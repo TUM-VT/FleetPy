@@ -1,0 +1,2 @@
+op_module,scenario_name,rq_file,op_fleet_composition,op_rh_immediate_max_routes,op_rvh_nr_direction,op_rvh_nr_least_load,op_rvh_AM_nr_check_assigned_rrs,op_rvh_AM_nr_check_assigned_rrs,op_rvh_AM_nr_test_best_insertions
+PoolingIRSAssignmentBatchOptimization,example_pool_norvheuristics_sc_2,example_200.csv,default_vehtype:9,,,,,

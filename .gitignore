@@ -1,3 +1,34 @@
+# private simulation scripts (private copies of bugfix_or_run.py with modifications for specific scenarios)
+run_private*.py
+
+# data directories except for example
+data/demand/*
+!data/demand/example_demand_196
+data/fleetctrl/*
+data/infra/*
+data/networks/*
+!data/networks/EasyRideLine196_Example
+data/pubtrans/*
+data/vehicles/*
+!data/vehicles/default_vehtype.csv
+data/zones/*
+!data/zones/ERLine196_Example
+
+# study directories except for example
+studies/*
+!studies/example_study
+studies/example_study/results/*
+
+# system dependent C++ Router files
+src/routing/cpp_router/*.pyd
+src/routing/cpp_router/build/*
+src/routing/cpp_router/PyNetwork.cpp
+src/routing/extractors/cache/*
+
+# IDE-related files
+*.idea
+.vscode/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -76,6 +107,7 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*.ipynb
 
 # IPython
 profile_default/

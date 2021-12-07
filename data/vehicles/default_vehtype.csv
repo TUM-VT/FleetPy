@@ -1,0 +1,7 @@
+vtype_name_full,default_vehtype
+maximum_passengers,4
+daily_fix_cost [cent],2500
+per_km_cost [cent],25
+battery_size [kWh],50
+range [km],10000
+source,
