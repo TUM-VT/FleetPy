@@ -418,7 +418,7 @@ class Replay(VehicleMovementSimulation):
             for vid, veh_stat_f in fleet_stat_df.groupby(G_RQ_VID):
                 self.replay_vehicles[(op_id, vid)] = ReplayVehicle(op_id, vid, veh_stat_f, self.sim_start_time,
                                                                    self.sim_end_time)
-        states_codes = {v: x for x, v in G_VEHICLE_STATUS_DICT.items()}
+        states_codes = {status.display_name: status.value for status in VRL_STATES}
         self.poss_veh_states = sorted(self.poss_veh_states, key=lambda x: states_codes[x])
         print("... processing user data")
         # TODO # load vehicle data

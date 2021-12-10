@@ -461,12 +461,12 @@ class SimulationVehicle:
             record_dict[G_V_OP_ID] = self.op_id
             record_dict[G_V_VID] = self.vid
             record_dict[G_V_TYPE] = self.veh_type
-            record_dict[G_VR_STATUS] = G_VEHICLE_STATUS_DICT[self.status]
+            record_dict[G_VR_STATUS] = self.status.display_name
             record_dict[G_VR_LOCKED] = ca.locked
             record_dict[G_VR_LEG_START_TIME] = self.cl_start_time
             record_dict[G_VR_LEG_END_TIME] = simulation_time
             if self.cl_start_pos is None:
-                LOG.error(f"current cl starting point not set before! {self.vid} {G_VEHICLE_STATUS_DICT[self.status]} {self.cl_start_time}")
+                LOG.error(f"current cl starting point not set before! {self.vid} {self.status.display_name} {self.cl_start_time}")
                 raise EnvironmentError
             record_dict[G_VR_LEG_START_POS] = self.routing_engine.return_position_str(self.cl_start_pos)
             record_dict[G_VR_LEG_END_POS] = self.routing_engine.return_position_str(self.pos)
@@ -1432,8 +1432,7 @@ class FleetSimulationBase:
                         vehicle_counts = self.count_fleet_status()
                         info_dict = {"simulation_time": sim_time,
                                      "driving": sum([vehicle_counts[x] for x in G_DRIVING_STATUS])}
-                        info_dict.update({G_VEHICLE_STATUS_DICT[x]: vehicle_counts[x]
-                                          for x in PROGRESS_LOOP_VEHICLE_STATUS})
+                        info_dict.update({x.display_name: vehicle_counts[x] for x in PROGRESS_LOOP_VEHICLE_STATUS})
                         pbar.set_postfix(info_dict)
                         self._update_realtime_plots_dict(sim_time)
             else:
@@ -1493,10 +1492,11 @@ class FleetSimulationBase:
         if self.realtime_plot_flag in {1, 2}:
             veh_ids = list(self.sim_vehicles.keys())
             possible_states = self.scenario_parameters.get(G_SIM_REALTIME_PLOT_VEHICLE_STATUS,
-                                                           G_VEHICLE_STATUS_DICT.keys())
+                                                           [status.value for status in VRL_STATES])
+            G_VEHICLE_STATUS_DICT = VRL_STATES.G_VEHICLE_STATUS_DICT()
             possible_states = [G_VEHICLE_STATUS_DICT[x] for x in possible_states]
             veh_status = [self.sim_vehicles[veh].status for veh in veh_ids]
-            veh_status = [G_VEHICLE_STATUS_DICT[state] for state in veh_status]
+            veh_status = [state.display_name for state in veh_status]
             veh_positions = [self.sim_vehicles[veh].pos for veh in veh_ids]
             veh_positions = self.routing_engine.return_positions_lon_lat(veh_positions)
             df = pd.DataFrame({"status": veh_status,
@@ -1510,10 +1510,10 @@ class FleetSimulationBase:
     def count_fleet_status(self) -> dict:
         """ This method counts the number of vehicles in each of the vehicle statuses
 
-        :return: dictionary of vehicle codes as keys and number of vehicles in those status as values
+        :return: dictionary of vehicle state as keys and number of vehicles in those status as values
         """
         vehicles = self.sim_vehicles.values()
-        count = {key: 0 for key in G_VEHICLE_STATUS_DICT.keys()}
+        count = {state: 0 for state in VRL_STATES}
         for v in vehicles:
             count[v.status] += 1
         return count

@@ -5,6 +5,7 @@ These variables should be referenced for Data Input, Output and Evaluation to gu
 import os
 import json
 from enum import Enum
+from types import DynamicClassAttribute
 
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -465,60 +466,35 @@ G_V_INIT_SOC = "final_soc"
 # Vehicle Status
 # --------------
 class VRL_STATES(Enum):
-    BLOCKED_INIT = -1
-    IDLE = 0
-    BOARDING = 1
-    CHARGING = 2
-    BOARDING_WITH_CHARGING = 3
-    WAITING = 4
-    OUT_OF_SERVICE = 5
-    PLANNED_STOP = 6    # TODO whats that for?
-    ROUTE = 10
-    REPOSITION = 11
-    TO_CHARGE = 12
-    TO_DEPOT = 13
+    BLOCKED_INIT = (-1, "blocked_init_status")
+    IDLE = (0, "idle")
+    BOARDING = (1, "boarding")
+    CHARGING = (2, "charging")
+    BOARDING_WITH_CHARGING = (3, "boarding_with_charging")
+    WAITING = (4, "waiting")
+    OUT_OF_SERVICE = (5, "out_of_service")
+    PLANNED_STOP = (6, "planned_stop")    # TODO whats that for?
+    ROUTE = (10, "route")
+    REPOSITION = (11, "reposition")
+    TO_CHARGE = (12, "to_charge")
+    TO_DEPOT = (13, "to_depot")
+
+    @DynamicClassAttribute
+    def value(self):
+        return self._value_[0]
+
+    @DynamicClassAttribute
+    def display_name(self):
+        return self._value_[1]
+
+    @staticmethod
+    def G_VEHICLE_STATUS_DICT() -> dict:
+        return {status.value: status.display_name for status in VRL_STATES}
 
 G_DRIVING_STATUS = [VRL_STATES.ROUTE, VRL_STATES.REPOSITION, VRL_STATES.TO_CHARGE, VRL_STATES.TO_DEPOT] # [10,11,12,13]
 G_REVENUE_STATUS = [VRL_STATES.BOARDING, VRL_STATES.WAITING, VRL_STATES.ROUTE, VRL_STATES.REPOSITION] # [1, 4, 10, 11]
 G_LAZY_STATUS = [VRL_STATES.WAITING] # [4]     # VRLs not actively planned and dont do anything (i.e. waiting)
 G_LOCK_DURATION_STATUS = [VRL_STATES.BLOCKED_INIT, VRL_STATES.BOARDING, VRL_STATES.BOARDING_WITH_CHARGING] # [-1, 1, 3]
-G_VEHICLE_STATUS_DICT = {}
-G_VEHICLE_STATUS_DICT[VRL_STATES.BLOCKED_INIT] = "blocked_init_status"
-G_VEHICLE_STATUS_DICT[VRL_STATES.IDLE] = "idle"
-G_VEHICLE_STATUS_DICT[VRL_STATES.BOARDING] = "boarding"
-G_VEHICLE_STATUS_DICT[VRL_STATES.CHARGING] = "charging"
-G_VEHICLE_STATUS_DICT[VRL_STATES.BOARDING_WITH_CHARGING] = "boarding_with_charging"
-G_VEHICLE_STATUS_DICT[VRL_STATES.WAITING] = "waiting"
-G_VEHICLE_STATUS_DICT[VRL_STATES.OUT_OF_SERVICE] = "out_of_service"
-G_VEHICLE_STATUS_DICT[VRL_STATES.PLANNED_STOP] = "planned_stop"
-G_VEHICLE_STATUS_DICT[VRL_STATES.ROUTE] = "route"
-G_VEHICLE_STATUS_DICT[VRL_STATES.REPOSITION] = "reposition"
-G_VEHICLE_STATUS_DICT[VRL_STATES.TO_CHARGE] = "to_charge"
-G_VEHICLE_STATUS_DICT[VRL_STATES.TO_DEPOT] = "to_depot"
-
-# G_DRIVING_STATUS = [10,11,12,13,14,15,16,19,20]
-# G_IDLE_BUSY_STATUS = [17,18]
-# G_LAZY_STATUS = [4]     # VRLs not actively planned and dont do anything (i.e. waiting)
-# G_LOCK_DURATION_STATUS = [-1, 1, 3]
-# G_VEHICLE_STATUS_DICT = {}
-# G_VEHICLE_STATUS_DICT[-1] = "blocked_init_status"
-# G_VEHICLE_STATUS_DICT[0] = "idle"
-# G_VEHICLE_STATUS_DICT[1] = "boarding"
-# G_VEHICLE_STATUS_DICT[2] = "charging"
-# G_VEHICLE_STATUS_DICT[3] = "boarding_with_charging"
-# G_VEHICLE_STATUS_DICT[4] = "waiting"
-# G_VEHICLE_STATUS_DICT[5] = "out_of_service"
-# G_VEHICLE_STATUS_DICT[10] = "route"
-# G_VEHICLE_STATUS_DICT[11] = "reposition"
-# G_VEHICLE_STATUS_DICT[12] = "to_charge"
-# G_VEHICLE_STATUS_DICT[13] = "to_depot"
-# G_VEHICLE_STATUS_DICT[14] = "private_en_route"
-# G_VEHICLE_STATUS_DICT[15] = "searching_charging_station"
-# G_VEHICLE_STATUS_DICT[16] = "going_back_no_socket_found"
-# G_VEHICLE_STATUS_DICT[17] = "charging_privately"
-# G_VEHICLE_STATUS_DICT[18] = "charging_at_station"
-# G_VEHICLE_STATUS_DICT[19] = "driving_to_reserved_station"
-# G_VEHICLE_STATUS_DICT[20] = "redirected_to_reserved_station"
 
 # TODO # after ISTTT: define all vehicle states
 

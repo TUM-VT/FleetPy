@@ -141,7 +141,7 @@ def avg_in_vehicle_distance(op_df):
     sum_dis = 0
     for vid, veh_df in op_df.groupby(G_V_VID):
         for status, distance, ob_str, boarding_str, alight_str in zip(veh_df[G_VR_STATUS].values, veh_df[G_VR_LEG_DISTANCE].values, veh_df[G_VR_OB_RID].values, veh_df[G_VR_BOARDING_RID].values, veh_df[G_VR_ALIGHTING_RID].values):
-            if status == G_VEHICLE_STATUS_DICT[VRL_STATES.BOARDING]:
+            if status == VRL_STATES.BOARDING.display_name:
                 if boarding_str == boarding_str:
                     for rid in boarding_str.split(";"):
                         dis_dict[rid] = 0
@@ -169,7 +169,7 @@ def shared_rides(op_df):
     N_shared = 0
     for vid, veh_df in op_df.groupby(G_V_VID):
         for status, distance, ob_str, boarding_str, alight_str in zip(veh_df[G_VR_STATUS].values, veh_df[G_VR_LEG_DISTANCE].values, veh_df[G_VR_OB_RID].values, veh_df[G_VR_BOARDING_RID].values, veh_df[G_VR_ALIGHTING_RID].values):
-            if status == G_VEHICLE_STATUS_DICT[VRL_STATES.BOARDING]:
+            if status == VRL_STATES.BOARDING.display_name:
                 if boarding_str == boarding_str:
                     for rid in boarding_str.split(";"):
                         rid_shared_dict[rid] = 0
@@ -369,11 +369,11 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
                 # correct utilization: do not consider tasks after simulation end time
                 op_vehicle_df["VRL_end_sim_end_time"] = np.minimum(op_vehicle_df[G_VR_LEG_END_TIME], sim_end_time)
                 op_vehicle_df["VRL_start_sim_end_time"] = np.minimum(op_vehicle_df[G_VR_LEG_START_TIME], sim_end_time)
-                utilized_veh_df = op_vehicle_df[(op_vehicle_df["status"] != G_VEHICLE_STATUS_DICT[VRL_STATES.OUT_OF_SERVICE]) & (op_vehicle_df["status"] != G_VEHICLE_STATUS_DICT[VRL_STATES.CHARGING])]
+                utilized_veh_df = op_vehicle_df[(op_vehicle_df["status"] != VRL_STATES.OUT_OF_SERVICE.display_name) & (op_vehicle_df["status"] != VRL_STATES.CHARGING.display_name)]
                 utilization_time = utilized_veh_df["VRL_end_sim_end_time"].sum() - utilized_veh_df["VRL_start_sim_end_time"].sum()
-                unutilized_veh_df = op_vehicle_df[(op_vehicle_df["status"] == G_VEHICLE_STATUS_DICT[VRL_STATES.OUT_OF_SERVICE]) | (op_vehicle_df["status"] == G_VEHICLE_STATUS_DICT[VRL_STATES.CHARGING])]
+                unutilized_veh_df = op_vehicle_df[(op_vehicle_df["status"] == VRL_STATES.OUT_OF_SERVICE.display_name) | (op_vehicle_df["status"] == VRL_STATES.CHARGING.display_name)]
                 unutilized_time = unutilized_veh_df["VRL_end_sim_end_time"].sum() - unutilized_veh_df["VRL_start_sim_end_time"].sum()
-                rev_df = op_vehicle_df[op_vehicle_df["status"].isin([G_VEHICLE_STATUS_DICT[x] for x in G_REVENUE_STATUS])]
+                rev_df = op_vehicle_df[op_vehicle_df["status"].isin([x.display_name for x in G_REVENUE_STATUS])]
                 op_vehicle_revenue_hours = (rev_df["VRL_end_sim_end_time"].sum() - rev_df["VRL_start_sim_end_time"].sum())/3600.0
                 op_ride_per_veh_rev_hours = op_number_pax/op_vehicle_revenue_hours
                 op_ride_per_veh_rev_hours_rq = op_number_users/op_vehicle_revenue_hours
@@ -429,7 +429,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
                 op_ride_distance_per_vehicle_distance_no_rel = op_sum_direct_travel_distance / (op_total_km * (1.0 - op_repositioning_vkm/100.0))
 
             # speed
-            driving = op_vehicle_df[op_vehicle_df["status"].isin([G_VEHICLE_STATUS_DICT[i] for i in G_DRIVING_STATUS])]
+            driving = op_vehicle_df[op_vehicle_df["status"].isin([i.display_name for i in G_DRIVING_STATUS])]
             driving_time = driving["end_time"].sum() - driving["start_time"].sum()
             op_avg_velocity = op_total_km/driving_time*3600.0
             op_trip_velocity = trip_direct_distance/op_user_sum_travel_time*3.6

@@ -167,7 +167,7 @@ def avg_util_binned(binned_operator_stats, output_dir, op_id, n_vehicles, show=T
     util = []
     last = 0
     bins = list(binned_operator_stats.keys())
-    util_states = [G_VEHICLE_STATUS_DICT[x] for x in G_REVENUE_STATUS]
+    util_states = [x.display_name for x in G_REVENUE_STATUS]
     for t, binned_stats_df in binned_operator_stats.items():
         ts.append(t/3600.0)
         util.append(last)
@@ -202,7 +202,7 @@ def avg_fleet_km_binned(binned_operator_stats, output_dir, op_id, show = True):
     last = 0
     bins = list(binned_operator_stats.keys())
     bin_size = bins[1] - bins[0]
-    driving_states = [G_VEHICLE_STATUS_DICT[x] for x in G_DRIVING_STATUS]
+    driving_states = [x.display_name for x in G_DRIVING_STATUS]
     for t, binned_stats_df in binned_operator_stats.items():
         ts.append(t/3600.0)
         driven_distances.append(last)
@@ -241,8 +241,8 @@ def avg_fleet_driving_speeds_binned(binned_operator_stats, output_dir, op_id, sh
     last_rev = 0
     bins = list(binned_operator_stats.keys())
     bin_size = bins[1] - bins[0]
-    driving_states = [G_VEHICLE_STATUS_DICT[x] for x in G_DRIVING_STATUS]
-    util_states = [G_VEHICLE_STATUS_DICT[x] for x in G_REVENUE_STATUS]
+    driving_states = [x.display_name for x in G_DRIVING_STATUS]
+    util_states = [x.display_name for x in G_REVENUE_STATUS]
     for t, binned_stats_df in binned_operator_stats.items():
         ts.append(t/3600.0)
         driven_speed.append(last_dr)
@@ -301,7 +301,7 @@ def avg_revenue_hours_binned(binned_operator_stats, output_dir, op_id, n_vehicle
     last = 0
     bins = list(binned_operator_stats.keys())
     bin_size = bins[1] - bins[0]
-    util_states = [G_VEHICLE_STATUS_DICT[x] for x in G_REVENUE_STATUS]
+    util_states = [x.display_name for x in G_REVENUE_STATUS]
     for t, binned_stats_df in binned_operator_stats.items():
         ts.append(t/3600.0)
         vrhs.append(last)
@@ -395,7 +395,7 @@ def avg_customers_per_vehicle_revenue_hous_binned(binned_served_customer_stats, 
     bins = list(binned_served_customer_stats.keys())
     bin_size = bins[1] - bins[0]
     differs = False
-    util_states = [G_VEHICLE_STATUS_DICT[x] for x in G_REVENUE_STATUS]
+    util_states = [x.display_name for x in G_REVENUE_STATUS]
     def get_frac_active_cust_time(row):
         rq_time = row[G_RQ_DO] - row[G_RQ_TIME]
         return row["interval_weight"] * bin_size/rq_time
