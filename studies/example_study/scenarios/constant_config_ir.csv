@@ -1,10 +1,10 @@
 Input_Parameter_Name,Parameter_Value
 ##1,FleetSimulation
 initial_state_scenario,
-sim_env,ImmediateOfferSimulation
+sim_env,ImmediateDecisionsSimulation
 network_type,NetworkBasicWithStore
-network_name,EasyRideLine196_Example
-demand_name,example_demand_196
+network_name,example_network
+demand_name,example_demand
 rq_file,
 random_seed,0
 start_time,0

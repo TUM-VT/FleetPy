@@ -3,16 +3,19 @@ run_private*.py
 
 # data directories except for example
 data/demand/*
-!data/demand/example_demand_196
-data/fleetctrl/*
+!data/demand/example_demand
+data/fleetctrl/initial_vehicle_distribution/*
+data/fleetctrl/elastic_pricing/*
+data/fleetctrl/elastic_fleet_size/*
+!data/fleetctrl/initial_vehicle_distribution/example_network
 data/infra/*
 data/networks/*
-!data/networks/EasyRideLine196_Example
+!data/networks/example_network
 data/pubtrans/*
 data/vehicles/*
 !data/vehicles/default_vehtype.csv
 data/zones/*
-!data/zones/ERLine196_Example
+!data/zones/example_zones
 
 # study directories except for example
 studies/*
