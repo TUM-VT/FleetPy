@@ -121,7 +121,7 @@ def load_repositioning_strategy(op_repo_class_string):
     repo_dict = {}  # str -> (module path, class name)
     repo_dict["PavoneFC"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingRepositioningFC")
     repo_dict["PavoneFCV2"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingV2RepositioningFC")
-    repo_dict["DensityFrontiers"] = ("src.fleetctrl.FrontiersDensityBasedRepositioning", "DensityRepositioning")
+    repo_dict["DensityFrontiers"] = ("src.fleetctrl.repositioning.FrontiersDensityBasedRepositioning", "DensityRepositioning")
     # add development content
     if dev_content is not None:
         dev_repo_dict = dev_content.add_repositioning_modules()
