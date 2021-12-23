@@ -494,6 +494,7 @@ class VRL_STATES(Enum):
     WAITING = (4, "waiting")
     OUT_OF_SERVICE = (5, "out_of_service")
     PLANNED_STOP = (6, "planned_stop")    # TODO whats that for?
+    REPO_TARGET = (7, "repositioning_target")
     ROUTE = (10, "route")
     REPOSITION = (11, "reposition")
     TO_CHARGE = (12, "to_charge")

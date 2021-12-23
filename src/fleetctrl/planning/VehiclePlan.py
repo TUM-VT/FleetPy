@@ -957,8 +957,10 @@ class VehiclePlan:
                 inactive = False
             if pstop.get_departure_time(0) != 0:
                 planned_stop = True
+                repo_target = False
             else:
                 planned_stop = False
+                repo_target = True
             if c_pos != pstop.get_pos():
                 # driving vrl
                 if boarding:
@@ -984,6 +986,8 @@ class VehiclePlan:
                 status = VRL_STATES.OUT_OF_SERVICE
             elif planned_stop:
                 status = VRL_STATES.PLANNED_STOP
+            elif repo_target:
+                status = VRL_STATES.REPO_TARGET
             else:
                 # TODO # after ISTTT: add other states if necessary; for now assume vehicle idles
                 status = VRL_STATES.IDLE
