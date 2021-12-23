@@ -442,6 +442,7 @@ class FleetControlBase(metaclass=ABCMeta):
         :type add_arg: not defined here
         """
         LOG.debug(f"assign to {veh_obj.vid} at time {sim_time} : {vehicle_plan}")
+        vehicle_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
         new_vrl = vehicle_plan.build_VRL(veh_obj, self.rq_dict, charging_management=self.charging_management)
         veh_obj.assign_vehicle_plan(new_vrl, sim_time, force_ignore_lock=force_assign)
         self.veh_plans[veh_obj.vid] = vehicle_plan
