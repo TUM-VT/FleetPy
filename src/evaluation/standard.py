@@ -254,6 +254,8 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
     for op_id, op_users in user_stats.groupby(G_RQ_OP_ID):
         op_name = "?"
+        
+        op_reservation_horizon = list_operator_attributes[int(op_id)].get(G_RA_OPT_HOR,0)
 
         op_number_users = op_users.shape[0]
         op_number_pax = op_users[G_RQ_PAX].sum()
@@ -266,12 +268,39 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         op_avg_utility = np.nan
         if G_RQ_C_UTIL in op_users.columns:
             op_avg_utility = op_users[G_RQ_C_UTIL].sum()/op_number_users  
+            
+        op_reservation_users = op_users[op_users[G_RQ_EPT] - op_users[G_RQ_TIME] > op_reservation_horizon]
+        total_reservation_users = user_stats[user_stats[G_RQ_EPT] - user_stats[G_RQ_TIME] > op_reservation_horizon]
+        op_number_reservation_users = op_reservation_users.shape[0]
+        op_number_reservation_pax = op_reservation_users[G_RQ_PAX].sum()
+        try:
+            op_frac_served_reservation_users = op_number_reservation_users/total_reservation_users.shape[0]*100.0
+            op_frac_served_reservation_pax = op_number_reservation_pax/total_reservation_users[G_RQ_PAX].sum()*100.0
+        except ZeroDivisionError:
+            op_frac_served_reservation_users = 100.0
+            op_frac_served_reservation_pax = 100.0
+        op_number_online_users = op_number_users - op_number_reservation_users
+        op_number_online_pax = op_number_pax - op_number_reservation_pax
+        try:
+            op_frac_served_online_users = op_number_online_users/(number_users - total_reservation_users.shape[0])*100.0
+            op_frac_served_online_pax = op_number_online_pax/(number_total_travelers - total_reservation_users[G_RQ_PAX].sum())*100.0
+        except ZeroDivisionError:
+            op_frac_served_online_users = 100.0
+            op_frac_served_online_pax = 100.0
 
         result_dict = {"operator_id": op_id, 
                        "number users": op_number_users,
                        "number travelers": op_number_pax,
                        "modal split": op_modal_split,
                        "modal split rq": op_modal_split_rq,
+                       "reservation users": op_number_reservation_users,
+                       "reservation pax" : op_number_reservation_pax,
+                       "served reservation users [%]": op_frac_served_reservation_users,
+                       "served reservation pax [%]": op_frac_served_reservation_pax,
+                       "online users" : op_number_online_users,
+                       "online pax" : op_number_online_pax,
+                       "served online users [%]": op_frac_served_online_users,
+                       "served online pax [%]": op_frac_served_online_pax,
                        r'% created offers': op_rel_created_offers,
                        "utility" : op_avg_utility}
 
@@ -279,6 +308,9 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         op_user_sum_travel_time = np.nan
         op_revenue = np.nan
         op_avg_wait_time = np.nan
+        op_med_wait_time = np.nan
+        op_90perquant_wait_time = np.nan
+        op_avg_wait_from_ept = np.nan
         op_avg_travel_time = np.nan
         op_avg_travel_distance = np.nan
         op_sum_direct_travel_distance = np.nan
@@ -337,7 +369,13 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
                 op_revenue = op_users[G_RQ_FARE].sum()
             # avg waiting time
             if G_RQ_PU in op_users.columns and G_RQ_TIME in op_users.columns:
-                op_avg_wait_time = (op_users[G_RQ_PU].sum() - op_users[G_RQ_TIME].sum()) / op_number_users
+                op_users["wait time"] = op_users[G_RQ_PU] - op_users[G_RQ_TIME]
+                op_avg_wait_time = op_users["wait time"].mean()
+                op_med_wait_time = op_users["wait time"].median()
+                op_90perquant_wait_time = op_users["wait time"].quantile(q=0.9)
+            # avg waiting time from earliest pickup time
+            if G_RQ_PU in op_users.columns and G_RQ_EPT in op_users.columns:
+                op_avg_wait_from_ept = (op_users[G_RQ_PU].sum() - op_users[G_RQ_EPT].sum()) / op_number_users
             # avg abs detour time
             if not np.isnan(op_user_sum_travel_time) and G_RQ_DRT in op_users.columns:
                 op_avg_detour_time = (op_user_sum_travel_time - op_users[G_RQ_DRT].sum())/op_number_users - \
@@ -480,8 +518,6 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
                                     for rq_id in op_users[G_RQ_ID]])/op_number_users
             if G_RQ_FARE in op_users.columns:
                 op_revenue = op_users[G_RQ_FARE].sum()
-            pt_extra_eval_dict = public_transport_evaluation(output_dir)
-            result_dict.update(pt_extra_eval_dict)
 
         elif op_id == G_MC_DEC_PV:
             # 3) private vehicle:
@@ -520,6 +556,9 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         result_dict["travel time"] = op_avg_travel_time
         result_dict["travel distance"] = op_avg_travel_distance
         result_dict["waiting time"] = op_avg_wait_time
+        result_dict["waiting time from ept"] = op_avg_wait_from_ept
+        result_dict["waiting time (median)"] = op_med_wait_time
+        result_dict["waiting time (90% quantile)"] = op_90perquant_wait_time
         result_dict["detour time"] = op_avg_detour_time
         result_dict["rel detour"] = op_avg_rel_detour
         result_dict[r"% fleet utilization"] = op_fleet_utilization

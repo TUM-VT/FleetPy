@@ -94,7 +94,6 @@ class NetworkBasicWithStore(NetworkBasic):
             R = Router(self, origin_node, destination_nodes=[destination_node], mode='bidirectional', customized_section_cost_function=customized_section_cost_function)
             s = R.compute(return_route=False)[0][1]
             if customized_section_cost_function is None:
-                # TODO # check if this is correct
                 self._add_to_database(origin_node, destination_node, s[0], s[1], s[2])
         return (s[0] + origin_overhead[0] + destination_overhead[0], s[1] + origin_overhead[1] + destination_overhead[1], s[2] + origin_overhead[2] + destination_overhead[2])
 

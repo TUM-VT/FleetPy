@@ -588,7 +588,6 @@ int Network::computeRouteSize1to1(int start_node_index, int end_node_index) {
     int meeting_node_index = -1;
     pair<double, double> result = dijkstraBidirectional(start_node_index, end_node_index, &meeting_node_index);
     if (meeting_node_index >= 0) {
-        cout << "meeting: " << meeting_node_index << endl;
         _last_found_route_fw = {};
         _last_found_route_fw.push_back(meeting_node_index);
         if ((nodes[meeting_node_index].getPrev() >= 0) & (nodes[meeting_node_index].getPrev() != meeting_node_index)) {

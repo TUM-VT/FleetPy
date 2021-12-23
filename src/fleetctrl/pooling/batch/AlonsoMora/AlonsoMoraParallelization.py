@@ -124,7 +124,7 @@ class ParallelizationManager():
             c -= 1
             # LOG.debug(f"initOp got {x} rest {c}")
 
-    def delRequest(self, fo_id, rid):
+    def delete_request(self, fo_id, rid):
         """ this function is used to communicate the deletion of a rid to the parallel processes
         :param fo_id: fleetctrl id
         :param rid: request id
@@ -142,7 +142,7 @@ class ParallelizationManager():
         except:
             pass
 
-    def addNewRequest(self, fo_id, rid, prq, consider_for_global_optimisation = True, is_allready_assigned = False):
+    def add_new_request(self, fo_id, rid, prq, consider_for_global_optimisation = True, is_allready_assigned = False):
         """ this function used to add a new request at parallel processes
         :param fo_id: flletctrl id
         :param rid: request id
@@ -152,7 +152,7 @@ class ParallelizationManager():
         if consider_for_global_optimisation:
             self.fo_rid_to_consider_for_global_optimisation_for_next_opt_step[fo_id][rid] = 1
 
-    def setMutuallyExclusiveAssignmentConstraint(self, fo_id, list_sub_rids, base_rid):
+    def set_mutually_exclusive_assignment_constraint(self, fo_id, list_sub_rids, base_rid):
         for s_rid in list_sub_rids:
             self.fo_rid_to_mutually_exclusive_cluster_id_for_next_opt_step[fo_id][s_rid] = base_rid
 

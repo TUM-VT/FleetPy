@@ -12,7 +12,8 @@ from typing import List, Dict, Tuple
 
 # src imports
 # -----------
-from src.FleetSimulationBase import VehicleChargeLeg, VehicleRouteLeg, SimulationVehicle
+from src.simulation.Legs import VehicleRouteLeg, VehicleChargeLeg
+from src.simulation.Vehicles import SimulationVehicle
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.routing.NetworkBase import NetworkBase
 
@@ -95,6 +96,11 @@ class PlanStopBase(metaclass=ABCMeta):
         :return: change number pax (difference between boarding and deboarding persons)"""
         
     @abstractmethod
+    def get_change_nr_parcels(self) -> int:
+        """ get the change of parcel occupancy after this plan stop 
+        :return: change number parcels (difference between boarding and deboarding parcels)"""
+        
+    @abstractmethod
     def get_departure_time(self, start_time : float) -> float:
         """ this function returns the time the vehicle leaves the plan stop if it is started at start_time
         :param start_time: time the plan stop has been started
@@ -129,6 +135,11 @@ class PlanStopBase(metaclass=ABCMeta):
     def is_locked(self) -> bool:
         """test for lock
         :return: bool True, if plan stop is locked"""
+        
+    @abstractmethod
+    def is_locked_end(self) -> bool:
+        """ ths for end lock
+        :return: bool True, if plan stop is locked at end of plan stop (no insertion after this possible)"""
         
     @abstractmethod
     def is_infeasible_locked(self) -> bool:
@@ -213,8 +224,8 @@ class PlanStop(PlanStopBase):
         vehicles are moving between these different plan stops.
         this class is the most general class of plan stops"""
     def __init__(self, position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={}, earliest_pickup_time_dict={}, latest_pickup_time_dict={},
-                 change_nr_pax=0, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None,
-                 locked=False, charging_power=0, existing_vcl=None, charging_unit_id=None, planstop_state : G_PLANSTOP_STATES=G_PLANSTOP_STATES.MIXED):
+                 change_nr_pax=0, change_nr_parcels=0, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None,
+                 locked=False, locked_end=False, charging_power=0, existing_vcl=None, charging_unit_id=None, planstop_state : G_PLANSTOP_STATES=G_PLANSTOP_STATES.MIXED):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param boarding_dict: dictionary with entries +1 -> list of request ids that board the vehicle there; -1 -> list of requests that alight the vehicle there
@@ -223,11 +234,13 @@ class PlanStop(PlanStopBase):
         :param earliest_pickup_time_dict: dictionary request_id -> earliest pickup time of all requests boarding at this stop to check earliest pickup time constraint
         :param latest_pickup_time_dict: dictionary request_id -> latest pickup time of all requests boarding at this top to check latest pickup time constraint
         :param change_nr_pax: (int) change of number of passengers at this point: number people boarding - number people alighting to check capacity constraint
+        :param change_nr_parcels: (int) change of number of parcels at this point: number boarding parcels - number alighting parcels to check capacity constraint
         :param earliest_start_time: (float) absolute earliest start time this plan stop is allowed to start
         :param latest_start_time: (float) absolute latest start time this plan stop is allowed to start
         :param duration: (float) minimum duration this plan stops takes at this location
         :param earliest_end_time: (float) absolute earliest time a vehicle is allowed to leave at this plan stop
         :param locked: (bool) false by default; if true this planstop can no longer be unassigned from vehicleplan and has to be fullfilled. currently only working when also all planstops before this planstop are locked, too
+        :param locked_end: (bool) false by default; if true, no planstops can be added after this planstop in the assignment algorithm and it cannot be removed by the assignemnt algorithm (insertions before are possible!)
         :param charging_power: optional (float); if given the vehicle is charged with this power (TODO unit!) while at this stop
         :param existing_vcl: optional reference to VehicleChargeLeg TODO (is this a VCL or the ID?)
         :param charging_unit_id: optional (int) charging unit it the vehicle is supposed to charge at, defined in ChargingInfrastructure
@@ -238,6 +251,7 @@ class PlanStop(PlanStopBase):
         
         self.boarding_dict = boarding_dict  # +1: [rids] for boarding | -1: [rids] for alighting
         self.locked = locked
+        self.locked_end = locked_end
         
         # charging
         self.charging_power = charging_power
@@ -246,6 +260,7 @@ class PlanStop(PlanStopBase):
         
         # parameters that define capacity constraints
         self.change_nr_pax = change_nr_pax
+        self.change_nr_parcels = change_nr_parcels
         # parameters that define time constraints
         self.max_trip_time_dict = max_trip_time_dict  # deboarding rid -> max_trip_time constraint
         self.latest_arrival_time_dict = latest_arrival_time_dict    # deboarding rid -> latest_arrival_time constraint
@@ -309,7 +324,7 @@ class PlanStop(PlanStopBase):
                          latest_arrival_time_dict=self.latest_arrival_time_dict.copy(), earliest_pickup_time_dict=self.earliest_pickup_time_dict.copy(),
                          latest_pickup_time_dict=self.latest_pickup_time_dict.copy(), change_nr_pax=self.change_nr_pax,
                          earliest_start_time=self.direct_earliest_start_time, latest_start_time=self.direct_latest_start_time,
-                         duration=self.direct_duration, earliest_end_time=self.direct_earliest_end_time, locked=self.locked,
+                         duration=self.direct_duration, earliest_end_time=self.direct_earliest_end_time, locked=self.locked, locked_end=self.locked_end,
                          charging_power=self.charging_power, existing_vcl=self.existing_vcl, charging_unit_id=self.charging_unit_id)
         cp_ps._planned_arrival_time = self._planned_arrival_time
         cp_ps._planned_departure_time = self._planned_departure_time
@@ -363,6 +378,9 @@ class PlanStop(PlanStopBase):
     def get_change_nr_pax(self) -> int:
         return self.change_nr_pax
     
+    def get_change_nr_parcels(self) -> int:
+        return self.change_nr_parcels
+    
     def get_departure_time(self, start_time: float) -> float:
         """ this function returns the time the vehicle leaves the plan stop if it is started at start_time
         :param start_time: time the plan stop has been started
@@ -402,6 +420,9 @@ class PlanStop(PlanStopBase):
         
     def is_locked(self) -> bool:
         return self.locked
+    
+    def is_locked_end(self) -> bool:
+        return self.locked_end
     
     def is_infeasible_locked(self) -> bool:
         return self.infeasible_locked
@@ -461,7 +482,7 @@ class PlanStop(PlanStopBase):
 class BoardingPlanStop(PlanStop):
     """ this class can be used to generate a plan stop where only boarding processes take place """
     def __init__(self, position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={},
-                 earliest_pickup_time_dict={}, latest_pickup_time_dict={}, change_nr_pax=0, duration=None, locked=False):
+                 earliest_pickup_time_dict={}, latest_pickup_time_dict={}, change_nr_pax=0, change_nr_parcels=0, duration=None, locked=False):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param boarding_dict: dictionary with entries +1 -> list of request ids that board the vehicle there; -1 -> list of requests that alight the vehicle there
@@ -470,12 +491,13 @@ class BoardingPlanStop(PlanStop):
         :param earliest_pickup_time_dict: dictionary request_id -> earliest pickup time of all requests boarding at this stop to check earliest pickup time constraint
         :param latest_pickup_time_dict: dictionary request_id -> latest pickup time of all requests boarding at this top to check latest pickup time constraint
         :param change_nr_pax: (int) change of number of passengers at this point: number people boarding - number people alighting to check capacity constraint
+        :param change_nr_parcels: (int) change of number of parcels at this point: number boarding parcels - number alighting parcels to check capacity constraint
         :param duration: (float) minimum duration this plan stops takes at this location
         :param locked: (bool) false by default; if true this planstop can no longer be unassigned from vehicleplan and has to be fullfilled. currently only working when also all planstops before this planstop are locked, too
         """
         super().__init__(position, boarding_dict=boarding_dict, max_trip_time_dict=max_trip_time_dict,
                          latest_arrival_time_dict=latest_arrival_time_dict, earliest_pickup_time_dict=earliest_pickup_time_dict,
-                         latest_pickup_time_dict=latest_pickup_time_dict, change_nr_pax=change_nr_pax,
+                         latest_pickup_time_dict=latest_pickup_time_dict, change_nr_pax=change_nr_pax, change_nr_parcels=change_nr_parcels,
                          earliest_start_time=None, latest_start_time=None,
                          duration=duration, earliest_end_time=None, locked=locked,
                          charging_power=0, existing_vcl=None, charging_unit_id=None, planstop_state=G_PLANSTOP_STATES.BOARDING)
@@ -483,7 +505,7 @@ class BoardingPlanStop(PlanStop):
 class RoutingTargetPlanStop(PlanStop):
     """ this plan stop can be used to schedule a routing target for vehicles with the only task to drive there
         i.e repositioning"""
-    def __init__(self, position, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None, locked=False, planstop_state=G_PLANSTOP_STATES.REPO_TARGET):
+    def __init__(self, position, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None, locked=False, locked_end=False, planstop_state=G_PLANSTOP_STATES.REPO_TARGET):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param earliest_start_time: (float) absolute earliest start time this plan stop is allowed to start
@@ -491,16 +513,17 @@ class RoutingTargetPlanStop(PlanStop):
         :param duration: (float) minimum duration this plan stops takes at this location
         :param earliest_end_time: (float) absolute earliest time a vehicle is allowed to leave at this plan stop
         :param locked: (bool) false by default; if true this planstop can no longer be unassigned from vehicleplan and has to be fullfilled. currently only working when also all planstops before this planstop are locked, too
+        :param locked_end: (bool) false by default; if true, no planstops can be added after this planstop in the assignment algorithm and it cannot be removed by the assignemnt algorithm (insertions before are possible!)
         :param planstop_state: (G_PLANSTOP_STATES) indicates the planstop state. should be in (REPO_TARGET, INACTIVE, RESERVATION)
         """
         super().__init__(position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={}, earliest_pickup_time_dict={}, latest_pickup_time_dict={},
                          change_nr_pax=0, earliest_start_time=earliest_start_time, latest_start_time=latest_start_time, duration=duration,
-                         earliest_end_time=earliest_end_time, locked=locked, charging_power=0, existing_vcl=None, charging_unit_id=None, planstop_state=planstop_state)
+                         earliest_end_time=earliest_end_time, locked=locked, locked_end=locked_end, charging_power=0, existing_vcl=None, charging_unit_id=None, planstop_state=planstop_state)
 
 class ChargingPlanStop(PlanStop):
     """ this plan stop can be used to schedule a charging only process """
     def __init__(self, position, earliest_start_time=None, latest_start_time=None, duration=None, 
-                 earliest_end_time=None, locked=False, charging_power=0, existing_vcl=None, charging_unit_id=None):
+                 earliest_end_time=None, locked=False, locked_end=False, charging_power=0, existing_vcl=None, charging_unit_id=None):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param earliest_start_time: (float) absolute earliest start time this plan stop is allowed to start
@@ -508,6 +531,7 @@ class ChargingPlanStop(PlanStop):
         :param duration: (float) minimum duration this plan stops takes at this location
         :param earliest_end_time: (float) absolute earliest time a vehicle is allowed to leave at this plan stop
         :param locked: (bool) false by default; if true this planstop can no longer be unassigned from vehicleplan and has to be fullfilled. currently only working when also all planstops before this planstop are locked, too
+        :param locked_end: (bool) false by default; if true, no planstops can be added after this planstop in the assignment algorithm and it cannot be removed by the assignemnt algorithm (insertions before are possible!)        
         :param charging_power: optional (float); if given the vehicle is charged with this power (TODO unit!) while at this stop
         :param existing_vcl: optional reference to VehicleChargeLeg TODO (is this a VCL or the ID?)
         :param charging_unit_id: optional (int) charging unit it the vehicle is supposed to charge at, defined in ChargingInfrastructure
@@ -515,7 +539,7 @@ class ChargingPlanStop(PlanStop):
         super().__init__(position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={}, 
                          earliest_pickup_time_dict={}, latest_pickup_time_dict={}, change_nr_pax=0, 
                          earliest_start_time=earliest_start_time, latest_start_time=latest_start_time, duration=duration, 
-                         earliest_end_time=earliest_end_time, locked=locked, charging_power=charging_power, 
+                         earliest_end_time=earliest_end_time, locked=locked, locked_end=locked_end, charging_power=charging_power, 
                          existing_vcl=existing_vcl, charging_unit_id=charging_unit_id, planstop_state=G_PLANSTOP_STATES.CHARGING)
 
 class VehiclePlan:
@@ -631,14 +655,20 @@ class VehiclePlan:
             list_passed_VRLs = []
         # LOG.debug(str(self))
         # LOG.debug([str(x) for x in list_passed_VRLs])
+        # LOG.debug([str(x) for x in self.list_plan_stops])
         key_translator = {sub_rid[0]: sub_rid for sub_rid in self.pax_info.keys() if type(sub_rid) == tuple}
         if list_passed_VRLs and self.list_plan_stops:
             for vrl in list_passed_VRLs:
                 if vrl.status in G_DRIVING_STATUS or vrl.status in G_LAZY_STATUS:
-                    if vrl.destination_pos == self.list_plan_stops[0].get_pos() and self.list_plan_stops[0].is_empty():
-                        # LOG.info("jumped ps {} becouse of vrl {}".format(self.list_plan_stops[0], vrl))
-                        self.list_plan_stops = self.list_plan_stops[1:]
                     continue
+                # if vrl.status in G_LAZY_STATUS:
+                #     # waiting part should not be part of the vehicle plan
+                #     continue
+                # if vrl.status in G_DRIVING_STATUS or vrl.status in G_LAZY_STATUS:
+                #     if vrl.destination_pos == self.list_plan_stops[0].get_pos() and self.list_plan_stops[0].is_empty():
+                #         # LOG.info("jumped ps {} becouse of vrl {}".format(self.list_plan_stops[0], vrl))
+                #         self.list_plan_stops = self.list_plan_stops[1:]
+                #     continue
                 if vrl.destination_pos == self.list_plan_stops[0].get_pos():
                     # plan infeasible as soon as other people board the vehicle
                     rid_boarded_at_stop = set([key_translator.get(rq.get_rid_struct(), rq.get_rid_struct())
@@ -723,6 +753,7 @@ class VehiclePlan:
         key_translator = {sub_rid[0]: sub_rid for sub_rid in self.pax_info.keys() if type(sub_rid) == tuple}
         c_pax = {key_translator.get(rq.get_rid_struct(), rq.get_rid_struct()): 1 for rq in veh_obj.pax}
         nr_pax = veh_obj.get_nr_pax_without_currently_boarding()  # sum([rq.nr_pax for rq in veh_obj.pax])
+        nr_parcels = veh_obj.get_nr_parcels_without_currently_boarding()
         self.pax_info = {}
         for rq in veh_obj.pax:
             rid = key_translator.get(rq.get_rid_struct(), rq.get_rid_struct())
@@ -744,6 +775,7 @@ class VehiclePlan:
                     # LOG.debug(f"c_time 3 {c_time}")
                 # update pax and check max. passenger constraint
                 nr_pax += pstop.get_change_nr_pax()
+                nr_parcels += pstop.get_change_nr_parcels()
                 for rid in pstop.get_list_boarding_rids():
                     if self.pax_info.get(rid):
                         continue
@@ -760,13 +792,13 @@ class VehiclePlan:
                 c_time = pstop.get_departure_time(c_time)
                 pstop.set_planned_arrival_and_departure_time(last_c_time, c_time)
                 # set charge
-                if pstop.charging_power > 0:  # TODO # is charging now in waiting included as planned here?
+                if pstop.get_charging_power() > 0:  # TODO # is charging now in waiting included as planned here?
                     c_soc += veh_obj.compute_soc_charging(pstop.get_charging_power(), c_time - last_c_time)
                     c_soc = max(c_soc, 1.0)
                 pstop.set_planned_arrival_and_departure_soc(last_c_soc, c_soc)
                     
         return {"stop_index": stop_index, "c_pos": c_pos, "c_soc": c_soc, "c_time": c_time, "c_pax": c_pax,
-                "pax_info": self.pax_info.copy(), "c_nr_pax": nr_pax}
+                "pax_info": self.pax_info.copy(), "c_nr_pax": nr_pax, "c_nr_parcels" : nr_parcels}
 
     def update_tt_and_check_plan(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase, init_plan_state : dict=None, keep_feasible : bool=False):
         """This method updates the planning properties of all PlanStops of the Plan according to the new vehicle
@@ -793,6 +825,7 @@ class VehiclePlan:
             c_time = init_plan_state["c_time"]
             c_pax = init_plan_state["c_pax"].copy()
             c_nr_pax = init_plan_state["c_nr_pax"]
+            c_nr_parcels = init_plan_state["c_nr_parcels"]
             self.pax_info = {}
             for k, v in init_plan_state["pax_info"].items():
                 self.pax_info[k] = v.copy()
@@ -810,6 +843,7 @@ class VehiclePlan:
                     c_time = boarding_started
             c_pax = {key_translator.get(rq.get_rid_struct(), rq.get_rid_struct()): 1 for rq in veh_obj.pax}
             c_nr_pax = veh_obj.get_nr_pax_without_currently_boarding()  # sum([rq.nr_pax for rq in veh_obj.pax])
+            c_nr_parcels = veh_obj.get_nr_parcels_without_currently_boarding()
             for rq in veh_obj.pax:
                 # LOG.debug(f"add pax info {rq.get_rid_struct()} : {rq.pu_time}")
                 rid = key_translator.get(rq.get_rid_struct(), rq.get_rid_struct())
@@ -844,6 +878,7 @@ class VehiclePlan:
                     # LOG.debug(f"c_time 3 {c_time}")
                 # update pax and check max. passenger constraint
                 c_nr_pax += pstop.get_change_nr_pax()
+                c_nr_parcels += pstop.get_change_nr_parcels()
                 #LOG.debug(f"change nr pax {pstop.change_nr_pax}")
                 for rid in pstop.get_list_boarding_rids():
                     if i == 0 and self.pax_info.get(rid):
@@ -867,7 +902,7 @@ class VehiclePlan:
                     infeasible_index = i
                     # LOG.debug(f" -> arrival after latest {c_time} > {latest_time}")
                 #LOG.debug(f"-> c nr {c_nr_pax} | cap {veh_obj.max_pax}")
-                if c_nr_pax > veh_obj.max_pax:
+                if c_nr_pax > veh_obj.max_pax or c_nr_parcels > veh_obj.max_parcels:
                     # LOG.debug(" -> capacity wrong")
                     is_feasible = False
                     infeasible_index = i
@@ -969,8 +1004,10 @@ class VehiclePlan:
                     list_vrl.append(new_vcl)
             elif status != VRL_STATES.IDLE:
                 dur, edep = pstop.get_duration_and_earliest_departure()
-                LOG.debug("vrl earliest departure: {} {}".format(dur, edep))
+                earliest_start_time = pstop.get_earliest_start_time()
+                #LOG.debug("vrl earliest departure: {} {}".format(dur, edep))
                 if edep is not None:
+                    LOG.warning("absolute earliest departure not implementen in build VRL!")
                     departure_time = edep
                 else:
                     departure_time = -LARGE_INT
@@ -979,7 +1016,7 @@ class VehiclePlan:
                 else:
                     stop_duration = 0
                 list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), boarding_dict, pstop.get_charging_power(),
-                                                duration=stop_duration, earliest_start_time=departure_time,
+                                                duration=stop_duration, earliest_start_time=earliest_start_time,
                                                 locked=pstop.is_locked()))
         return list_vrl
 
@@ -1021,7 +1058,7 @@ class VehiclePlan:
         tmp = []
         rm = False
         for ps in new_plan.list_plan_stops:
-            if not ps.is_empty() or ps.is_locked():
+            if not ps.is_empty() or ps.is_locked() or ps.is_locked_end():
                 tmp.append(ps)
             else:
                 rm = True

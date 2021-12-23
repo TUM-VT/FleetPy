@@ -92,8 +92,7 @@ class NetworkBasicWithStoreCpp(NetworkBasicCpp):
                 s = (float("inf"), float("inf"))
             res = (s[0] + origin_overhead[0] + destination_overhead[0], s[0] + origin_overhead[1] + destination_overhead[1], s[1] + origin_overhead[2] + destination_overhead[2])
             if customized_section_cost_function is None:
-                # TODO # check if this is correct
-                self._add_to_database(origin_node, destination_node, s[0], s[1], s[2])
+                self._add_to_database(origin_node, destination_node, s[0], s[0], s[1])
             return res
 
     def _reset_internal_attributes_after_travel_time_update(self):

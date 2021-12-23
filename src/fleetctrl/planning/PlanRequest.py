@@ -10,7 +10,7 @@ import pandas as pd
 from src.misc.globals import *
 from src.demand.TravelerModels import RequestBase
 from src.routing.NetworkBase import NetworkBase
-from src.FleetSimulationBase import TravellerOffer
+from src.simulation.Offers import TravellerOffer
 
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
@@ -229,6 +229,9 @@ class PlanRequest:
         """ this function returns if the request is locked
         :return: True if locked"""
         return self.locked
+    
+    def is_parcel(self) -> bool:
+        return False
 
 
 class SoftConstraintPlanRequest(PlanRequest):

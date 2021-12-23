@@ -66,10 +66,13 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
             f = "base"
         else:
             f = str(self.travel_time_file_folders[scenario_time])
-        self.tt_table = np.load(os.path.join(network_name_dir, f, "tt_matrix.npy"))
-        self.dis_table = np.load(os.path.join(network_name_dir, f, "dis_matrix.npy"))
-        self.max_preprocessed_index = self.tt_table.shape[0]
-        LOG.info(" ... travel time tables loaded until index {}".format(self.max_preprocessed_index))
+        try:
+            self.tt_table = np.load(os.path.join(network_name_dir, f, "tt_matrix.npy"))
+            self.dis_table = np.load(os.path.join(network_name_dir, f, "dis_matrix.npy"))
+            self.max_preprocessed_index = self.tt_table.shape[0]
+            LOG.info(" ... travel time tables loaded until index {}".format(self.max_preprocessed_index))
+        except FileNotFoundError:
+            LOG.warning(" ... no preprocessing files found!")
 
     def update_network(self, simulation_time, update_state = True):
         """This method can be called during simulations to update travel times (dynamic networks).

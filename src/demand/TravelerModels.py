@@ -42,16 +42,17 @@ class RequestBase(metaclass=ABCMeta):
         # input
         self.rid = rq_row.get(G_RQ_ID, rq_row.name)  # request id is index of dataframe
         self.sub_rid_struct = None
+        self.is_parcel = False  # requests are usually persons
         self.rq_time = rq_row[G_RQ_TIME] - rq_row[G_RQ_TIME] % simulation_time_step
         self.latest_decision_time = rq_row[G_RQ_LDT]
         self.earliest_start_time = self.rq_time
         if rq_row.get(G_RQ_EPT):
             self.earliest_start_time = rq_row.get(G_RQ_EPT)
-        elif scenario_parameters.get(G_AR_MIN_WT):
+        elif scenario_parameters.get(G_AR_MIN_WT):  # TODO RPP : auslagern in ParcelBase + definieren neuer global variable (parcel_min_wait_time)
             self.earliest_start_time = self.rq_time + scenario_parameters.get(G_AR_MIN_WT)
         self.latest_start_time = None
         self.max_trip_time = None
-        self.nr_pax = rq_row.get(G_RQ_PAX, 1)
+        self.nr_pax = rq_row.get(G_RQ_PAX, 1)   # TODO RPP: neue attribute für größe/menge/gewicht
         #
         self.o_node = int(rq_row[G_RQ_ORIGIN])
         self.o_pos = routing_engine.return_node_position(self.o_node)
@@ -78,7 +79,7 @@ class RequestBase(metaclass=ABCMeta):
         self.direct_route_travel_time = None
         self.direct_route_travel_distance = None
         # 
-        self.modal_state = G_RQ_STATE_MONOMODAL # mono-modal trip by default
+        self.modal_state = G_RQ_STATE_MONOMODAL # mono-modal trip by default 
 
     def get_rid(self):
         return self.rid
@@ -319,6 +320,7 @@ class BasicRequest(RequestBase):
             return opts[0]
         else:
             LOG.error(f"not implemented {offer_str(self.offer)}")
+
 # -------------------------------------------------------------------------------------------------------------------- #
 
 
@@ -436,6 +438,62 @@ class MasterRandomChoiceRequest(RequestBase):
 class SlaveRequest(RequestBase):
     """This request class does not have any choice functionality."""
     type = "SlaveRequest"
+
+    def choose_offer(self, scenario_parameters, simulation_time):
+        # method is not used
+        raise AssertionError(f"Request class {self.type} cannot be used for choice decisions!")
+
+    def user_boards_vehicle(self, simulation_time, op_id, vid, pu_pos, t_access):
+        #LOG.info(f"user boards vehicle: {self.rid} | {self.sub_rid_struct} | {self.offer}")
+        self.fare = self.offer[op_id].get(G_OFFER_FARE, 0)
+        return super().user_boards_vehicle(simulation_time, op_id, vid, pu_pos, t_access)
+
+# -------------------------------------------------------------------------------------------------------------------- #
+# Parcel Requests #
+# -------------------------------------------------------------------------------------------------------------------- #
+class ParcelRequestBase(RequestBase):
+    type = "ParcelRequestBase"
+    """ here specific attributes for parcels are defined (i.e. ID) or type """
+    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        # TODO RPP: Definiere globale Variablen für parcels
+        self.parcel_size = None
+        super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
+        self.is_parcel = True
+        self.rid = f"p_{self.rid}"
+        self.parcel_size = rq_row.get(G_RQ_PA_SIZE, 1)
+        self.earliest_start_time = rq_row.get(G_RQ_PA_EPT, None)
+        self.latest_start_time = rq_row.get(G_RQ_PA_LPT, None)
+        self.earliest_drop_off_time = rq_row.get(G_RQ_PA_EDT, None)
+        self.latest_drop_off_time = rq_row.get(G_RQ_PA_LDT, None)
+
+class BasicParcelRequest(ParcelRequestBase): # TODO
+    type = "BasicParcelRequest"
+    "here only additional attributes for a parcel request are defined"
+    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        # TODO RPP : für CL: zugehörige person request id
+        # initialisierung für verschiedene globals
+        super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
+
+    def choose_offer(self, scenario_parameters, simulation_time):
+        """This method returns the operator id of the chosen mode.
+        0..n: MoD fleet provider
+        None: not decided yet
+        <0: decline all MoD
+        :param scenario_parameters: scenario parameter dictionary
+        :param simulation_time: current simulation time
+        :return: operator_id of chosen offer; or -1 if all MoD offers are declined; None if decision not defined yet
+        """
+        declines = [offer_id for offer_id, operator_offer in self.offer.items() if operator_offer.service_declined()]
+        if len(declines) == scenario_parameters[G_NR_OPERATORS]:
+            return -1
+        elif len(self.offer) > 1:
+            raise NotImplementedError("More than one offer?")
+        else:
+            return list(self.offer.keys())[0]
+        return None
+class SlaveParcelRequest(ParcelRequestBase):
+    """This request class does not have any choice functionality."""
+    type = "SlaveParcelRequest"
 
     def choose_offer(self, scenario_parameters, simulation_time):
         # method is not used

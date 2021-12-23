@@ -116,6 +116,56 @@ class Demand:
                  f" requests removed ({G_RQ_TIME} not in simulation time)")
         # LOG.debug(f"self.future_requests = {self.future_requests}")
 
+    def load_parcel_demand_file(self, start_time, end_time, parcel_rq_file_dir, parcel_rq_file_name, np_random_seed, parcel_rq_type=None,
+                         parcel_rq_type_distr={}, parcel_rq_od_zone_distr={}, simulation_time_step=1):
+        np.random.seed(int(1712 * np_random_seed))
+        # classification of requests
+        rq_node_type_distr = {}
+        if parcel_rq_type:
+            rq_class = load_request_module(parcel_rq_type)
+            rq_node_type_distr[None] = {rq_class: 1.0}
+        elif parcel_rq_type_distr:
+            rq_node_type_distr[None] = {}
+            for rq_type, share in parcel_rq_type_distr.items():
+                rq_class = load_request_module(rq_type)
+                rq_node_type_distr[None][rq_class] = share
+        elif parcel_rq_od_zone_distr:
+            if not self.zone_definition:
+                raise IOError("Zones for different request classes are not defined!")
+            for od_zone_tuple, rq_type_distr in parcel_rq_od_zone_distr.items():
+                rq_node_type_distr[od_zone_tuple] = {}
+                for rq_type, share in rq_type_distr.items():
+                    rq_class = load_request_module(rq_type)
+                    rq_node_type_distr[od_zone_tuple][rq_class] = share
+        else:
+            raise IOError("No valid traveler type found")
+        # read input
+        abs_req_f = os.path.join(parcel_rq_file_dir, parcel_rq_file_name)
+        tmp_df = pd.read_csv(abs_req_f, dtype={"start": int, "end": int})
+        number_rq_0 = tmp_df.shape[0]
+        future_requests = tmp_df[(tmp_df[G_RQ_TIME] >= start_time) & (tmp_df[G_RQ_TIME] < end_time)]
+        number_rq = future_requests.shape[0]
+        future_requests[G_RQ_TIME] = future_requests[G_RQ_TIME] - np.mod(future_requests[G_RQ_TIME],
+                                                                         simulation_time_step)
+        # define maximum decision time
+        if G_RQ_LDT not in future_requests.columns:
+            max_dec_time = self.scenario_parameters[G_AR_MAX_DEC_T]
+            future_requests[G_RQ_LDT] = future_requests[G_RQ_TIME] + max_dec_time
+        for rq_time, rq_time_df in future_requests.groupby(G_RQ_TIME):
+            new_rq_dict = {}
+            # TODO: note, iterrows() does not preserve dtype, so strange things happen if demand file contains mixed types. Possibly rethink how this works.
+            for _, rq_row in rq_time_df.iterrows():
+                rq_obj = create_traveler(rq_row, rq_node_type_distr, self.zone_definition, self.routing_engine,
+                                         simulation_time_step, self.scenario_parameters)
+                new_rq_dict[rq_obj.rid] = rq_obj
+            if rq_time in self.future_requests:
+                self.future_requests[rq_time].update(new_rq_dict)
+            else:
+                self.future_requests[rq_time] = new_rq_dict
+        LOG.info(f"init(): {number_rq_0 - number_rq}/{number_rq_0}"
+                 f" requests removed ({G_RQ_TIME} not in simulation time)")
+        # LOG.debug(f"self.future_requests = {self.future_requests}")
+
     def save_user_stats(self, force=True):
         current_buffer_size = len(self.user_stat_buffer)
         if (current_buffer_size and force) or current_buffer_size >= BUFFER_SIZE:
@@ -227,14 +277,21 @@ class Demand:
 class SlaveDemand(Demand):
     """This class can be used when request are added from an external demand module."""
     rq_class = load_request_module("SlaveRequest")
-
-    def add_request(self, rq_info_dict, offer_id, routing_engine, sim_time, modal_state=G_RQ_STATE_MONOMODAL):
+    rq_parcel_class = load_request_module("SlaveParcelRequest")
+    def add_request(self, rq_info_dict, offer_id, routing_engine, sim_time, modal_state = G_RQ_STATE_MONOMODAL):
+        """ this function is used to add a new (person) request to the demand class
+        :param rq_info_dict: dictionary with all information regarding the request input
+        :param offer_id: used if there are different subrequests (TODO make optional? needed for moia)
+        :param routing_engine: routinge engine obj
+        :param sim_time: current simulation time
+        :modal_state: look in globals for additional states (used to indicate first or last mile customers if needed)
+        :return: request object
+        """
         rq_info_dict[G_RQ_TIME] = sim_time
         if rq_info_dict.get(G_RQ_LDT) is None:
             rq_info_dict[G_RQ_LDT] = 0
         if modal_state == G_RQ_STATE_MONOMODAL:
             # original request
-
             rq_obj = self.rq_class(rq_info_dict, routing_engine, 1, self.scenario_parameters)
             rq_obj.set_direct_route_travel_infos(routing_engine)
         else:
@@ -248,6 +305,24 @@ class SlaveDemand(Demand):
             mod_start_time = rq_info_dict[G_RQ_EPT]
             rq_obj = parent_request.create_SubTripRequest(offer_id, mod_o_node, mod_d_node, mod_start_time, modal_state = modal_state)
             rq_obj.set_direct_route_travel_infos(routing_engine)
+        # use rid-struct as key
+        self.rq_db[rq_obj.get_rid_struct()] = rq_obj
+        return rq_obj
+
+    def add_parcel_request(self, rq_info_dict, offer_id, routing_engine, sim_time):
+        """ this function is used to add a new (person) request to the demand class
+        :param rq_info_dict: dictionary with all information regarding the request input
+        :param offer_id: used if there are different subrequests (TODO make optional? needed for moia)
+        :param routing_engine: routinge engine obj
+        :param sim_time: current simulation time
+        :return: request object
+        """
+        rq_info_dict[G_RQ_TIME] = sim_time
+        if rq_info_dict.get(G_RQ_LDT) is None:
+            rq_info_dict[G_RQ_LDT] = 0
+        # original request
+        rq_obj = self.rq_parcel_class(rq_info_dict, routing_engine, 1, self.scenario_parameters)
+        rq_obj.set_direct_route_travel_infos(routing_engine)
         # use rid-struct as key
         self.rq_db[rq_obj.get_rid_struct()] = rq_obj
         return rq_obj

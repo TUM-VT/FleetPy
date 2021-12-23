@@ -1,7 +1,7 @@
 from src.fleetctrl.FleetControlBase import FleetControlBase
 from src.fleetctrl.planning.VehiclePlan import BoardingPlanStop, VehiclePlan
 from src.fleetctrl.planning.PlanRequest import PlanRequest
-from src.FleetSimulationBase import SimulationVehicle
+from src.simulation.Vehicles import SimulationVehicle
 from src.routing.NetworkBase import NetworkBase
 from src.fleetctrl.pooling.immediate.searchVehicles import veh_search_for_immediate_request,\
                                                             veh_search_for_reservation_request
@@ -16,7 +16,7 @@ LOG = logging.getLogger(__name__)
 
 def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : SimulationVehicle, orig_veh_plan : VehiclePlan, 
                   new_prq_obj : PlanRequest, std_bt : int, add_bt : int,
-                  skip_first_position_insertion : bool=False, random_order : bool = False) -> List[VehiclePlan]:
+                  skip_first_position_insertion : bool=False) -> List[VehiclePlan]:
     """This method inserts the stops for the new request at all possible positions of orig_veh_plan and returns a
     generator that only yields the feasible solutions and None in the other case.
 
@@ -33,7 +33,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
     #LOG.debug("simple_insert: sim_time {} veh {}".format(sim_time, veh_obj))
 
     # do not consider inactive vehicles
-    if veh_obj.status == 5:
+    if veh_obj.status == VRL_STATES.OUT_OF_SERVICE:
         return
 
     number_stops = len(orig_veh_plan.list_plan_stops)
@@ -47,9 +47,6 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
     if skip_first_position_insertion:
         skip_next = 0
     first_iterator = range(number_stops)
-    if random_order:
-        first_iterator = list(first_iterator)
-        np.random.shuffle(first_iterator)
     for i in first_iterator:
         if not o_prq_feasible:
             break
@@ -57,7 +54,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
             continue
         next_o_plan = orig_veh_plan.copy()
         # only allow combination of boarding tasks if the existing one is not locked (has not started)
-        if not next_o_plan.list_plan_stops[i].is_locked() and prq_o_stop_pos == next_o_plan.list_plan_stops[i].get_pos():
+        if not next_o_plan.list_plan_stops[i].is_locked() and not next_o_plan.list_plan_stops[i].is_locked_end() and prq_o_stop_pos == next_o_plan.list_plan_stops[i].get_pos():
             old_pstop = next_o_plan.list_plan_stops[i]
             new_boarding_list = old_pstop.get_list_boarding_rids() + [new_rid_struct]
             new_boarding_dict = {-1:old_pstop.get_list_alighting_rids(), 1:new_boarding_list}
@@ -104,7 +101,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                         o_prq_feasible = False
                         continue
     # add stop after last stop (waiting at this stop is also possible!)
-    if o_prq_feasible and skip_next != number_stops:
+    if o_prq_feasible and skip_next != number_stops and (number_stops == 0 or not orig_veh_plan.list_plan_stops[-1].is_locked_end()):
         i = number_stops
         #new_earliest_departure = max(prq_t_pu_earliest + std_bt, sim_time + std_bt)
         new_plan_stop = BoardingPlanStop(prq_o_stop_pos, boarding_dict={1:[new_rid_struct]}, earliest_pickup_time_dict={new_rid_struct : prq_t_pu_earliest},
@@ -127,15 +124,12 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
         next_d_plan = tmp_next_plan.copy()
         init_plan_state = next_d_plan.return_intermediary_plan_state(veh_obj, sim_time, routing_engine, o_index)
         second_iterator = range(o_index + 1, number_stops)
-        if random_order:
-            second_iterator = list(second_iterator)
-            np.random.shuffle(second_iterator)
         for j in second_iterator:
             if not d_feasible:
                 break
             # reload the plan without d-insertion
             next_d_plan = tmp_next_plan.copy()
-            if d_stop_pos == next_d_plan.list_plan_stops[j].get_pos():
+            if d_stop_pos == next_d_plan.list_plan_stops[j].get_pos() and not next_d_plan.list_plan_stops[j].is_locked_end():
                 old_pstop = next_d_plan.list_plan_stops[j]
                 # combine with last stop if it is at the same location (combine constraints)
                 new_alighting_list = old_pstop.get_list_alighting_rids() + [new_rid_struct]
@@ -183,7 +177,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                     if len(planned_pu_do) > 1 and planned_pu_do[1] > prq_t_do_latest:
                         d_feasible = False
 
-        if skip_next != number_stops:
+        if skip_next != number_stops and not tmp_next_plan.list_plan_stops[-1].is_locked_end():
             next_d_plan = tmp_next_plan.copy()
             j = number_stops
             new_plan_stop = BoardingPlanStop(d_stop_pos, boarding_dict={-1: [new_rid_struct]}, max_trip_time_dict={new_rid_struct : prq_max_trip_time},
@@ -461,7 +455,7 @@ def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleet
     return return_rv_tuples
 
 
-def reservation_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase, force_feasible_assignment : bool=True) -> List[Tuple[Any, VehiclePlan, float]]:
+def reservation_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase, force_feasible_assignment : bool=True, veh_plans : Dict[int, VehiclePlan] = None) -> List[Tuple[Any, VehiclePlan, float]]:
     """This function has access to all FleetControl attributes and therefore can trigger different heuristics and
     is easily extendable if new ideas for heuristics are developed.
 
@@ -490,18 +484,23 @@ def reservation_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fle
     :param prq: PlanRequest (reservation) to insert
     :param fleetctrl: FleetControl instance
     :param force_feasible_assignment: if True, a feasible solution is assigned even with positive control function value
+    :param veh_plans: dict vehicle id -> vehicle plan to insert to; if non fleetctrl.veh_plans is used
     :return: list of (vid, vehplan, delta_cfv) tuples
     :rtype: list
     """
 
     # TODO # think about generalization to use of Parallelization_Manager
     # -> separation into multiple parts or if-clause for Parallelization_Manager in between?
+    
+    veh_plans_to_insert_to = veh_plans
+    if veh_plans_to_insert_to is None:
+        veh_plans_to_insert_to = fleetctrl.veh_plans
 
     # 1) pre vehicle-search processes
     excluded_vid = []
 
     # 2) vehicle-search process
-    dict_veh_to_av_infos = veh_search_for_reservation_request(sim_time, prq, fleetctrl, list_excluded_vid=excluded_vid)
+    dict_veh_to_av_infos = veh_search_for_reservation_request(sim_time, prq, fleetctrl, list_excluded_vid=excluded_vid, veh_plans=veh_plans_to_insert_to)
 
     # 3) pre-insertion vehicle-selection processes
     rv_vehicles = []
@@ -512,7 +511,7 @@ def reservation_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fle
         rv_vehicles.append(fleetctrl.sim_vehicles[vid])
 
     # 4) insertion processes
-    insertion_return_list = insert_prq_in_selected_veh_list(rv_vehicles, fleetctrl.veh_plans, prq, fleetctrl.vr_ctrl_f,
+    insertion_return_list = insert_prq_in_selected_veh_list(rv_vehicles, veh_plans_to_insert_to, prq, fleetctrl.vr_ctrl_f,
                                                             fleetctrl.routing_engine, fleetctrl.rq_dict, sim_time,
                                                             fleetctrl.const_bt, fleetctrl.add_bt,
                                                             force_feasible_assignment, fleetctrl.rv_heuristics)
