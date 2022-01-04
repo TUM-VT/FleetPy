@@ -1,11 +1,14 @@
 from src.misc.globals import *
+import typing as tp
+if tp.TYPE_CHECKING is True:
+    from src.fleetctrl.planning.VehiclePlan import StationaryProcess
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Simulation Vehicle Route Leg class
 # ----------------------------------
 class VehicleRouteLeg:
     def __init__(self, status, destination_pos, rq_dict, power=0.0, duration=None, route=[], locked=False,
-                 earliest_start_time=-1000, charging_station=None):
+                 earliest_start_time=-1000, stationary_process=None):
         """
         This class summarizes the minimal information for a a route leg. It only reflects a complete state
         with the information of the initial state at the start of the leg.
@@ -17,6 +20,7 @@ class VehicleRouteLeg:
         :param route: list of nodes
         :param locked: locked tasks cannot be changed anymore
         :param earliest_start_time: for e.g. boarding processes
+        :param stationary_process:  The stationary process do be carried out at the stop
         """
         self.status = status
         self.rq_dict = rq_dict
@@ -31,7 +35,7 @@ class VehicleRouteLeg:
                 x = int(duration)
             except:
                 raise TypeError("wrong type for duration: {}".format(duration))
-        self.charging_station = charging_station
+        self.stationary_process: StationaryProcess = stationary_process
 
     def __eq__(self, other):
         """Comparison of two VehicleRouteLegs.

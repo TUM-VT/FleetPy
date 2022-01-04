@@ -8,7 +8,7 @@ from os import startfile
 # ------------------------------------------
 import numpy as np
 from abc import abstractmethod, ABCMeta
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 # src imports
 # -----------
@@ -24,6 +24,38 @@ from src.misc.globals import *
 
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
+
+
+class StationaryProcess(metaclass=ABCMeta):
+    """ A StationaryProcess provides basic interfaces for the tasks planned at the PlanStop """
+
+    @abstractmethod
+    def start_task(self, sim_time) -> bool:
+        """ Return True if the task started successfully
+
+        :param sim_time:    current simulation time
+        """
+        pass
+
+    @abstractmethod
+    def end_task(self, sim_time):
+        """ Ends the current task """
+        pass
+
+    def remaining_time_to_start(self, sim_time) -> Optional[int]:
+        """ Returns the time remaining to start the task (i.e. delay). The returned time could be negative. It returns
+         None if the values cannot be determined. The default value returns 0 """
+        return 0
+
+    @abstractmethod
+    def remaining_duration_to_finish(self, sim_time) -> Optional[int]:
+        """ Returns the estimated duration for task completion. Returns None if the process did not start """
+        pass
+
+    @abstractmethod
+    def update_state(self, delta_time):
+        """ Updates the state of the stationary process """
+        pass
 
 # =================================================================================================================== #
 # ========= PLAN STOP CLASSES ======================================================================================= #
@@ -225,7 +257,8 @@ class PlanStop(PlanStopBase):
         this class is the most general class of plan stops"""
     def __init__(self, position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={}, earliest_pickup_time_dict={}, latest_pickup_time_dict={},
                  change_nr_pax=0, change_nr_parcels=0, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None,
-                 locked=False, locked_end=False, charging_power=0, existing_vcl=None, charging_unit_id=None, planstop_state : G_PLANSTOP_STATES=G_PLANSTOP_STATES.MIXED):
+                 locked=False, locked_end=False, charging_power=0, existing_vcl=None, charging_unit_id=None, planstop_state : G_PLANSTOP_STATES=G_PLANSTOP_STATES.MIXED,
+                 stationary_task: StationaryProcess = None, status: Optional[VRL_STATES] = None):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param boarding_dict: dictionary with entries +1 -> list of request ids that board the vehicle there; -1 -> list of requests that alight the vehicle there
@@ -244,7 +277,10 @@ class PlanStop(PlanStopBase):
         :param charging_power: optional (float); if given the vehicle is charged with this power (TODO unit!) while at this stop
         :param existing_vcl: optional reference to VehicleChargeLeg TODO (is this a VCL or the ID?)
         :param charging_unit_id: optional (int) charging unit it the vehicle is supposed to charge at, defined in ChargingInfrastructure
-        :param planstop_state: used to characterize the planstop state (task to to there)"""
+        :param planstop_state: used to characterize the planstop state (task to to there)
+        :param stationary_task: the stationary task to be performed at the plan stop
+        :param status:          vehicle status while performing the current plan stop
+        """
         
         self.pos = position
         self.state = planstop_state
@@ -297,6 +333,9 @@ class PlanStop(PlanStopBase):
 
         self.started_at = None  # is only set in update_plan
         self.infeasible_locked = False
+
+        self.stationary_task: StationaryProcess = stationary_task
+        self.status: Optional[VRL_STATES] = status
         
     def get_pos(self) -> tuple:
         """returns network position of this plan stop
@@ -925,6 +964,14 @@ class VehiclePlan:
         # LOG.debug("update plan and check tt {}".format(self))
         return is_feasible
 
+    def _get_veh_leg(self, pstop: PlanStop):
+        """ Creates a vehicle leg with the planstop has as associated instance of StationaryProcess class"""
+
+        # TODO: Make the following code general for all types of stationary processes
+        veh_leg = VehicleRouteLeg(pstop.status, pstop.get_pos(), {1: [], -1: []}, locked=True,
+                                  stationary_process=pstop.stationary_task)
+        return veh_leg
+
     def build_VRL(self, veh_obj : SimulationVehicle, prq_db : dict, charging_management=None) -> List[VehicleRouteLeg]:
         """This method builds VRL for simulation vehicles from a given Plan. Since the vehicle could already have the
         VRL with the correct route, the route from veh_obj.assigned_route[0] will be used if destination positions
@@ -938,6 +985,12 @@ class VehiclePlan:
         list_vrl = []
         c_pos = veh_obj.pos
         for pstop in self.list_plan_stops:
+            # TODO: The following should be made as default behavior to delegate the specific tasks (e.g. boarding,
+            #  charging etc) to the StationaryProcess class. The usage of StationaryProcess class can significantly
+            #  simplify the code
+            if pstop.stationary_task is not None:
+                list_vrl.append(self._get_veh_leg(pstop))
+                continue
             boarding_dict = {1: [], -1: []}
             if len(pstop.get_list_boarding_rids()) > 0 or len(pstop.get_list_alighting_rids()) > 0:
                 boarding = True
@@ -972,6 +1025,8 @@ class VehiclePlan:
                 else:
                     # repositioning
                     status = VRL_STATES.REPOSITION
+                if pstop.status is not None:
+                    status = pstop.status
                 # use empty boarding dict for this VRL, but do not overwrite boarding_dict!
                 list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), {1: [], -1: []}, locked=pstop.is_locked()))
                 c_pos = pstop.get_pos()

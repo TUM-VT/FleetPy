@@ -141,6 +141,26 @@ class SimulationVehicle:
         # beware of not blocking a vehicle for a whole day!
         final_state_dict[G_V_INIT_TIME] = end_time % (24*3600)
         return final_state_dict
+
+    def _start_next_leg_stationary_object(self, simulation_time):
+        """ Starts the next leg using the route leg with a stationary process """
+
+        # TODO: Generalize the current method and incoporate directly into the start_next_leg method
+        ca = self.assigned_route[0]
+        remaining_time_to_start = ca.stationary_process.remaining_time_to_start(simulation_time)
+        if remaining_time_to_start is not None and remaining_time_to_start > 0:
+            # insert waiting leg
+            waiting_vrl = VehicleRouteLeg(VRL_STATES.WAITING, self.pos, {}, duration=remaining_time_to_start)
+            self.assigned_route = [waiting_vrl] + self.assigned_route
+            LOG.debug("veh start next leg waiting at time {} remaining {} : {}".format(simulation_time,
+                                                                                       remaining_time_to_start,
+                                                                                       self))
+            return self.start_next_leg(simulation_time)
+        else:
+            self.cl_remaining_route = []
+            ca.stationary_process.start_task(simulation_time)
+            self.cl_remaining_time = ca.stationary_process.remaining_duration_to_finish(simulation_time)
+            return [], []
     
     def start_next_leg(self, simulation_time):
         """
@@ -177,6 +197,10 @@ class SimulationVehicle:
                 self.cl_remaining_time = None
                 list_boarding_pax = []
                 list_start_alighting_pax = []
+            elif ca.stationary_process is not None:
+                list_boarding_pax = []
+                list_start_alighting_pax = []
+                self._start_next_leg_stationary_object(simulation_time)
             else:
                 # VehicleChargeLeg: check whether duration should be changed (other SOC value or late arrival)
                 if ca.status == VRL_STATES.CHARGING:
@@ -224,6 +248,8 @@ class SimulationVehicle:
         if self.assigned_route and not self.start_next_leg_first:
             ca = self.assigned_route[0]
             LOG.debug(f"Vehicle {self.vid} ends a VRL and starts {ca.__dict__} at time {simulation_time}")
+            if ca.stationary_process is not None:
+                ca.stationary_process.end_task(simulation_time)
             # record
             record_dict = {}
             record_dict[G_V_OP_ID] = self.op_id
@@ -329,6 +355,24 @@ class SimulationVehicle:
                 # self.start_next_leg(sim_time)
         # LOG.info(f"Vehicle {self.vid} after new assignment: {[str(x) for x in self.assigned_route]} at time {sim_time}")
 
+    def __update_stationary_task(self, current_time, step):
+        """ Updates the state of stationary process """
+
+        # TODO: Generalize the method for any type of stationary task and incoporate into main update method
+        stationary_process = self.assigned_route[0].stationary_process
+        passed_VRL = None
+        if step < self.cl_remaining_time:
+            self.cl_remaining_time -= step
+            stationary_process.update_state(step)
+            remaining_time = 0
+            current_time = current_time + step
+        else:
+            stationary_process.update_state(self.cl_remaining_time)
+            remaining_time = step - self.cl_remaining_time
+            current_time = current_time + self.cl_remaining_time
+            _, passed_VRL = self.end_current_leg(current_time)
+        return remaining_time, current_time, passed_VRL
+
     def update_veh_state(self, current_time, next_time):
         """This method updates the current state of a simulation vehicle. This includes moving, boarding etc.
         The method updates the vehicle position, soc. Additionally, it triggers the end and start of VehicleRouteLegs.
@@ -384,6 +428,10 @@ class SimulationVehicle:
                             dict_boarding_requests[rid] = (c_time, self.pos)
                         for rid in start_alighting_rids:
                             dict_start_alighting[rid] = (c_time, self.pos)
+            elif self.assigned_route and self.assigned_route[0].stationary_process is not None:
+                remaining_step_time, c_time, passed_VRL = self.__update_stationary_task(c_time, remaining_step_time)
+                if passed_VRL is not None:
+                    list_passed_VRL.append(passed_VRL)
             elif self.status != VRL_STATES.IDLE: #elif self.status != 0 and not self.status in G_IDLE_BUSY_STATUS:
                 # 2) non-moving:
                 # LOG.debug(f"Vehicle {self.vid} performs non-moving task between {c_time} and {next_time}")

@@ -226,10 +226,10 @@ G_OP_DYFS_UNDER_UTIL_DUR = "op_dyfs_underutilization_duration"  # only remove ve
 G_OP_CH_M = "op_charging_method"
 G_OP_CHARGE_PUBLIC_ONLY = "op_charging_public_only"
 G_OP_APS_SOC = "op_min_soc_after_planstop"
-G_PUBLIC_CHARGING_FILE = "charging_stations_file"
+G_PUBLIC_CHARGING_FILE = "op_charging_stations_file"
 G_OP_MIN_SOC_CHARGE_PUBLIC = "op_min_soc_public_station"    # Minimum soc limit after which a EV must visit charging station
-G_OP_MAX_DURATION_HOURS = "max_charging_duration_hours"           # List of pairs (start_time, end_time) when the max durations are applied
-G_OP_STATIONS_MAX_DURATIONS = "max_charging_durations"            # max allowed charging durations at stations corresponding to applicable hours in G_OP_MAX_DURATION_HOURS
+G_OP_MAX_DURATION_HOURS = "op_max_charging_duration_hours"           # List of pairs (start_time, end_time) when the max durations are applied
+G_OP_STATIONS_MAX_DURATIONS = "op_max_charging_durations"            # max allowed charging durations at stations corresponding to applicable hours in G_OP_MAX_DURATION_HOURS
 
 # Broker / Multi-Operator parameters
 G_MULTIOP_PREF_OP_RSEED = "multiop_preferred_operator_random_seed"
@@ -511,7 +511,7 @@ class VRL_STATES(Enum):
 
     @staticmethod
     def G_VEHICLE_STATUS_DICT() -> dict:
-        print("WARNING: G_VEHICLE_STATUS_DICT is still accessed! (misc.globals)")
+        # print("WARNING: G_VEHICLE_STATUS_DICT is still accessed! (misc.globals)")
         return {status.value: status.display_name for status in VRL_STATES}
 
 G_DRIVING_STATUS = [VRL_STATES.ROUTE, VRL_STATES.REPOSITION, VRL_STATES.TO_CHARGE, VRL_STATES.TO_DEPOT] # [10,11,12,13]
