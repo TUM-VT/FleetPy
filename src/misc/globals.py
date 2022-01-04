@@ -28,6 +28,7 @@ G_SIM_ROUTE_OUT_FLAG = "route_output_flag"
 G_SIM_REPLAY_FLAG = "replay_flag"
 G_SIM_REALTIME_PLOT_FLAG = "realtime_plot"
 G_SIM_REALTIME_PLOT_VEHICLE_STATUS = "realtime_plot_veh_states"
+G_SIM_REALTIME_PLOT_EXTENTS = "realtime_plot_extents"
 G_NR_OPERATORS = "nr_mod_operators"
 
 # general optional input

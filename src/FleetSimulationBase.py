@@ -731,8 +731,12 @@ class FleetSimulationBase:
     def _start_realtime_plot(self):
         """ This method starts a separate process for real time python plots """
         if self.realtime_plot_flag in {1, 2}:
-            bounding = self.routing_engine.return_network_bounding_box()
-            lons, lats = list(zip(*bounding))
+            if self.scenario_parameters.get(G_SIM_REALTIME_PLOT_EXTENTS, None):
+                extents = self.scenario_parameters.get(G_SIM_REALTIME_PLOT_EXTENTS)
+                lons, lats = extents[:2], extents[2:]
+            else:
+                bounding = self.routing_engine.return_network_bounding_box()
+                lons, lats = list(zip(*bounding))
             if self.realtime_plot_flag == 1:
                 self._manager = Manager()
                 self._shared_dict = self._manager.dict()
