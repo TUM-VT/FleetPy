@@ -1,12 +1,25 @@
+from __future__ import annotations
 import logging
 import time
+from typing import Dict, List, Tuple, Any, TYPE_CHECKING
 
-from src.fleetctrl.FleetControlBase import FleetControlBase, VehiclePlan, PlanRequest
+from src.fleetctrl.FleetControlBase import FleetControlBase
+from src.fleetctrl.planning.VehiclePlan import VehiclePlan
+from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.fleetctrl.pooling.objectives import return_pooling_objective_function
 from src.misc.init_modules import load_ride_pooling_batch_optimizer
-from src.FleetSimulationBase import TravellerOffer
+from src.simulation.Offers import Rejection, TravellerOffer
+from src.simulation.Legs import VehicleRouteLeg
 from src.fleetctrl.pooling.GeneralPoolingFunctions import get_assigned_rids_from_vehplan
 from src.misc.globals import *
+
+if TYPE_CHECKING:
+    from src.routing.NetworkBase import NetworkBase
+    from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
+    from src.simulation.Vehicles import SimulationVehicle
+    from src.infra.ChargingStation import ChargingAndDepotManagement
+    from src.infra.Zoning import ZoneSystem
+    from src.demand.TravelerModels import RequestBase
 
 
 LOG = logging.getLogger(__name__)
@@ -29,8 +42,9 @@ def load_parallelization_manager(rp_batch_optimizer_str):
 
 
 class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
-    def __init__(self, op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                 dir_names, charging_management=None):
+    def __init__(self, op_id : int, operator_attributes : dict, list_vehicles : List[SimulationVehicle],
+                 routing_engine : NetworkBase, zone_system : ZoneSystem, scenario_parameters : dict,
+                 dir_names : dict, charging_management : ChargingAndDepotManagement=None):
         """The specific attributes for the fleet control module are initialized. Strategy specific attributes are
         introduced in the children classes.
 
@@ -61,8 +75,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
                          dir_names, charging_management=charging_management)
         self.sim_time = scenario_parameters[G_SIM_START_TIME]
-        self.rid_to_assigned_vid = {}
-        self.pos_veh_dict = {}  # pos -> list_veh
+        self.rid_to_assigned_vid : Dict[Any, int] = {}
+        self.pos_veh_dict : Dict[tuple, List[SimulationVehicle]] = {}  # pos -> list_veh
         # additional control scenario input parameters
         # define vr-assignment control objective function
         self.vr_ctrl_f = return_pooling_objective_function(operator_attributes[G_OP_VR_CTRL_F])
@@ -71,16 +85,15 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         n_cores = scenario_parameters[G_SLAVE_CPU]
 
         RPBO_class = load_ride_pooling_batch_optimizer(operator_attributes.get(G_RA_RP_BATCH_OPT, "AlonsoMora"))
-        self.RPBO_Module = RPBO_class(self, self.routing_engine, self.sim_time, self.vr_ctrl_f, operator_attributes, optimisation_cores=n_cores, seed=scenario_parameters[G_RANDOM_SEED])
+        self.RPBO_Module : BatchAssignmentAlgorithmBase = RPBO_class(self, self.routing_engine, self.sim_time, self.vr_ctrl_f, operator_attributes, optimisation_cores=n_cores, seed=scenario_parameters[G_RANDOM_SEED])
 
         self.optimisation_time_step = operator_attributes[G_RA_REOPT_TS]
         self.max_rv_con = operator_attributes.get(G_RA_MAX_VR, None)
         self.applied_heuristic = operator_attributes.get(G_RA_HEU, None)
         
         # dynamic dicts to update database
-        self.new_requests = {}  # rid -> prq (new)
-        self.requests_that_changed = {}  # rid -> prq (already here but new constraints)
-        self.active_request_offers = {} #rid -> TravellerOffers
+        self.new_requests : Dict[Any, PlanRequest] = {}  # rid -> prq (new)
+        self.requests_that_changed : Dict[Any, PlanRequest] = {}  # rid -> prq (already here but new constraints)
         self.new_travel_times_loaded = False    # indicates if new travel times have been loaded on the routing engine
 
         # init dynamic output -> children fleet controls should check correct usage
@@ -93,7 +106,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         LOG.info("add init: {}".format(n_cores))
         if n_cores > 1 and self.Parallelization_Manager is None:
             LOG.info("initialize Parallelization Manager")
-            pm_class = load_parallelization_manager(operator_attributes[G_RA_RP_BATCH_OPT])
+            pm_class = load_parallelization_manager(operator_attributes.get(G_RA_RP_BATCH_OPT, "AlonsoMora"))
             if pm_class is not None:
                 self.Parallelization_Manager = pm_class(n_cores, scenario_parameters, self.dir_names)
                 LOG.info(" -> success")
@@ -110,7 +123,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         """
         self.Parallelization_Manager = Parallelization_Manager
 
-    def receive_status_update(self, vid, simulation_time, list_finished_VRL, force_update=True):
+    def receive_status_update(self, vid : int, simulation_time : int, list_finished_VRL : List[VehicleRouteLeg], force_update : bool=True):
         """This method can be used to update plans and trigger processes whenever a simulation vehicle finished some
          VehicleRouteLegs.
 
@@ -138,13 +151,13 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         upd_utility_val = self.compute_VehiclePlan_utility(simulation_time, veh_obj, self.veh_plans[vid])
         self.veh_plans[vid].set_utility(upd_utility_val)
 
-    def user_request(self, rq, sim_time):
+    def user_request(self, rq : RequestBase, sim_time : int):
         """This method is triggered for a new incoming request. It generally adds the rq to the database.
         WHEN INHERITING THIS FUNCTION AN ADDITIONAL CONTROL STRUCTURE TO CREATE OFFERS NEED TO BE IMPLEMENTED IF NEEDED
         (e.g. the functionality of creating an offer might be extended here)
 
         :param rq: request object containing all request information
-        :type rq: RequestDesign
+        :type rq: RequestBase
         :param sim_time: current simulation time
         :type sim_time: float
 
@@ -158,16 +171,16 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
 
         rid_struct = rq.get_rid_struct()
         self.rq_dict[rid_struct] = prq
-        self.RPBO_Module.addNewRequest(rid_struct, prq)
+        self.RPBO_Module.add_new_request(rid_struct, prq)
         self.new_requests[rid_struct] = 1
 
         return {}
 
-    def user_confirms_booking(self, rid, simulation_time):
+    def user_confirms_booking(self, rid : Any, simulation_time : int):
         """This method is used to confirm a customer booking. This can trigger some database processes.
 
         WHEN INHERITING THIS FUNCTION ADDITIONAL CONTROL STRUCTURES WHICH DEFINE THE ASSIGNED PLAN MIGHT BE NEEDED
-        DEPENDING ON WHERE OFFERS ARE CREATED THEY HAVE TO BE ADDED TO THE DICT self.active_request_offers
+        DEPENDING ON WHERE OFFERS ARE CREATED THEY HAVE TO BE ADDED TO THE OFFERS OF PLANREQUESTS
 
         :param rid: request id
         :type rid: int
@@ -184,13 +197,9 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
                 self.vid_with_reserved_rids[vid].append(rid)
             except KeyError:
                 self.vid_with_reserved_rids[vid] = [rid]
-        self.RPBO_Module.setRequestAssigned(rid)
-        try:
-            del self.active_request_offers[rid]
-        except KeyError:
-            pass
+        self.RPBO_Module.set_request_assigned(rid)
 
-    def user_cancels_request(self, rid, simulation_time):
+    def user_cancels_request(self, rid : Any, simulation_time : int):
         """This method is used to confirm a customer cancellation. This can trigger some database processes.
 
         WHEN INHERITING THIS FUNCTION AN ADDITIONAL CONTROL STRUCTURE DEFINING WHICH VEHICLE ROUTE SHOULD BE PICKED
@@ -226,13 +235,9 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
             del self.rid_to_assigned_vid[rid]
         except KeyError:
             pass
-        self.RPBO_Module.delRequest(rid)
-        try:
-            del self.active_request_offers[rid]
-        except KeyError:
-            pass
+        self.RPBO_Module.delete_request(rid)
 
-    def acknowledge_boarding(self, rid, vid, simulation_time):
+    def acknowledge_boarding(self, rid : Any, vid : int, simulation_time : int):
         """This method can trigger some database processes whenever a passenger is starting to board a vehicle.
 
         :param rid: request id
@@ -245,9 +250,9 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         self.sim_time = simulation_time
         LOG.debug(f"acknowledge boarding {rid} in {vid} at {simulation_time}")
         self.rq_dict[rid].set_pickup(vid, simulation_time)
-        self.RPBO_Module.setDataBaseInCaseOfBoarding(rid, vid)
+        self.RPBO_Module.set_database_in_case_of_boarding(rid, vid)
 
-    def acknowledge_alighting(self, rid, vid, simulation_time):
+    def acknowledge_alighting(self, rid : Any, vid : int, simulation_time : int):
         """This method can trigger some database processes whenever a passenger is finishing to alight a vehicle.
 
         :param rid: request id
@@ -259,14 +264,14 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         """
         self.sim_time = simulation_time
         LOG.debug(f"acknowledge alighting {rid} from {vid} at {simulation_time}")
-        self.RPBO_Module.setDataBaseInCaseOfAlighting(rid, vid)
+        self.RPBO_Module.set_database_in_case_of_alighting(rid, vid)
         del self.rq_dict[rid]
         try:
             del self.rid_to_assigned_vid[rid]
         except KeyError:
             pass
 
-    def _prq_from_reservation_to_immediate(self, rid, sim_time):
+    def _prq_from_reservation_to_immediate(self, rid : Any, sim_time : int):
         """This method is triggered when a reservation request becomes an immediate request.
         All database relevant methods can be triggered from here.
 
@@ -275,11 +280,11 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         :return: None
         """
         if self.rid_to_assigned_vid.get(rid) is not None:
-            self.RPBO_Module.addNewRequest(rid, self.rq_dict[rid], is_allready_assigned=True)
+            self.RPBO_Module.add_new_request(rid, self.rq_dict[rid], is_allready_assigned=True)
         else:
-            self.RPBO_Module.addNewRequest(rid, self.rq_dict[rid])
+            self.RPBO_Module.add_new_request(rid, self.rq_dict[rid])
 
-    def _call_time_trigger_request_batch(self, simulation_time):
+    def _call_time_trigger_request_batch(self, simulation_time : int):
         """This method can be used to perform time-triggered processes, e.g. the optimization of the current
         assignments of simulation vehicles of the fleet.
 
@@ -296,17 +301,17 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         self.sim_time = simulation_time
         if self.sim_time % self.optimisation_time_step == 0:
             # LOG.info(f"time for new optimisation at {simulation_time}")
-            self.RPBO_Module.computeNewVehicleAssignments(self.sim_time, self.vid_finished_VRLs, build_from_scratch=False,
+            self.RPBO_Module.compute_new_vehicle_assignments(self.sim_time, self.vid_finished_VRLs, build_from_scratch=False,
                                                         new_travel_times=self.new_travel_times_loaded)
             # LOG.info(f"new assignments computed")
-            self.set_new_assignments()
-            self.clearDataBases()
-            self.RPBO_Module.clearDataBases()
+            self._set_new_assignments()
+            self._clearDataBases()
+            self.RPBO_Module.clear_databases()
             dt = round(time.perf_counter() - t0, 5)
             output_dict = {G_FCTRL_CT_RQB: dt}
             self._add_to_dynamic_fleetcontrol_output(simulation_time, output_dict)
 
-    def compute_VehiclePlan_utility(self, simulation_time, veh_obj, vehicle_plan):
+    def compute_VehiclePlan_utility(self, simulation_time : int, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan) -> float:
         """This method computes the utility of a given plan and returns the value.
 
         :param simulation_time: current simulation time
@@ -320,7 +325,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         """
         return self.vr_ctrl_f(simulation_time, veh_obj, vehicle_plan, self.rq_dict, self.routing_engine)
 
-    def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, add_arg=None):
+    def assign_vehicle_plan(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, sim_time : int, force_assign : bool=False
+                            , add_arg : bool=None):
         """ this method should be used to assign a new vehicle plan to a vehicle
 
         WHEN OVERWRITING THIS FUNCTION MAKE SURE TO CALL AT LEAST THE LINES BELOW (i.e. super())
@@ -336,6 +342,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         :param add_arg: set to True, if the vehicle plan is assigned internally by AM-assignment
         :type add_arg: not defined here
         """
+        LOG.debug(f"assign vehicle plan for {veh_obj} addarg {add_arg} : {vehicle_plan}")
+        vehicle_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
         new_vrl = vehicle_plan.build_VRL(veh_obj, self.rq_dict, charging_management=self.charging_management)
         veh_obj.assign_vehicle_plan(new_vrl, sim_time, force_ignore_lock=force_assign)
         self.veh_plans[veh_obj.vid] = vehicle_plan
@@ -349,22 +357,23 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         else:
             self.RPBO_Module.set_assignment(veh_obj.vid, vehicle_plan)
 
-    def set_new_assignments(self):
+    def _set_new_assignments(self):
         """ this function sets the new assignments computed in the alonso-mora-module
         """
+        LOG.debug("global opt sols:")
         for vid, veh_obj in enumerate(self.sim_vehicles):
-            assigned_plan = self.RPBO_Module.getOptimisationSolution(vid)
+            assigned_plan = self.RPBO_Module.get_optimisation_solution(vid)
             LOG.debug("vid: {} {}".format(vid, assigned_plan))
             rids = get_assigned_rids_from_vehplan(assigned_plan)
             if len(rids) == 0 and len(get_assigned_rids_from_vehplan(self.veh_plans[vid])) == 0:
-                LOG.debug("ignore assignment")
+                #LOG.debug("ignore assignment")
                 self.RPBO_Module.set_assignment(vid, None)
                 continue
             if assigned_plan is not None:
-                LOG.debug(f"assigning new plan for vid {vid} : {assigned_plan}")
+                #LOG.debug(f"assigning new plan for vid {vid} : {assigned_plan}")
                 self.assign_vehicle_plan(veh_obj, assigned_plan, self.sim_time, add_arg=True)
             else:
-                LOG.debug(f"removing assignment from {vid}")
+                #LOG.debug(f"removing assignment from {vid}")
                 assigned_plan = VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])
                 self.assign_vehicle_plan(veh_obj, assigned_plan, self.sim_time, add_arg=True)
 
@@ -373,7 +382,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         and prevents them from reassignment in the next opt-steps
         """
         for vid, veh_obj in enumerate(self.sim_vehicles):
-            assigned_plan = self.RPBO_Module.getOptimisationSolution(vid)
+            assigned_plan = self.RPBO_Module.get_optimisation_solution(vid)
             # LOG.debug("vid: {} {}".format(vid, assigned_plan))
             rids = get_assigned_rids_from_vehplan(assigned_plan)
             for rid in rids:
@@ -381,7 +390,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
                     # LOG.info("lock rid {} to vid {}".format(rid, vid))
                     self.RPBO_Module.lock_request_to_vehicle(rid, vid)
 
-    def clearDataBases(self):
+    def _clearDataBases(self):
         """ this function clears dynamic data base entries in fleet control 
         should be called after the optimisation step
         """
@@ -390,7 +399,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         self.vid_finished_VRLs = {}
         self.new_travel_times_loaded = False
 
-    def inform_network_travel_time_update(self, simulation_time):
+    def inform_network_travel_time_update(self, simulation_time : int):
         """ triggered if new travel times are available;
         -> the AM database needs to be recomputed
         -> networks on parallel cores need to be synchronized
@@ -400,7 +409,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         if self.Parallelization_Manager is not None:
             self.Parallelization_Manager.update_network(simulation_time)
 
-    def lock_current_vehicle_plan(self, vid):
+    def lock_current_vehicle_plan(self, vid : int):
         super().lock_current_vehicle_plan(vid)
         if hasattr(self, "RPBO_Module"):
             LOG.debug(" -> also lock in RPBO_Module")
@@ -411,7 +420,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
             for rid in get_assigned_rids_from_vehplan(assigned_plan):
                 self.RPBO_Module.lock_request_to_vehicle(rid, vid)
 
-    def _lock_vid_rid_pickup(self, sim_time, vid, rid):
+    def _lock_vid_rid_pickup(self, sim_time : int, vid : int, rid : Any):
         """This method constrains the pick-up of a rid. In the pooling case, the pick-up time is constrained to a very
         short time window. In the hailing case, the Task to serve rid is locked for the vehicle.
 
@@ -423,7 +432,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         super()._lock_vid_rid_pickup(sim_time, vid, rid)
         self.RPBO_Module.lock_request_to_vehicle(rid, vid)
 
-    def change_prq_time_constraints(self, sim_time, rid, new_lpt, new_ept=None):
+    def change_prq_time_constraints(self, sim_time : int, rid : Any, new_lpt : float, new_ept : float=None):
         """this function registers if time constraints of a requests is changed during the simulation"""
         LOG.debug("change time constraints for rid {}".format(rid))
         prq = self.rq_dict[rid]
@@ -440,7 +449,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         self.RPBO_Module.register_change_in_time_constraints(rid, prq, assigned_vid=ass_vid,
                                                            exceeds_former_time_windows=exceed_tw)
 
-    def _create_user_offer(self, prq, simulation_time, assigned_vehicle_plan=None, offer_dict_without_plan={}):
+    def _create_user_offer(self, prq : PlanRequest, simulation_time : int, assigned_vehicle_plan : VehiclePlan=None,
+                           offer_dict_without_plan : dict={}) -> TravellerOffer:
         """ creating the offer for a requests
 
         :param prq: plan request
@@ -457,31 +467,10 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         """
         if assigned_vehicle_plan is not None:
             pu_time, do_time = assigned_vehicle_plan.pax_info.get(prq.get_rid_struct())
-            # offer = {G_OFFER_WAIT: pu_time - simulation_time, G_OFFER_DRIVE: do_time - pu_time,
-            #          G_OFFER_FARE: self._compute_fare(simulation_time, prq, assigned_vehicle_plan)}
             offer = TravellerOffer(prq.get_rid_struct(), self.op_id, pu_time - prq.rq_time, do_time - pu_time,
                                    self._compute_fare(simulation_time, prq, assigned_vehicle_plan))
             prq.set_service_offered(offer)  # has to be called
-            self.active_request_offers[prq.get_rid_struct()] = offer
         else:
-            offer = TravellerOffer(prq.get_rid(), self.op_id, None, None, None)
-            self.active_request_offers[prq.get_rid_struct()] = offer
+            offer = Rejection(prq.get_rid(), self.op_id)
+            prq.set_service_offered(offer)
         return offer
-
-    def get_current_offer(self, rid):
-        """ this method returns the currently active offer for the request rid
-        if a current offer is active:
-            the current TravellerOffer is returned
-        if the service is decline and the request didnt leave the system yet:
-            a "service_declined" TravellerOffer is returned (at least offered_waiting_time is set to None in TravellerOffer init)
-        if an offer is not evaluated yet:
-            None is returned
-
-        use the method "_create_user_offer" to create single user offers
-
-        :param rid: request id
-        :type rid: int
-        :return: TravellerOffer or None for the request
-        :rtype: TravellerOffer or None
-        """
-        return self.active_request_offers.get(rid, None)

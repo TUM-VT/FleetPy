@@ -1,3 +1,4 @@
+from __future__ import annotations
 # -------------------------------------------------------------------------------------------------------------------- #
 # standard distribution imports
 # -----------------------------
@@ -15,7 +16,9 @@ import numpy as np
 
 # src imports
 # -----------
-from src.FleetSimulationBase import Rejection, SimulationVehicle, VehicleRouteLeg, TravellerOffer
+from src.simulation.Offers import Rejection, TravellerOffer
+from src.simulation.Legs import VehicleRouteLeg  # ,VehicleChargeLeg
+
 from src.fleetctrl.charging.ChargingBase import ChargingBase  # ,VehicleChargeLeg
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan, RoutingTargetPlanStop
 from src.fleetctrl.planning.PlanRequest import PlanRequest
@@ -27,12 +30,13 @@ from src.infra.ChargingStation import ChargingAndDepotManagement
 from src.routing.NetworkBase import NetworkBase
 from src.infra.Zoning import ZoneSystem
 from src.demand.TravelerModels import RequestBase
+
 from src.misc.init_modules import load_repositioning_strategy, load_charging_strategy, \
     load_dynamic_fleet_sizing_strategy, load_dynamic_pricing_strategy, load_reservation_strategy
 from src.fleetctrl.pooling.GeneralPoolingFunctions import get_assigned_rids_from_vehplan
 if TYPE_CHECKING:
     from src.routing.NetworkBase import NetworkBase
-    from src.FleetSimulationBase import SimulationVehicle
+    from src.simulation.Vehicles import SimulationVehicle
     from src.infra.Zoning import ZoneSystem
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -78,7 +82,7 @@ class FleetControlBase(metaclass=ABCMeta):
         self.zones: ZoneSystem = zone_system
         self.dir_names = dir_names
         #
-        self.sim_vehicles: tp.List[SimulationVehicle] = list_vehicles
+        self.sim_vehicles: List[SimulationVehicle] = list_vehicles
         self.nr_vehicles = len(self.sim_vehicles)
         sim_start_time = scenario_parameters[G_SIM_START_TIME]
 
@@ -99,7 +103,7 @@ class FleetControlBase(metaclass=ABCMeta):
         self.pos_veh_dict = {}  # pos -> list_veh
         self.vr_ctrl_f = None  # has to be set by respective children classes
         self.vid_finished_VRLs : Dict[int, List[VehicleRouteLeg]] = {}
-        self.vid_with_reserved_rids = {}  # vid -> list of reservation_rids planned for vehicle
+        self.vid_with_reserved_rids : Dict[int, List[Any]] = {}  # vid -> list of reservation_rids planned for vehicle
 
         # PlanRequest data base (all / outside of short-term horizon)
         # -----------------------------------------------------------
@@ -438,6 +442,7 @@ class FleetControlBase(metaclass=ABCMeta):
         :type add_arg: not defined here
         """
         LOG.debug(f"assign to {veh_obj.vid} at time {sim_time} : {vehicle_plan}")
+        vehicle_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
         new_vrl = vehicle_plan.build_VRL(veh_obj, self.rq_dict, charging_management=self.charging_management)
         veh_obj.assign_vehicle_plan(new_vrl, sim_time, force_ignore_lock=force_assign)
         self.veh_plans[veh_obj.vid] = vehicle_plan

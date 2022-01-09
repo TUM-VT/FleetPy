@@ -44,7 +44,7 @@ def veh_search_for_immediate_request(sim_time, prq, fleetctrl, list_excluded_vid
     return rv_vehicles, rv_results_dict
 
 
-def veh_search_for_reservation_request(sim_time, prq, fleetctrl, list_excluded_vid=[]):
+def veh_search_for_reservation_request(sim_time, prq, fleetctrl, list_excluded_vid=[], veh_plans = None):
     """This function returns a list of vehicles that should be considered for insertion of a plan request
     whose pick up is far in the future.
 
@@ -67,6 +67,7 @@ def veh_search_for_reservation_request(sim_time, prq, fleetctrl, list_excluded_v
     :param sim_time: current simulation time
     :param prq: corresponding plan request
     :param list_excluded_vid: possible list of vehicles that are excluded from prior heuristic
+    :param veh_plans: dict vehicle id -> assigned plan (if None -> fleetctrl.veh_plans is used)
     :return: dict: vid -> list of (av_pos, av_delta_t, ps_id, later_stops_flag) tuples
     :rtype: dict
     """
@@ -89,7 +90,10 @@ def veh_search_for_reservation_request(sim_time, prq, fleetctrl, list_excluded_v
         if veh_obj.status == 5 or vid in list_excluded_vid:
             continue
         # only use currently assigned vehicle plan, create a flag whether the stop is the latest considered stop
-        a_vehplan = fleetctrl.veh_plans[vid]
+        if veh_plans is None:
+            a_vehplan = fleetctrl.veh_plans[vid]
+        else:
+            a_vehplan = veh_plans[vid]
         later_stops_flag = False
         # idle vehicles
         if not a_vehplan.list_plan_stops:

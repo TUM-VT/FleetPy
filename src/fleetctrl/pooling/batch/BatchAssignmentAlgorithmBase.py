@@ -6,7 +6,8 @@ from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.fleetctrl.pooling.immediate.insertion import simple_remove
 import numpy as np
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
-from src.FleetSimulationBase import SimulationVehicle, VehicleRouteLeg
+from src.simulation.Legs import VehicleRouteLeg
+from src.simulation.Vehicles import SimulationVehicle
 from src.routing.NetworkBase import NetworkBase
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class SimulationVehicleStruct():
 
         self.veh_type = simulation_vehicle.veh_type
         self.max_pax = simulation_vehicle.max_pax
+        self.max_parcels = simulation_vehicle.max_parcels
         self.daily_fix_cost = simulation_vehicle.daily_fix_cost
         self.distance_cost = simulation_vehicle.distance_cost
         self.battery_size = simulation_vehicle.battery_size
@@ -78,10 +80,8 @@ class SimulationVehicleStruct():
         else:
             locked_ps = []
             for ps in assigned_veh_plan.list_plan_stops:
-                if ps.is_locked():
+                if ps.is_locked() or ps.is_locked_end():
                     locked_ps.append(ps.copy())
-                else:
-                    break
             if len(locked_ps) > 0:
                 LOG.debug("locked ps for vid {}: {}".format(self.vid, [str(x) for x in locked_ps]))
             self.locked_vehplan = VehiclePlan(self, sim_time, routing_engine, locked_ps, external_pax_info=assigned_veh_plan.pax_info.copy())
@@ -100,10 +100,23 @@ class SimulationVehicleStruct():
         :return: number of pax without currently boarding ones
         :rtype: int
         """
-        if self.status == 1:
-            return sum([rq.nr_pax for rq in self.pax]) - sum([rq.nr_pax for rq in self.assigned_route[0].rq_dict.get(1, [])])
+        if self.status == VRL_STATES.BOARDING:
+            return sum([rq.nr_pax for rq in self.pax if not rq.is_parcel]) - sum([rq.nr_pax for rq in self.assigned_route[0].rq_dict.get(1, []) if not rq.is_parcel])
         else:
-            return sum([rq.nr_pax for rq in self.pax])
+            return sum([rq.nr_pax for rq in self.pax if not rq.is_parcel if not rq.is_parcel])
+        
+    def get_nr_parcels_without_currently_boarding(self) -> int:
+        """ this method returns the current number of parcels for the use of setting the inititial stats for 
+        the update_tt_... function in fleetControlBase.py.
+        In case the vehicle is currently boarding, this method doesnt count the number of currently boarding parcels
+        the reason is that boarding and deboarding of parcels is recognized during different timesteps of the vcl
+        :return: number of parcels without currently boarding ones
+        :rtype: int
+        """
+        if self.status == VRL_STATES.BOARDING:
+            return sum([rq.nr_pax for rq in self.pax if rq.is_parcel]) - sum([rq.nr_pax for rq in self.assigned_route[0].rq_dict.get(1, []) if rq.is_parcel])
+        else:
+            return sum([rq.nr_pax for rq in self.pax if rq.is_parcel])
 
 class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
 
@@ -164,7 +177,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def computeNewVehicleAssignments(self, sim_time : int, vid_to_list_passed_VRLs : Dict[int, List[VehicleRouteLeg]], veh_objs_to_build : Dict[int, SimulationVehicle] = {}, new_travel_times : bool = False, build_from_scratch : bool = False):
+    def compute_new_vehicle_assignments(self, sim_time : int, vid_to_list_passed_VRLs : Dict[int, List[VehicleRouteLeg]], veh_objs_to_build : Dict[int, SimulationVehicle] = {}, new_travel_times : bool = False, build_from_scratch : bool = False):
         """ this function computes new vehicle assignments based on current fleet information
         param sim_time : current simulation time
         param vid_to_list_passed_VRLs : (dict) vid -> list_passed_VRLs; needed to update database and V2RBs
@@ -174,7 +187,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         """
         pass
 
-    def addNewRequest(self, rid : Any, prq : PlanRequest, consider_for_global_optimisation : bool = True, is_allready_assigned : bool = False):
+    def add_new_request(self, rid : Any, prq : PlanRequest, consider_for_global_optimisation : bool = True, is_allready_assigned : bool = False):
         """ this function adds a new request to the modules database and set entries that
         possible v2rbs are going to be computed in the next opt step.
         :param rid: plan_request_id
@@ -191,7 +204,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         if not is_allready_assigned:
             self.unassigned_requests[rid] = 1
 
-    def setRequestAssigned(self, rid : Any):
+    def set_request_assigned(self, rid : Any):
         """ this function marks a request as assigned. its assignment is therefor treatet as hard constraint in the optimization problem formulation
         also all requests with the same mutually_exclusive_cluster_id are set as assigned
         :param rid: plan_request_id """
@@ -206,7 +219,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
                 except KeyError:
                     pass
 
-    def setDataBaseInCaseOfBoarding(self, rid : Any, vid : int):
+    def set_database_in_case_of_boarding(self, rid : Any, vid : int):
         """ deletes all rtvs without rid from vid (rid boarded to vid)
         deletes all rtvs with rid for all other vehicles 
         this function should be called in the fleet operators acknowledge boarding in case rid boards vid
@@ -218,7 +231,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
             self.v2r_locked[vid] = {rid : 1}
         self.r2v_locked[rid] = vid
 
-    def setDataBaseInCaseOfAlighting(self, rid : Any, vid : int):
+    def set_database_in_case_of_alighting(self, rid : Any, vid : int):
         """ this function deletes all database entries of rid and sets the new assignement by deleting rid of the currently
         assigned v2rb; the database of vid will be completely rebuild in the next opt step
         this function should be called in the fleet operators acknowledge alighting in case rid alights vid
@@ -229,10 +242,10 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         del self.r2v_locked[rid]
         sub_rids = self._get_all_rids_representing_this_base_rid(rid)
         for sub_rid in list(sub_rids):
-            self.delRequest(sub_rid)
+            self.delete_request(sub_rid)
 
     @abstractmethod
-    def getOptimisationSolution(self, vid : int) -> VehiclePlan:
+    def get_optimisation_solution(self, vid : int) -> VehiclePlan:
         """ returns optimisation solution for vid
         :param vid: vehicle id
         :return: vehicle plan object for the corresponding vehicle
@@ -249,19 +262,19 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def get_current_assignment(self, vid : int) -> VehiclePlan: # TODO same as getOptimisationSolution (delete?)
+    def get_current_assignment(self, vid : int) -> VehiclePlan: # TODO same as get_optimisation_solution (delete?)
         """ returns the vehicle plan assigned to vid currently
         :param vid: vehicle id
         :return: vehicle plan
         """
         pass
 
-    def clearDataBases(self):
+    def clear_databases(self):
         """ this function resets database entries after an optimisation step
         """
         pass
 
-    def delRequest(self, rid : Any):
+    def delete_request(self, rid : Any):
         """ this function deletes a request from all databases
         :param rid: plan_request_id """
         try:
@@ -278,7 +291,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         except:
             pass
 
-    def getVehiclePlanWithoutRid(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, rid_to_remove : Any, sim_time : int) -> VehiclePlan:
+    def get_vehicle_plan_without_rid(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, rid_to_remove : Any, sim_time : int) -> VehiclePlan:
         """this function returns the best vehicle plan by removing the rid_to_remove from the vehicle plan
         :param veh_obj: corresponding vehicle obj
         :param vehicle_plan: vehicle_plan where rid_remove is included
@@ -299,9 +312,9 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
             self.v2r_locked[vid] = {rid : 1}
         self.r2v_locked[rid] = vid
 
-    def setMutuallyExclusiveAssignmentConstraint(self, list_sub_rids : List[Any], base_rid : Any):
+    def set_mutually_exclusive_assignment_constraint(self, list_sub_rids : List[Any], base_rid : Any):
         """ when this function is called, only one of requests from list_rids is allowed being part of the solution of the assignment constraints
-        all requests of list_sub_rids have to be added by addNewRequest before calling this method
+        all requests of list_sub_rids have to be added by add_new_request before calling this method
         :param list_sub_rids: list of request_ids
         :param base_rid: id of request, that will actually board the vehicle in the simulation (the sub_rids represent variations of this request)
         """

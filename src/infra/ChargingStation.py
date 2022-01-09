@@ -15,7 +15,8 @@ from typing import List, Dict, Tuple, TYPE_CHECKING
 # -----------
 from src.misc.config import decode_config_str
 from src.misc.distributions import draw_from_distribution_dict
-from src.FleetSimulationBase import VehicleChargeLeg, SimulationVehicle
+from src.simulation.Legs import VehicleChargeLeg
+from src.simulation.Vehicles import SimulationVehicle
 from src.fleetctrl.planning.VehiclePlan import ChargingPlanStop, RoutingTargetPlanStop, PlanStopBase
 if TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase

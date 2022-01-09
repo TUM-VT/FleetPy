@@ -1,8 +1,7 @@
 import logging
-import numpy as np
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
 from src.fleetctrl.RidePoolingBatchOptimizationFleetControlBase import RidePoolingBatchOptimizationFleetControlBase
-from src.FleetSimulationBase import TravellerOffer
+from src.simulation.Offers import TravellerOffer
 from src.misc.globals import *
 
 LOG = logging.getLogger(__name__)
@@ -156,7 +155,6 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
             rq.set_service_offered(offer)
         else:
             offer = TravellerOffer(rq.get_rid(), self.op_id, None, None, None)
-        self.active_request_offers[rq.get_rid()] = offer
         return offer
 
     def _get_offered_time_interval(self, rid):

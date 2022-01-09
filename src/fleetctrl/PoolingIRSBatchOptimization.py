@@ -1,11 +1,9 @@
 import logging
 import time
-import os
 
-from src.FleetSimulationBase import TravellerOffer
-from src.fleetctrl.FleetControlBase import VehiclePlan, PlanRequest
+from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.fleetctrl.RidePoolingBatchOptimizationFleetControlBase import RidePoolingBatchOptimizationFleetControlBase
-from src.fleetctrl.pooling.immediate.insertion import single_insertion, insertion_with_heuristics
+from src.fleetctrl.pooling.immediate.insertion import insertion_with_heuristics
 
 from src.misc.globals import *
 
@@ -58,7 +56,7 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
         :return: offer
         :rtype: TravellerOffer
         """
-        # TODO # think about way to call super().user_request() again! -> addNewRequest should not be called twice
+        # TODO # think about way to call super().user_request() again! -> add_new_request should not be called twice
         # check if request is already in database (do nothing in this case)
         if self.rq_dict.get(rq.get_rid_struct()):
             return
@@ -84,20 +82,24 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
 
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
         if t_pu_earliest - sim_time > self.opt_horizon:
+            self.reservation_module.add_reservation_request(prq, sim_time)
+            offer = self.reservation_module.return_reservation_offer(prq.get_rid_struct(), sim_time)
+            LOG.debug(f"reservation offer for rid {rid_struct} : {offer}")
             prq.set_reservation_flag(True)
-            self.RPBO_Module.addNewRequest(rid_struct, prq, consider_for_global_optimisation=False)
+            self.RPBO_Module.add_new_request(rid_struct, prq, consider_for_global_optimisation=False)
         else:
-            self.RPBO_Module.addNewRequest(rid_struct, prq)
-
-        list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
-        if len(list_tuples) > 0:
-            (vid, vehplan, delta_cfv) = list_tuples[0]
-            self.tmp_assignment[rid_struct] = vehplan
-            offer = self._create_user_offer(prq, sim_time, vehplan)
-            LOG.debug(f"new offer for rid {rid_struct} : {offer}")
-        else:
-            LOG.debug(f"rejection for rid {rid_struct}")
-            self._create_rejection(prq, sim_time)
+            self.RPBO_Module.add_new_request(rid_struct, prq)
+            list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
+            if len(list_tuples) > 0:
+                (vid, vehplan, delta_cfv) = list_tuples[0]
+                LOG.debug(f"before insertion: {vid} | {self.veh_plans[vid]}")
+                LOG.debug(f"after insertion: {vid} | {vehplan}")
+                self.tmp_assignment[rid_struct] = vehplan
+                offer = self._create_user_offer(prq, sim_time, vehplan)
+                LOG.debug(f"new offer for rid {rid_struct} : {offer}")
+            else:
+                LOG.debug(f"rejection for rid {rid_struct}")
+                self._create_rejection(prq, sim_time)
 
         # record cpu time
         dt = round(time.perf_counter() - t0, 5)
@@ -118,12 +120,17 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
         :type simulation_time: float
         """
         self.sim_time = simulation_time
+        LOG.debug(f"user confirms booking {rid} at {simulation_time}")
         super().user_confirms_booking(rid, simulation_time)
-        assigned_plan = self.tmp_assignment[rid]
-        vid = assigned_plan.vid
-        veh_obj = self.sim_vehicles[vid]
-        self.assign_vehicle_plan(veh_obj, assigned_plan, simulation_time)
-        del self.tmp_assignment[rid]
+        prq = self.rq_dict[rid]
+        if prq.get_reservation_flag():
+            self.reservation_module.user_confirms_booking(rid, simulation_time)
+        else:
+            assigned_plan = self.tmp_assignment[rid]
+            vid = assigned_plan.vid
+            veh_obj = self.sim_vehicles[vid]
+            self.assign_vehicle_plan(veh_obj, assigned_plan, simulation_time)
+            del self.tmp_assignment[rid]
 
     def user_cancels_request(self, rid, simulation_time):
         """This method is used to confirm a customer cancellation. This can trigger some database processes.
@@ -134,7 +141,12 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
         :type simulation_time: float
         """
         self.sim_time = simulation_time
+        LOG.debug(f"user cancels request {rid} at {simulation_time}")
+        prq = self.rq_dict[rid]
+        if prq.get_reservation_flag():
+            self.reservation_module.user_cancels_request(rid, simulation_time)
+        else:
+            prev_assignment = self.tmp_assignment.get(rid)
+            if prev_assignment:
+                del self.tmp_assignment[rid]
         super().user_cancels_request(rid, simulation_time)
-        prev_assignment = self.tmp_assignment.get(rid)
-        if prev_assignment:
-            del self.tmp_assignment[rid]

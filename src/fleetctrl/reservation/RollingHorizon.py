@@ -1,8 +1,8 @@
-
+from __future__ import annotations
+from typing import Dict
 
 from src.misc.globals import *
 from src.fleetctrl.reservation.ReservationBase import ReservationBase
-from src.FleetSimulationBase import TravellerOffer, Rejection
 from src.fleetctrl.pooling.immediate.insertion import reservation_insertion_with_heuristics, simple_remove
 
 import logging
@@ -25,8 +25,6 @@ class RollingHorizonReservation(ReservationBase):
         :param plan_request: PlanRequest obj
         :param sim_time: current simulation time"""
         super().add_reservation_request(plan_request, sim_time)
-        self.sorted_rids_with_epa.append( (plan_request.get_rid_struct(), plan_request.get_o_stop_info()[1]))
-        self.sorted_rids_with_epa.sort(key=lambda x:x[1])
 
     def reveal_requests_for_online_optimization(self, sim_time):
         """ this function is triggered during the simulation and returns a list of request ids that should be treated as online requests in the global optimisation and
@@ -79,7 +77,9 @@ class RollingHorizonReservation(ReservationBase):
         :param rid: request id
         :param sim_time: current simulation time        
         """
-        pass
+        plan_request = self.active_reservation_requests[rid]
+        self.sorted_rids_with_epa.append( (plan_request.get_rid_struct(), plan_request.get_o_stop_info()[1]))
+        self.sorted_rids_with_epa.sort(key=lambda x:x[1])
 
     def user_cancels_request(self, rid, simulation_time):
         """ in case a reservation request which could be assigned earlier cancels the request
@@ -101,5 +101,4 @@ class RollingHorizonReservation(ReservationBase):
         """ this function is triggered during the simulation time and might trigger reoptimization processes for example 
         :param sim_time: simulation time """
         pass
-
     

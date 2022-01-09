@@ -83,6 +83,8 @@ def load_request_module(rq_type_string):
     rm_dict["PriceSensitiveIndividualConstraintRequest"] = ("src.demand.TravelerModels", "PriceSensitiveIndividualConstraintRequest")
     rm_dict["MasterRandomChoiceRequest"] = ("src.demand.TravelerModels", "MasterRandomChoiceRequest")
     rm_dict["SlaveRequest"] = ("src.demand.TravelerModels", "SlaveRequest")
+    rm_dict["BasicParcelRequest"] = ("src.demand.TravelerModels", "BasicParcelRequest")
+    rm_dict["SlaveParcelRequest"] = ("src.demand.TravelerModels", "SlaveParcelRequest")
     # add development content
     if dev_content is not None:
         dev_rm_dict = dev_content.add_request_models()

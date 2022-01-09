@@ -8,6 +8,7 @@ from enum import Enum
 from types import DynamicClassAttribute
 
 
+
 # -------------------------------------------------------------------------------------------------------------------- #
 # Scenario Definition
 # -------------------
@@ -84,6 +85,12 @@ G_RQ_TYP1 = "rq_type"
 G_RQ_TYP2 = "rq_type_distribution"
 G_RQ_TYP3 = "rq_type_od_distribution"
 
+# parcel traveler input
+G_PA_RQ_FILE = "parcel_rq_file"
+G_PA_RQ_TYP1 = "parcel_rq_type"
+G_PA_RQ_TYP2 = "parcel_rq_type_distribution"
+G_PA_RQ_TYP3 = "parcel_rq_type_od_distribution"
+
 # traveler MoD accept/reject attributes
 G_AR_MIN_WT = "user_min_wait_time"
 G_AR_MAX_WT = "user_max_wait_time"
@@ -134,7 +141,13 @@ G_OP_UTIL_EVAL_INT = "op_util_eval_interval"    # time interval utilization is e
 G_OP_ZONE_PRICE = "op_zone_price_scale_dict"
 G_OP_ELA_PRICE = "op_elastic_price_file"
 G_OP_FC_SUPPLY = "op_supply_fc_type"
-
+#parcel constraints
+G_OP_PA_EPT = "op_parcel_earliest_pickup_time"
+G_OP_PA_LPT = "op_parcel_latest_pickup_time"
+G_OP_PA_EDT = "op_parcel_earliest_dropoff_time"
+G_OP_PA_LDT = "op_parcel_latest_dropoff_time"
+G_OP_PA_CONST_BT = "op_parcel_const_boarding_time"
+G_OP_PA_ADD_BT = "op_parcel_add_boarding_time"
 
 # operator specific attributes
 G_RA_SOLVER = "op_solver"   # currently "Gurobi" or "CPLEX"
@@ -149,9 +162,10 @@ G_RA_TW_LENGTH = "op_time_window_length"
 G_RA_LOCK_RID_VID = "op_lock_rid_vid_assignment" # no re-assignment if false
 # reservation
 G_RA_RES_MOD = "op_reservation_module"
-G_RA_OPT_HOR = "op_short_term_horizon"
-G_RA_MAX_BATCH_SIZE = "op_res_batch_size"
-G_RA_RES_BOPT_TS = "op_res_opt_timestep"
+G_RA_OPT_HOR = "op_short_term_horizon"  # time ahead when requests will be treated as reservation requests
+G_RA_ASS_HOR = "op_res_assignment_horizon"  # time ahead when reservation plans will be assigned to vehicles (must exceed op_short_term_horizon)
+G_RA_MAX_BATCH_SIZE = "op_res_batch_size"   # size of of batches for ForwardBatchOptimization
+G_RA_RES_BOPT_TS = "op_res_opt_timestep"    # time interval of reservation module
 
 # private vehicles + charging
 G_PRIVATE_TRIPS_FILE = "op_private_trips_file"  # Private vehicle trips file
@@ -360,6 +374,12 @@ G_RQ_LPT = "latest_pickup_time"
 G_RQ_LDT = "latest_decision_time"
 G_RQ_MRD = "max_rel_detour"
 G_RQ_MAX_FARE = "max_fare"
+# parcel
+G_RQ_PA_SIZE = "parcel_size"
+G_RQ_PA_EPT = "parcel_earliest_pickup_time"
+G_RQ_PA_LPT = "parcel_latest_pickup_time"
+G_RQ_PA_EDT = "parcel_earliest_dropoff_time"
+G_RQ_PA_LDT = "parcel_latest_dropoff_time"
 
 # output general
 # --------------
@@ -474,6 +494,7 @@ class VRL_STATES(Enum):
     WAITING = (4, "waiting")
     OUT_OF_SERVICE = (5, "out_of_service")
     PLANNED_STOP = (6, "planned_stop")    # TODO whats that for?
+    REPO_TARGET = (7, "repositioning_target")
     ROUTE = (10, "route")
     REPOSITION = (11, "reposition")
     TO_CHARGE = (12, "to_charge")
@@ -489,6 +510,7 @@ class VRL_STATES(Enum):
 
     @staticmethod
     def G_VEHICLE_STATUS_DICT() -> dict:
+        print("WARNING: G_VEHICLE_STATUS_DICT is still accessed! (misc.globals)")
         return {status.value: status.display_name for status in VRL_STATES}
 
 G_DRIVING_STATUS = [VRL_STATES.ROUTE, VRL_STATES.REPOSITION, VRL_STATES.TO_CHARGE, VRL_STATES.TO_DEPOT] # [10,11,12,13]
@@ -529,6 +551,7 @@ G_VTYPE_DIST_COST = "per_km_cost [cent]"
 G_VTYPE_BATTERY_SIZE = "battery_size [kWh]"
 G_VTYPE_RANGE = "range [km]"
 G_VTYPE_HOME_CHARGING_POWER = "home charging power [kW]"
+G_VTYPE_MAX_PARCELS = "maximum_parcels"
 
 
 # -------------------------------------------------------------------------------------------------------------------- #
