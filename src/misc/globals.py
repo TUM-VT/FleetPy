@@ -86,6 +86,7 @@ G_RQ_TYP2 = "rq_type_distribution"
 G_RQ_TYP3 = "rq_type_od_distribution"
 
 # parcel traveler input
+G_PA_DEMAND_NAME = "parcel_demand_name"
 G_PA_RQ_FILE = "parcel_rq_file"
 G_PA_RQ_TYP1 = "parcel_rq_type"
 G_PA_RQ_TYP2 = "parcel_rq_type_distribution"
@@ -246,6 +247,9 @@ G_BP_MAX_BPS = "bp_max_bp_to_consider"
 G_AIMSUN_STAT_INT = "aimsun_statistics_interval"
 G_AIMSUN_VEH_TYPE_NAME = "aimsun_vehicle_type_name"
 
+# RPP fleetcontrol
+G_OP_PA_ASSTH = "op_parcel_assignment_threshold"
+
 # -------------------------------------------------------------------------------------------------------------------- #
 # Charging Stations/Depots
 # ------------------------
@@ -277,6 +281,7 @@ G_DIR_VEH = "vehicles"
 G_DIR_FCTRL = "fleetctrl"
 G_DIR_BP = "boardingpoints"
 G_DIR_INFRA = "infra"
+G_DIR_PARCEL_DEMAND = "parceldemand"
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # General
@@ -636,6 +641,7 @@ def get_directory_dict(scenario_parameters):
     fc_t_res = scenario_parameters.get(G_FC_TR, None)
     gtfs_name = scenario_parameters.get(G_GTFS_NAME, None)
     infra_name = scenario_parameters.get(G_INFRA_NAME, None)
+    parcel_demand_name = scenario_parameters.get(G_PA_DEMAND_NAME, None)
     #
     dirs = {}
     dirs[G_DIR_MAIN] = os.path.abspath(os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir))
@@ -653,4 +659,6 @@ def get_directory_dict(scenario_parameters):
         dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pubtrans", gtfs_name)
     if infra_name is not None:
         dirs[G_DIR_INFRA] = os.path.join(dirs[G_DIR_DATA], "infra", infra_name, network_name)
+    if parcel_demand_name is not None:
+        dirs[G_DIR_PARCEL_DEMAND] = os.path.join(dirs[G_DIR_DATA], "demand", parcel_demand_name, "matched", network_name)
     return dirs

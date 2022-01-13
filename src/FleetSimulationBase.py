@@ -295,7 +295,7 @@ class FleetSimulationBase:
                                          simulation_time_step=self.time_step)
             if self.scenario_parameters.get(G_PA_RQ_FILE) is not None:
                 self.demand.load_parcel_demand_file(self.scenario_parameters[G_SIM_START_TIME],
-                                            self.scenario_parameters[G_SIM_END_TIME], self.dir_names[G_DIR_DEMAND],
+                                            self.scenario_parameters[G_SIM_END_TIME], self.dir_names[G_DIR_PARCEL_DEMAND],
                                             self.scenario_parameters[G_PA_RQ_FILE], self.scenario_parameters[G_RANDOM_SEED],
                                             self.scenario_parameters.get(G_PA_RQ_TYP1, None),
                                             self.scenario_parameters.get(G_PA_RQ_TYP2, {}),
