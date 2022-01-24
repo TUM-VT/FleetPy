@@ -99,7 +99,7 @@ class NetworkTTMatrix(NetworkBase):
         self.zones = None
         self.tt_factor = 1.0
         self.network_name_dir = network_name_dir
-        with open(self.network_name_dir + "\\base\\crs.info", "r") as f:
+        with open(os.path.join(self.network_name_dir, "base", "crs.info"), "r") as f:
             self.crs = f.read()
         # load network structure: nodes
         nodes_f = os.path.join(network_name_dir, "base", "nodes.csv")
