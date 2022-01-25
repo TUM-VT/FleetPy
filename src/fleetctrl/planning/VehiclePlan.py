@@ -2,7 +2,6 @@
 # standard distribution imports
 # -----------------------------
 import logging
-from os import startfile
 
 # additional module imports (> requirements)
 # ------------------------------------------
@@ -13,6 +12,7 @@ from typing import List, Dict, Tuple, Optional
 # src imports
 # -----------
 from src.simulation.Legs import VehicleRouteLeg, VehicleChargeLeg
+from src.simulation.StationaryProcess import StationaryProcess
 from src.simulation.Vehicles import SimulationVehicle
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.routing.NetworkBase import NetworkBase
@@ -25,37 +25,6 @@ from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
 
-
-class StationaryProcess(metaclass=ABCMeta):
-    """ A StationaryProcess provides basic interfaces for the tasks planned at the PlanStop """
-
-    @abstractmethod
-    def start_task(self, sim_time) -> bool:
-        """ Return True if the task started successfully
-
-        :param sim_time:    current simulation time
-        """
-        pass
-
-    @abstractmethod
-    def end_task(self, sim_time):
-        """ Ends the current task """
-        pass
-
-    def remaining_time_to_start(self, sim_time) -> Optional[int]:
-        """ Returns the time remaining to start the task (i.e. delay). The returned time could be negative. It returns
-         None if the values cannot be determined. The default value returns 0 """
-        return 0
-
-    @abstractmethod
-    def remaining_duration_to_finish(self, sim_time) -> Optional[int]:
-        """ Returns the estimated duration for task completion. Returns None if the process did not start """
-        pass
-
-    @abstractmethod
-    def update_state(self, delta_time):
-        """ Updates the state of the stationary process """
-        pass
 
 # =================================================================================================================== #
 # ========= PLAN STOP CLASSES ======================================================================================= #

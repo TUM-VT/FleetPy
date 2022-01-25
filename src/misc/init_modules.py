@@ -139,8 +139,9 @@ def load_charging_strategy(op_charging_class_string):
     :return: Charging class
     """
     # FleetPy charging options
+    # TODO # adapt charging strategy names
     cs_dict = {}  # str -> (module path, class name)
-    cs_dict["Threshold"] = ("src.fleetctrl.charging.Threshold", "ChargingThreshold")
+    cs_dict["Threshold_PCI"] = ("src.fleetctrl.charging.Threshold", "ChargingThresholdPublicInfrastructure")
     # add development content
     if dev_content is not None:
         dev_cs_dict = dev_content.add_charging_strategy_modules()

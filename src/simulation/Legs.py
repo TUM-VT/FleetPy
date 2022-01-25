@@ -1,7 +1,8 @@
 from src.misc.globals import *
 import typing as tp
 if tp.TYPE_CHECKING is True:
-    from src.fleetctrl.planning.VehiclePlan import StationaryProcess
+    from src.simulation.StationaryProcess import StationaryProcess
+
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Simulation Vehicle Route Leg class

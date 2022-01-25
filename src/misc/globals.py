@@ -30,6 +30,7 @@ G_SIM_REALTIME_PLOT_FLAG = "realtime_plot"
 G_SIM_REALTIME_PLOT_VEHICLE_STATUS = "realtime_plot_veh_states"
 G_SIM_REALTIME_PLOT_EXTENTS = "realtime_plot_extents"
 G_NR_OPERATORS = "nr_mod_operators"
+G_NR_CH_OPERATORS = "nr_charging_operators"
 
 # general optional input
 G_ZONE_SYSTEM_NAME = "zone_system_name"

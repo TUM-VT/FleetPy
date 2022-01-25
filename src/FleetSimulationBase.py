@@ -24,7 +24,6 @@ import numpy as np
 # -----------
 from src.misc.init_modules import load_fleet_control_module, load_routing_engine
 from src.demand.demand import Demand, SlaveDemand
-from src.routing.NetworkBase import return_position_str
 from src.simulation.Vehicles import SimulationVehicle
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
@@ -131,6 +130,7 @@ class FleetSimulationBase:
         self.time_step = self.scenario_parameters.get(G_SIM_TIME_STEP, 1)
         self.check_sim_env_spec_inputs(self.scenario_parameters)
         self.n_op = self.scenario_parameters[G_NR_OPERATORS]
+        self.n_ch_op = self.scenario_parameters.get(G_NR_CH_OPERATORS, 0)
         self._manager: tp.Optional[Manager] = None
         self._shared_dict: dict = {}
         self._plot_class_instance: tp.Optional[PyPlot] = None
@@ -139,6 +139,8 @@ class FleetSimulationBase:
         # build list of operator dictionaries  # TODO: this could be eliminated with a new YAML-based config system
         self.list_op_dicts: tp.Dict[str,str] = build_operator_attribute_dicts(scenario_parameters, self.n_op,
                                                                               prefix="op_")
+        self.list_ch_op_dicts: tp.Dict[str,str] = build_operator_attribute_dicts(scenario_parameters, self.n_ch_op,
+                                                                                 prefix="ch_op_")
 
         # take care of random seeds at beginning of simulations
         random.seed(self.scenario_parameters[G_RANDOM_SEED])
@@ -239,25 +241,6 @@ class FleetSimulationBase:
         self._load_demand_module()
         self._load_charging_modules()
 
-        # take care of charging stations, depots and initially inactive vehicles
-        if self.dir_names.get(G_DIR_INFRA):
-            depot_fname = self.scenario_parameters.get(G_INFRA_DEP)
-            if depot_fname is not None:
-                depot_f = os.path.join(self.dir_names[G_DIR_INFRA], depot_fname)
-            else:
-                depot_f = os.path.join(self.dir_names[G_DIR_INFRA], "depots.csv")
-            pub_cs_fname = self.scenario_parameters.get(G_INFRA_PBCS)
-            if pub_cs_fname is not None:
-                pub_cs_f = os.path.join(self.dir_names[G_DIR_INFRA], pub_cs_fname)
-            else:
-                pub_cs_f = os.path.join(self.dir_names[G_DIR_INFRA], "public_charging_stations.csv")
-            from src.infra.ChargingStation import ChargingAndDepotManagement
-            self.cdp = ChargingAndDepotManagement(depot_f, pub_cs_f, self.routing_engine, self.scenario_parameters,
-                                                  self.list_op_dicts)
-            LOG.info("charging stations and depots initialzied!")
-        else:
-            self.cdp = None
-
         # attributes for fleet controller and vehicles
         self.sim_vehicles: tp.Dict[tp.Tuple[int, int], SimulationVehicle] = {}
         self.sorted_sim_vehicle_keys: tp.List[tp.Tuple[int, int]] = sorted(self.sim_vehicles.keys())
@@ -309,8 +292,9 @@ class FleetSimulationBase:
 
     def _load_charging_modules(self):
         """ Loads necessary modules for charging """
-
-        # take care of charging stations, depots and initially inactive vehicles
+        # TODO # multiple charging operators:
+        #  either public charging operator or depot operator
+        #  add parameter list [with extra parameter list] (e.g. list of allowed fleet operators, infrastructure data file)
         if self.dir_names.get(G_DIR_INFRA):
             depot_fname = self.scenario_parameters.get(G_INFRA_DEP)
             if depot_fname is not None:
@@ -322,10 +306,10 @@ class FleetSimulationBase:
                 pub_cs_f = os.path.join(self.dir_names[G_DIR_INFRA], pub_cs_fname)
             else:
                 pub_cs_f = os.path.join(self.dir_names[G_DIR_INFRA], "public_charging_stations.csv")
-            from src.infra.ChargingStation import ChargingAndDepotManagement
+            from dev.infra.ChargingStationOld import ChargingAndDepotManagement
             self.cdp = ChargingAndDepotManagement(depot_f, pub_cs_f, self.routing_engine, self.scenario_parameters,
                                                   self.list_op_dicts)
-            LOG.info("charging stations and depots initialzied!")
+            LOG.info("charging stations and depots initialized!")
         else:
             self.cdp = None
 
@@ -359,7 +343,7 @@ class FleetSimulationBase:
                 self.operators.append(OpClass(op_id, operator_attributes, list_vehicles, self.routing_engine, self.zones,
                                             self.scenario_parameters, self.dir_names, self.cdp))
             else:
-                from src.pubtrans.PtFleetControl import PtFleetControl
+                from dev.pubtrans.PtFleetControl import PtFleetControl
                 OpClass = PtFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, self.dir_names, charging_management=self.cdp)
                 init_vids = OpClass.return_vehicles_to_initialize()
                 list_vehicles = []

@@ -1,69 +1,48 @@
 import logging
 
 from src.fleetctrl.charging.ChargingBase import ChargingBase
+from src.simulation.StationaryProcess import ChargingProcess
+from src.fleetctrl.planning.VehiclePlan import PlanStop
 from src.misc.globals import *
+
 LOG = logging.getLogger(__name__)
 
 
-class ChargingThreshold(ChargingBase):
+class ChargingThresholdPublicInfrastructure(ChargingBase):
     def __init__(self, fleetctrl, operator_attributes):
         super().__init__(fleetctrl, operator_attributes)
         self.soc_threshold = operator_attributes.get(G_OP_APS_SOC, 0.1)
-        if operator_attributes.get(G_OP_CHARGE_PUBLIC_ONLY):
-            self.charge_in_depots = False
-        else:
-            self.charge_in_depots = True
 
-    def _call_specific_charging_strategy(self, sim_time):
-        if self.charge_in_depots:
-            self._low_soc_veh_to_depot(sim_time)
-        else:
-            self._low_soc_veh_to_public_cs(sim_time)
-
-    def _low_soc_veh_to_depot(self, sim_time):
-        """This charging strategy sends low SOC vehicles to the depot and reactivates another vehicle at the depot.
-
-        :param sim_time: current simulation time
-        :return: None
-        """
-        # deactivate vehicles with SOC below threshold
-        reactivate = {}  # (future time, depot_id) -> nr_activate
-        found_depots = {}  # depot_id -> depot
+    def time_triggered_charging_processes(self, sim_time):
         for veh_obj in self.fleetctrl.sim_vehicles:
             # do not consider inactive vehicles
-            if veh_obj.status == 5:
+            if veh_obj.status in {VRL_STATES.OUT_OF_SERVICE, VRL_STATES.BLOCKED_INIT}:
                 continue
             current_plan = self.fleetctrl.veh_plans[veh_obj.vid]
+            is_charging_required = False
+            last_time = sim_time
+            last_pos = veh_obj.pos
+            last_soc = veh_obj.soc
             if current_plan.list_plan_stops:
                 last_pstop = current_plan.list_plan_stops[-1]
-                if last_pstop.get_charging_power() == 0 and last_pstop.get_planned_arrival_soc() < self.soc_threshold and \
-                        not last_pstop.is_inactive():
-                    # search depot with replacement vehicle
-                    dep_rv = self.fleetctrl.charging_management.find_nearest_depot_replace_veh(last_pstop.get_pos(),
-                                                                                               self.fleetctrl.op_id)
-                    #
-                    depot, depot_ps = self.fleetctrl.charging_management.deactivate_vehicle(self.fleetctrl, veh_obj,
-                                                                                            sim_time, dep_rv)
-                    LOG.info(f"Operator {self.fleetctrl.op_id} sending vehicle {veh_obj.vid} to "
-                             f"depot {depot} for charging.")
-                    arrival_time = depot_ps.get_planned_arrival_and_departure_time()[0]
-                    found_depots[depot.cstat_id] = depot
-                    try:
-                        reactivate[(arrival_time, depot.cstat_id)] += 1
-                    except KeyError:
-                        reactivate[(arrival_time, depot.cstat_id)] = 1
-        # reactivate drivers with other vehicles at depot
-        for k, nr_activate in reactivate.items():
-            activate_time, depot_id = k
-            depot = found_depots[depot_id]
-            self.fleetctrl.charging_management.add_time_triggered_activate(activate_time, self.fleetctrl.op_id,
-                                                                           nr_activate, depot)
+                pstop_task = last_pstop.stationary_task
+                if pstop_task is not None and not isinstance(pstop_task, ChargingProcess):
+                    last_soc, _ = current_plan.list_plan_stops[-1].get_planned_arrival_and_departure_soc()
+                    if last_soc < self.soc_threshold and not last_pstop.is_inactive():
+                        _, last_time = last_pstop.get_planned_arrival_and_departure_time()
+                        last_pos = last_pstop.get_pos()
+                        is_charging_required = True
+            elif veh_obj.soc < self.soc_threshold:
+                is_charging_required = True
 
-    def _low_soc_veh_to_public_cs(self, sim_time):
-        """This charging strategy sends low SOC vehicles to the next available public charging infrastructure and
-        charges it there.
-
-        :param sim_time: current simulation time
-        :return: None
-        """
-        raise NotImplementedError("Threshold charging with public charging infrastructure not yet implemented.")
+            if is_charging_required is True:
+                charging_possibilities = self.cm.get_charging_slots(sim_time, veh_obj, last_time, last_pos, last_soc, 1.0, 1, 1)
+                if len(charging_possibilities) > 0:
+                    (station_id, socket_id, possible_start_time, possible_end_time, desired_veh_soc) = charging_possibilities[0]
+                    booking = self.cm.book_station(sim_time, veh_obj, station_id, socket_id, possible_start_time, possible_end_time)
+                    station = self.cm.station_by_id[station_id]
+                    ps = PlanStop(station.pos, {}, {}, {}, {}, {}, locked=True, stationary_task=booking,
+                                  status=VRL_STATES.CHARGING)
+                    current_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
+                    self.fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
+                    self.fleetctrl.assign_vehicle_plan(veh_obj, current_plan, sim_time)

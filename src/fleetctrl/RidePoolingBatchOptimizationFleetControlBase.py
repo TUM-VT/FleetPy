@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
 import time
-from typing import Dict, List, Tuple, Any, TYPE_CHECKING
+from typing import Dict, List, Any, TYPE_CHECKING
 
 from src.fleetctrl.FleetControlBase import FleetControlBase
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from src.routing.NetworkBase import NetworkBase
     from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
     from src.simulation.Vehicles import SimulationVehicle
-    from src.infra.ChargingStation import ChargingAndDepotManagement
+    from dev.infra.ChargingStationOld import ChargingAndDepotManagement
     from src.infra.Zoning import ZoneSystem
     from src.demand.TravelerModels import RequestBase
 
