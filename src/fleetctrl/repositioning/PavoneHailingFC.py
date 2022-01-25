@@ -104,6 +104,12 @@ class PavoneHailingRepositioningFC(RepositionBase):
 
         # optimization problem
         # --------------------
+        LOG.debug("PavoneHailingRepositioningFC input:")
+        LOG.debug("list zones: {}".format(list_zones))
+        LOG.debug("total_excess_vehicles: {}".format(total_excess_vehicles))
+        LOG.debug("v_i_e_dict: {}".format(v_i_e_dict))
+        LOG.debug("v_i_d_dict: {}".format(v_i_d_dict))
+        LOG.debug("idle vehicles: {}".format(number_idle_vehicles))
         if self.solver_key == "Gurobi":
             alpha_od, od_reposition_trips = self._optimization_gurobi(sim_time, list_zones, v_i_e_dict, v_i_d_dict,
                                                                       number_idle_vehicles, zone_dict)
@@ -133,6 +139,8 @@ class PavoneHailingRepositioningFC(RepositionBase):
         #         fhlog.write(
         #             f"{current_time},after,{sigma},{sum_idle_vehicles},{f_abs_1},{f_pos_1},{f_neg_1},{f2_val_1}\n")
         #     fhlog.close()
+        
+        LOG.debug("PavoneHailingRepositioningFC results: {}".format(od_reposition_trips))
 
         list_veh_with_changes = []
         if od_reposition_trips:

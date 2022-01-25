@@ -12,7 +12,6 @@ from tqdm import tqdm
 import typing as tp
 from pathlib import Path
 from multiprocessing import Manager
-from src.python_plots.plot_classes import PyPlot
 
 # additional module imports (> requirements)
 # ------------------------------------------
@@ -29,6 +28,7 @@ from src.simulation.Vehicles import SimulationVehicle
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.routing.NetworkBase import NetworkBase
+    from src.python_plots.plot_classes import PyPlot
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -731,6 +731,7 @@ class FleetSimulationBase:
     def _start_realtime_plot(self):
         """ This method starts a separate process for real time python plots """
         if self.realtime_plot_flag in {1, 2}:
+            from src.python_plots.plot_classes import PyPlot
             bounding = self.routing_engine.return_network_bounding_box()
             lons, lats = list(zip(*bounding))
             if self.realtime_plot_flag == 1:

@@ -2,7 +2,6 @@
 # standard distribution imports
 # -----------------------------
 import logging
-from os import startfile
 
 # additional module imports (> requirements)
 # ------------------------------------------
