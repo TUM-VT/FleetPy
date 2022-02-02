@@ -24,7 +24,6 @@ from src.fleetctrl.repositioning.RepositioningBase import RepositionBase
 from src.fleetctrl.pricing.DynamicPricingBase import DynamicPrizingBase
 from src.fleetctrl.fleetsizing.DynamicFleetSizingBase import DynamicFleetSizingBase
 from src.fleetctrl.reservation.ReservationBase import ReservationBase
-from dev.infra.ChargingStationOld import ChargingAndDepotManagement
 from src.demand.TravelerModels import RequestBase
 
 from src.misc.init_modules import load_repositioning_strategy, load_charging_strategy, \
@@ -34,6 +33,7 @@ if TYPE_CHECKING:
     from src.routing.NetworkBase import NetworkBase
     from src.simulation.Vehicles import SimulationVehicle
     from src.infra.Zoning import ZoneSystem
+    from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -50,7 +50,8 @@ BUFFER_SIZE = 100
 class FleetControlBase(metaclass=ABCMeta):
     def __init__(self, op_id : int, operator_attributes : Dict, list_vehicles : List[SimulationVehicle],
                  routing_engine : NetworkBase, zone_system : ZoneSystem, scenario_parameters : Dict,
-                 dir_names : Dict, charging_management : ChargingAndDepotManagement=None):
+                 dir_names : Dict, op_charge_depot_infra : OperatorChargingAndDepotInfrastructure=None,
+                 list_pub_charging_infra: List[PublicChargingInfrastructureOperator]= []):
         """The general attributes for the fleet control module are initialized. Strategy specific attributes are
         introduced in the children classes.
 
@@ -68,8 +69,10 @@ class FleetControlBase(metaclass=ABCMeta):
         :type scenario_parameters: dict
         :param dir_names: dictionary with references to data and output directories
         :type dir_names: dict
-        :param charging_management: reference to a ChargingAndDepotManagement class (optional)
-        :type charging_management: ChargingAndDepotManagement
+        :param op_charge_depot_infra: reference to a OperatorChargingAndDepotInfrastructure class (optional) (unique for each operator)
+        :type OperatorChargingAndDepotInfrastructure: OperatorChargingAndDepotInfrastructure
+        :param list_pub_charging_infra: list of PublicChargingInfrastructureOperator classes (optional) (accesible for all agents)
+        :type list_pub_charging_infra: list of PublicChargingInfrastructureOperator
         """
         self.n_cpu = scenario_parameters["n_cpu_per_sim"]
         self.solver: str = operator_attributes.get(G_RA_SOLVER, "Gurobi")
@@ -182,11 +185,12 @@ class FleetControlBase(metaclass=ABCMeta):
         # --------------------------------
         self.min_aps_soc = operator_attributes.get(G_OP_APS_SOC, 0.1)
         # TODO # init available charging operators
-        self.charging_management = charging_management
+        self.op_charge_depot_infra = op_charge_depot_infra
+        self.list_pub_charging_infra = list_pub_charging_infra
         charging_method = operator_attributes.get(G_OP_CH_M)
         if charging_method is not None:
             ChargingClass = load_charging_strategy(charging_method)
-            self.charging_strategy : ChargingBase = ChargingClass(self, operator_attributes)
+            self.charging_strategy : ChargingBase = ChargingClass(self, operator_attributes, self.op_charge_depot_infra, self.list_pub_charging_infra)
             prt_strategy_str += f"\t Charging: {self.charging_strategy.__class__.__name__}\n"
             self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_CH)
         else:
@@ -195,7 +199,7 @@ class FleetControlBase(metaclass=ABCMeta):
 
         # on-street parking
         # -----------------
-        if self.charging_management:
+        if self.op_charge_depot_infra:
             self.allow_on_street_parking = scenario_parameters.get(G_INFRA_ALLOW_SP, True)
         else:
             self.allow_on_street_parking = True
@@ -261,9 +265,11 @@ class FleetControlBase(metaclass=ABCMeta):
                                                active_vehicle_file_name)
             if not os.path.isfile(active_vehicle_file):
                 raise IOError(f"Could not find active vehicle file {active_vehicle_file}")
-        if self.charging_management is not None and active_vehicle_file is not None:
-            self.charging_management.read_active_vehicle_file(self, active_vehicle_file, scenario_parameters)
-            LOG.info("active vehicle file loaded!")
+        if active_vehicle_file is not None:
+            raise NotImplementedError("active vehicle control not implemented yet!")
+        # if self.charging_management is not None and active_vehicle_file is not None:
+        #     self.charging_management.read_active_vehicle_file(self, active_vehicle_file, scenario_parameters)
+        #     LOG.info("active vehicle file loaded!")
 
         # self.vid_finished_VRLs = {}
 

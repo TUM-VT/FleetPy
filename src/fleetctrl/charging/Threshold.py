@@ -36,13 +36,15 @@ class ChargingThresholdPublicInfrastructure(ChargingBase):
                 is_charging_required = True
 
             if is_charging_required is True:
-                charging_possibilities = self.cm.get_charging_slots(sim_time, veh_obj, last_time, last_pos, last_soc, 1.0, 1, 1)
-                if len(charging_possibilities) > 0:
-                    (station_id, socket_id, possible_start_time, possible_end_time, desired_veh_soc) = charging_possibilities[0]
-                    booking = self.cm.book_station(sim_time, veh_obj, station_id, socket_id, possible_start_time, possible_end_time)
-                    station = self.cm.station_by_id[station_id]
-                    ps = PlanStop(station.pos, {}, {}, {}, {}, {}, locked=True, stationary_task=booking,
-                                  status=VRL_STATES.CHARGING)
-                    current_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
-                    self.fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
-                    self.fleetctrl.assign_vehicle_plan(veh_obj, current_plan, sim_time)
+                for ch_ops in self.all_charging_infra:
+                    charging_possibilities = ch_ops.get_charging_slots(sim_time, veh_obj, last_time, last_pos, last_soc, 1.0, 1, 1)
+                    if len(charging_possibilities) > 0:
+                        (station_id, socket_id, possible_start_time, possible_end_time, desired_veh_soc) = charging_possibilities[0]
+                        booking = ch_ops.book_station(sim_time, veh_obj, station_id, socket_id, possible_start_time, possible_end_time)
+                        station = ch_ops.station_by_id[station_id]
+                        ps = PlanStop(station.pos, {}, {}, {}, {}, {}, locked=True, stationary_task=booking,
+                                    status=VRL_STATES.CHARGING)
+                        current_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
+                        self.fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
+                        self.fleetctrl.assign_vehicle_plan(veh_obj, current_plan, sim_time)
+                        break

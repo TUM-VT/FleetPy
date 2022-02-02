@@ -237,8 +237,8 @@ class FleetSimulationBase:
 
         # attribute for demand, charging and zone module
         self.demand = None
-        self.cdp = None
         self._load_demand_module()
+        self.charging_operator_dict = {}    # dict "op" -> operator_id -> OperatorChargingInfrastructure, "pub" -> ch_op_id -> ChargingInfrastructureOperator
         self._load_charging_modules()
 
         # attributes for fleet controller and vehicles
@@ -295,45 +295,26 @@ class FleetSimulationBase:
         # TODO # multiple charging operators:
         #  either public charging operator or depot operator
         #  add parameter list [with extra parameter list] (e.g. list of allowed fleet operators, infrastructure data file)
-        self.ch_mod_dict = {}
+        self.charging_operator_dict = {"op" : {}, "pub" : {}}
         if self.dir_names.get(G_DIR_INFRA):
             # operator depots:
-            from src.infra.ChargingInfrastructure import OperatorChargingInfrastructure
+            from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure
             for op_id, op_dict in enumerate(self.list_op_dicts):
                 depot_f_name = op_dict.get(G_OP_DEPOT_F)
                 if depot_f_name is not None:
                     depot_f = os.path.join(self.dir_names[G_DIR_INFRA], depot_f_name)
-                    op_charge = OperatorChargingInfrastructure(op_id, depot_f, op_dict, self.dir_names, self.routing_engine)
+                    op_charge = OperatorChargingAndDepotInfrastructure(op_id, depot_f, op_dict, self.dir_names, self.routing_engine)
+                    self.charging_operator_dict["op"][op_id] = op_charge
                 
             # public charging
             if len(self.list_ch_op_dicts) > 0:
-                from src.infra.ChargingInfrastructure import ChargingInfrastructureOperator
+                from src.infra.ChargingInfrastructure import PublicChargingInfrastructureOperator
                 for ch_op_id, ch_op_dict in enumerate(self.list_ch_op_dicts):
                     pub_cs_f_name = ch_op_dict.get(G_CH_OP_F)
                     if pub_cs_f_name is None:
                         raise EnvironmentError("Public charging stations file not given as input! parameter {} required!".format(G_CH_OP_F))
-                    ch_op = ChargingInfrastructureOperator(ch_op_id, pub_cs_f_name, ch_op_dict, self.dir_names, self.routing_engine)
-        raise NotImplementedError
-                
-        # OLD
-        #===================#
-        # if self.dir_names.get(G_DIR_INFRA):
-        #     depot_fname = self.scenario_parameters.get(G_INFRA_DEP)
-        #     if depot_fname is not None:
-        #         depot_f = os.path.join(self.dir_names[G_DIR_INFRA], depot_fname)
-        #     else:
-        #         depot_f = os.path.join(self.dir_names[G_DIR_INFRA], "depots.csv")
-        #     pub_cs_fname = self.scenario_parameters.get(G_INFRA_PBCS)
-        #     if pub_cs_fname is not None:
-        #         pub_cs_f = os.path.join(self.dir_names[G_DIR_INFRA], pub_cs_fname)
-        #     else:
-        #         pub_cs_f = os.path.join(self.dir_names[G_DIR_INFRA], "public_charging_stations.csv")
-        #     from dev.infra.ChargingStationOld import ChargingAndDepotManagement
-        #     self.cdp = ChargingAndDepotManagement(depot_f, pub_cs_f, self.routing_engine, self.scenario_parameters,
-        #                                           self.list_op_dicts)
-        #     LOG.info("charging stations and depots initialized!")
-        # else:
-        #     self.cdp = None
+                    ch_op = PublicChargingInfrastructureOperator(ch_op_id, pub_cs_f_name, ch_op_dict, self.dir_names, self.routing_engine)
+                    self.charging_operator_dict["pub"][ch_op_id] = ch_op
 
     def _load_fleetctr_vehicles(self):
         """ Loads the fleet controller and vehicles """

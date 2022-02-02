@@ -285,7 +285,7 @@ class Depot(ChargingStation):
         self.number_parking_spots = number_parking_spots
 
 
-class ChargingInfrastructureOperator:
+class PublicChargingInfrastructureOperator:
 
     # TODO # init with routing engine, charging operator attributes
     # TODO # load data in metric system
@@ -418,7 +418,7 @@ class ChargingInfrastructureOperator:
         return [self.charging_stations[x] for x in station_inx]
 
 
-class OperatorChargingInfrastructure(ChargingInfrastructureOperator):
+class OperatorChargingAndDepotInfrastructure(PublicChargingInfrastructureOperator):
     """ this class has similar functionality like a ChargingInfrastructureOperator but is unique for each MoD operator (only the corresponding operator
     has access to the charging stations """
     def __init__(self, op_id: int, depot_file: str, operator_attributes: dict, dir_names: dict, routing_engine: NetworkBase):
