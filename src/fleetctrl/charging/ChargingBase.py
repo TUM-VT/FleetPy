@@ -2,7 +2,7 @@ from abc import abstractmethod, ABC
 import logging
 from typing import Dict, List, Any, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
-    from src.infra.ChargingStation import ChargingInfrastructureOperator
+    from src.infra.ChargingInfrastructure import ChargingInfrastructureOperator
 
 LOG = logging.getLogger(__name__)
 

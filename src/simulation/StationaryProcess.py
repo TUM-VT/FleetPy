@@ -1,3 +1,4 @@
+from __future__ import annotations
 # -------------------------------------------------------------------------------------------------------------------- #
 # standard distribution imports
 # -----------------------------
@@ -6,12 +7,13 @@ import logging
 # additional module imports (> requirements)
 # ------------------------------------------
 from abc import abstractmethod, ABCMeta
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 # src imports
 # -----------
-from src.infra.ChargingStation import ChargingStation
-from src.simulation.Vehicles import SimulationVehicle
+if TYPE_CHECKING:
+    from src.infra.ChargingInfrastructure import ChargingStation
+    from src.simulation.Vehicles import SimulationVehicle
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables

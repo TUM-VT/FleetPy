@@ -10,7 +10,7 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 from operator import attrgetter, itemgetter
 
 # additional module imports (> requirements)
@@ -20,11 +20,12 @@ from operator import attrgetter, itemgetter
 # -----------
 from pyproj import Transformer
 
-from src.fleetctrl.FleetControlBase import FleetControlBase
-from src.misc.globals import G_PUBLIC_CHARGING_FILE, G_DIR_OUTPUT, G_CHARGING_STATION_SEARCH_RADIUS
-from src.routing.NetworkBase import NetworkBase
-from src.simulation.Vehicles import SimulationVehicle
+from src.misc.globals import *
 from src.simulation.StationaryProcess import ChargingProcess
+from src.misc.config import decode_config_str
+if TYPE_CHECKING:
+    from src.routing.NetworkBase import NetworkBase
+    from src.simulation.Vehicles import SimulationVehicle
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -279,7 +280,9 @@ class ChargingStation:
 # TODO # keep track of parking (inactive) vehicles | query parking lots
 class Depot(ChargingStation):
     """This class represents a charging station with parking lots for inactive vehicles."""
-    pass
+    def __init__(self, station_id, node, socket_ids, max_socket_powers: List[float], number_parking_spots):
+        super().__init__(station_id, node, socket_ids, max_socket_powers)
+        self.number_parking_spots = number_parking_spots
 
 
 class ChargingInfrastructureOperator:
@@ -288,7 +291,9 @@ class ChargingInfrastructureOperator:
     # TODO # load data in metric system
     # TODO # functionality for parking lots here | functionality for activating/deactivating in fleetctrl/fleetsizing
     # TODO # functionality for depot charging in fleetctrl/charging
-    def __init__(self, fleetctrl, operator_attributes):
+    #def __init__(self, fleetctrl, operator_attributes):
+    def __init__(self, ch_op_id: int, public_charging_station_file: str, ch_operator_attributes: dict,
+                 dir_names: dict, routing_engine: NetworkBase):
         """This class represents the operator for the charging infrastructure.
 
         :param fleetctrl: FleetControl class
@@ -296,10 +301,10 @@ class ChargingInfrastructureOperator:
         :param solver: solver for optimization problems
         """
 
-        self.fleetctrl: FleetControlBase = fleetctrl
-        self.routing_engine: NetworkBase = fleetctrl.routing_engine
-        self.operator_attributes = operator_attributes
-        self.charging_stations: tp.List[ChargingStation] = self._loading_charging_stations()
+        self.ch_op_id = ch_op_id
+        self.routing_engine = routing_engine
+        self.ch_operator_attributes = ch_operator_attributes
+        self.charging_stations: tp.List[ChargingStation] = self._loading_charging_stations(public_charging_station_file, dir_names)
         self.station_by_id: tp.Dict[int, ChargingStation] = {station.id: station for station in self.charging_stations}
 
         # Calculate and save the utm coordinates of the charging stations for calculating euclidean distances
@@ -309,24 +314,25 @@ class ChargingInfrastructureOperator:
         self.__charging_stations_utm = np.array(list(zip(x_utm, y_utm)))
 
 
-    def _loading_charging_stations(self):
+    def _loading_charging_stations(self, public_charging_station_file, dir_names) -> List[ChargingStation]:
         """ Loads the charging stations from the provided csv file"""
-
-        dir_names = self.fleetctrl.dir_names
-        stations_file = self.operator_attributes.get(G_PUBLIC_CHARGING_FILE, None)
-        assert stations_file is not None, f"Public charging stations file must exist in folder demand -> (network name) " \
-                                          f"-> public and provided via config parameter {G_PUBLIC_CHARGING_FILE}"
-        stations_file = Path(Path(dir_names["demand"]).parent.parent, "public", stations_file)
-        stations_df = pd.read_csv(stations_file)
-        stations_dict = dict(stations_df.groupby(STATION_ID_COL).apply(lambda x: x.to_dict(orient='list')))
+        stations_df = pd.read_csv(public_charging_station_file)
         file = Path(dir_names[G_DIR_OUTPUT]).joinpath("4-charging_stats.csv")
         if file.exists():
             file.unlink()
         ChargingStation.set_history_file_path(file)
-        stations = [ChargingStation(info[STATION_ID_COL][0],
-                                    info[STATION_NETWORK_NODE_COL][0],
-                                    info[STATION_SOCKET_COL],
-                                    info[STATION_SOCKET_POWER_COL]) for info in stations_dict.values()]
+        stations = []
+        for _, row in stations_df.iterrows():
+            station_id = row[G_INFRA_CS_ID]
+            node_index = row[G_NODE_ID]
+            cunit_dict = decode_config_str(row[G_INFRA_CU_DEF])
+            if cunit_dict is None:
+                cunit_dict = {}
+            socked_ids = [i for i in range(sum(cunit_dict.values()))]
+            socked_powers = []
+            for power, number in cunit_dict.items():
+                socked_powers += [power for _ in range(number)]
+            stations.append(ChargingStation(station_id, node_index, socked_ids, socked_powers))
         return stations
 
     def modify_booking(self, sim_time, booking: ChargingProcess):
@@ -412,5 +418,32 @@ class ChargingInfrastructureOperator:
         return [self.charging_stations[x] for x in station_inx]
 
 
+class OperatorChargingInfrastructure(ChargingInfrastructureOperator):
+    """ this class has similar functionality like a ChargingInfrastructureOperator but is unique for each MoD operator (only the corresponding operator
+    has access to the charging stations """
+    def __init__(self, op_id: int, depot_file: str, operator_attributes: dict, dir_names: dict, routing_engine: NetworkBase):
+        super().__init__(f"op_{op_id}", depot_file, operator_attributes, dir_names, routing_engine)
+        
+    def _loading_charging_stations(self, public_charging_station_file, dir_names) -> List[ChargingStation]:
+        """ Loads the charging stations from the provided csv file"""
+        stations_df = pd.read_csv(public_charging_station_file)
+        file = Path(dir_names[G_DIR_OUTPUT]).joinpath("4-charging_stats.csv")
+        if file.exists():
+            file.unlink()
+        ChargingStation.set_history_file_path(file)
+        stations = []
+        for _, row in stations_df.iterrows():
+            station_id = row[G_INFRA_CS_ID]
+            node_index = row[G_NODE_ID]
+            cunit_dict = decode_config_str(row[G_INFRA_CU_DEF])
+            number_parking_spots = row[G_INFRA_MAX_PARK]
+            if cunit_dict is None:
+                cunit_dict = {}
+            socked_ids = [i for i in range(sum(cunit_dict.values()))]
+            socked_powers = []
+            for power, number in cunit_dict.items():
+                socked_powers += [power for _ in range(number)]
+            stations.append(Depot(station_id, node_index, socked_ids, socked_powers, number_parking_spots))
+        return stations
 
 

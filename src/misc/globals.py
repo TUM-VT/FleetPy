@@ -143,6 +143,8 @@ G_OP_UTIL_EVAL_INT = "op_util_eval_interval"    # time interval utilization is e
 G_OP_ZONE_PRICE = "op_zone_price_scale_dict"
 G_OP_ELA_PRICE = "op_elastic_price_file"
 G_OP_FC_SUPPLY = "op_supply_fc_type"
+# charging
+G_OP_DEPOT_F = "op_depot_file"
 #parcel constraints
 G_OP_PA_EPT = "op_parcel_earliest_pickup_time"
 G_OP_PA_LPT = "op_parcel_latest_pickup_time"
@@ -263,6 +265,9 @@ G_INFRA_PUB_UTIL = "public_util"
 
 # active vehicle
 G_ACT_VEH_SHARE = "share_active_fleet_size"
+
+# charing operator
+G_CH_OP_F = "ch_op_public_charging_station_f"
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Directories
