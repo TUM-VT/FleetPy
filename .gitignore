@@ -16,6 +16,7 @@ data/vehicles/*
 !data/vehicles/default_vehtype.csv
 data/zones/*
 !data/zones/example_zones
+!data/infra/example_infra
 
 # study directories except for example
 studies/*
