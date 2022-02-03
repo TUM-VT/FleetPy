@@ -84,6 +84,7 @@ class FleetControlBase(metaclass=ABCMeta):
         self.sim_vehicles: List[SimulationVehicle] = list_vehicles
         self.nr_vehicles = len(self.sim_vehicles)
         sim_start_time = scenario_parameters[G_SIM_START_TIME]
+        self.sim_time = sim_start_time
 
         # dynamic output base
         # -------------------
@@ -252,26 +253,12 @@ class FleetControlBase(metaclass=ABCMeta):
         # log and print summary of additional strategies
         LOG.info(prt_strategy_str)
         print(prt_strategy_str)
-        self.sim_time = sim_start_time
 
     def add_init(self, operator_attributes, scenario_parameters):
         # das ist notwendig, da sonst die child-classes nicht komplett initialisiert werden können
         # initiate vehicles in depot for simulations with elastic fleet size
-        active_vehicle_file_name = operator_attributes.get(G_OP_ACT_FLEET_SIZE)
-        if active_vehicle_file_name is None:
-            active_vehicle_file = None
-        else:
-            active_vehicle_file = os.path.join(self.dir_names[G_DIR_FCTRL], "elastic_fleet_size",
-                                               active_vehicle_file_name)
-            if not os.path.isfile(active_vehicle_file):
-                raise IOError(f"Could not find active vehicle file {active_vehicle_file}")
-        if active_vehicle_file is not None:
-            raise NotImplementedError("active vehicle control not implemented yet!")
-        # if self.charging_management is not None and active_vehicle_file is not None:
-        #     self.charging_management.read_active_vehicle_file(self, active_vehicle_file, scenario_parameters)
-        #     LOG.info("active vehicle file loaded!")
-
-        # self.vid_finished_VRLs = {}
+        # TODO #
+        pass
 
     @abstractmethod
     def receive_status_update(self, vid : int, simulation_time : int, list_finished_VRL : List[VehicleRouteLeg], force_update : bool=True):

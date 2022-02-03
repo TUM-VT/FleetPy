@@ -237,6 +237,48 @@ class ChargingStation:
 
     def modify_booking(self, sim_time, booking: ChargingProcess):
         raise NotImplemented
+    
+    def get_charging_slots(self, sim_time, vehicle, planned_arrival_time, planned_start_soc, desired_end_soc, max_sockets_per_station=1):
+        """ Returns specific charging possibilities for a vehicle at this charging station
+        a future time, place with estimated SOC and desired SOC.
+
+        :param sim_time: current simulation time
+        :param vehicle: the vehicle for which the charging slot is required
+        :param planned_arrival_time: earliest time at which charging should be considered
+        :param planned_start_soc: estimated vehicle SOC at that position
+        :param desired_end_soc: desired final SOC after charging
+        :param max_sockets_per_station: maximum number of sockets per charging station to consider
+        :return: list of specific offers of ChargingOperator consisting of
+                    (charging station id, charging socket id, booking start time, booking end time, expected booking end soc)
+        """
+
+        list_station_offers = []
+        charge_durations = self.calculate_charge_durations(vehicle, planned_start_soc, desired_end_soc)
+        estimated_arrival_time = planned_arrival_time
+        for socket_id, socket_schedule in self.get_current_schedules(sim_time).items():
+            socket_charge_duration = charge_durations[socket_id]
+            possible_start_time = estimated_arrival_time
+            found_free_slot = False
+            for planned_booking in socket_schedule:
+                # check whether charging process can be finished before next booking
+                possible_end_time = possible_start_time + socket_charge_duration
+                pb_start_time, pb_et, pb_id = planned_booking
+                if possible_end_time <= pb_start_time:
+                    list_station_offers.append((self.id, socket_id, possible_start_time, possible_end_time, desired_end_soc))
+                    found_free_slot = True
+                    break
+                possible_start_time = pb_et
+            if not found_free_slot:
+                possible_end_time = possible_start_time + socket_charge_duration
+                list_station_offers.append((self.id, socket_id, possible_start_time, possible_end_time, desired_end_soc))
+            # TODO # check methodology to stop
+            if len(list_station_offers) == max_sockets_per_station:
+                if possible_start_time == estimated_arrival_time:
+                    break
+                else:
+                    # only keep offer with earliest start
+                    list_station_offers = sorted(list_station_offers, key=lambda x: x[2])[:max_sockets_per_station]
+        return list_station_offers
 
     def __append_to_history(self, sim_time, vehicle, event_name, socket=None):
         if self.station_history_file_path is not None:
@@ -277,7 +319,133 @@ class Depot(ChargingStation):
     def __init__(self, station_id, node, socket_ids, max_socket_powers: List[float], number_parking_spots):
         super().__init__(station_id, node, socket_ids, max_socket_powers)
         self.number_parking_spots = number_parking_spots
+        self.deactived_vehicles: tp.List[SimulationVehicle] = []
+        
+    @property
+    def free_parking_spots(self):
+        return self.number_parking_spots - len(self.deactived_vehicles)
+    
+    @property
+    def parking_vehicles(self):
+        return len(self.deactived_vehicles)
+        
+    def schedule_inactive(self, veh_obj):
+        """ adds the vehicle to park at the depot
+        :param veh_obj: vehicle obj"""
+        self.free_parking_spots -= 1
+        self.deactived_vehicles.append(veh_obj)
+        
+    def schedule_active(self, veh_obj):
+        """ removes the vehicle from the depot
+        :param veh_obj: vehicle obj"""
+        self.free_parking_spots += 1
+        self.deactived_vehicles.remove(veh_obj)
+        
+    def pick_vehicle_to_be_active(self) -> SimulationVehicle:
+        """ selects the vehicle with highest soc from the list of deactivated vehicles (does not activate the vehicle yet!)
+        :return: simulation vehicle obj"""
+        return max(self.deactived_vehicles, key = lambda x:x.soc)
+    
+    def refill_charging(self, simulation_time, keep_free_for_short_term=0,
+                        min_charging_duration=0):
+        """This method fills empty charging slots in a depot with the lowest SOC parking (status 5) vehicles. The
+        vehicles receive a locked PlanStop/VCL followed, which will be followed by another status 5 PlanStop/VRL.
+        These will directly be assigned to the vehicle. The VCL will also be assigned to the charging unit.
 
+        :param fleetctrl: FleetControl class
+        :param simulation_time: current simulation time
+        :param keep_free_for_short_term: optional parameter in order to keep short-term charging capacity
+        :param min_charging_duration:
+        :return: None
+        """
+        # check for vehicles that require charging
+        list_consider_charging: List[SimulationVehicle] = []
+        for veh_obj in self.deactived_vehicles:
+            if veh_obj.soc == 1.0 or veh_obj.status != VRL_STATES.OUT_OF_SERVICE:
+                continue
+            # check whether veh_obj already has vcl
+            consider_charging = True
+            for vrl in veh_obj.assigned_route:
+                if vrl.status == VRL_STATES.CHARGING:
+                    consider_charging = False
+                    break
+            if consider_charging:
+                list_consider_charging.append(veh_obj)
+        if not list_consider_charging:
+            return
+
+        for veh_obj in sorted(list_consider_charging, key = lambda x:x.soc):
+            charging_options = self.get_charging_slots(simulation_time, veh_obj, simulation_time, veh_obj.soc, 1.0)
+            if len(charging_options) > 0:
+                selected_charging_option = min(charging_options, key=lambda x:x[3])
+                ch_process = self.make_booking(simulation_time, selected_charging_option[1], start_time=selected_charging_option[2], end_time=selected_charging_option[3])
+        # for power in sorted(self.c_units_per_power.keys(), reverse=True):
+        # for 
+        #     if not list_consider_charging:
+        #         break
+        #     for cunit in self.c_units_per_power[power]:
+        #         if not list_consider_charging:
+        #             break
+        #         # 1) check free charging units
+        #         if cunit.is_currently_available(simulation_time, min_charging_duration):
+        #             if keep_free_for_short_term > 0:
+        #                 keep_free_for_short_term -= 1
+        #                 continue
+        #             # 2) fill them from lowest SOC vehicle
+        #             remove_from_consideration = []
+        #             for veh_obj in list_consider_charging:
+        #                 # check whether veh_obj already has vcl
+        #                 consider_charging = True
+        #                 for vrl in veh_obj.assigned_route:
+        #                     if vrl.status == 2:
+        #                         consider_charging = False
+        #                 if consider_charging:
+        #                     # 3) create PlanStops, VCL and VRL
+        #                     desired_end_soc = 1.0
+        #                     # get cunit availability information
+        #                     start_time, end_time, end_soc, _, _ = \
+        #                         cunit.check_charging_possibility(veh_obj, simulation_time, veh_obj.soc, desired_end_soc,
+        #                                                          stop_unlocked=False,
+        #                                                          min_charging_duration=min_charging_duration)
+        #                     # schedule charging first (in order to add VCL-Id and cunit-id to PlanStop)
+        #                     vcl = cunit.schedule_charging_job(veh_obj, power, simulation_time, end_soc, end_time, True)
+        #                     # create PlanStop
+        #                     duration = end_time - start_time
+        #                     ps = ChargingPlanStop(cunit.pos, duration=duration,
+        #                                           locked=True, charging_power=power, existing_vcl=vcl.get_vcl_id(), charging_unit_id=cunit.cu_id) # TODO planned attributes have been specified here as input before! why?
+        #                     if start_time == simulation_time:
+        #                         # finish current status 5 task
+        #                         veh_obj.end_current_leg(simulation_time)
+        #                         # modify veh-plan: insert charging before list position -1
+        #                         fleetctrl.veh_plans[veh_obj.vid].add_plan_stop(ps, veh_obj, simulation_time,
+        #                                                                        fleetctrl.routing_engine,
+        #                                                                        return_copy=False, position=-1)
+        #                     else:
+        #                         # modify veh-plan:
+        #                         # set inactive task duration correctly
+        #                         current_inactive_stop = fleetctrl.veh_plans[veh_obj.vid].list_plan_stops[-1]
+        #                         last_start = current_inactive_stop.get_started_at()
+        #                         if last_start is None:
+        #                             last_start = current_inactive_stop.get_planned_arrival_and_departure_time()[0]
+        #                         complete_duration = start_time - last_start
+        #                         current_inactive_stop.set_duration_and_earliest_end_time(duration=complete_duration)
+        #                         # insert charging before list after current stop
+        #                         fleetctrl.veh_plans[veh_obj.vid].add_plan_stop(ps, veh_obj, simulation_time,
+        #                                                                        fleetctrl.routing_engine,
+        #                                                                        return_copy=False)
+        #                         # append another inactive task after that
+        #                         inactive_ps = RoutingTargetPlanStop(self.pos, locked=True, duration=LARGE_INT, planstop_state=G_PLANSTOP_STATES.INACTIVE)
+        #                         fleetctrl.veh_plans[veh_obj.vid].add_plan_stop(inactive_ps, veh_obj, simulation_time,
+        #                                                                        fleetctrl.routing_engine,
+        #                                                                        return_copy=False)
+        #                     fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
+        #                     # assign vehicle plan
+        #                     fleetctrl.assign_vehicle_plan(veh_obj, fleetctrl.veh_plans[veh_obj.vid], simulation_time)
+        #                     remove_from_consideration.append(veh_obj)
+        #                     # only 1 vehicle per charging unit
+        #                     break
+        #             for veh_obj in remove_from_consideration:
+        #                 list_consider_charging.remove(veh_obj)
 
 class PublicChargingInfrastructureOperator:
 
@@ -357,38 +525,14 @@ class PublicChargingInfrastructureOperator:
         :param max_number_charging_stations: maximum number of charging stations to consider
         :param max_sockets_per_station: maximum number of sockets per charging station to consider
         :return: list of specific offers of ChargingOperator consisting of
-                    (charging station id, charging socket id, booking start time, booking end time, expected booking end soc, travel time to station, travel distance to station)
+                    (charging station id, charging socket id, booking start time, booking end time, expected booking end soc)
         """
         considered_station_list = self._get_considered_stations(planned_veh_pos)
         list_offers = []
         for station_id, tt, dis in considered_station_list:
             station = self.station_by_id[station_id]
-            list_station_offers = []
-            charge_durations = station.calculate_charge_durations(vehicle, planned_veh_soc, desired_veh_soc)
             estimated_arrival_time = planned_start_time + tt
-            for socket_id, socket_schedule in station.get_current_schedules(sim_time).items():
-                socket_charge_duration = charge_durations[socket_id]
-                possible_start_time = estimated_arrival_time
-                found_free_slot = False
-                for planned_booking in socket_schedule:
-                    # check whether charging process can be finished before next booking
-                    possible_end_time = possible_start_time + socket_charge_duration
-                    pb_start_time, pb_et, pb_id = planned_booking
-                    if possible_end_time <= pb_start_time:
-                        list_station_offers.append((station.id, socket_id, possible_start_time, possible_end_time, desired_veh_soc, tt, dis))
-                        found_free_slot = True
-                        break
-                    possible_start_time = pb_et
-                if not found_free_slot:
-                    possible_end_time = possible_start_time + socket_charge_duration
-                    list_station_offers.append((station.id, socket_id, possible_start_time, possible_end_time, desired_veh_soc, tt, dis))
-                # TODO # check methodology to stop
-                if len(list_station_offers) == max_sockets_per_station:
-                    if possible_start_time == estimated_arrival_time:
-                        break
-                    else:
-                        # only keep offer with earliest start
-                        list_station_offers = sorted(list_offers, key=lambda x: x[2])[:1]
+            list_station_offers = station.get_charging_slots(sim_time, vehicle, estimated_arrival_time, planned_veh_soc, desired_veh_soc, max_sockets_per_station=max_sockets_per_station)
             list_offers.extend(list_station_offers)
             # TODO # check methodology to stop
             if len(list_offers) >= max_number_charging_stations:
@@ -419,6 +563,7 @@ class PublicChargingInfrastructureOperator:
         """ this method is triggered in each simulation time step
         :param sim_time: simulation time"""
         pass
+    
 
 class OperatorChargingAndDepotInfrastructure(PublicChargingInfrastructureOperator):
     """ this class has similar functionality like a ChargingInfrastructureOperator but is unique for each MoD operator (only the corresponding operator
@@ -437,8 +582,9 @@ class OperatorChargingAndDepotInfrastructure(PublicChargingInfrastructureOperato
         :param routing_engine: reference to network class
         """
         super().__init__(f"op_{op_id}", depot_file, operator_attributes, scenario_parameters, dir_names, routing_engine)
+        self.depot_by_id: tp.Dict[int, Depot] = {depot_id : depot for depot_id, depot in self.station_by_id.items() if depot.number_parking_spots > 0}
         
-    def _loading_charging_stations(self, depot_file, dir_names) -> List[ChargingStation]:
+    def _loading_charging_stations(self, depot_file, dir_names) -> List[Depot]:
         """ Loads the charging stations from the provided csv file"""
         stations_df = pd.read_csv(depot_file)
         file = Path(dir_names[G_DIR_OUTPUT]).joinpath("4-charging_stats.csv")
@@ -459,5 +605,22 @@ class OperatorChargingAndDepotInfrastructure(PublicChargingInfrastructureOperato
                 socked_powers += [power for _ in range(number)]
             stations.append(Depot(station_id, node_index, socked_ids, socked_powers, number_parking_spots))
         return stations
+    
+    def find_nearest_free_depot(self, pos, check_free=True) -> Depot:
+        """This method can be used to send a vehicle to the next depot.
 
-
+        :param pos: final vehicle position
+        :param check_free: if set to False, the check for free parking is ignored
+        :return: Depot
+        """
+        free_depot_positions = {}
+        for depot in self.depot_by_id.values():
+            if depot.free_parking_spots > 0 or not check_free:
+                free_depot_positions[depot.pos] = depot
+        re_list = self.routing_engine.return_travel_costs_1toX(pos, free_depot_positions.keys(), max_routes=1)
+        if re_list:
+            destination_pos = re_list[0][0]
+            depot = free_depot_positions[destination_pos]
+        else:
+            depot = None
+        return depot
