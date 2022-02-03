@@ -3,6 +3,7 @@
 # -----------------------------
 from __future__ import annotations
 import logging
+from pdb import post_mortem
 import typing as tp
 from pathlib import Path
 from collections import defaultdict
@@ -32,14 +33,7 @@ if TYPE_CHECKING:
 # ----------------
 LOG = logging.getLogger(__name__)
 
-MAX_CHARGING_SEARCH = 100
-UTM_CRS = "+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
-STATION_ID_COL = "station_id"
-STATION_SOCKET_COL = "socket nr"
-STATION_SOCKET_POWER_COL = "max_socket_power"
-STATION_NETWORK_NODE_COL = "nearest_node"
-STATION_NODE_DISTANCE_COL = "nearest_node_distance"
-
+MAX_CHARGING_SEARCH = 100   # TODO # in globals?
 
 class ChargingSocket:
     """ This class represents a single charging socket """
@@ -287,18 +281,16 @@ class Depot(ChargingStation):
 
 class PublicChargingInfrastructureOperator:
 
-    # TODO # init with routing engine, charging operator attributes
-    # TODO # load data in metric system
-    # TODO # functionality for parking lots here | functionality for activating/deactivating in fleetctrl/fleetsizing
-    # TODO # functionality for depot charging in fleetctrl/charging
-    #def __init__(self, fleetctrl, operator_attributes):
     def __init__(self, ch_op_id: int, public_charging_station_file: str, ch_operator_attributes: dict,
-                 dir_names: dict, routing_engine: NetworkBase):
+                 scenario_parameters: dict, dir_names: dict, routing_engine: NetworkBase):
         """This class represents the operator for the charging infrastructure.
 
-        :param fleetctrl: FleetControl class
-        :param operator_attributes: operator dictionary that can contain additionally required parameters
-        :param solver: solver for optimization problems
+        :param ch_op_id: id of charging operator
+        :param public_charging_station_file: path to file where charging stations are loaded from
+        :param ch_operator_attributes: dictionary that can contain additionally required parameters (parameter specific for charging operator)
+        :param scenario_parameters: dictionary that contain global scenario parameters
+        :param dir_names: dictionary that specifies the folder structure of the simulation
+        :param routing_engine: reference to network class
         """
 
         self.ch_op_id = ch_op_id
@@ -306,12 +298,15 @@ class PublicChargingInfrastructureOperator:
         self.ch_operator_attributes = ch_operator_attributes
         self.charging_stations: tp.List[ChargingStation] = self._loading_charging_stations(public_charging_station_file, dir_names)
         self.station_by_id: tp.Dict[int, ChargingStation] = {station.id: station for station in self.charging_stations}
-
-        # Calculate and save the utm coordinates of the charging stations for calculating euclidean distances
-        stations_lonlat = self.routing_engine.return_positions_lon_lat([x.pos for x in self.charging_stations])
-        proj_transformer = Transformer.from_proj('epsg:4326', UTM_CRS)
-        x_utm, y_utm = proj_transformer.transform([x[1] for x in stations_lonlat], [x[0] for x in stations_lonlat])
-        self.__charging_stations_utm = np.array(list(zip(x_utm, y_utm)))
+        self.pos_to_list_station_id: tp.Dict[tuple, tp.List[int]] = {}
+        for station_id, station in self.station_by_id.items():
+            try:
+                self.pos_to_list_station_id[station.pos].append(station_id)
+            except KeyError:
+                self.pos_to_list_station_id[station.pos] = [station_id]
+                
+        self.max_search_radius = scenario_parameters.get(G_CH_OP_MAX_STATION_SEARCH_RADIUS)
+        self.max_considered_stations = scenario_parameters.get(G_CH_OP_MAX_CHARGING_SEARCH, 100)
 
 
     def _loading_charging_stations(self, public_charging_station_file, dir_names) -> List[ChargingStation]:
@@ -350,7 +345,7 @@ class PublicChargingInfrastructureOperator:
 
     def get_charging_slots(self, sim_time, vehicle: SimulationVehicle, planned_start_time, planned_veh_pos,
                            planned_veh_soc, desired_veh_soc, max_number_charging_stations=1, max_sockets_per_station=1) \
-            -> tp.List[tp.Tuple[int, int, int, int, float]]:
+            -> tp.List[tp.Tuple[int, int, int, int, float, float, float]]:
         """ Returns specific charging possibilities for a vehicle at a future time, place with estimated SOC and desired SOC.
 
         :param sim_time: current simulation time
@@ -362,14 +357,15 @@ class PublicChargingInfrastructureOperator:
         :param max_number_charging_stations: maximum number of charging stations to consider
         :param max_sockets_per_station: maximum number of sockets per charging station to consider
         :return: list of specific offers of ChargingOperator consisting of
-                    (charging station id, charging socket id, booking start time, booking end time, expected booking end soc)
+                    (charging station id, charging socket id, booking start time, booking end time, expected booking end soc, travel time to station, travel distance to station)
         """
-        considered_stations = self._get_considered_stations(planned_veh_pos)
+        considered_station_list = self._get_considered_stations(planned_veh_pos)
         list_offers = []
-        for station in considered_stations:
+        for station_id, tt, dis in considered_station_list:
+            station = self.station_by_id[station_id]
             list_station_offers = []
             charge_durations = station.calculate_charge_durations(vehicle, planned_veh_soc, desired_veh_soc)
-            estimated_arrival_time = planned_start_time + self.routing_engine.return_travel_costs_1to1(planned_veh_pos, station.pos)
+            estimated_arrival_time = planned_start_time + tt
             for socket_id, socket_schedule in station.get_current_schedules(sim_time).items():
                 socket_charge_duration = charge_durations[socket_id]
                 possible_start_time = estimated_arrival_time
@@ -379,13 +375,13 @@ class PublicChargingInfrastructureOperator:
                     possible_end_time = possible_start_time + socket_charge_duration
                     pb_start_time, pb_et, pb_id = planned_booking
                     if possible_end_time <= pb_start_time:
-                        list_station_offers.append((station.id, socket_id, possible_start_time, possible_end_time, desired_veh_soc))
+                        list_station_offers.append((station.id, socket_id, possible_start_time, possible_end_time, desired_veh_soc, tt, dis))
                         found_free_slot = True
                         break
                     possible_start_time = pb_et
                 if not found_free_slot:
                     possible_end_time = possible_start_time + socket_charge_duration
-                    list_station_offers.append((station.id, socket_id, possible_start_time, possible_end_time, desired_veh_soc))
+                    list_station_offers.append((station.id, socket_id, possible_start_time, possible_end_time, desired_veh_soc, tt, dis))
                 # TODO # check methodology to stop
                 if len(list_station_offers) == max_sockets_per_station:
                     if possible_start_time == estimated_arrival_time:
@@ -399,34 +395,52 @@ class PublicChargingInfrastructureOperator:
                 break
         return list_offers
 
-    def _get_considered_stations(self, position):
+    def _get_considered_stations(self, position: tuple) -> tp.List[tuple]:
         """ Returns the list of stations nearest stations (using euclidean distance) within search radius of the
         position.
 
         :param position: position around which the station is sought
-        :returns:   List of charging station in order of proximity to the provided position
+        :returns:   List of tuple charging station id, travel time from position, travel distanc from position
+                        in order of proximity to the provided position
         """
-
-        # TODO # think about using routing 1-to-X functionality to search charging stations -> information could be used to calculate estimated_arrival_time
-        veh_lon, veh_lat = self.routing_engine.return_positions_lon_lat([position])[0]
-        proj_transformer = Transformer.from_proj('epsg:4326', UTM_CRS)
-        veh_x_utm = np.array(proj_transformer.transform(veh_lat, veh_lon))
-        euclidean = np.linalg.norm(veh_x_utm - self.__charging_stations_utm, axis=1)
-        closest_inx = np.argpartition(euclidean, MAX_CHARGING_SEARCH)[:MAX_CHARGING_SEARCH]
-        distances = euclidean[closest_inx]
-        station_inx = closest_inx[distances <= self.operator_attributes[G_CHARGING_STATION_SEARCH_RADIUS]]
-        return [self.charging_stations[x] for x in station_inx]
-
+        r_list = self.routing_engine.return_travel_costs_1toX(position, self.pos_to_list_station_id.keys(),
+                                                        max_routes=self.max_considered_stations, max_cost_value=self.max_search_radius)
+        r = []
+        c = 0
+        for d_pos, _, tt, dis in r_list:
+            for station_id in self.pos_to_list_station_id[d_pos]:
+                r.append( (station_id, tt, dis) )
+                c += 1
+                if c == self.max_considered_stations:
+                    return r
+        return r
+    
+    def time_trigger(self, sim_time):
+        """ this method is triggered in each simulation time step
+        :param sim_time: simulation time"""
+        pass
 
 class OperatorChargingAndDepotInfrastructure(PublicChargingInfrastructureOperator):
     """ this class has similar functionality like a ChargingInfrastructureOperator but is unique for each MoD operator (only the corresponding operator
     has access to the charging stations """
-    def __init__(self, op_id: int, depot_file: str, operator_attributes: dict, dir_names: dict, routing_engine: NetworkBase):
-        super().__init__(f"op_{op_id}", depot_file, operator_attributes, dir_names, routing_engine)
+    # TODO # functionality for parking lots here | functionality for activating/deactivating in fleetctrl/fleetsizing
+    # TODO # functionality for depot charging in fleetctrl/charging
+    def __init__(self, op_id: int, depot_file: str, operator_attributes: dict,
+                 scenario_parameters: dict, dir_names: dict, routing_engine: NetworkBase):
+        """This class represents the operator for the charging infrastructure.
+
+        :param op_id: id of mod operator this depot class belongs to
+        :param depot_file: path to file where charging stations an depots are loaded from
+        :param operator_attributes: dictionary that can contain additionally required parameters (parameter specific for the mod operator)
+        :param scenario_parameters: dictionary that contain global scenario parameters
+        :param dir_names: dictionary that specifies the folder structure of the simulation
+        :param routing_engine: reference to network class
+        """
+        super().__init__(f"op_{op_id}", depot_file, operator_attributes, scenario_parameters, dir_names, routing_engine)
         
-    def _loading_charging_stations(self, public_charging_station_file, dir_names) -> List[ChargingStation]:
+    def _loading_charging_stations(self, depot_file, dir_names) -> List[ChargingStation]:
         """ Loads the charging stations from the provided csv file"""
-        stations_df = pd.read_csv(public_charging_station_file)
+        stations_df = pd.read_csv(depot_file)
         file = Path(dir_names[G_DIR_OUTPUT]).joinpath("4-charging_stats.csv")
         if file.exists():
             file.unlink()

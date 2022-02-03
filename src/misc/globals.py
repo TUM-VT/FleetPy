@@ -171,12 +171,6 @@ G_RA_ASS_HOR = "op_res_assignment_horizon"  # time ahead when reservation plans 
 G_RA_MAX_BATCH_SIZE = "op_res_batch_size"   # size of of batches for ForwardBatchOptimization
 G_RA_RES_BOPT_TS = "op_res_opt_timestep"    # time interval of reservation module
 
-# private vehicles + charging
-G_PRIVATE_TRIPS_FILE = "op_private_trips_file"  # Private vehicle trips file
-G_PRIVATE_PRIME_CUSTOMER_RATIO = "op_private_prime_vehicle_ratio"      # Percentage of private vehicles of each type to be marked as prime members for booking charging station
-G_CHARGING_STATION_SEARCH_RADIUS = "op_charging_station_search_radius"  # radius in meters
-G_DISCONNECT_ON_FULL_SOC = "op_disconnect_charging_on_full_soc"                  # Should a charging vehicle be disconnected immediately after full soc
-
 # RV heuristics
 G_RA_MAX_VR = "op_max_VR_con"
 G_RA_MAX_RP = "op_max_request_plans"
@@ -266,8 +260,16 @@ G_INFRA_PUB_UTIL = "public_util"
 # active vehicle
 G_ACT_VEH_SHARE = "share_active_fleet_size"
 
-# charing operator
+# charging operator
 G_CH_OP_F = "ch_op_public_charging_station_f"
+G_CH_DISCONNECT_ON_FULL_SOC = "ch_op_disconnect_charging_on_full_soc"                  # Should a charging vehicle be disconnected immediately after full soc
+# parameter for all charging operators
+G_CH_OP_MAX_STATION_SEARCH_RADIUS = "ch_max_station_search_radius"  # radius in seconds travel time (TODO ?)
+G_CH_OP_MAX_CHARGING_SEARCH = "ch_max_station_search"    # max number of charging stations to be considered
+
+#private vehicles
+G_PRIVATE_TRIPS_FILE = "op_private_trips_file"  # Private vehicle trips file
+G_PRIVATE_PRIME_CUSTOMER_RATIO = "op_private_prime_vehicle_ratio"      # Percentage of private vehicles of each type to be marked as prime members for booking charging station
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Directories

@@ -9,6 +9,10 @@ LOG = logging.getLogger(__name__)
 
 
 class ChargingThresholdPublicInfrastructure(ChargingBase):
+    """ this strategy looks through all fleet vehicles an triggers charging tasks in case the soc within a planned route
+    of a vehicle drops below a threshold (G_OP_APS_SOC)
+    the closest charging station possible from this position is considered for charging
+    in case multiple charging operators are present, the offer closest to postion is selected (also with depots)"""
     def __init__(self, fleetctrl, operator_attributes):
         super().__init__(fleetctrl, operator_attributes)
         self.soc_threshold = operator_attributes.get(G_OP_APS_SOC, 0.1)
@@ -36,15 +40,21 @@ class ChargingThresholdPublicInfrastructure(ChargingBase):
                 is_charging_required = True
 
             if is_charging_required is True:
-                for ch_ops in self.all_charging_infra:
-                    charging_possibilities = ch_ops.get_charging_slots(sim_time, veh_obj, last_time, last_pos, last_soc, 1.0, 1, 1)
+                best_charging_poss = None
+                best_ch_op = None
+                for ch_op in self.all_charging_infra:
+                    charging_possibilities = ch_op.get_charging_slots(sim_time, veh_obj, last_time, last_pos, last_soc, 1.0, 1, 1)
                     if len(charging_possibilities) > 0:
-                        (station_id, socket_id, possible_start_time, possible_end_time, desired_veh_soc) = charging_possibilities[0]
-                        booking = ch_ops.book_station(sim_time, veh_obj, station_id, socket_id, possible_start_time, possible_end_time)
-                        station = ch_ops.station_by_id[station_id]
-                        ps = PlanStop(station.pos, {}, {}, {}, {}, {}, locked=True, stationary_task=booking,
-                                    status=VRL_STATES.CHARGING)
-                        current_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
-                        self.fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
-                        self.fleetctrl.assign_vehicle_plan(veh_obj, current_plan, sim_time)
-                        break
+                        ch_op_best = min(charging_possibilities, key=lambda x:x[5])
+                        if best_charging_poss is None or ch_op_best[5] < best_charging_poss[5]:
+                            best_charging_poss = ch_op_best
+                            best_ch_op = ch_op
+                if best_charging_poss is not None:
+                    (station_id, socket_id, possible_start_time, possible_end_time, desired_veh_soc, tt, dis) = best_charging_poss
+                    booking = best_ch_op.book_station(sim_time, veh_obj, station_id, socket_id, possible_start_time, possible_end_time)
+                    station = best_ch_op.station_by_id[station_id]
+                    ps = PlanStop(station.pos, {}, {}, {}, {}, {}, locked=True, stationary_task=booking,
+                                status=VRL_STATES.CHARGING)
+                    current_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
+                    self.fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
+                    self.fleetctrl.assign_vehicle_plan(veh_obj, current_plan, sim_time)

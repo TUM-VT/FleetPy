@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from src.routing.NetworkBase import NetworkBase
     from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
     from src.simulation.Vehicles import SimulationVehicle
-    from dev.infra.ChargingStationOld import ChargingAndDepotManagement
+    from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
     from src.infra.Zoning import ZoneSystem
     from src.demand.TravelerModels import RequestBase
 
@@ -35,7 +35,7 @@ def load_parallelization_manager(rp_batch_optimizer_str):
         from src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraParallelization import ParallelizationManager
         return ParallelizationManager
     elif rp_batch_optimizer_str == "ParallelTempering":
-        from src.fleetctrl.pooling.batch.ParallelTempering.ParallelTemperingParallelization import ParallelizationManager
+        from dev.fleetctrl.pooling.batch.ParallelTempering.ParallelTemperingParallelization import ParallelizationManager
         return ParallelizationManager
     else:
         return None
@@ -44,7 +44,8 @@ def load_parallelization_manager(rp_batch_optimizer_str):
 class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
     def __init__(self, op_id : int, operator_attributes : dict, list_vehicles : List[SimulationVehicle],
                  routing_engine : NetworkBase, zone_system : ZoneSystem, scenario_parameters : dict,
-                 dir_names : dict, charging_management : ChargingAndDepotManagement=None):
+                 dir_names : dict, op_charge_depot_infra : OperatorChargingAndDepotInfrastructure=None,
+                 list_pub_charging_infra: List[PublicChargingInfrastructureOperator]= []):
         """The specific attributes for the fleet control module are initialized. Strategy specific attributes are
         introduced in the children classes.
 
@@ -71,9 +72,13 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         :type routing_engine: Network
         :param scenario_parameters: access to all scenario parameters (if necessary)
         :type scenario_parameters: dict
+        :param op_charge_depot_infra: reference to a OperatorChargingAndDepotInfrastructure class (optional) (unique for each operator)
+        :type OperatorChargingAndDepotInfrastructure: OperatorChargingAndDepotInfrastructure
+        :param list_pub_charging_infra: list of PublicChargingInfrastructureOperator classes (optional) (accesible for all agents)
+        :type list_pub_charging_infra: list of PublicChargingInfrastructureOperator
         """
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                         dir_names, charging_management=charging_management)
+                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra)
         self.sim_time = scenario_parameters[G_SIM_START_TIME]
         self.rid_to_assigned_vid : Dict[Any, int] = {}
         self.pos_veh_dict : Dict[tuple, List[SimulationVehicle]] = {}  # pos -> list_veh

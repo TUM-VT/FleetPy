@@ -303,7 +303,7 @@ class FleetSimulationBase:
                 depot_f_name = op_dict.get(G_OP_DEPOT_F)
                 if depot_f_name is not None:
                     depot_f = os.path.join(self.dir_names[G_DIR_INFRA], depot_f_name)
-                    op_charge = OperatorChargingAndDepotInfrastructure(op_id, depot_f, op_dict, self.dir_names, self.routing_engine)
+                    op_charge = OperatorChargingAndDepotInfrastructure(op_id, depot_f, op_dict, self.scenario_parameters, self.dir_names, self.routing_engine)
                     self.charging_operator_dict["op"][op_id] = op_charge
                 
             # public charging
@@ -313,7 +313,7 @@ class FleetSimulationBase:
                     pub_cs_f_name = ch_op_dict.get(G_CH_OP_F)
                     if pub_cs_f_name is None:
                         raise EnvironmentError("Public charging stations file not given as input! parameter {} required!".format(G_CH_OP_F))
-                    ch_op = PublicChargingInfrastructureOperator(ch_op_id, pub_cs_f_name, ch_op_dict, self.dir_names, self.routing_engine)
+                    ch_op = PublicChargingInfrastructureOperator(ch_op_id, pub_cs_f_name, ch_op_dict, self.scenario_parameters, self.dir_names, self.routing_engine)
                     self.charging_operator_dict["pub"][ch_op_id] = ch_op
 
     def _load_fleetctr_vehicles(self):

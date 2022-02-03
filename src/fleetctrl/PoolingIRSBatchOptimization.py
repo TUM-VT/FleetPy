@@ -24,7 +24,7 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
     """
 
     def __init__(self, op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                 dir_names, charging_management=None):
+                 dir_names, op_charge_depot_infra=None, list_pub_charging_infra= []):
         """Initialization of FleetControlClass
 
         :param op_id: operator id
@@ -39,9 +39,13 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
         :type scenario_parameters: dict
         :param dirnames: directories for output and input
         :type dirnames: dict
+        :param op_charge_depot_infra: reference to a OperatorChargingAndDepotInfrastructure class (optional) (unique for each operator)
+        :type OperatorChargingAndDepotInfrastructure: OperatorChargingAndDepotInfrastructure
+        :param list_pub_charging_infra: list of PublicChargingInfrastructureOperator classes (optional) (accesible for all agents)
+        :type list_pub_charging_infra: list of PublicChargingInfrastructureOperator
         """
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                         dir_names=dir_names, charging_management=charging_management)
+                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra)
         self.tmp_assignment = {}  # rid -> possible veh_plan
 
     def user_request(self, rq, sim_time):
