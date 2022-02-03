@@ -11,7 +11,7 @@ from typing import List, Dict, Tuple, Optional
 
 # src imports
 # -----------
-from src.simulation.Legs import VehicleRouteLeg, VehicleChargeLeg
+from src.simulation.Legs import VehicleRouteLeg
 from src.simulation.StationaryProcess import StationaryProcess
 from src.simulation.Vehicles import SimulationVehicle
 from src.fleetctrl.planning.PlanRequest import PlanRequest
@@ -63,6 +63,11 @@ class PlanStopBase(metaclass=ABCMeta):
     def get_list_alighting_rids(self) -> list:
         """ returns list of all request ids alighting at this plan stop
         :return: list of alighting rids"""
+        
+    @abstractmethod
+    def get_stationary_task(self) -> StationaryProcess:
+        """ returns the stationary process of the plan stop if present
+        :return: stationary process; None if not present"""
     
     @abstractmethod
     def get_earliest_start_time(self) -> float:
@@ -111,11 +116,6 @@ class PlanStopBase(metaclass=ABCMeta):
     def get_charging_power(self) -> float:
         """ returns the charging power at this plan stop 
         :return: charging power"""
-        
-    @abstractmethod
-    def get_charging_unit_and_vcl(self):
-        """ returns the charging unit and the existing vcl
-        :return: tuple (charging_unit_id, vcl); None if not existent"""
         
     @abstractmethod
     def get_boarding_time_constraint_dicts(self) -> Tuple[Dict, Dict, Dict, Dict]:
@@ -192,13 +192,6 @@ class PlanStopBase(metaclass=ABCMeta):
         :param departure_soc: soc at end of charging process"""
         
     @abstractmethod
-    def set_charging_attributes(self, charging_unit_id : int, existing_vcl : VehicleChargeLeg, power : float):
-        """ this methods sets entries for charging tasks when defined later on
-        :param charging_unit_id: id of charging uit
-        :param existing_vcl: corresponding vehicle charge leg
-        :param power: power of charging"""
-        
-    @abstractmethod
     def update_rid_boarding_time_constraints(self, rid, new_earliest_pickup_time : float=None, new_latest_pickup_time : float=None):
         """ this method can be used to update boarding time constraints a request in this plan stop (if given)
         :param rid: request id
@@ -226,7 +219,7 @@ class PlanStop(PlanStopBase):
         this class is the most general class of plan stops"""
     def __init__(self, position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={}, earliest_pickup_time_dict={}, latest_pickup_time_dict={},
                  change_nr_pax=0, change_nr_parcels=0, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None,
-                 locked=False, locked_end=False, charging_power=0, existing_vcl=None, charging_unit_id=None, planstop_state : G_PLANSTOP_STATES=G_PLANSTOP_STATES.MIXED,
+                 locked=False, locked_end=False, charging_power=0, planstop_state : G_PLANSTOP_STATES=G_PLANSTOP_STATES.MIXED,
                  stationary_task: StationaryProcess = None, status: Optional[VRL_STATES] = None):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
@@ -244,8 +237,6 @@ class PlanStop(PlanStopBase):
         :param locked: (bool) false by default; if true this planstop can no longer be unassigned from vehicleplan and has to be fullfilled. currently only working when also all planstops before this planstop are locked, too
         :param locked_end: (bool) false by default; if true, no planstops can be added after this planstop in the assignment algorithm and it cannot be removed by the assignemnt algorithm (insertions before are possible!)
         :param charging_power: optional (float); if given the vehicle is charged with this power (TODO unit!) while at this stop
-        :param existing_vcl: optional reference to VehicleChargeLeg TODO (is this a VCL or the ID?)
-        :param charging_unit_id: optional (int) charging unit it the vehicle is supposed to charge at, defined in ChargingInfrastructure
         :param planstop_state: used to characterize the planstop state (task to to there)
         :param stationary_task: the stationary task to be performed at the plan stop
         :param status:          vehicle status while performing the current plan stop
@@ -260,8 +251,6 @@ class PlanStop(PlanStopBase):
         
         # charging
         self.charging_power = charging_power
-        self.charging_unit_id = charging_unit_id
-        self.existing_vcl = existing_vcl
         
         # parameters that define capacity constraints
         self.change_nr_pax = change_nr_pax
@@ -324,6 +313,11 @@ class PlanStop(PlanStopBase):
         :return: list of alighting rids"""
         return self.boarding_dict.get(-1, [])
 
+    def get_stationary_task(self) -> StationaryProcess:
+        """ returns the stationary process of the plan stop if present
+        :return: stationary process; None if not present"""
+        return self.stationary_task
+
     def copy(self):
         """ this function returns the copy of a plan stop
         :return: PlanStop copy
@@ -333,7 +327,7 @@ class PlanStop(PlanStopBase):
                          latest_pickup_time_dict=self.latest_pickup_time_dict.copy(), change_nr_pax=self.change_nr_pax,
                          earliest_start_time=self.direct_earliest_start_time, latest_start_time=self.direct_latest_start_time,
                          duration=self.direct_duration, earliest_end_time=self.direct_earliest_end_time, locked=self.locked, locked_end=self.locked_end,
-                         charging_power=self.charging_power, existing_vcl=self.existing_vcl, charging_unit_id=self.charging_unit_id)
+                         charging_power=self.charging_power, stationary_task=self.stationary_task, status=self.status)
         cp_ps._planned_arrival_time = self._planned_arrival_time
         cp_ps._planned_departure_time = self._planned_departure_time
         cp_ps._planned_arrival_soc = self._planned_arrival_soc
@@ -406,9 +400,6 @@ class PlanStop(PlanStopBase):
     def get_charging_power(self) -> float:
         return self.charging_power
     
-    def get_charging_unit_and_vcl(self):
-        return self.charging_unit_id, self.existing_vcl
-    
     def get_boarding_time_constraint_dicts(self) -> Tuple[Dict, Dict, Dict, Dict]:
         return self.earliest_pickup_time_dict, self.latest_pickup_time_dict, self.max_trip_time_dict, self.latest_arrival_time_dict
 
@@ -458,11 +449,6 @@ class PlanStop(PlanStopBase):
         if earliest_end_time is not None:
             self.direct_earliest_end_time = earliest_end_time
         
-    def set_charging_attributes(self, charging_unit_id: int, existing_vcl: VehicleChargeLeg, power: float):
-        self.charging_unit_id = charging_unit_id
-        self.existing_vcl = existing_vcl
-        self.charging_power = power
-        
     def update_rid_boarding_time_constraints(self, rid, new_earliest_pickup_time: float = None, new_latest_pickup_time: float = None):
         if new_earliest_pickup_time is not None:
             self.earliest_pickup_time_dict[rid] = new_earliest_pickup_time
@@ -508,7 +494,7 @@ class BoardingPlanStop(PlanStop):
                          latest_pickup_time_dict=latest_pickup_time_dict, change_nr_pax=change_nr_pax, change_nr_parcels=change_nr_parcels,
                          earliest_start_time=None, latest_start_time=None,
                          duration=duration, earliest_end_time=None, locked=locked,
-                         charging_power=0, existing_vcl=None, charging_unit_id=None, planstop_state=G_PLANSTOP_STATES.BOARDING)
+                         charging_power=0, planstop_state=G_PLANSTOP_STATES.BOARDING)
         
 class RoutingTargetPlanStop(PlanStop):
     """ this plan stop can be used to schedule a routing target for vehicles with the only task to drive there
@@ -526,12 +512,13 @@ class RoutingTargetPlanStop(PlanStop):
         """
         super().__init__(position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={}, earliest_pickup_time_dict={}, latest_pickup_time_dict={},
                          change_nr_pax=0, earliest_start_time=earliest_start_time, latest_start_time=latest_start_time, duration=duration,
-                         earliest_end_time=earliest_end_time, locked=locked, locked_end=locked_end, charging_power=0, existing_vcl=None, charging_unit_id=None, planstop_state=planstop_state)
+                         earliest_end_time=earliest_end_time, locked=locked, locked_end=locked_end, charging_power=0, planstop_state=planstop_state)
 
 class ChargingPlanStop(PlanStop):
     """ this plan stop can be used to schedule a charging only process """
     def __init__(self, position, earliest_start_time=None, latest_start_time=None, duration=None, 
-                 earliest_end_time=None, locked=False, locked_end=False, charging_power=0, existing_vcl=None, charging_unit_id=None):
+                 earliest_end_time=None, locked=False, locked_end=False, charging_power=0,
+                 stationary_task: StationaryProcess = None, status: Optional[VRL_STATES] = None):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param earliest_start_time: (float) absolute earliest start time this plan stop is allowed to start
@@ -541,14 +528,12 @@ class ChargingPlanStop(PlanStop):
         :param locked: (bool) false by default; if true this planstop can no longer be unassigned from vehicleplan and has to be fullfilled. currently only working when also all planstops before this planstop are locked, too
         :param locked_end: (bool) false by default; if true, no planstops can be added after this planstop in the assignment algorithm and it cannot be removed by the assignemnt algorithm (insertions before are possible!)        
         :param charging_power: optional (float); if given the vehicle is charged with this power (TODO unit!) while at this stop
-        :param existing_vcl: optional reference to VehicleChargeLeg TODO (is this a VCL or the ID?)
-        :param charging_unit_id: optional (int) charging unit it the vehicle is supposed to charge at, defined in ChargingInfrastructure
         """
         super().__init__(position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={}, 
                          earliest_pickup_time_dict={}, latest_pickup_time_dict={}, change_nr_pax=0, 
                          earliest_start_time=earliest_start_time, latest_start_time=latest_start_time, duration=duration, 
                          earliest_end_time=earliest_end_time, locked=locked, locked_end=locked_end, charging_power=charging_power, 
-                         existing_vcl=existing_vcl, charging_unit_id=charging_unit_id, planstop_state=G_PLANSTOP_STATES.CHARGING)
+                         planstop_state=G_PLANSTOP_STATES.CHARGING, stationary_task=stationary_task, status=status)
 
 class VehiclePlan:
     """ this class is used to plan tasks for a vehicle and evaluates feasiblity of time constraints of this plan
@@ -933,22 +918,21 @@ class VehiclePlan:
         # LOG.debug("update plan and check tt {}".format(self))
         return is_feasible
 
-    def _get_veh_leg(self, pstop: PlanStop):
-        """ Creates a vehicle leg with the planstop has as associated instance of StationaryProcess class"""
+    # def _get_veh_leg(self, pstop: PlanStop):
+    #     """ Creates a vehicle leg with the planstop has as associated instance of StationaryProcess class"""
 
-        # TODO: Make the following code general for all types of stationary processes
-        veh_leg = VehicleRouteLeg(pstop.status, pstop.get_pos(), {1: [], -1: []}, locked=True,
-                                  stationary_process=pstop.stationary_task)
-        return veh_leg
+    #     # TODO: Make the following code general for all types of stationary processes
+    #     veh_leg = VehicleRouteLeg(pstop.status, pstop.get_pos(), {1: [], -1: []}, locked=True,
+    #                               stationary_process=pstop.stationary_task)
+    #     return veh_leg
 
-    def build_VRL(self, veh_obj : SimulationVehicle, prq_db : dict, charging_management=None) -> List[VehicleRouteLeg]:
+    def build_VRL(self, veh_obj : SimulationVehicle, prq_db : dict) -> List[VehicleRouteLeg]:
         """This method builds VRL for simulation vehicles from a given Plan. Since the vehicle could already have the
         VRL with the correct route, the route from veh_obj.assigned_route[0] will be used if destination positions
         are matching
 
         :param veh_obj: vehicle object to which plan is applied
         :param prq_db: reference to PlanRequest database
-        :param charging_management: reference to charging management
         :return: VRL according to the given plan
         """
         list_vrl = []
@@ -957,9 +941,10 @@ class VehiclePlan:
             # TODO: The following should be made as default behavior to delegate the specific tasks (e.g. boarding,
             #  charging etc) to the StationaryProcess class. The usage of StationaryProcess class can significantly
             #  simplify the code
-            if pstop.stationary_task is not None:
-                list_vrl.append(self._get_veh_leg(pstop))
-                continue
+            # i dont think the following lines work
+            # if pstop.stationary_task is not None:
+            #     list_vrl.append(self._get_veh_leg(pstop))
+            #     continue
             boarding_dict = {1: [], -1: []}
             if len(pstop.get_list_boarding_rids()) > 0 or len(pstop.get_list_alighting_rids()) > 0:
                 boarding = True
@@ -1015,22 +1000,7 @@ class VehiclePlan:
             else:
                 # TODO # after ISTTT: add other states if necessary; for now assume vehicle idles
                 status = VRL_STATES.IDLE
-            if status == VRL_STATES.BOARDING_WITH_CHARGING:
-                create_new_vcl = True
-                charging_unit_id, existing_vcl = pstop.get_charging_unit_and_vcl()
-                if existing_vcl is not None and charging_unit_id is not None:
-                    # use existing VCL if it already has been scheduled
-                    existing_vcl = charging_management.get_vcl(charging_unit_id, existing_vcl)
-                    if existing_vcl is not None:
-                        create_new_vcl = False
-                        # TODO # check schedule and adapt existing_vcl if necessary?
-                        list_vrl.append(existing_vcl)
-                if create_new_vcl:
-                    # schedule new VCL if there was no vcl assigned
-                    new_vcl, power, charging_unit_id, vcl_id = charging_management.create_new_vcl(veh_obj, pstop)
-                    pstop.set_charging_attributes(charging_unit_id, vcl_id, power)
-                    list_vrl.append(new_vcl)
-            elif status != VRL_STATES.IDLE:
+            if status != VRL_STATES.IDLE:
                 dur, edep = pstop.get_duration_and_earliest_departure()
                 earliest_start_time = pstop.get_earliest_start_time()
                 #LOG.debug("vrl earliest departure: {} {}".format(dur, edep))
@@ -1045,7 +1015,7 @@ class VehiclePlan:
                     stop_duration = 0
                 list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), boarding_dict, pstop.get_charging_power(),
                                                 duration=stop_duration, earliest_start_time=earliest_start_time,
-                                                locked=pstop.is_locked()))
+                                                locked=pstop.is_locked(), stationary_process=pstop.get_stationary_task()))
         return list_vrl
 
     def get_dedicated_rid_list(self) -> list:

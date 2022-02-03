@@ -244,6 +244,7 @@ class FleetSimulationBase:
         # attributes for fleet controller and vehicles
         self.sim_vehicles: tp.Dict[tp.Tuple[int, int], SimulationVehicle] = {}
         self.sorted_sim_vehicle_keys: tp.List[tp.Tuple[int, int]] = sorted(self.sim_vehicles.keys())
+        self.vehicle_update_order: tp.Dict[tp.Tuple[int, int], int] = {vid : 1 for vid in self.sim_vehicles.keys()} #value defines the order in whichvehicles are updated (i.e. charging first)
         self.operators: tp.List[FleetControlBase] = []
         self.op_output = {}
         self._load_fleetctr_vehicles()
@@ -342,12 +343,12 @@ class FleetSimulationBase:
                         list_vehicles.append(tmp_veh_obj)
                         self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
                         vid += 1
-                OpClass = load_fleet_control_module(operator_module_name)
+                OpClass: FleetControlBase = load_fleet_control_module(operator_module_name)
                 self.operators.append(OpClass(op_id, operator_attributes, list_vehicles, self.routing_engine, self.zones,
-                                            self.scenario_parameters, self.dir_names, self.cdp))
+                                            self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values())))
             else:
                 from dev.pubtrans.PtFleetControl import PtFleetControl
-                OpClass = PtFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, self.dir_names, charging_management=self.cdp)
+                OpClass = PtFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()))
                 init_vids = OpClass.return_vehicles_to_initialize()
                 list_vehicles = []
                 for vid, veh_type in init_vids.items():
@@ -362,6 +363,7 @@ class FleetSimulationBase:
         veh_type_f = os.path.join(self.dir_names[G_DIR_OUTPUT], "2_vehicle_types.csv")
         veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
         veh_type_df.to_csv(veh_type_f, index=False)
+        self.vehicle_update_order: tp.Dict[tp.Tuple[int, int], int] = {vid : 1 for vid in self.sim_vehicles.keys()}
 
     @staticmethod
     def get_directory_dict(scenario_parameters):
@@ -555,10 +557,15 @@ class FleetSimulationBase:
         :param force_update_plan: flag that can force vehicle plan to be updated
         """
         LOG.debug(f"updating MoD state from {last_time} to {next_time}")
-        for opid_vid_tuple, veh_obj in self.sim_vehicles.items():
+        #for opid_vid_tuple, veh_obj in self.sim_vehicles.items():
+        for opid_vid_tuple, veh_obj in sorted(self.sim_vehicles.items(), key=lambda x:self.vehicle_update_order[x[0]]):
             op_id, vid = opid_vid_tuple
             boarding_requests, alighting_requests, passed_VRL, dict_start_alighting =\
                 veh_obj.update_veh_state(last_time, next_time)
+            if veh_obj.status == VRL_STATES.CHARGING:
+                self.vehicle_update_order[opid_vid_tuple] = 0
+            else:
+                self.vehicle_update_order[opid_vid_tuple] = 1
             for rid, boarding_time_and_pos in boarding_requests.items():
                 boarding_time, boarding_pos = boarding_time_and_pos
                 LOG.debug(f"rid {rid} boarding at {boarding_time} at pos {boarding_pos}")

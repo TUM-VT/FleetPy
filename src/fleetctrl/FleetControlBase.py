@@ -191,7 +191,7 @@ class FleetControlBase(metaclass=ABCMeta):
         charging_method = operator_attributes.get(G_OP_CH_M)
         if charging_method is not None:
             ChargingClass = load_charging_strategy(charging_method)
-            self.charging_strategy : ChargingBase = ChargingClass(self, operator_attributes, self.op_charge_depot_infra, self.list_pub_charging_infra)
+            self.charging_strategy : ChargingBase = ChargingClass(self, operator_attributes)
             prt_strategy_str += f"\t Charging: {self.charging_strategy.__class__.__name__}\n"
             self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_CH)
         else:
@@ -433,7 +433,7 @@ class FleetControlBase(metaclass=ABCMeta):
         """
         LOG.debug(f"assign to {veh_obj.vid} at time {sim_time} : {vehicle_plan}")
         vehicle_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
-        new_vrl = vehicle_plan.build_VRL(veh_obj, self.rq_dict, charging_management=self.charging_management)
+        new_vrl = vehicle_plan.build_VRL(veh_obj, self.rq_dict)
         veh_obj.assign_vehicle_plan(new_vrl, sim_time, force_ignore_lock=force_assign)
         self.veh_plans[veh_obj.vid] = vehicle_plan
         for rid in get_assigned_rids_from_vehplan(vehicle_plan):

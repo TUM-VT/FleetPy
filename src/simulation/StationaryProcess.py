@@ -77,6 +77,9 @@ class ChargingProcess(StationaryProcess):
         self.socket_id: int = int(booking_id.split("_")[0])
         self.locked: bool = False
         self._task_started = False
+        
+    def __str__(self) -> str:
+        return f"charging process: id {self.id} vid {self.veh.vid} station {self.station.id} socked {self.socket_id} start time {self.start_time} end time {self.end_time} started {self._task_started}"
 
     def start_task(self, sim_time):
         """ Connects the vehicle to the socket and returns true for successful connection """
@@ -99,7 +102,7 @@ class ChargingProcess(StationaryProcess):
         if self._task_started is None:
             return None
         else:
-            return self.station.remaining_charging_time(self.veh.vid)
+            return self.station.remaining_charging_time(sim_time, self.veh.vid)
 
     def update_state(self, delta_time):
         assert self.veh.status is VRL_STATES.CHARGING

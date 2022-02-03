@@ -2,7 +2,7 @@ import logging
 
 from src.fleetctrl.charging.ChargingBase import ChargingBase
 from src.simulation.StationaryProcess import ChargingProcess
-from src.fleetctrl.planning.VehiclePlan import PlanStop
+from src.fleetctrl.planning.VehiclePlan import ChargingPlanStop
 from src.misc.globals import *
 
 LOG = logging.getLogger(__name__)
@@ -13,8 +13,8 @@ class ChargingThresholdPublicInfrastructure(ChargingBase):
     of a vehicle drops below a threshold (G_OP_APS_SOC)
     the closest charging station possible from this position is considered for charging
     in case multiple charging operators are present, the offer closest to postion is selected (also with depots)"""
-    def __init__(self, fleetctrl, operator_attributes):
-        super().__init__(fleetctrl, operator_attributes)
+    def __init__(self, fleetctrl, operator_attributes, solver="Gurobi"):
+        super().__init__(fleetctrl, operator_attributes, solver=solver)
         self.soc_threshold = operator_attributes.get(G_OP_APS_SOC, 0.1)
 
     def time_triggered_charging_processes(self, sim_time):
@@ -29,10 +29,9 @@ class ChargingThresholdPublicInfrastructure(ChargingBase):
             last_soc = veh_obj.soc
             if current_plan.list_plan_stops:
                 last_pstop = current_plan.list_plan_stops[-1]
-                pstop_task = last_pstop.stationary_task
-                if pstop_task is not None and not isinstance(pstop_task, ChargingProcess):
-                    last_soc, _ = current_plan.list_plan_stops[-1].get_planned_arrival_and_departure_soc()
-                    if last_soc < self.soc_threshold and not last_pstop.is_inactive():
+                if not last_pstop.get_state() == G_PLANSTOP_STATES.CHARGING and not last_pstop.is_inactive():
+                    last_soc, _ = last_pstop.get_planned_arrival_and_departure_soc()
+                    if last_soc < self.soc_threshold:
                         _, last_time = last_pstop.get_planned_arrival_and_departure_time()
                         last_pos = last_pstop.get_pos()
                         is_charging_required = True
@@ -40,6 +39,7 @@ class ChargingThresholdPublicInfrastructure(ChargingBase):
                 is_charging_required = True
 
             if is_charging_required is True:
+                LOG.debug(f"charging required for vehicle {veh_obj}")
                 best_charging_poss = None
                 best_ch_op = None
                 for ch_op in self.all_charging_infra:
@@ -50,11 +50,13 @@ class ChargingThresholdPublicInfrastructure(ChargingBase):
                             best_charging_poss = ch_op_best
                             best_ch_op = ch_op
                 if best_charging_poss is not None:
-                    (station_id, socket_id, possible_start_time, possible_end_time, desired_veh_soc, tt, dis) = best_charging_poss
+                    LOG.debug(f" -> best charging possibility: {best_charging_poss}")
+                    (station_id, socket_id, possible_start_time, possible_end_time, desired_veh_soc, max_charging_power) = best_charging_poss
                     booking = best_ch_op.book_station(sim_time, veh_obj, station_id, socket_id, possible_start_time, possible_end_time)
                     station = best_ch_op.station_by_id[station_id]
-                    ps = PlanStop(station.pos, {}, {}, {}, {}, {}, locked=True, stationary_task=booking,
-                                status=VRL_STATES.CHARGING)
+                    start_time, end_time = booking.get_scheduled_start_end_times()
+                    ps = ChargingPlanStop(station.pos, earliest_start_time=start_time, duration=end_time-start_time, charging_power=max_charging_power,
+                                          stationary_task=booking, locked=True)
                     current_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
                     self.fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
                     self.fleetctrl.assign_vehicle_plan(veh_obj, current_plan, sim_time)

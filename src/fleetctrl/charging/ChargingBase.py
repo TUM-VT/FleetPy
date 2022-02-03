@@ -1,3 +1,4 @@
+from __future__ import annotations
 from abc import abstractmethod, ABC
 import logging
 from typing import Dict, List, Any, Tuple, TYPE_CHECKING
