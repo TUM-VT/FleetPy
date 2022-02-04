@@ -575,25 +575,13 @@ class FleetControlBase(metaclass=ABCMeta):
         n_active_vehicles = 0
         n_effective_utilized_vehicles = 0.0
         for veh in self.sim_vehicles:
-            # if veh.status == 5 or veh.status == 2: #out_of_service or charging
-            #     continue
-            # if len(self.veh_plans[veh.vid].list_plan_stops) == 0:
-            #     n_active_vehicles += 1
-            #     continue
-            # ass_plan = self.veh_plans[veh.vid]
-            # if veh.status == 11 and not ass_plan.list_plan_stops[0].locked:    #not locked relocation
-            #     n_active_vehicles +=1
-            #     continue
             ass_plan = self.veh_plans[veh.vid]
             if len(ass_plan.list_plan_stops) == 0:
                 n_active_vehicles += 1
                 continue
-            if ass_plan.list_plan_stops[0].is_locked() and\
-                    len(ass_plan.list_plan_stops[0].get_list_boarding_rids()) == 0 and\
-                    len(ass_plan.list_plan_stops[0].get_list_alighting_rids()) == 0:  # out of service and locked reloc
+            if veh.status in G_INACTIVE_STATUS:
                 continue
-            if len(ass_plan.list_plan_stops[0].get_list_boarding_rids()) == 0 and\
-                    len(ass_plan.list_plan_stops[0].get_list_alighting_rids()) == 0:  # unlocked reloc
+            if ass_plan.list_plan_stops[0].is_empty() and not ass_plan.list_plan_stops[0].is_locked():
                 n_active_vehicles += 1
                 continue
             _, end_assignment = ass_plan.list_plan_stops[-1].get_planned_arrival_and_departure_time()

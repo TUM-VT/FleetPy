@@ -15,7 +15,13 @@ if TYPE_CHECKING:
 
 class TimeBasedFS(DynamicFleetSizingBase):
     def __init__(self, fleetctrl: FleetControlBase, operator_attributes: dict, solver: str="Gurobi"):
-        """Initialization of repositioning class.
+        """Initialization of fleetsizing class.
+        
+        information about the timedependent fleetsize has to be given with the file "op_act_fs_file"
+        according to the active fleetsize curve this strategy activates and deactivates vehicles to fit this curve
+        inactive vehicles in depots are selected to charge if a charging station is present
+            - vehicles are sent to the nearest depots (idle vehicles have priority; other vehicles have to finish their task first (locks their plan))
+            - the presence of a charging station has no influence on the depot to be picked!
 
         :param fleetctrl: FleetControl class
         :param operator_attributes: operator dictionary that can contain additionally required parameters

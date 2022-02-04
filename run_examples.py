@@ -263,3 +263,21 @@ if __name__ == "__main__":
         list_results = read_outputs_for_comparison(cc, sc)
         all_scenario_assert_dict = {0: {"number users": 198}}
         check_assertions(list_results, all_scenario_assert_dict)
+        
+        # h) Pooling with public charging infrastructure (low range vehicles)
+        log_level = "info"
+        cc = r"studies\example_study\scenarios\constant_config_charge.csv"
+        sc = r"studies\example_study\scenarios\example_charge.csv"
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
+        
+        # i) Pooling and active vehicle fleet size is controlled externally (time and utilization based)
+        log_level = "info"
+        cc = r"studies\example_study\scenarios\constant_config_depot.csv"
+        sc = r"studies\example_study\scenarios\example_depot.csv"
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
+        
+        # j) Pooling with public charging and fleet size control (low range vehicles)
+        log_level = "info"
+        cc = r"studies\example_study\scenarios\constant_config_depot_charge.csv"
+        sc = r"studies\example_study\scenarios\example_depot_charge.csv"
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)

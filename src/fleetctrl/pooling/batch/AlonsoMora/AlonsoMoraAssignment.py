@@ -1220,7 +1220,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     necessary_ob_rids.append(ass_rid)
             rtv_key = createRTVKey(vid, necessary_ob_rids)
             if self.rtv_obj.get(rtv_key, None) is None:
-                LOG.debug("create ob v2rb: {} from {} | {}".format(rtv_key, assigned_key, necessary_ob_rids))
+                LOG.debug("create ob v2rb: {} from {} | {} | {}".format(rtv_key, assigned_key, necessary_ob_rids, locked_rids))
                 assigned_v2rb = self.rtv_obj.get(assigned_key)
                 if assigned_v2rb is None:
                     LOG.warning("assigned rtv-key not here to create OBV2RB! {}".format(assigned_key))
@@ -1235,9 +1235,9 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     #     assigned_plan.update_plan(self.veh_objs[vid], self.sim_time, self.routing_engine, list_passed_VRLs=self.vid_to_list_passed_VRLs.get(vid, []), keep_time_infeasible = True)
                     assigned_v2rb = V2RB(self.routing_engine, self.active_requests, self.sim_time, assigned_key, self.veh_objs[vid], self.std_bt, self.add_bt, self.objective_function, orig_veh_plans=[assigned_plan])
                     self._addRtvKey(assigned_key, assigned_v2rb)
-                # LOG.debug("assigned_v2rb: {}".format(assigned_v2rb))
-                ob_v2rb = assigned_v2rb.createLowerV2RB(rtv_key, self.sim_time, self.routing_engine, self.objective_function, self.active_requests, self.std_bt, self.add_bt)
-                self._addRtvKey(rtv_key, ob_v2rb)
+                if rtv_key is not None:
+                    ob_v2rb = assigned_v2rb.createLowerV2RB(rtv_key, self.sim_time, self.routing_engine, self.objective_function, self.active_requests, self.std_bt, self.add_bt)
+                    self._addRtvKey(rtv_key, ob_v2rb)
         # test for feasible v2rbs of inactive rids
         assigned_key = self.current_assignments.get(vid)
         if assigned_key is not None:
