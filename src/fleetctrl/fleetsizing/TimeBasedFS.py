@@ -22,9 +22,9 @@ class TimeBasedFS(DynamicFleetSizingBase):
         :param solver: solver for optimization problems
         """
         super().__init__(fleetctrl, operator_attributes)
-        # TODO # TimeBasedFS.__init__()
-        # load elastic fleet size file and insert them to time trigger activate and deactivate
-        # beware of initialization of active/inactive vehicles! -> check old add_init()
+        
+    def add_init(self, operator_attributes: dict):
+        """ additional loading for stuff that has to be initialized after full init of fleetcontrol"""
         active_vehicle_file_name = operator_attributes.get(G_OP_ACT_FLEET_SIZE)
         if active_vehicle_file_name is None:
             raise EnvironmentError("TimeBased FleetSizing selected but no input file given! specify parameter {}!".format(G_OP_ACT_FLEET_SIZE))
@@ -41,9 +41,11 @@ class TimeBasedFS(DynamicFleetSizingBase):
         :param sim_time: current simulation time
         :return: net change in fleet size
         """
-        # TODO # TimeBasedFS.check_and_change_fleet_size()
-        # nothing has to be done here -> charging_management takes care
-        pass
+        activate_list = self.time_triggered_activate(sim_time)
+        deactivate_list = self.time_triggered_deactivate(sim_time)
+        LOG.debug("refill charging units at depot")
+        self.fill_charging_units_at_depot(sim_time)
+        return len(activate_list) - len(deactivate_list)
     
     def _read_active_vehicle_file(self, active_vehicle_file):
         """This method reads a csv file which has at least two columns (time, share_active_veh_change). For times with a
@@ -57,7 +59,6 @@ class TimeBasedFS(DynamicFleetSizingBase):
 
         df = pd.read_csv(active_vehicle_file, index_col=0)
         LOG.debug("read active vehicle file")
-        last_share = None
         # remove entries before simulation start time
         sim_start_time = self.fleetctrl.sim_time
         remove_indices = []
@@ -74,11 +75,17 @@ class TimeBasedFS(DynamicFleetSizingBase):
         depot_distribution = {}
         for depot_id, depot in self.op_charge_depot_infra.depot_by_id.items():
             depot_distribution[depot_id] = depot.free_parking_spots
-        for sim_time, share_active_veh in df[G_ACT_VEH_SHARE].items():
-            if last_share is None:
+        last_number_active = None
+        def share_to_act_veh(row):
+            return min( max(int(np.round(row[G_ACT_VEH_SHARE] * self.fleetctrl.nr_vehicles)), 0), self.fleetctrl.nr_vehicles)
+        df["number_active_vehicles"] = df.apply(share_to_act_veh, axis=1)
+        LOG.debug("act veh df: {}".format(df))
+        for sim_time, number_active in df["number_active_vehicles"].items():
+            if last_number_active is None:
                 # initial inactive vehicles have to be set here; the chosen vehicles will start in the depot
                 # -> will not be overwritten by FleetSimulation.set_initial_state() as veh_obj.pos is not None
-                number_inactive = min(int(np.math.floor((1 - share_active_veh) * self.fleetctrl.nr_vehicles)), self.fleetctrl.nr_vehicles)
+                number_inactive = self.fleetctrl.nr_vehicles - number_active
+                LOG.debug("init inactive vehicles: {}".format(number_inactive))
                 for vid in range(number_inactive):
                     veh_obj = self.fleetctrl.sim_vehicles[vid]
                     drawn_depot_id = draw_from_distribution_dict(depot_distribution)
@@ -94,16 +101,18 @@ class TimeBasedFS(DynamicFleetSizingBase):
                     if ps.pos != veh_obj.pos:
                         veh_obj.pos = ps.pos
                         veh_obj.soc = 1.0
-                share_active_veh_change = 0
+                active_veh_change = 0
             else:
-                share_active_veh_change = share_active_veh - last_share
-            if share_active_veh_change > 0:
-                add_active_veh = int(np.round(share_active_veh_change * self.fleetctrl.nr_vehicles, 0))
+                active_veh_change = number_active - last_number_active
+            if active_veh_change > 0:
+                add_active_veh = active_veh_change
                 if add_active_veh > 0:
                     self.add_time_triggered_activate(sim_time, add_active_veh)
-            elif share_active_veh_change < 0:
-                rem_active_veh = int(np.round(-share_active_veh_change * self.fleetctrl.nr_vehicles, 0))
+            elif active_veh_change < 0:
+                rem_active_veh = -active_veh_change
                 if rem_active_veh > 0:
                     self.add_time_triggered_deactivate(sim_time, rem_active_veh)
-            last_share = share_active_veh
+            last_number_active = number_active
         LOG.info(f"Loaded nr-of-active-vehicles curve from {active_vehicle_file}.")
+        LOG.debug("-> time triggered activate: {}".format(self.sorted_time_activate))
+        LOG.debug("-> time triggered deactivate: {}".format(self.sorted_time_deactivate))

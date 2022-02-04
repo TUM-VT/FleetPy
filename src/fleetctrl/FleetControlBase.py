@@ -255,10 +255,10 @@ class FleetControlBase(metaclass=ABCMeta):
         print(prt_strategy_str)
 
     def add_init(self, operator_attributes, scenario_parameters):
-        # das ist notwendig, da sonst die child-classes nicht komplett initialisiert werden können
-        # initiate vehicles in depot for simulations with elastic fleet size
-        # TODO #
-        pass
+        """ additional init for stuff that has to be loaded (i.e. in modules) that requires full init of fleetcontrol
+        """
+        if self.dyn_fleet_sizing is not None:
+            self.dyn_fleet_sizing.add_init(operator_attributes)
 
     @abstractmethod
     def receive_status_update(self, vid : int, simulation_time : int, list_finished_VRL : List[VehicleRouteLeg], force_update : bool=True):

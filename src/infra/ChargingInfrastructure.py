@@ -227,6 +227,7 @@ class ChargingStation:
         # test for next bookings
         if len(self._socket_bookings.get(attached_socked.id, [])) > 0:
             next_start_time = min(self._socket_bookings[attached_socked.id], key=lambda x:x.start_time).start_time
+            assert next_start_time - sim_time > 0, f"uncancelled bookings in charging station {self.id} at time {sim_time} with schedule { {a:[str(c) for c in b] for a, b in self._socket_bookings.items()}}!"
             if next_start_time - sim_time < full_charge_duration:
                 return next_start_time - sim_time
         return full_charge_duration
@@ -335,32 +336,32 @@ class Depot(ChargingStation):
     def __init__(self, station_id, ch_op_id, node, socket_ids, max_socket_powers: List[float], number_parking_spots):
         super().__init__(station_id, ch_op_id, node, socket_ids, max_socket_powers)
         self.number_parking_spots = number_parking_spots
-        self.deactived_vehicles: tp.List[SimulationVehicle] = []
+        self.deactivated_vehicles: tp.List[SimulationVehicle] = []
         
     @property
     def free_parking_spots(self):
-        return self.number_parking_spots - len(self.deactived_vehicles)
+        return self.number_parking_spots - len(self.deactivated_vehicles)
     
     @property
     def parking_vehicles(self):
-        return len(self.deactived_vehicles)
+        return len(self.deactivated_vehicles)
         
     def schedule_inactive(self, veh_obj):
         """ adds the vehicle to park at the depot
         :param veh_obj: vehicle obj"""
-        self.free_parking_spots -= 1
-        self.deactived_vehicles.append(veh_obj)
+        LOG.debug(f"park vid {veh_obj.vid} in depot {self.id} with parking vids {[x.vid for x in self.deactivated_vehicles]}")
+        self.deactivated_vehicles.append(veh_obj)
         
     def schedule_active(self, veh_obj):
         """ removes the vehicle from the depot
         :param veh_obj: vehicle obj"""
-        self.free_parking_spots += 1
-        self.deactived_vehicles.remove(veh_obj)
+        LOG.debug(f"activate vid {veh_obj.vid} in depot {self.id} with parking vids {[x.vid for x in self.deactivated_vehicles]}")
+        self.deactivated_vehicles.remove(veh_obj)
         
     def pick_vehicle_to_be_active(self) -> SimulationVehicle:
         """ selects the vehicle with highest soc from the list of deactivated vehicles (does not activate the vehicle yet!)
         :return: simulation vehicle obj"""
-        return max(self.deactived_vehicles, key = lambda x:x.soc)
+        return max(self.deactivated_vehicles, key = lambda x:x.soc)
     
     def refill_charging(self, fleetctrl: FleetControlBase, simulation_time, keep_free_for_short_term=0):
         """This method fills empty charging slots in a depot with the lowest SOC parking (status 5) vehicles.
@@ -376,7 +377,7 @@ class Depot(ChargingStation):
             raise NotImplementedError("keep free for short term is not implemented yet!")
         # check for vehicles that require charging
         list_consider_charging: List[SimulationVehicle] = []
-        for veh_obj in self.deactived_vehicles:
+        for veh_obj in self.deactivated_vehicles:
             if veh_obj.soc == 1.0 or veh_obj.status != VRL_STATES.OUT_OF_SERVICE:
                 continue
             # check whether veh_obj already has vcl
@@ -394,40 +395,39 @@ class Depot(ChargingStation):
             charging_options = self.get_charging_slots(simulation_time, veh_obj, simulation_time, veh_obj.soc, 1.0)
             if len(charging_options) > 0:
                 selected_charging_option = min(charging_options, key=lambda x:x[3])
-                ch_process = self.make_booking(simulation_time, selected_charging_option[1], start_time=selected_charging_option[2], end_time=selected_charging_option[3])
+                ch_process = self.make_booking(simulation_time, selected_charging_option[1], veh_obj, start_time=selected_charging_option[2], end_time=selected_charging_option[3])
                 start_time, end_time = ch_process.get_scheduled_start_end_times()
                 ch_ps = ChargingPlanStop(self.pos, stationary_task=ch_process, earliest_start_time=start_time, duration=end_time-start_time,
                                          charging_power=selected_charging_option[5], locked=True)
                 
                 assert fleetctrl.veh_plans[veh_obj.vid].list_plan_stops[-1].get_state() == G_PLANSTOP_STATES.INACTIVE
                 if start_time == simulation_time:
+                    LOG.debug(" -> start now")
                     # finish current status 5 task
                     veh_obj.end_current_leg(simulation_time)
                     # modify veh-plan: insert charging before list position -1
                     fleetctrl.veh_plans[veh_obj.vid].add_plan_stop(ch_ps, veh_obj, simulation_time,
                                                                     fleetctrl.routing_engine,
                                                                     return_copy=False, position=-1)
+                    fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
+                    # assign vehicle plan
+                    fleetctrl.assign_vehicle_plan(veh_obj, fleetctrl.veh_plans[veh_obj.vid], simulation_time)
                 else:
+                    LOG.debug(" -> start later")
                     # modify veh-plan:
-                    # set inactive task duration correctly
-                    current_inactive_stop = fleetctrl.veh_plans[veh_obj.vid].list_plan_stops[-1]
-                    last_start = current_inactive_stop.get_started_at()
-                    if last_start is None:
-                        last_start = current_inactive_stop.get_planned_arrival_and_departure_time()[0]
-                    complete_duration = start_time - last_start
-                    current_inactive_stop.set_duration_and_earliest_end_time(duration=complete_duration)
-                    # insert charging before list after current stop
-                    fleetctrl.veh_plans[veh_obj.vid].add_plan_stop(ch_ps, veh_obj, simulation_time,
-                                                                    fleetctrl.routing_engine,
-                                                                    return_copy=False)
-                    # append another inactive task after that
-                    inactive_ps = RoutingTargetPlanStop(self.pos, locked=True, duration=LARGE_INT, planstop_state=G_PLANSTOP_STATES.INACTIVE)
-                    fleetctrl.veh_plans[veh_obj.vid].add_plan_stop(inactive_ps, veh_obj, simulation_time,
-                                                                    fleetctrl.routing_engine,
-                                                                    return_copy=False)
-                fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
-                # assign vehicle plan
-                fleetctrl.assign_vehicle_plan(veh_obj, fleetctrl.veh_plans[veh_obj.vid], simulation_time)
+                    # finish current inactive task
+                    _, inactive_vrl = veh_obj.end_current_leg(simulation_time)
+                    fleetctrl.receive_status_update(veh_obj.vid, simulation_time, [inactive_vrl])
+                    # add new inactivate task with corresponding duration
+                    inactive_ps_1 = RoutingTargetPlanStop(self.pos, locked=True, duration=start_time - simulation_time, planstop_state=G_PLANSTOP_STATES.INACTIVE)
+                    # add inactivate task after charging
+                    inactive_ps_2 = RoutingTargetPlanStop(self.pos, locked=True, duration=LARGE_INT, planstop_state=G_PLANSTOP_STATES.INACTIVE)
+                    # new veh plan
+                    new_veh_plan = VehiclePlan(veh_obj, simulation_time, fleetctrl.routing_engine, [inactive_ps_1, ch_ps, inactive_ps_2])
+                    
+                    fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
+                    # assign vehicle plan
+                    fleetctrl.assign_vehicle_plan(veh_obj, new_veh_plan, simulation_time)
 
 class PublicChargingInfrastructureOperator:
 

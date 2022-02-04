@@ -5,11 +5,10 @@ from typing import TYPE_CHECKING, List
 import logging
 
 from src.misc.globals import *
-
+from src.fleetctrl.planning.VehiclePlan import RoutingTargetPlanStop, VehiclePlan
 if TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.simulation.Vehicles import SimulationVehicle
-    from src.fleetctrl.planning.VehiclePlan import RoutingTargetPlanStop
     from src.infra.ChargingInfrastructure import Depot
 
 LOG = logging.getLogger(__name__)
@@ -33,9 +32,14 @@ class DynamicFleetSizingBase(ABC):
         self.solver_key = solver
         self.sorted_time_activate = []
         self.sorted_time_deactivate = []
+        self.keep_free_depot_cu = 0 # TODO (parameter to keep free depot charging spots otherwise filled with parking vehicles)
         # children classes:
         # - check of additionally required attributes from operator_attributes
         # - save these as class attributes
+        
+    def add_init(self, operator_attributes: dict):
+        """ additional loading for stuff that has to be initialized after full init of fleetcontrol"""
+        pass
 
     @abstractmethod
     def check_and_change_fleet_size(self, sim_time):
@@ -89,7 +93,7 @@ class DynamicFleetSizingBase(ABC):
         if depot is None:
             most_parking_veh = 0
             for possible_depot in self.op_charge_depot_infra.depot_by_id.values():
-                if depot.parking_vehicles > most_parking_veh:
+                if possible_depot.parking_vehicles > most_parking_veh:
                     depot = possible_depot
                     most_parking_veh = depot.parking_vehicles
         if depot is None:
@@ -97,6 +101,14 @@ class DynamicFleetSizingBase(ABC):
         veh_obj = depot.pick_vehicle_to_be_active()
         LOG.info(f"Activating vehicle {veh_obj} from depot {depot} (plan time: {sim_time})")
         if veh_obj is not None:
+            if len(self.fleetctrl.veh_plans[veh_obj.vid].list_plan_stops) > 1:
+                for ps in self.fleetctrl.veh_plans[veh_obj.vid].list_plan_stops[1:]:
+                    if ps.get_state() == G_PLANSTOP_STATES.CHARGING:
+                        charging_process = ps.get_stationary_task()
+                        LOG.debug("cancel charging process {}".format(charging_process))
+                        charging_process.station.cancel_booking(sim_time, charging_process)
+                new_veh_plan = VehiclePlan(veh_obj, sim_time, self.fleetctrl.routing_engine, self.fleetctrl.veh_plans[veh_obj.vid].list_plan_stops[:1])
+                self.fleetctrl.assign_vehicle_plan(veh_obj, new_veh_plan, sim_time, force_assign=True)
             _, inactive_vrl = veh_obj.end_current_leg(sim_time)
             self.fleetctrl.receive_status_update(veh_obj.vid, sim_time, [inactive_vrl])
             depot.schedule_active(veh_obj)
@@ -131,7 +143,7 @@ class DynamicFleetSizingBase(ABC):
         :return: None
         """
         self.sorted_time_deactivate.append((deactivate_time, nr_deactivate, depot))
-        LOG.debug("sorted_time_deactivate {}".format(self.sorted_time_activate))
+        LOG.debug("sorted_time_deactivate {}".format(self.sorted_time_deactivate))
         self.sorted_time_deactivate.sort(key=lambda x:x[0])
     
     def time_triggered_deactivate(self, simulation_time, list_veh_obj : List[SimulationVehicle]=None):
@@ -181,11 +193,11 @@ class DynamicFleetSizingBase(ABC):
                 vrl_counter = 0
                 for vrl in veh_obj.assigned_route:
                     vrl_counter += 1
-                    if vrl.status == 5:
+                    if vrl.status == VRL_STATES.OUT_OF_SERVICE:
                         prio = False
                         other = False
                         break
-                    elif vrl.status in [2, 11]:
+                    elif vrl.status in [VRL_STATES.BOARDING, VRL_STATES.CHARGING]:
                         prio = False
                 if prio:
                     list_next_prio.append([vrl_counter, veh_obj])
@@ -250,4 +262,4 @@ class DynamicFleetSizingBase(ABC):
         :return: None
         """
         for depot_obj in self.op_charge_depot_infra.depot_by_id.values():
-            depot_obj.refill_charging(simulation_time, self.keep_free_depot_cu)
+            depot_obj.refill_charging(self.fleetctrl, simulation_time, keep_free_for_short_term=self.keep_free_depot_cu)

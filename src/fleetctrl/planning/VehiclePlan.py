@@ -412,7 +412,7 @@ class PlanStop(PlanStopBase):
     def is_inactive(self) -> bool:
         """ this function evaluates if this is an inactive PlanStop (i.e. undefined duration and no tasks)
         :return: (bool) True if inactive, else False """
-        if self.get_departure_time(0) > LARGE_INT:
+        if self.state == G_PLANSTOP_STATES.INACTIVE or self.get_departure_time(0) > LARGE_INT:
             return True
         else:
             return False
@@ -958,7 +958,8 @@ class VehiclePlan:
                 charging = True
             else:
                 charging = False
-            if pstop.get_departure_time(0) > LARGE_INT:
+            #if pstop.get_departure_time(0) > LARGE_INT:
+            if pstop.get_state() == G_PLANSTOP_STATES.INACTIVE:
                 inactive = True
             else:
                 inactive = False
