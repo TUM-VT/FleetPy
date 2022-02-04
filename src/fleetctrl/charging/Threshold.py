@@ -18,6 +18,7 @@ class ChargingThresholdPublicInfrastructure(ChargingBase):
         self.soc_threshold = operator_attributes.get(G_OP_APS_SOC, 0.1)
 
     def time_triggered_charging_processes(self, sim_time):
+        LOG.debug("time triggered charging at {}".format(sim_time))
         for veh_obj in self.fleetctrl.sim_vehicles:
             # do not consider inactive vehicles
             if veh_obj.status in {VRL_STATES.OUT_OF_SERVICE, VRL_STATES.BLOCKED_INIT}:
@@ -29,8 +30,10 @@ class ChargingThresholdPublicInfrastructure(ChargingBase):
             last_soc = veh_obj.soc
             if current_plan.list_plan_stops:
                 last_pstop = current_plan.list_plan_stops[-1]
+                LOG.debug(f"last ps of vid {veh_obj} : {last_pstop}")
+                LOG.debug(f" state {last_pstop.get_state()} inactive {last_pstop.is_inactive()} arr dep soc {last_pstop.get_planned_arrival_and_departure_soc()}")
                 if not last_pstop.get_state() == G_PLANSTOP_STATES.CHARGING and not last_pstop.is_inactive():
-                    last_soc, _ = last_pstop.get_planned_arrival_and_departure_soc()
+                    _, last_soc = last_pstop.get_planned_arrival_and_departure_soc()
                     if last_soc < self.soc_threshold:
                         _, last_time = last_pstop.get_planned_arrival_and_departure_time()
                         last_pos = last_pstop.get_pos()

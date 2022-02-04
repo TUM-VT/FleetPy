@@ -327,7 +327,7 @@ class PlanStop(PlanStopBase):
                          latest_pickup_time_dict=self.latest_pickup_time_dict.copy(), change_nr_pax=self.change_nr_pax,
                          earliest_start_time=self.direct_earliest_start_time, latest_start_time=self.direct_latest_start_time,
                          duration=self.direct_duration, earliest_end_time=self.direct_earliest_end_time, locked=self.locked, locked_end=self.locked_end,
-                         charging_power=self.charging_power, stationary_task=self.stationary_task, status=self.status)
+                         charging_power=self.charging_power, stationary_task=self.stationary_task, status=self.status, planstop_state=self.state)
         cp_ps._planned_arrival_time = self._planned_arrival_time
         cp_ps._planned_departure_time = self._planned_departure_time
         cp_ps._planned_arrival_soc = self._planned_arrival_soc
@@ -462,7 +462,7 @@ class PlanStop(PlanStopBase):
             self.latest_arrival_time_dict[rid] = new_latest_dropoff_time
 
     def __str__(self):
-        return f"PS: {self.pos} bd {self.boarding_dict} earl dep {self._earliest_start_time} latest arr " \
+        return f"PS: {self.pos} state {self.state.name} bd {self.boarding_dict} earl dep {self._earliest_start_time} latest arr " \
                f"{self._latest_start_time} eta {self._planned_arrival_time}"
 
     def is_empty(self) -> bool:

@@ -349,7 +349,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         """
         LOG.debug(f"assign vehicle plan for {veh_obj} addarg {add_arg} : {vehicle_plan}")
         vehicle_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
-        new_vrl = vehicle_plan.build_VRL(veh_obj, self.rq_dict, charging_management=self.charging_management)
+        new_vrl = vehicle_plan.build_VRL(veh_obj, self.rq_dict)
         veh_obj.assign_vehicle_plan(new_vrl, sim_time, force_ignore_lock=force_assign)
         self.veh_plans[veh_obj.vid] = vehicle_plan
         for rid in get_assigned_rids_from_vehplan(vehicle_plan):
