@@ -251,7 +251,7 @@ class ChargingStation:
     def modify_booking(self, sim_time, booking: ChargingProcess):
         raise NotImplemented
     
-    def get_charging_slots(self, sim_time, vehicle, planned_arrival_time, planned_start_soc, desired_end_soc, max_sockets_per_station=1):
+    def get_charging_slots(self, sim_time, vehicle, planned_arrival_time, planned_start_soc, desired_end_soc, max_offers_per_station=1):
         """ Returns specific charging possibilities for a vehicle at this charging station
         a future time, place with estimated SOC and desired SOC.
 
@@ -260,7 +260,7 @@ class ChargingStation:
         :param planned_arrival_time: earliest time at which charging should be considered
         :param planned_start_soc: estimated vehicle SOC at that position
         :param desired_end_soc: desired final SOC after charging
-        :param max_sockets_per_station: maximum number of sockets per charging station to consider
+        :param max_offers_per_station: maximum number of offers per charging station to consider
         :return: list of specific offers of ChargingOperator consisting of
                     (charging station id, charging socket id, booking start time, booking end time, expected booking end soc, max_charging_power)
         """
@@ -288,13 +288,10 @@ class ChargingStation:
                 list_station_offers.append((self.id, socket_id, possible_start_time, possible_end_time, desired_end_soc, max_power))
             LOG.debug(f"possible slots for station {self.id} at socket {socket_id} with schedule {socket_schedule}:")
             LOG.debug(f"    -> {list_station_offers}")
-            # TODO # check methodology to stop
-            if len(list_station_offers) == max_sockets_per_station:
-                if possible_start_time == estimated_arrival_time:
-                    break
-                else:
-                    # only keep offer with earliest start
-                    list_station_offers = sorted(list_station_offers, key=lambda x: x[2])[:max_sockets_per_station]
+        # TODO # check methodology to stop
+        if len(list_station_offers) > max_offers_per_station:
+            # only keep offer with earliest start
+            list_station_offers = sorted(list_station_offers, key=lambda x: x[2])[:max_offers_per_station]
         return list_station_offers
 
     def __append_to_history(self, sim_time, vehicle, event_name, socket=None):
@@ -497,7 +494,7 @@ class PublicChargingInfrastructureOperator:
         return station.make_booking(sim_time, socket_id, vehicle, start_time, end_time)
 
     def get_charging_slots(self, sim_time, vehicle: SimulationVehicle, planned_start_time, planned_veh_pos,
-                           planned_veh_soc, desired_veh_soc, max_number_charging_stations=1, max_sockets_per_station=1) \
+                           planned_veh_soc, desired_veh_soc, max_number_charging_stations=1, max_offers_per_station=1) \
             -> tp.List[tp.Tuple[int, int, int, int, float, float, float]]:
         """ Returns specific charging possibilities for a vehicle at a future time, place with estimated SOC and desired SOC.
 
@@ -508,22 +505,25 @@ class PublicChargingInfrastructureOperator:
         :param planned_veh_soc: estimated vehicle SOC at that position
         :param desired_veh_soc: desired final SOC after charging
         :param max_number_charging_stations: maximum number of charging stations to consider
-        :param max_sockets_per_station: maximum number of sockets per charging station to consider
+        :param max_offers_per_station: maximum number of offers per charging station to consider
         :return: list of specific offers of ChargingOperator consisting of
                     (charging station id, charging socket id, booking start time, booking end time, expected booking end soc, max charging power)
         """
         considered_station_list = self._get_considered_stations(planned_veh_pos)
         list_offers = []
+        c = 0
         for station_id, tt, dis in considered_station_list:
             station = self.station_by_id[station_id]
             estimated_arrival_time = planned_start_time + tt
-            list_station_offers = station.get_charging_slots(sim_time, vehicle, estimated_arrival_time, planned_veh_soc, desired_veh_soc, max_sockets_per_station=max_sockets_per_station)
+            list_station_offers = station.get_charging_slots(sim_time, vehicle, estimated_arrival_time, planned_veh_soc, desired_veh_soc, max_offers_per_station=max_offers_per_station)
             LOG.debug(f"possible charge offers from station {station_id} for veh {vehicle.vid} with tt {tt} : {planned_start_time} -> {estimated_arrival_time}")
             LOG.debug(f"{list_station_offers}")
             list_offers.extend(list_station_offers)
             # TODO # check methodology to stop
-            if len(list_offers) >= max_number_charging_stations:
-                break
+            if len(list_station_offers) > 0:
+                c += 1
+                if c == max_number_charging_stations:
+                    break
         return list_offers
 
     def _get_considered_stations(self, position: tuple) -> tp.List[tuple]:

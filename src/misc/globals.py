@@ -145,6 +145,8 @@ G_OP_ELA_PRICE = "op_elastic_price_file"
 G_OP_FC_SUPPLY = "op_supply_fc_type"
 # charging
 G_OP_DEPOT_F = "op_depot_file"
+G_OP_CH_N_STATION_QUERY = "op_n_charge_station_query"   # max number of stations to query charge offers from
+G_OP_CH_N_OFFER_P_ST_QUERY = "op_n_charge_offer_per_station"    # max number of offers per station
 #parcel constraints
 G_OP_PA_EPT = "op_parcel_earliest_pickup_time"
 G_OP_PA_LPT = "op_parcel_latest_pickup_time"

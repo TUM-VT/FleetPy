@@ -43,10 +43,13 @@ class ChargingThresholdPublicInfrastructure(ChargingBase):
                 best_charging_poss = None
                 best_ch_op = None
                 for ch_op in self.all_charging_infra:
-                    charging_possibilities = ch_op.get_charging_slots(sim_time, veh_obj, last_time, last_pos, last_soc, 1.0, 1, 1)
+                    charging_possibilities = ch_op.get_charging_slots(sim_time, veh_obj, last_time, last_pos, last_soc, self.target_soc,
+                                                                      max_number_charging_stations=self.n_stations_to_query, max_offers_per_station=self.n_offers_p_station)
+                    LOG.debug(f"charging possiblilities of ch op {ch_op.ch_op_id}: {charging_possibilities}")
                     if len(charging_possibilities) > 0:
-                        ch_op_best = min(charging_possibilities, key=lambda x:x[5])
-                        if best_charging_poss is None or ch_op_best[5] < best_charging_poss[5]:
+                        # pick those with earliest finish
+                        ch_op_best = min(charging_possibilities, key=lambda x:x[3])
+                        if best_charging_poss is None or ch_op_best[3] < best_charging_poss[3]:
                             best_charging_poss = ch_op_best
                             best_ch_op = ch_op
                 if best_charging_poss is not None:

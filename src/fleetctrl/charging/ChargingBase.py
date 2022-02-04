@@ -2,6 +2,8 @@ from __future__ import annotations
 from abc import abstractmethod, ABC
 import logging
 from typing import Dict, List, Any, Tuple, TYPE_CHECKING
+
+from src.misc.globals import G_OP_CH_N_OFFER_P_ST_QUERY, G_OP_CH_N_STATION_QUERY
 if TYPE_CHECKING:
     from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
     from src.fleetctrl.FleetControlBase import FleetControlBase
@@ -26,6 +28,9 @@ class ChargingBase(ABC):
         self.all_charging_infra += self.list_pub_charging_infra[:]
         self.routing_engine = fleetctrl.routing_engine
         self.solver_key = solver
+        self.n_stations_to_query = operator_attributes.get(G_OP_CH_N_STATION_QUERY, 1)
+        self.n_offers_p_station = operator_attributes.get(G_OP_CH_N_OFFER_P_ST_QUERY, 1)
+        self.target_soc = 1.0   #TODO
         # children classes:
         # - check of additionally required attributes from operator_attributes
         # - save these as class attributes

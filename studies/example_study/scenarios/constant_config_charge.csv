@@ -38,7 +38,10 @@ op_reoptimisation_timestep,60
 op_depot_file,depots.csv
 op_charging_method,Threshold_PCI
 op_min_soc_after_planstop,0.5
+op_n_charge_station_query,5
+op_n_charge_offer_per_station,5
 ##2b,PublicChargingOperator
+nr_charging_operators,1
 ch_op_public_charging_station_f,public_charging_stations.csv
 ##3,TravelerModel
 ##4,PublicTransport
