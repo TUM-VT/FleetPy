@@ -961,6 +961,10 @@ class VehiclePlan:
                 planned_stop = False
                 repo_target = True
             if c_pos != pstop.get_pos():
+                if pstop.get_state() == G_PLANSTOP_STATES.RESERVATION:
+                    if pstop.get_planned_arrival_and_departure_time()[0] + 600 < pstop.get_earliest_start_time():
+                        LOG.warning("reservation to build vrl -> further update needed!")
+                        break
                 # driving vrl
                 if boarding:
                     status = VRL_STATES.ROUTE

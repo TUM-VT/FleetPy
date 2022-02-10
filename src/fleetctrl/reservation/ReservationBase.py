@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 import random
 from abc import abstractmethod, ABCMeta
+from src.misc.globals import G_RA_RES_BOPT_TS
 
 from typing import TYPE_CHECKING, Dict, Any, List, Tuple
 if TYPE_CHECKING:
@@ -21,6 +22,7 @@ class ReservationBase(metaclass=ABCMeta):
         :param solver: optional attribute to specify the solver to solve optimization problems """
         self.fleetctrl = fleetctrl
         self.routing_engine = fleetctrl.routing_engine
+        self.solver = solver
         self.active_reservation_requests : Dict[Any, PlanRequest] = {}
 
     def add_reservation_request(self, plan_request : PlanRequest, sim_time : int):
@@ -67,8 +69,8 @@ class ReservationBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def return_reservation_offer(self, rid : Any, sim_time : int) -> TravellerOffer:
-        """ this function returns an offer if possible for an reservation request which has been added to the reservation module before 
+    def return_immediate_reservation_offer(self, rid : Any, sim_time : int) -> TravellerOffer:
+        """ this function returns an offer if possible for an reservation request in case an immediate offer is needed for a reservation request
         :param rid: request id
         :param sim_time: current simulation time
         :return: offer for request """

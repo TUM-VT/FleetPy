@@ -107,7 +107,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
         if t_pu_earliest - sim_time > self.opt_horizon:
             self.reservation_module.add_reservation_request(prq, sim_time)
-            offer = self.reservation_module.return_reservation_offer(prq.get_rid_struct(), sim_time)
+            offer = self.reservation_module.return_immediate_reservation_offer(prq.get_rid_struct(), sim_time)
             LOG.debug(f"reservation offer for rid {rid_struct} : {offer}")
         else:
             list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
