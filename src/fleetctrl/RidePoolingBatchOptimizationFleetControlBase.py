@@ -163,18 +163,45 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
 
         """
         LOG.debug(f"Incoming request {rq.__dict__} at time {sim_time}")
+        if self.rq_dict.get(rq.get_rid_struct()):
+            return
+        t0 = time.perf_counter()
         self.sim_time = sim_time
-        prq = PlanRequest(rq, self.routing_engine, min_wait_time=self.min_wait_time, max_wait_time=self.max_wait_time,
+
+        self.sim_time = sim_time
+        prq = PlanRequest(rq, self.routing_engine, min_wait_time=self.min_wait_time,
+                          max_wait_time=self.max_wait_time,
                           max_detour_time_factor=self.max_dtf, max_constant_detour_time=self.max_cdt,
                           add_constant_detour_time=self.add_cdt, min_detour_time_window=self.min_dtw,
                           boarding_time=self.const_bt)
-
         rid_struct = rq.get_rid_struct()
-        self.rq_dict[rid_struct] = prq
-        self.RPBO_Module.add_new_request(rid_struct, prq)
-        self.new_requests[rid_struct] = 1
 
-        return {}
+        if prq.o_pos == prq.d_pos:
+            LOG.debug(f"automatic decline for rid {rid_struct}!")
+            self._create_rejection(prq, sim_time)
+            return
+
+        self.new_requests[rid_struct] = 1
+        self.rq_dict[rid_struct] = prq
+
+        o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
+        if t_pu_earliest - sim_time > self.opt_horizon:
+            self.reservation_module.add_reservation_request(prq, sim_time)
+            LOG.debug(f"reservation rid {rid_struct}")
+            prq.set_reservation_flag(True)
+            self.RPBO_Module.add_new_request(rid_struct, prq, consider_for_global_optimisation=False)
+        else:
+            self.RPBO_Module.add_new_request(rid_struct, prq)
+
+        # record cpu time
+        dt = round(time.perf_counter() - t0, 5)
+        old_dt = self._get_current_dynamic_fleetcontrol_value(sim_time, G_FCTRL_CT_RQU)
+        if old_dt is None:
+            new_dt = dt
+        else:
+            new_dt = old_dt + dt
+        output_dict = {G_FCTRL_CT_RQU: new_dt}
+        self._add_to_dynamic_fleetcontrol_output(sim_time, output_dict)
 
     def user_confirms_booking(self, rid : Any, simulation_time : int):
         """This method is used to confirm a customer booking. This can trigger some database processes.

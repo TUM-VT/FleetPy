@@ -55,7 +55,7 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
         if assigned_vid is not None:
             veh_obj = self.sim_vehicles[assigned_vid]
             assigned_plan = self.RPBO_Module.get_current_assignment(assigned_vid)
-            new_best_plan = self.RPBO_Module.getVehiclePlanWithoutRid(veh_obj, assigned_plan, rid, simulation_time)
+            new_best_plan = self.RPBO_Module.get_vehicle_plan_without_rid(veh_obj, assigned_plan, rid, simulation_time)
             if new_best_plan is not None:
                 self.assign_vehicle_plan(assigned_vid, new_best_plan, simulation_time, force_assign=True)
             else:
@@ -111,7 +111,7 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
                         _, earliest_pu, _ = prq.get_o_stop_info()
                         new_latest_pu = earliest_pu + self.max_wait_time_2
                         self.change_prq_time_constraints(simulation_time, rid, new_latest_pu)
-                        self.RPBO_Module.addNewRequest(rid, prq)
+                        self.RPBO_Module.add_new_request(rid, prq)
                     else:   # no retry, rid declined
                         self._create_user_offer(prq, simulation_time)
                 else:
