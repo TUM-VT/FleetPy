@@ -167,6 +167,8 @@ G_RA_OPT_HOR = "op_short_term_horizon"  # time ahead when requests will be treat
 G_RA_ASS_HOR = "op_res_assignment_horizon"  # time ahead when reservation plans will be assigned to vehicles (must exceed op_short_term_horizon)
 G_RA_MAX_BATCH_SIZE = "op_res_batch_size"   # size of of batches for ForwardBatchOptimization
 G_RA_RES_BOPT_TS = "op_res_opt_timestep"    # time interval of reservation module
+G_RA_RES_LG_MAX_DEPTH = "op_res_loc_graph_max_depth"    # for GraphContractionTSP -> depth of local graph for evalutating new sol
+G_RA_RES_LG_MAX_CUT = "op_res_loc_graph_max_cut_time"   # for GraphContractionTSP -> only add edges wtih this max time horizon and cut rest
 
 # private vehicles + charging
 G_PRIVATE_TRIPS_FILE = "op_private_trips_file"  # Private vehicle trips file
