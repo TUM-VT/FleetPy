@@ -4,6 +4,7 @@
 from __future__ import annotations
 import logging
 from pdb import post_mortem
+from tracemalloc import start
 import typing as tp
 from pathlib import Path
 from collections import defaultdict
@@ -223,11 +224,10 @@ class ChargingStation:
         attached_socked = self._vid_socket_dict[vid]
         full_charge_duration = attached_socked.calculate_charge_duration(attached_socked.attached_vehicle, attached_socked.attached_vehicle.soc, end_soc)
         LOG.debug(" -> full charge duration at time {}: {}".format(sim_time, full_charge_duration))
-        LOG.debug(" -> next bookings: {}".format([str(x) for x in self._socket_bookings.get(attached_socked.id, [])]))
         # test for next bookings
         if len(self._socket_bookings.get(attached_socked.id, [])) > 0:
             next_start_time = min(self._socket_bookings[attached_socked.id], key=lambda x:x.start_time).start_time
-            assert next_start_time - sim_time > 0, f"uncancelled bookings in charging station {self.id} at time {sim_time} with schedule { {a:[str(c) for c in b] for a, b in self._socket_bookings.items()}}!"
+            assert next_start_time - sim_time > 0, f"uncancelled bookings in charging station {self.id} at time {sim_time} with schedule { [str(c) for c in self._socket_bookings[attached_socked.id] ]}!"
             if next_start_time - sim_time < full_charge_duration:
                 return next_start_time - sim_time
         return full_charge_duration
@@ -287,13 +287,44 @@ class ChargingStation:
             if not found_free_slot:
                 possible_end_time = possible_start_time + socket_charge_duration
                 list_station_offers.append((self.id, socket_id, possible_start_time, possible_end_time, desired_end_soc, max_power))
-            LOG.debug(f"possible slots for station {self.id} at socket {socket_id} with schedule {socket_schedule}:")
+            LOG.debug(f"possible slots for station {self.id} at socket {socket_id}:")
             LOG.debug(f"    -> {list_station_offers}")
         # TODO # check methodology to stop
         if len(list_station_offers) > max_offers_per_station:
             # only keep offer with earliest start
             list_station_offers = sorted(list_station_offers, key=lambda x: x[2])[:max_offers_per_station]
         return list_station_offers
+    
+    def add_external_booking(self, start_time, end_time, sim_time, veh_struct):
+        """ this methods adds an external booking to the charging station and therefor occupies a socket for a given time
+        :param start_time: start time of booking
+        :param end_time: end time of booking
+        :param sim_time : current simulation time
+        :return: True, if booking is possible; False if all sockets are already occupied"""
+        found_socked = None
+        for socket_id, socket_schedule in self.get_current_schedules(sim_time).items():
+            if len(socket_schedule) == 0:
+                found_socked = socket_id
+                break
+            else:
+                last_end_time = start_time
+                for pb_start_time, pb_end_time, _ in socket_schedule:
+                    if pb_start_time <= end_time and last_end_time >= start_time:
+                        found_socked = socket_id
+                        break
+                    last_end_time = pb_end_time
+                    if pb_start_time >= end_time:
+                        break
+                if found_socked is not None:
+                    break
+                if last_end_time >= start_time:
+                    found_socked = socket_id
+                    break
+        if found_socked is None:
+            return False
+        else:
+            self.make_booking(sim_time, found_socked, veh_struct, start_time=start_time, end_time=end_time)
+            return True
 
     def __append_to_history(self, sim_time, vehicle, event_name, socket=None):
         if self.station_history_file_path is not None:
@@ -432,7 +463,7 @@ class Depot(ChargingStation):
 class PublicChargingInfrastructureOperator:
 
     def __init__(self, ch_op_id: int, public_charging_station_file: str, ch_operator_attributes: dict,
-                 scenario_parameters: dict, dir_names: dict, routing_engine: NetworkBase):
+                 scenario_parameters: dict, dir_names: dict, routing_engine: NetworkBase, initial_charging_events_f: str = None):
         """This class represents the operator for the charging infrastructure.
 
         :param ch_op_id: id of charging operator
@@ -441,6 +472,7 @@ class PublicChargingInfrastructureOperator:
         :param scenario_parameters: dictionary that contain global scenario parameters
         :param dir_names: dictionary that specifies the folder structure of the simulation
         :param routing_engine: reference to network class
+        :param initial_charging_events_f: in this file charging events are specified that are booked at the beginning of the simulation
         """
 
         self.ch_op_id = ch_op_id
@@ -457,6 +489,22 @@ class PublicChargingInfrastructureOperator:
                 
         self.max_search_radius = scenario_parameters.get(G_CH_OP_MAX_STATION_SEARCH_RADIUS)
         self.max_considered_stations = scenario_parameters.get(G_CH_OP_MAX_CHARGING_SEARCH, 100)
+        
+        sim_start_time = scenario_parameters[G_SIM_START_TIME]
+        sim_end_time = scenario_parameters[G_SIM_END_TIME]
+        
+        self.sim_time_step = scenario_parameters[G_SIM_TIME_STEP]
+        
+        if initial_charging_events_f is not None:
+            class VehicleStruct():
+                def __init__(self) -> None:
+                    self.vid = -1
+            
+            charging_events = pd.read_csv(initial_charging_events_f)
+            for station_id, start_time, end_time in zip(charging_events["charging_station_id"].values, charging_events["start_time"].values, charging_events["end_time"].values):
+                if end_time < sim_start_time or start_time > sim_end_time:
+                    continue
+                self.station_by_id[station_id].add_external_booking(start_time, end_time, sim_start_time, VehicleStruct())
 
 
     def _loading_charging_stations(self, public_charging_station_file, dir_names) -> List[ChargingStation]:
@@ -546,10 +594,29 @@ class PublicChargingInfrastructureOperator:
                     return r
         return r
     
+    def _remove_unrealized_bookings(self, sim_time):
+        """ this method removes all planned bookings that are not ended by the update of a simulation vehicle and are there considered as not realized
+        :param sim_time: simulation time"""
+        for s_id, charging_station in self.station_by_id.items():
+            schedule_dict = charging_station.get_current_schedules(sim_time)
+            running_processes = charging_station.get_running_processes()[0]
+            for socket_id, schedule in schedule_dict.items():
+                if len(schedule) > 0:
+                    _, end_time, booking_id = min(schedule, key=lambda x:x[1])
+                    if end_time < sim_time + self.sim_time_step:
+                        if running_processes.get(socket_id) is None or running_processes.get(socket_id).id != booking_id:
+                            LOG.debug("end unrealized booking at time {}: {}".format(sim_time, booking_id))
+                            try:
+                                ch_process = charging_station._booked_processes[booking_id]
+                                charging_station.cancel_booking(sim_time, ch_process)
+                            except KeyError:
+                                LOG.warning("couldnt cancel charging booking {}".format(booking_id))
+                        
+    
     def time_trigger(self, sim_time):
         """ this method is triggered in each simulation time step
         :param sim_time: simulation time"""
-        pass
+        self._remove_unrealized_bookings(sim_time)
     
 
 class OperatorChargingAndDepotInfrastructure(PublicChargingInfrastructureOperator):
@@ -611,3 +678,6 @@ class OperatorChargingAndDepotInfrastructure(PublicChargingInfrastructureOperato
         else:
             depot = None
         return depot
+    
+    def time_trigger(self, sim_time):
+        super().time_trigger(sim_time)

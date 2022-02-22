@@ -265,6 +265,7 @@ G_ACT_VEH_SHARE = "share_active_fleet_size"
 # charging operator
 G_CH_OP_F = "ch_op_public_charging_station_f"
 G_CH_DISCONNECT_ON_FULL_SOC = "ch_op_disconnect_charging_on_full_soc"                  # Should a charging vehicle be disconnected immediately after full soc
+G_CH_OP_INIT_CH_EVENTS_F = "ch_op_init_charge_events_f"
 # parameter for all charging operators
 G_CH_OP_MAX_STATION_SEARCH_RADIUS = "ch_max_station_search_radius"  # radius in seconds travel time (TODO ?)
 G_CH_OP_MAX_CHARGING_SEARCH = "ch_max_station_search"    # max number of charging stations to be considered
