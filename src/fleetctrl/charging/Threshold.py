@@ -35,9 +35,16 @@ class ChargingThresholdPublicInfrastructure(ChargingBase):
                 if not last_pstop.get_state() == G_PLANSTOP_STATES.CHARGING and not last_pstop.is_inactive():
                     _, last_soc = last_pstop.get_planned_arrival_and_departure_soc()
                     if last_soc < self.soc_threshold:
-                        _, last_time = last_pstop.get_planned_arrival_and_departure_time()
-                        last_pos = last_pstop.get_pos()
-                        is_charging_required = True
+                        charging_planned = False
+                        for ps in current_plan.list_plan_stops: # TODO remove at some time but currently this results in bugs
+                            if ps.get_state() == G_PLANSTOP_STATES.CHARGING:
+                                charging_planned=True
+                                LOG.debug(" -> but charging allready planned")
+                                break
+                        if not charging_planned:
+                            _, last_time = last_pstop.get_planned_arrival_and_departure_time()
+                            last_pos = last_pstop.get_pos()
+                            is_charging_required = True
             elif veh_obj.soc < self.soc_threshold:
                 is_charging_required = True
 

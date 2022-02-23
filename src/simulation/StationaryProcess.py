@@ -74,7 +74,7 @@ class ChargingProcess(StationaryProcess):
         self.end_time = end_time
         # TODO: Remove the "station" attribute to avoid direct access of stationary process to charging station
         self.station: ChargingStation = station
-        self.socket_id: int = int(booking_id.split("_")[0])
+        self.socket_id: int = int(booking_id.split("_")[1])
         self.locked: bool = False
         self._task_started = False
         

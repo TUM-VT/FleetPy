@@ -244,7 +244,7 @@ class ChargingStation:
         """
 
         start_time = sim_time if start_time is None else start_time
-        booking_id = f"{socket_id}_{vehicle.vid}_{start_time}"
+        booking_id = f"{self.id}_{socket_id}_{vehicle.vid}_{int(start_time)}_{int(end_time)}"
         booking = ChargingProcess(booking_id, vehicle, self, start_time, end_time)
         self.__add_to_scheduled(booking)
         return booking
@@ -605,7 +605,7 @@ class PublicChargingInfrastructureOperator:
                     _, end_time, booking_id = min(schedule, key=lambda x:x[1])
                     if end_time < sim_time + self.sim_time_step:
                         if running_processes.get(socket_id) is None or running_processes.get(socket_id).id != booking_id:
-                            LOG.debug("end unrealized booking at time {}: {}".format(sim_time, booking_id))
+                            LOG.debug("end unrealized booking at time {} at station {} socket {}: {}".format(sim_time, s_id, socket_id, booking_id))
                             try:
                                 ch_process = charging_station._booked_processes[booking_id]
                                 charging_station.cancel_booking(sim_time, ch_process)
