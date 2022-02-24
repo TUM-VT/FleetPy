@@ -182,7 +182,7 @@ class ChargingStation:
         socket = self._sockets[booking.socket_id]
         found_empty_socket = socket.attach(sim_time, booking.veh)
         LOG.debug(f"start charging process: {booking} at time {sim_time}")
-        LOG.debug(f"with schedule {self.get_current_schedules(sim_time)}")
+        #LOG.debug(f"with schedule {self.get_current_schedules(sim_time)}")
         assert found_empty_socket is True, f"unable to connect to the socket {socket} at station {self.id}"
         self._vid_socket_dict[booking.veh.vid] = socket
         self._current_processes[socket.id] = booking
@@ -308,16 +308,18 @@ class ChargingStation:
                 break
             else:
                 last_end_time = start_time
-                for pb_start_time, pb_end_time, _ in socket_schedule:
-                    if pb_start_time <= end_time and last_end_time >= start_time:
+                for pb_start_time, pb_end_time, _ in sorted(socket_schedule,key=lambda x:x[0]):
+                    if pb_start_time >= end_time and last_end_time <= start_time:
                         found_socked = socket_id
+                        last_end_time = pb_end_time
+                        break
+                    if pb_start_time >= end_time:
+                        last_end_time = pb_end_time
                         break
                     last_end_time = pb_end_time
-                    if pb_start_time >= end_time:
-                        break
                 if found_socked is not None:
                     break
-                if last_end_time >= start_time:
+                if last_end_time <= start_time:
                     found_socked = socket_id
                     break
         if found_socked is None:
@@ -505,7 +507,7 @@ class PublicChargingInfrastructureOperator:
                 if end_time < sim_start_time or start_time > sim_end_time:
                     continue
                 self.station_by_id[station_id].add_external_booking(start_time, end_time, sim_start_time, VehicleStruct())
-
+                
 
     def _loading_charging_stations(self, public_charging_station_file, dir_names) -> List[ChargingStation]:
         """ Loads the charging stations from the provided csv file"""
@@ -603,7 +605,7 @@ class PublicChargingInfrastructureOperator:
             for socket_id, schedule in schedule_dict.items():
                 if len(schedule) > 0:
                     _, end_time, booking_id = min(schedule, key=lambda x:x[1])
-                    if end_time < sim_time + self.sim_time_step:
+                    if end_time <= sim_time + self.sim_time_step:
                         if running_processes.get(socket_id) is None or running_processes.get(socket_id).id != booking_id:
                             LOG.debug("end unrealized booking at time {} at station {} socket {}: {}".format(sim_time, s_id, socket_id, booking_id))
                             try:
