@@ -3,9 +3,8 @@
 # -----------------------------
 from __future__ import annotations
 import logging
-from pdb import post_mortem
-from tracemalloc import start
 import typing as tp
+import time
 from pathlib import Path
 from collections import defaultdict
 
@@ -287,6 +286,9 @@ class ChargingStation:
             if not found_free_slot:
                 possible_end_time = possible_start_time + socket_charge_duration
                 list_station_offers.append((self.id, socket_id, possible_start_time, possible_end_time, desired_end_soc, max_power))
+                if possible_start_time == planned_arrival_time and len(list_station_offers) >= max_offers_per_station:
+                    LOG.debug("early brake in offer search")
+                    break
             LOG.debug(f"possible slots for station {self.id} at socket {socket_id}:")
             LOG.debug(f"    -> {list_station_offers}")
         # TODO # check methodology to stop
@@ -618,7 +620,9 @@ class PublicChargingInfrastructureOperator:
     def time_trigger(self, sim_time):
         """ this method is triggered in each simulation time step
         :param sim_time: simulation time"""
+        t = time.time()
         self._remove_unrealized_bookings(sim_time)
+        LOG.debug("charging infra time trigger took {}".format(time.time() - t))
     
 
 class OperatorChargingAndDepotInfrastructure(PublicChargingInfrastructureOperator):
