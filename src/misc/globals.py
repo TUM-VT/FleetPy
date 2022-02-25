@@ -618,7 +618,7 @@ def load_scenario_inputs(output_dir):
     """This function reads the scenario config file, which enables access to all input parameters for evaluations etc.
 
     :param output_dir: scenario output directory
-    :return: scenario_parameter dictionary, directory dictionary
+    :return: scenario_parameter dictionary, list_op_attributes, directory dictionary
     """
     config_f = os.path.join(output_dir, G_SC_INP_F)
     fhin = open(config_f)

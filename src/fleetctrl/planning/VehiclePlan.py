@@ -504,7 +504,7 @@ class BoardingPlanStop(PlanStop):
 class RoutingTargetPlanStop(PlanStop):
     """ this plan stop can be used to schedule a routing target for vehicles with the only task to drive there
         i.e repositioning"""
-    def __init__(self, position, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None, locked=False, locked_end=False, planstop_state=G_PLANSTOP_STATES.REPO_TARGET):
+    def __init__(self, position, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None, locked=False, locked_end=True, planstop_state=G_PLANSTOP_STATES.REPO_TARGET):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param earliest_start_time: (float) absolute earliest start time this plan stop is allowed to start
