@@ -512,6 +512,9 @@ class FleetSimulationBase:
         remaining_tasks = -1
         while remaining_tasks != 0:
             self.update_sim_state_fleets(c_time - self.time_step, c_time)
+            for ch_op_dict in self.charging_operator_dict.values():
+                for ch_op in ch_op_dict.values():
+                    ch_op.time_trigger(c_time)
             remaining_tasks = 0
             for veh_obj in self.sim_vehicles.values():
                 if veh_obj.assigned_route and veh_obj.assigned_route[0].status == VRL_STATES.OUT_OF_SERVICE:
