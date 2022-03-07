@@ -110,7 +110,7 @@ class SimulationVehicle:
                 init_blocked_duration = final_time-start_time
                 self.status = VRL_STATES.BLOCKED_INIT
                 fleetctrl.set_init_blocked(self, start_time, routing_engine, init_blocked_duration)
-                self.assigned_route.append(VehicleRouteLeg(VRL_STATES.BLOCKED_INIT, state_dict[G_V_INIT_NODE], {},
+                self.assigned_route.append(VehicleRouteLeg(VRL_STATES.BLOCKED_INIT, (int(state_dict[G_V_INIT_NODE]), None, None), {},
                                                            duration=init_blocked_duration, locked=True))
                 # self.start_next_leg(start_time)
                 self.start_next_leg_first = True

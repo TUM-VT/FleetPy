@@ -436,14 +436,16 @@ class FleetSimulationBase:
         init_f_flag = False
         init_state_f = None
         if self.scenario_parameters.get(G_INIT_STATE_SCENARIO):
-            init_state_f = os.path.join(self.dir_names[G_DIR_MAIN], "results",
-                                        self.scenario_parameters[G_STUDY_NAME],
+            init_state_f = os.path.join(self.dir_names[G_DIR_MAIN], "studies",
+                                        self.scenario_parameters[G_STUDY_NAME], "results",
                                         str(self.scenario_parameters.get(G_INIT_STATE_SCENARIO, "None")),
                                         "final_state.csv")
             init_f_flag = True
+            if not os.path.isfile(init_state_f):
+                raise FileNotFoundError(f"init state variable {G_INIT_STATE_SCENARIO} given but file {init_state_f} not found!")
         set_unassigned_vid = set([(veh_obj.op_id, veh_obj.vid) for veh_obj in self.sim_vehicles.values()
                                   if veh_obj.pos is None])
-        if init_f_flag and os.path.isfile(init_state_f):
+        if init_f_flag:
             # set according to initial state if available
             init_state_df = pd.read_csv(init_state_f)
             init_state_df.set_index([G_V_OP_ID, G_V_VID], inplace=True)
