@@ -712,6 +712,7 @@ class FleetSimulationBase:
             # save final state, record remaining travelers and vehicle tasks
             self.save_final_state()
             self.record_remaining_assignments()
+            self.demand.record_remaining_users()
         t_run_end = time.perf_counter()
         # call evaluation
         self.evaluate()

@@ -256,6 +256,11 @@ class Demand:
             del self.rq_db[rid]
         else:
             LOG.warning(f"user_ends_alighting({rid}): user not found in database!")
+            
+    def record_remaining_users(self):
+        for rid in list(self.rq_db.keys()):
+            self.record_user(rid)
+        self.save_user_stats(force=True)
 
     def _get_all_requests(self):
         """Returns a list of (rid, Request) pairs for all requests currently in the Demand object."""
