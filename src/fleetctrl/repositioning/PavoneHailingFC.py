@@ -67,6 +67,8 @@ class PavoneHailingRepositioningFC(RepositionBase):
         # print(number_idle_vehicles)
         # print("")
         total_idle_vehicles = sum(number_idle_vehicles.values())
+        if total_idle_vehicles == 0:
+            return []
         nr_regions = len(list_zones)
         v_i_e_dict = {}
         omegas = []
@@ -341,6 +343,8 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         # print(number_idle_vehicles)
         # print("")
         total_idle_vehicles = sum(number_idle_vehicles.values())
+        if total_idle_vehicles == 0:
+            return []
         nr_regions_with_demand = 0
         v_i_e_dict = {} # can also contain negative values now!
         omegas = []
