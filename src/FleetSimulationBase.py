@@ -681,7 +681,7 @@ class FleetSimulationBase:
                 del self.demand.rq_db[rid]
                 del self.demand.waiting_rq[rid]
 
-    def run(self):
+    def run(self, tqdm_position=0):
         self._start_realtime_plot()
         t_run_start = time.perf_counter()
         if not self._started:
@@ -693,7 +693,7 @@ class FleetSimulationBase:
             elif PROGRESS_LOOP == "demand":
                 # loop over time with progress bar scaling according to future demand
                 all_requests = sum([len(x) for x in self.demand.future_requests.values()])
-                with tqdm(total=100) as pbar:
+                with tqdm(total=100, position=tqdm_position) as pbar:
                     for sim_time in range(self.start_time, self.end_time, self.time_step):
                         remaining_requests = sum([len(x) for x in self.demand.future_requests.values()])
                         self.step(sim_time)
@@ -707,7 +707,7 @@ class FleetSimulationBase:
                         self._update_realtime_plots_dict(sim_time)
             else:
                 # loop over time with progress bar scaling with time
-                for sim_time in tqdm(range(self.start_time, self.end_time, self.time_step)):
+                for sim_time in tqdm(range(self.start_time, self.end_time, self.time_step), position=tqdm_position):
                     self.step(sim_time)
                     self._update_realtime_plots_dict(sim_time)
 
