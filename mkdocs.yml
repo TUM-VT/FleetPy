@@ -1,0 +1,40 @@
+site_name: FleetSim
+
+theme:
+  # color
+  palette:
+    # Theme of the webpage: 'default' for light mode and 'slate' for dark mode
+    scheme: default
+
+    # Primary color: header, the sidebar, text links and several other components
+    primary: indigo
+
+    # Accent color: elements that can be interacted with
+    accent: indigo
+
+  # Font
+  font:
+
+    # regular font
+    text: Roboto
+
+  # language
+  language: en
+
+  # Navigation
+  features:
+    - navigation.instant
+    # - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+
+  name: material
+
+
+# footer
+extra:
+  social:
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/school/tum-chair-of-traffic-engineering-and-control/mycompany/
+      name: linkedin.com
