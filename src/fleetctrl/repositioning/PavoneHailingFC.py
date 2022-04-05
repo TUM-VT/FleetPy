@@ -34,7 +34,7 @@ class PavoneHailingRepositioningFC(RepositionBase):
                           f"Set them in the {G_OP_REPO_TH_DEF} scenario parameter!")
         self.optimisation_timeout = 30 # TODO #
 
-    def determine_and_create_repositioning_plans(self, sim_time, lock=True):
+    def determine_and_create_repositioning_plans(self, sim_time, lock=None):
         """This method determines and creates new repositioning plans. The repositioning plans are directly assigned
         to the vehicles. The repositioning algorithm can choose whether the generated respective plan stops are locked.
         In order to allow further database processes, the vids of vehicles with new plans are returned.
@@ -44,6 +44,8 @@ class PavoneHailingRepositioningFC(RepositionBase):
         :return: list[vid] of vehicles with changed plans
         """
         self.sim_time = sim_time
+        if lock is None:
+            lock = self.lock_repo_assignments
         # get forecast values
         # -------------------
         t0 = sim_time + self.list_horizons[0]
@@ -311,7 +313,7 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
     vehicles is more complex to allow negative values, but consistent solution during global vehicle shortage.
     """
 
-    def determine_and_create_repositioning_plans(self, sim_time, lock=True):
+    def determine_and_create_repositioning_plans(self, sim_time, lock=None):
         """This method determines and creates new repositioning plans. The repositioning plans are directly assigned
         to the vehicles. The repositioning algorithm can choose whether the generated respective plan stops are locked.
         In order to allow further database processes, the vids of vehicles with new plans are returned.
@@ -321,6 +323,8 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         :return: list[vid] of vehicles with changed plans
         """
         self.sim_time = sim_time
+        if lock is None:
+            lock = self.lock_repo_assignments
         # get forecast values
         # -------------------
         t0 = sim_time + self.list_horizons[0]
