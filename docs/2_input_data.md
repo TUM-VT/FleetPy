@@ -21,7 +21,7 @@ Optional data contains all the information that can increase the quality of simu
 
 Network data is stored in `data/networks`. For each network given a `network_name`, the following mandatory directory and file structure needs to be met:
 
-```
+```diff
     networks/  
     networks/{network_name}/  
     networks/{network_name}/base/  
@@ -34,13 +34,13 @@ Network data is stored in `data/networks`. For each network given a `network_nam
 <!-- Yunfei: should we specify the data format here? -->
 ### Data Specification
 
-A routable network consists of nodes and edges. Vehicles travel along edges, which contain the travel information and nodes are the connections between these edges and represent the positions in the network, where different edges can be chosen as next part of the route. Hence, they usually represent junctions of a street network.
+A routable network consists of *nodes* and *edges*. Vehicles travel along *edges* containing the travel information. *Edges*, are defined as the connections between *nodes*, which represent the positions in the network, where different *edges* can be chosen as the next part of the route. Hence, *nodes* usually represent junctions/intersections of a street network.
 
 ```diff
 - IMPORTANT: the network definition assumes that node indices are numbered from 0..|N-1|!
 ```
 
-In the following, the columns of the network data files are described. Please refer to documentation/Data_Directory_Structure.md for the correct placement of the respective files.
+In the following contents, the columns of different network data files are described.
 
 #### nodes.csv
 
@@ -75,13 +75,19 @@ travel_time | float | travel duration on street edge in seconds
 Column Name | Data Type | Description
 -- | -- | --
 shortcut_def | str | only for contraction hierarchy; use “;” as separator between IDs
-source_edge_id | str | OSM-Edge ID, Aimsun Section ID; can be "-" separated elements as well
+source_edge_id | str | depends on the source where edge are retrieved, could be, e.g., OSM-Edge ID, Aimsun Section ID...; can be "-" separated elements as well
+
+<!-- Yunfei: do we need to cite the reference (osm, aimsun) here? -->
 
 #### crs.info
 
-epsg:code
+`epsg:code`
 
-* This file only contains one line and contains the epsg-code 'code', which is valid for the pos_x, pos_y in the nodes.csv.
+- This file only contains one line: epsg-code 'code', which is valid for the pos_x, pos_y in the nodes.csv.
+
+### Preprocessing Methods (Need to be supplemented)
+
+There are various routing-modules that are based on different preprocessing scripts; the preprocessed data will also be saved in the respective network directory.
 
 #### NN_FASTEST_TT.NPY / NN_FASTEST_DISTANCE.NPY
 
@@ -119,10 +125,6 @@ The travel time matrix is called tt_matrix.npy, the distance matrix is called di
 These files are saved in the corresponding travel time folders; free-flow condition is stored in the base-folder.
 Note that only the travel times/distances between the first x nodes are stored. x is defined by the shape of the matrix.
 These matrices are used by NetworkPartiallyPreprocessed.py and NetworkPartiallyPreprocessedCpp.py.
-
-### Preprocessing Methods
-
-There are various routing-modules that are based on different preprocessing scripts; the preprocessed data will also be saved in the respective network directory.
 
 <!-- (Yunfei): base directory 
 
