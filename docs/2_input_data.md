@@ -85,6 +85,10 @@ source_edge_id | str | depends on the source where edge are retrieved, could be,
 
 - This file only contains one line: epsg-code 'code', which is valid for the pos_x, pos_y in the nodes.csv.
 
+#### nodes(/edges)_all_infos.geojson
+
+[GeoJSON](https://geojson.org/) is a format for geographic data that represents both geographic features and their non-spatial attributes. All information for nodes and edges is stored in these two files.
+
 ### Preprocessing Methods (Need to be supplemented)
 
 There are various routing-modules that are based on different preprocessing scripts; the preprocessed data will also be saved in the respective network directory.
