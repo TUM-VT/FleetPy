@@ -91,7 +91,7 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
             self.RPBO_Module.add_new_request(rid_struct, prq)
             list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
             if len(list_tuples) > 0:
-                (vid, vehplan, delta_cfv) = list_tuples[0]
+                (vid, vehplan, delta_cfv) = min(list_tuples, key=lambda x:x[2])
                 LOG.debug(f"before insertion: {vid} | {self.veh_plans[vid]}")
                 LOG.debug(f"after insertion: {vid} | {vehplan}")
                 self.tmp_assignment[rid_struct] = vehplan

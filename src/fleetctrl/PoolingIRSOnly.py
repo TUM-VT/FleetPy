@@ -112,7 +112,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         else:
             list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
             if len(list_tuples) > 0:
-                (vid, vehplan, delta_cfv) = list_tuples[0]
+                (vid, vehplan, delta_cfv) = min(list_tuples, key=lambda x:x[2])
                 self.tmp_assignment[rid_struct] = vehplan
                 offer = self._create_user_offer(prq, sim_time, vehplan)
                 LOG.debug(f"new offer for rid {rid_struct} : {offer}")
