@@ -694,6 +694,7 @@ class FleetSimulationBase:
                 # loop over time with progress bar scaling according to future demand
                 all_requests = sum([len(x) for x in self.demand.future_requests.values()])
                 with tqdm(total=100, position=tqdm_position) as pbar:
+                    pbar.set_description(self.scenario_parameters.get(G_SCENARIO_NAME))
                     for sim_time in range(self.start_time, self.end_time, self.time_step):
                         remaining_requests = sum([len(x) for x in self.demand.future_requests.values()])
                         self.step(sim_time)
@@ -707,7 +708,8 @@ class FleetSimulationBase:
                         self._update_realtime_plots_dict(sim_time)
             else:
                 # loop over time with progress bar scaling with time
-                for sim_time in tqdm(range(self.start_time, self.end_time, self.time_step), position=tqdm_position):
+                for sim_time in tqdm(range(self.start_time, self.end_time, self.time_step), position=tqdm_position,
+                                     desc=self.scenario_parameters.get(G_SCENARIO_NAME)):
                     self.step(sim_time)
                     self._update_realtime_plots_dict(sim_time)
 
