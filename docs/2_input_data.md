@@ -17,7 +17,9 @@ Optional data contains all the information that can increase the quality of simu
 
 ## Network Data
 
-### Basic Data Structure
+### Minimum Required Data
+
+#### Data Structure
 
 Network data is stored in `data/networks`. For each network given a `network_name`, the following mandatory directory and file structure needs to be met:
 
@@ -32,7 +34,8 @@ Network data is stored in `data/networks`. For each network given a `network_nam
 ```
 
 <!-- Yunfei: should we specify the data format here? -->
-### Data Specification
+
+#### Data Specification
 
 A routable network consists of *nodes* and *edges*. Vehicles travel along *edges* containing the travel information. *Edges*, are defined as the connections between *nodes*, which represent the positions in the network, where different *edges* can be chosen as the next part of the route. Hence, *nodes* usually represent junctions/intersections of a street network.
 
@@ -42,9 +45,9 @@ A routable network consists of *nodes* and *edges*. Vehicles travel along *edges
 
 In the following contents, the columns of different network data files are described.
 
-#### nodes.csv
+##### nodes.csv
 
-##### Necessary Attributes
+###### Necessary Attributes
 
 Column Name | Data Type | Description
 -- | -- | --
@@ -53,15 +56,15 @@ is_stop_only | bool | False: normal node; True: node can only be used as first o
 pos_x | float | x-position in projected coordinate system > unit: meters
 pos_y | float | y-position in projected coordinate system > unit: meters
 
-##### Optional Attributes
+###### Optional Attributes
 
 Column Name | Data Type | Description
 -- | -- | --
 node_order | int | only required for contraction hierarchy
 
-#### edges.csv
+##### edges.csv
 
-##### Necessary Attributes
+###### Necessary Attributes
 
 Column Name | Data Type | Description
 -- | -- | --
@@ -70,7 +73,7 @@ to_node | int | ID of destination node of a street edge
 distance | float | length of street edge in meters
 travel_time | float | travel duration on street edge in seconds
 
-##### Optional Attributes
+###### Optional Attributes
 
 Column Name | Data Type | Description
 -- | -- | --
@@ -79,15 +82,54 @@ source_edge_id | str | depends on the source where edge are retrieved, could be,
 
 <!-- Yunfei: do we need to cite the reference (osm, aimsun) here? -->
 
-#### crs.info
-
-`epsg:code`
-
-- This file only contains one line: epsg-code 'code', which is valid for the pos_x, pos_y in the nodes.csv.
-
-#### nodes(/edges)_all_infos.geojson
+##### nodes(/edges)_all_infos.geojson
 
 [GeoJSON](https://geojson.org/) is a format for geographic data that represents both geographic features and their non-spatial attributes. All information for nodes and edges is stored in these two files.
+
+### Optional Data
+
+#### Coordination System
+
+If the coordinate frame is not WGS84, an additional file is needed to state the used reference system.
+
+```diff
+    networks/{network_name}/base/crs.info
+```
+
+- This file only contains one line: `epsg:code`, which is valid for the pos_x, pos_y in the nodes.csv.
+
+#### Dynamic Network Modeling
+
+Travel times of links can be categorized from two dimensions:  deterministic or stochastic considering whether the travel time for a certain link is a fixed number or a distribution; static or dynamic depending on whether the travel time will vary from time. In case network travel times are *deterministic and dynamic*, the edge travel times are saved in following structure:
+
+```diff
+    networks/{network_name}/{scenario_time}/
+    networks/{network_name}/{scenario_time}/edges_td_att.csv
+```
+
+Additionally, the `NetworkTable` routing module requires fastest node-to-node travel time and distance tables for each travel time directory.
+
+```diff
+    networks/{network_name}/ff/
+    networks/{network_name}/ff/tables/
+    networks/{network_name}/ff/tables/nn_fastest_distance.npy
+    networks/{network_name}/ff/tables/nn_fastest_travel_time.npy
+    networks/{network_name}/{scenario_time}/tables/
+    networks/{network_name}/{scenario_time}/tables/nn_fastest_distance.npy
+    networks/{network_name}/{scenario_time}/tables/nn_fastest_travel_time.npy
+```
+
+`Network dynamics` file defines the loading of dynamic (time-dependent) travel time files or travel time factors, which shall be saved as:
+
+```diff
+    networks/{network_name}/{nw_dynamics_f}.csv
+```
+
+`DynamicNFDTable` routing module requires the ff/tables and the network nfd file:
+
+```diff
+    networks/{network_name}/base/nfd.csv
+```
 
 ### Preprocessing Methods (Need to be supplemented)
 
@@ -104,11 +146,11 @@ These files are saved under scenario_dir/tables/x.npy, where scenario_dir=ff for
 
 These files can be used
 
-* to define loading of corresponding travel time files at given simulation time (column "travel_time_folder")
+- to define loading of corresponding travel time files at given simulation time (column "travel_time_folder")
 
 or(!)
 
-* to scale all network travel times with certain factors according to the simulation time. This input is used by the 'NetworkTTMatrix' module. (column "travel_time_factor")
+- to scale all network travel times with certain factors according to the simulation time. This input is used by the 'NetworkTTMatrix' module. (column "travel_time_factor")
 
 Column Name | Data Type | Description
 -- | -- | --
