@@ -182,7 +182,7 @@ class V2RB():
                 new_ps = PlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
                                           earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
                                           change_nr_pax=change_nr_pax, duration=ps.get_duration_and_earliest_departure()[0], locked=ps.is_locked(),
-                                          charging_power=ps.get_charging_power(), planstop_state=ps.get_state(), stationary_task=ps.get_stationary_task(),
+                                          charging_power=ps.get_charging_power(), planstop_state=ps.get_state(), charging_task_id=ps.get_charging_task_id(),
                                           change_nr_parcels=ps.get_change_nr_parcels())
                 # new_ps = ps.copy()  
                 # new_ps.boarding_dict = new_boarding_dict

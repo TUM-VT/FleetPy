@@ -181,7 +181,7 @@ class ChargingStation:
         socket = self._sockets[booking.socket_id]
         found_empty_socket = socket.attach(sim_time, booking.veh)
         LOG.debug(f"start charging process: {booking} at time {sim_time}")
-        #LOG.debug(f"with schedule {self.get_current_schedules(sim_time)}")
+        LOG.debug(f"with schedule {self.get_current_schedules(sim_time)}")
         assert found_empty_socket is True, f"unable to connect to the socket {socket} at station {self.id}"
         self._vid_socket_dict[booking.veh.vid] = socket
         self._current_processes[socket.id] = booking
@@ -432,7 +432,8 @@ class Depot(ChargingStation):
                 selected_charging_option = min(charging_options, key=lambda x:x[3])
                 ch_process = self.make_booking(simulation_time, selected_charging_option[1], veh_obj, start_time=selected_charging_option[2], end_time=selected_charging_option[3])
                 start_time, end_time = ch_process.get_scheduled_start_end_times()
-                ch_ps = ChargingPlanStop(self.pos, stationary_task=ch_process, earliest_start_time=start_time, duration=end_time-start_time,
+                charging_task_id = (self.ch_op_id, ch_process.id)
+                ch_ps = ChargingPlanStop(self.pos, charging_task_id=charging_task_id, earliest_start_time=start_time, duration=end_time-start_time,
                                          charging_power=selected_charging_option[5], locked=True)
                 
                 assert fleetctrl.veh_plans[veh_obj.vid].list_plan_stops[-1].get_state() == G_PLANSTOP_STATES.INACTIVE
@@ -446,7 +447,7 @@ class Depot(ChargingStation):
                                                                     return_copy=False, position=-1)
                     fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
                     # assign vehicle plan
-                    fleetctrl.assign_vehicle_plan(veh_obj, fleetctrl.veh_plans[veh_obj.vid], simulation_time)
+                    fleetctrl.assign_vehicle_plan(veh_obj, fleetctrl.veh_plans[veh_obj.vid], simulation_time, assigned_charging_task=(charging_task_id, ch_process))
                 else:
                     LOG.debug(" -> start later")
                     # modify veh-plan:
@@ -462,7 +463,7 @@ class Depot(ChargingStation):
                     
                     fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
                     # assign vehicle plan
-                    fleetctrl.assign_vehicle_plan(veh_obj, new_veh_plan, simulation_time)
+                    fleetctrl.assign_vehicle_plan(veh_obj, new_veh_plan, simulation_time, assigned_charging_task=(charging_task_id, ch_process))
 
 class PublicChargingInfrastructureOperator:
 
@@ -606,8 +607,13 @@ class PublicChargingInfrastructureOperator:
             running_processes = charging_station.get_running_processes()[0]
             for socket_id, schedule in schedule_dict.items():
                 if len(schedule) > 0:
-                    _, end_time, booking_id = min(schedule, key=lambda x:x[1])
-                    if end_time <= sim_time + self.sim_time_step:
+                    start_time, end_time, booking_id = min(schedule, key=lambda x:x[1])
+                    end_booking_flag = False
+                    if end_time <= sim_time:
+                        end_booking_flag = True
+                    if end_time - start_time > self.sim_time_step and end_time <= sim_time + self.sim_time_step:
+                        end_booking_flag = True
+                    if end_booking_flag:
                         if running_processes.get(socket_id) is None or running_processes.get(socket_id).id != booking_id:
                             LOG.debug("end unrealized booking at time {} at station {} socket {}: {}".format(sim_time, s_id, socket_id, booking_id))
                             try:

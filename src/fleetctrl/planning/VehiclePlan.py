@@ -12,7 +12,6 @@ from typing import List, Dict, Tuple, Optional
 # src imports
 # -----------
 from src.simulation.Legs import VehicleRouteLeg
-from src.simulation.StationaryProcess import StationaryProcess
 from src.simulation.Vehicles import SimulationVehicle
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.routing.NetworkBase import NetworkBase
@@ -65,9 +64,9 @@ class PlanStopBase(metaclass=ABCMeta):
         :return: list of alighting rids"""
         
     @abstractmethod
-    def get_stationary_task(self) -> StationaryProcess:
-        """ returns the stationary process of the plan stop if present
-        :return: stationary process; None if not present"""
+    def get_charging_task_id(self) -> Tuple[int, str]:
+        """ returns the id of the stationary charging process of the plan stop if present
+        :return: charging task id (tuple(charging operator id, task id)); None if not present"""
     
     @abstractmethod
     def get_earliest_start_time(self) -> float:
@@ -220,7 +219,7 @@ class PlanStop(PlanStopBase):
     def __init__(self, position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={}, earliest_pickup_time_dict={}, latest_pickup_time_dict={},
                  change_nr_pax=0, change_nr_parcels=0, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None,
                  locked=False, locked_end=False, charging_power=0, planstop_state : G_PLANSTOP_STATES=G_PLANSTOP_STATES.MIXED,
-                 stationary_task: StationaryProcess = None, status: Optional[VRL_STATES] = None):
+                 charging_task_id: Tuple[int, str] = None, status: Optional[VRL_STATES] = None):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param boarding_dict: dictionary with entries +1 -> list of request ids that board the vehicle there; -1 -> list of requests that alight the vehicle there
@@ -238,7 +237,7 @@ class PlanStop(PlanStopBase):
         :param locked_end: (bool) false by default; if true, no planstops can be added after this planstop in the assignment algorithm and it cannot be removed by the assignemnt algorithm (insertions before are possible!)
         :param charging_power: optional (float); if given the vehicle is charged with this power (TODO unit!) while at this stop
         :param planstop_state: used to characterize the planstop state (task to to there)
-        :param stationary_task: the stationary task to be performed at the plan stop
+        :param charging_task_id: the stationary task to be performed at the plan stop
         :param status:          vehicle status while performing the current plan stop
         """
         
@@ -292,7 +291,7 @@ class PlanStop(PlanStopBase):
         self.started_at = None  # is only set in update_plan
         self.infeasible_locked = False
 
-        self.stationary_task: StationaryProcess = stationary_task
+        self.charging_task_id: Tuple[int, str] = charging_task_id
         self.status: Optional[VRL_STATES] = status
         
     def get_pos(self) -> tuple:
@@ -313,10 +312,10 @@ class PlanStop(PlanStopBase):
         :return: list of alighting rids"""
         return self.boarding_dict.get(-1, [])
 
-    def get_stationary_task(self) -> StationaryProcess:
-        """ returns the stationary process of the plan stop if present
-        :return: stationary process; None if not present"""
-        return self.stationary_task
+    def get_charging_task_id(self) -> Tuple[int, str]:
+        """ returns the id of the stationary charging process of the plan stop if present
+        :return: charging task id (tuple(charging operator id, task id)); None if not present"""
+        return self.charging_task_id
 
     def copy(self):
         """ this function returns the copy of a plan stop
@@ -327,7 +326,7 @@ class PlanStop(PlanStopBase):
                          latest_pickup_time_dict=self.latest_pickup_time_dict.copy(), change_nr_pax=self.change_nr_pax,
                          earliest_start_time=self.direct_earliest_start_time, latest_start_time=self.direct_latest_start_time,
                          duration=self.direct_duration, earliest_end_time=self.direct_earliest_end_time, locked=self.locked, locked_end=self.locked_end,
-                         charging_power=self.charging_power, stationary_task=self.stationary_task, status=self.status, planstop_state=self.state)
+                         charging_power=self.charging_power, charging_task_id=self.charging_task_id, status=self.status, planstop_state=self.state)
         cp_ps._planned_arrival_time = self._planned_arrival_time
         cp_ps._planned_departure_time = self._planned_departure_time
         cp_ps._planned_arrival_soc = self._planned_arrival_soc
@@ -518,7 +517,7 @@ class ChargingPlanStop(PlanStop):
     """ this plan stop can be used to schedule a charging only process """
     def __init__(self, position, earliest_start_time=None, latest_start_time=None, duration=None, 
                  earliest_end_time=None, locked=False, locked_end=False, charging_power=0,
-                 stationary_task: StationaryProcess = None, status: Optional[VRL_STATES] = None):
+                 charging_task_id: Tuple[int, str] = None, status: Optional[VRL_STATES] = None):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param earliest_start_time: (float) absolute earliest start time this plan stop is allowed to start
@@ -533,7 +532,7 @@ class ChargingPlanStop(PlanStop):
                          earliest_pickup_time_dict={}, latest_pickup_time_dict={}, change_nr_pax=0, 
                          earliest_start_time=earliest_start_time, latest_start_time=latest_start_time, duration=duration, 
                          earliest_end_time=earliest_end_time, locked=locked, locked_end=locked_end, charging_power=charging_power, 
-                         planstop_state=G_PLANSTOP_STATES.CHARGING, stationary_task=stationary_task, status=status)
+                         planstop_state=G_PLANSTOP_STATES.CHARGING, charging_task_id=charging_task_id, status=status)
 
 class VehiclePlan:
     """ this class is used to plan tasks for a vehicle and evaluates feasiblity of time constraints of this plan
@@ -917,107 +916,6 @@ class VehiclePlan:
         # LOG.debug(f"is feasible {is_feasible} | pax info {self.pax_info}")
         # LOG.debug("update plan and check tt {}".format(self))
         return is_feasible
-
-    # def _get_veh_leg(self, pstop: PlanStop):
-    #     """ Creates a vehicle leg with the planstop has as associated instance of StationaryProcess class"""
-
-    #     # TODO: Make the following code general for all types of stationary processes
-    #     veh_leg = VehicleRouteLeg(pstop.status, pstop.get_pos(), {1: [], -1: []}, locked=True,
-    #                               stationary_process=pstop.stationary_task)
-    #     return veh_leg
-
-    def build_VRL(self, veh_obj : SimulationVehicle, prq_db : dict) -> List[VehicleRouteLeg]:
-        """This method builds VRL for simulation vehicles from a given Plan. Since the vehicle could already have the
-        VRL with the correct route, the route from veh_obj.assigned_route[0] will be used if destination positions
-        are matching
-
-        :param veh_obj: vehicle object to which plan is applied
-        :param prq_db: reference to PlanRequest database
-        :return: VRL according to the given plan
-        """
-        list_vrl = []
-        c_pos = veh_obj.pos
-        for pstop in self.list_plan_stops:
-            # TODO: The following should be made as default behavior to delegate the specific tasks (e.g. boarding,
-            #  charging etc) to the StationaryProcess class. The usage of StationaryProcess class can significantly
-            #  simplify the code
-            # i dont think the following lines work
-            # if pstop.stationary_task is not None:
-            #     list_vrl.append(self._get_veh_leg(pstop))
-            #     continue
-            boarding_dict = {1: [], -1: []}
-            if len(pstop.get_list_boarding_rids()) > 0 or len(pstop.get_list_alighting_rids()) > 0:
-                boarding = True
-                for rid in pstop.get_list_boarding_rids():
-                    boarding_dict[1].append(prq_db[rid])
-                for rid in pstop.get_list_alighting_rids():
-                    boarding_dict[-1].append(prq_db[rid])
-            else:
-                boarding = False
-            if pstop.get_charging_power() > 0:
-                charging = True
-            else:
-                charging = False
-            #if pstop.get_departure_time(0) > LARGE_INT:
-            if pstop.get_state() == G_PLANSTOP_STATES.INACTIVE:
-                inactive = True
-            else:
-                inactive = False
-            if pstop.get_departure_time(0) != 0:
-                planned_stop = True
-                repo_target = False
-            else:
-                planned_stop = False
-                repo_target = True
-            if c_pos != pstop.get_pos():
-                # driving vrl
-                if boarding:
-                    status = VRL_STATES.ROUTE
-                elif charging:
-                    status = VRL_STATES.TO_CHARGE
-                elif inactive:
-                    status = VRL_STATES.TO_DEPOT
-                else:
-                    # repositioning
-                    status = VRL_STATES.REPOSITION
-                if pstop.status is not None:
-                    status = pstop.status
-                # use empty boarding dict for this VRL, but do not overwrite boarding_dict!
-                list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), {1: [], -1: []}, locked=pstop.is_locked()))
-                c_pos = pstop.get_pos()
-            # stop vrl
-            if boarding and charging:
-                status = VRL_STATES.BOARDING_WITH_CHARGING
-            elif boarding:
-                status = VRL_STATES.BOARDING
-            elif charging:
-                status = VRL_STATES.CHARGING
-            elif inactive:
-                status = VRL_STATES.OUT_OF_SERVICE
-            elif planned_stop:
-                status = VRL_STATES.PLANNED_STOP
-            elif repo_target:
-                status = VRL_STATES.REPO_TARGET
-            else:
-                # TODO # after ISTTT: add other states if necessary; for now assume vehicle idles
-                status = VRL_STATES.IDLE
-            if status != VRL_STATES.IDLE:
-                dur, edep = pstop.get_duration_and_earliest_departure()
-                earliest_start_time = pstop.get_earliest_start_time()
-                #LOG.debug("vrl earliest departure: {} {}".format(dur, edep))
-                if edep is not None:
-                    LOG.warning("absolute earliest departure not implementen in build VRL!")
-                    departure_time = edep
-                else:
-                    departure_time = -LARGE_INT
-                if dur is not None:
-                    stop_duration = dur
-                else:
-                    stop_duration = 0
-                list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), boarding_dict, pstop.get_charging_power(),
-                                                duration=stop_duration, earliest_start_time=earliest_start_time,
-                                                locked=pstop.is_locked(), stationary_process=pstop.get_stationary_task()))
-        return list_vrl
 
     def get_dedicated_rid_list(self) -> list:
         """ returns a list of request-ids whicht are part of this vehicle plan

@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from src.simulation.Vehicles import SimulationVehicle
     from src.infra.Zoning import ZoneSystem
     from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
+    from src.simulation.StationaryProcess import ChargingProcess
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -197,6 +198,8 @@ class FleetControlBase(metaclass=ABCMeta):
         else:
             self.charging_strategy = None
             prt_strategy_str += "\t Charging: None\n"
+        self._active_charging_processes: Dict[Tuple[int, str], ChargingProcess] = {}     # charging task id (ch_op_id, booking_id) -> charging process
+        self._vid_to_assigned_charging_process: Dict[int, Tuple[int, str]] = {}      # vehicle id -> charging task id
 
         # on-street parking
         # -----------------
@@ -274,7 +277,24 @@ class FleetControlBase(metaclass=ABCMeta):
         :param force_update: indicates if also current vehicle plan feasibilities have to be checked
         :type force_update: bool
         """
-        pass
+        veh_obj = self.sim_vehicles[vid]
+        # the vehicle plans should be up to date from assignments of previous time steps
+        if list_finished_VRL or force_update:
+            self.veh_plans[vid].update_plan(veh_obj, simulation_time, self.routing_engine, list_finished_VRL)
+            if self._vid_to_assigned_charging_process.get(vid) is not None:
+                finished_charging_task_id = None
+                for vrl in list_finished_VRL:
+                    if vrl.stationary_process is not None:
+                        finished_charging_task_id = vrl.stationary_process.id
+                        break
+                if finished_charging_task_id is not None:
+                    assigned_id = self._vid_to_assigned_charging_process[vid]
+                    if assigned_id[1] != finished_charging_task_id:
+                        LOG.warning("inconsitent charging task finished! assigned : {} finished: {}".format(assigned_id, finished_charging_task_id))
+                    del self._active_charging_processes[assigned_id]
+                    del self._vid_to_assigned_charging_process[vid]
+        upd_utility_val = self.compute_VehiclePlan_utility(simulation_time, veh_obj, self.veh_plans[vid])
+        self.veh_plans[vid].set_utility(upd_utility_val)
 
     @abstractmethod
     def user_request(self, rq : RequestBase, simulation_time : int):
@@ -415,7 +435,8 @@ class FleetControlBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def assign_vehicle_plan(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, sim_time : int, force_assign : bool=False, add_arg : Any=None):
+    def assign_vehicle_plan(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, sim_time : int,
+                            force_assign : bool=False, assigned_charging_task: Tuple[Tuple[str, int], ChargingProcess]=None, add_arg : Any=None):
         """ this method should be used to assign a new vehicle plan to a vehicle
 
         WHEN OVERWRITING THIS FUNCTION MAKE SURE TO CALL AT LEAST THE LINES BELOW (i.e. super())
@@ -428,13 +449,33 @@ class FleetControlBase(metaclass=ABCMeta):
         :type sim_time: int
         :param force_assign: this parameter can be used to enforce the assignment, when a plan is (partially) locked
         :type force_assign: bool
+        :param assigned_charging_task: this parameter has to be set if a new charging task is assigned to the vehicle
+        :type assigned_charging_task: tuple( tuple(charging_operator_id, booking_id), corresponding charging process object )
         :param add_arg: possible additional argument if needed
         :type add_arg: not defined here
         """
         LOG.debug(f"assign to {veh_obj.vid} at time {sim_time} : {vehicle_plan}")
         vehicle_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
-        new_vrl = vehicle_plan.build_VRL(veh_obj, self.rq_dict)
-        veh_obj.assign_vehicle_plan(new_vrl, sim_time, force_ignore_lock=force_assign)
+        if self._vid_to_assigned_charging_process.get(veh_obj.vid) is not None:
+            veh_plan_ch_task = None
+            for ps in vehicle_plan.list_plan_stops:
+                if ps.get_charging_task_id() is not None:
+                    veh_plan_ch_task = ps.get_charging_task_id()
+            if veh_plan_ch_task is None:
+                LOG.warning(f"charging task {self._vid_to_assigned_charging_process.get(veh_obj.vid)} no longer assigned! -> cancel booking!")
+                assigned_veh_charge_task = self._vid_to_assigned_charging_process[veh_obj.vid]
+                ch_op_id = assigned_veh_charge_task[0]
+                if type(ch_op_id) == str and ch_op_id.startswith("op"):
+                    self.op_charge_depot_infra.cancel_booking(sim_time, self._active_charging_processes[assigned_veh_charge_task])
+                else:
+                    self.list_pub_charging_infra[ch_op_id].cancel_booking(sim_time, self._active_charging_processes[assigned_veh_charge_task])
+                del self._active_charging_processes[self._vid_to_assigned_charging_process[veh_obj.vid]]
+                del self._vid_to_assigned_charging_process[veh_obj.vid]
+        if assigned_charging_task is not None:
+            self._active_charging_processes[assigned_charging_task[0]] = assigned_charging_task[1]
+            self._vid_to_assigned_charging_process[veh_obj.vid] = assigned_charging_task[0]
+        new_list_vrls = self._build_VRLs(vehicle_plan, veh_obj)
+        veh_obj.assign_vehicle_plan(new_list_vrls, sim_time, force_ignore_lock=force_assign)
         self.veh_plans[veh_obj.vid] = vehicle_plan
         for rid in get_assigned_rids_from_vehplan(vehicle_plan):
             pax_info = vehicle_plan.get_pax_info(rid)
@@ -779,3 +820,98 @@ class FleetControlBase(metaclass=ABCMeta):
         # additionally save repositioning output if repositioning module is available
         if self.repo:
             self.repo.record_repo_stats()
+            
+    def _build_VRLs(self, vehicle_plan : VehiclePlan, veh_obj : SimulationVehicle) -> List[VehicleRouteLeg]:
+        """This method builds VRL for simulation vehicles from a given Plan. Since the vehicle could already have the
+        VRL with the correct route, the route from veh_obj.assigned_route[0] will be used if destination positions
+        are matching
+
+        :param vehicle_plan: vehicle plan to be converted
+        :param veh_obj: vehicle object to which plan is applied
+        :return: list of VRLs according to the given plan
+        """
+        list_vrl = []
+        c_pos = veh_obj.pos
+        for pstop in vehicle_plan.list_plan_stops:
+            # TODO: The following should be made as default behavior to delegate the specific tasks (e.g. boarding,
+            #  charging etc) to the StationaryProcess class. The usage of StationaryProcess class can significantly
+            #  simplify the code
+            # i dont think the following lines work
+            # if pstop.stationary_task is not None:
+            #     list_vrl.append(self._get_veh_leg(pstop))
+            #     continue
+            boarding_dict = {1: [], -1: []}
+            stationary_process = None
+            if len(pstop.get_list_boarding_rids()) > 0 or len(pstop.get_list_alighting_rids()) > 0:
+                boarding = True
+                for rid in pstop.get_list_boarding_rids():
+                    boarding_dict[1].append(self.rq_dict[rid])
+                for rid in pstop.get_list_alighting_rids():
+                    boarding_dict[-1].append(self.rq_dict[rid])
+            else:
+                boarding = False
+            if pstop.get_charging_power() > 0:
+                charging = True
+                stationary_process = self._active_charging_processes[pstop.get_charging_task_id()]
+            else:
+                charging = False
+            #if pstop.get_departure_time(0) > LARGE_INT:
+            if pstop.get_state() == G_PLANSTOP_STATES.INACTIVE:
+                inactive = True
+            else:
+                inactive = False
+            if pstop.get_departure_time(0) != 0:
+                planned_stop = True
+                repo_target = False
+            else:
+                planned_stop = False
+                repo_target = True
+            if c_pos != pstop.get_pos():
+                # driving vrl
+                if boarding:
+                    status = VRL_STATES.ROUTE
+                elif charging:
+                    status = VRL_STATES.TO_CHARGE
+                elif inactive:
+                    status = VRL_STATES.TO_DEPOT
+                else:
+                    # repositioning
+                    status = VRL_STATES.REPOSITION
+                if pstop.status is not None:
+                    status = pstop.status
+                # use empty boarding dict for this VRL, but do not overwrite boarding_dict!
+                list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), {1: [], -1: []}, locked=pstop.is_locked()))
+                c_pos = pstop.get_pos()
+            # stop vrl
+            if boarding and charging:
+                status = VRL_STATES.BOARDING_WITH_CHARGING
+            elif boarding:
+                status = VRL_STATES.BOARDING
+            elif charging:
+                status = VRL_STATES.CHARGING
+            elif inactive:
+                status = VRL_STATES.OUT_OF_SERVICE
+            elif planned_stop:
+                status = VRL_STATES.PLANNED_STOP
+            elif repo_target:
+                status = VRL_STATES.REPO_TARGET
+            else:
+                # TODO # after ISTTT: add other states if necessary; for now assume vehicle idles
+                status = VRL_STATES.IDLE
+            if status != VRL_STATES.IDLE:
+                dur, edep = pstop.get_duration_and_earliest_departure()
+                earliest_start_time = pstop.get_earliest_start_time()
+                #LOG.debug("vrl earliest departure: {} {}".format(dur, edep))
+                if edep is not None:
+                    LOG.warning("absolute earliest departure not implementen in build VRL!")
+                    departure_time = edep
+                else:
+                    departure_time = -LARGE_INT
+                if dur is not None:
+                    stop_duration = dur
+                else:
+                    stop_duration = 0
+                list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), boarding_dict, pstop.get_charging_power(),
+                                                duration=stop_duration, earliest_start_time=earliest_start_time,
+                                                locked=pstop.is_locked(), stationary_process=stationary_process))
+        return list_vrl

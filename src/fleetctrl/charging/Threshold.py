@@ -68,8 +68,9 @@ class ChargingThresholdPublicInfrastructure(ChargingBase):
                     booking = best_ch_op.book_station(sim_time, veh_obj, station_id, socket_id, possible_start_time, possible_end_time)
                     station = best_ch_op.station_by_id[station_id]
                     start_time, end_time = booking.get_scheduled_start_end_times()
+                    charging_task_id = (best_ch_op.ch_op_id, booking.id)
                     ps = ChargingPlanStop(station.pos, earliest_start_time=start_time, duration=end_time-start_time, charging_power=max_charging_power,
-                                          stationary_task=booking, locked=True)
+                                          charging_task_id=charging_task_id, locked=True)
                     current_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
                     self.fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
-                    self.fleetctrl.assign_vehicle_plan(veh_obj, current_plan, sim_time)
+                    self.fleetctrl.assign_vehicle_plan(veh_obj, current_plan, sim_time, assigned_charging_task=(charging_task_id, booking))

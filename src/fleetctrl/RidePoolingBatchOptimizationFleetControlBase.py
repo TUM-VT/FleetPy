@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
 import time
-from typing import Dict, List, Any, TYPE_CHECKING
+from typing import Dict, List, Any, TYPE_CHECKING, Tuple
 
 from src.fleetctrl.FleetControlBase import FleetControlBase
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
     from src.infra.Zoning import ZoneSystem
     from src.demand.TravelerModels import RequestBase
+    from src.simulation.StationaryProcess import ChargingProcess
 
 
 LOG = logging.getLogger(__name__)
@@ -141,20 +142,17 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         :param force_update: force vehicle plan update (can be turned off in normal update step)
         :type force_update: bool
         """
+        if simulation_time%self.optimisation_time_step == 0:
+            force_update=True
+        super().receive_status_update(vid, simulation_time, list_finished_VRL, force_update=force_update)
         self.sim_time = simulation_time
         veh_obj = self.sim_vehicles[vid]
-        # update utility value
-        if list_finished_VRL or simulation_time % self.optimisation_time_step == 0 or force_update:
-            self.veh_plans[vid].update_plan(veh_obj, simulation_time, self.routing_engine, list_finished_VRL)
         # track done VRLs for updating DB in optimisation-step
         try:
             self.vid_finished_VRLs[vid] += list_finished_VRL
         except KeyError:
             self.vid_finished_VRLs[vid] = list_finished_VRL
         LOG.debug(f"veh {veh_obj} | after status update: {self.veh_plans[vid]}")
-        # LOG.debug(f"active rq: {self.rq_dict}")
-        upd_utility_val = self.compute_VehiclePlan_utility(simulation_time, veh_obj, self.veh_plans[vid])
-        self.veh_plans[vid].set_utility(upd_utility_val)
 
     def user_request(self, rq : RequestBase, sim_time : int):
         """This method is triggered for a new incoming request. It generally adds the rq to the database.
@@ -331,7 +329,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         return self.vr_ctrl_f(simulation_time, veh_obj, vehicle_plan, self.rq_dict, self.routing_engine)
 
     def assign_vehicle_plan(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, sim_time : int, force_assign : bool=False
-                            , add_arg : bool=None):
+                            , assigned_charging_task: Tuple[Tuple[str, int], ChargingProcess]=None , add_arg : bool=None):
         """ this method should be used to assign a new vehicle plan to a vehicle
 
         WHEN OVERWRITING THIS FUNCTION MAKE SURE TO CALL AT LEAST THE LINES BELOW (i.e. super())
@@ -348,14 +346,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         :type add_arg: not defined here
         """
         LOG.debug(f"assign vehicle plan for {veh_obj} addarg {add_arg} : {vehicle_plan}")
-        vehicle_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
-        new_vrl = vehicle_plan.build_VRL(veh_obj, self.rq_dict)
-        veh_obj.assign_vehicle_plan(new_vrl, sim_time, force_ignore_lock=force_assign)
-        self.veh_plans[veh_obj.vid] = vehicle_plan
-        for rid in get_assigned_rids_from_vehplan(vehicle_plan):
-            pax_info = vehicle_plan.get_pax_info(rid)
-            self.rq_dict[rid].set_assigned(pax_info[0], pax_info[1])
-            self.rid_to_assigned_vid[rid] = veh_obj.vid
+        super().assign_vehicle_plan(veh_obj, vehicle_plan, sim_time, force_assign=force_assign, assigned_charging_task=assigned_charging_task, add_arg=add_arg)
         if add_arg is None:
             veh_plan_without_rel = vehicle_plan.copy_and_remove_empty_planstops(veh_obj, sim_time, self.routing_engine)
             self.RPBO_Module.set_assignment(veh_obj.vid, veh_plan_without_rel, is_external_vehicle_plan=True)

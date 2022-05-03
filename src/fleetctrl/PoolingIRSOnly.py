@@ -67,12 +67,8 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         :param force_update: indicates if also current vehicle plan feasibilities have to be checked
         :type force_update: bool
         """
+        super().receive_status_update(vid, simulation_time, list_finished_VRL, force_update=force_update)
         veh_obj = self.sim_vehicles[vid]
-        # the vehicle plans should be up to date from assignments of previous time steps
-        if list_finished_VRL or force_update:
-            self.veh_plans[vid].update_plan(veh_obj, simulation_time, self.routing_engine, list_finished_VRL)
-        upd_utility_val = self.compute_VehiclePlan_utility(simulation_time, veh_obj, self.veh_plans[vid])
-        self.veh_plans[vid].set_utility(upd_utility_val)
         try:
             self.pos_veh_dict[veh_obj.pos].append(veh_obj)
         except KeyError:
@@ -284,8 +280,8 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
                                                                 self.routing_engine, prq, new_lpt, new_ept=new_ept,
                                                                 keep_feasible=True)
 
-    def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, add_arg=None):
-        super().assign_vehicle_plan(veh_obj, vehicle_plan, sim_time, force_assign, add_arg)
+    def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, assigned_charging_task=None, add_arg=None):
+        super().assign_vehicle_plan(veh_obj, vehicle_plan, sim_time, force_assign=force_assign, assigned_charging_task=assigned_charging_task, add_arg=add_arg)
 
     def lock_current_vehicle_plan(self, vid):
         super().lock_current_vehicle_plan(vid)

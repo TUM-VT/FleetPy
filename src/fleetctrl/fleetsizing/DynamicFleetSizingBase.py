@@ -102,11 +102,12 @@ class DynamicFleetSizingBase(ABC):
         LOG.info(f"Activating vehicle {veh_obj} from depot {depot} (plan time: {sim_time})")
         if veh_obj is not None:
             if len(self.fleetctrl.veh_plans[veh_obj.vid].list_plan_stops) > 1:
-                for ps in self.fleetctrl.veh_plans[veh_obj.vid].list_plan_stops[1:]:
-                    if ps.get_state() == G_PLANSTOP_STATES.CHARGING:
-                        charging_process = ps.get_stationary_task()
-                        LOG.debug("cancel charging process {}".format(charging_process))
-                        charging_process.station.cancel_booking(sim_time, charging_process)
+                # for ps in self.fleetctrl.veh_plans[veh_obj.vid].list_plan_stops[1:]:
+                #     if ps.get_state() == G_PLANSTOP_STATES.CHARGING:
+                #         charging_process_id = ps.get_charging_task_id()
+                #         charging_process = self.fleetctrl._active_charging_processes[charging_process_id]
+                #         LOG.debug("cancel charging process {}".format(charging_process))
+                #         charging_process.station.cancel_booking(sim_time, charging_process)
                 new_veh_plan = VehiclePlan(veh_obj, sim_time, self.fleetctrl.routing_engine, self.fleetctrl.veh_plans[veh_obj.vid].list_plan_stops[:1])
                 self.fleetctrl.assign_vehicle_plan(veh_obj, new_veh_plan, sim_time, force_assign=True)
             _, inactive_vrl = veh_obj.end_current_leg(sim_time)
