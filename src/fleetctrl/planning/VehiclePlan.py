@@ -321,7 +321,7 @@ class PlanStop(PlanStopBase):
         """
         cp_ps = PlanStop(self.pos, boarding_dict=self.boarding_dict.copy(), max_trip_time_dict=self.max_trip_time_dict.copy(),
                          latest_arrival_time_dict=self.latest_arrival_time_dict.copy(), earliest_pickup_time_dict=self.earliest_pickup_time_dict.copy(),
-                         latest_pickup_time_dict=self.latest_pickup_time_dict.copy(), change_nr_pax=self.change_nr_pax,
+                         latest_pickup_time_dict=self.latest_pickup_time_dict.copy(), change_nr_pax=self.change_nr_pax, change_nr_parcels=self.change_nr_parcels,
                          earliest_start_time=self.direct_earliest_start_time, latest_start_time=self.direct_latest_start_time,
                          duration=self.direct_duration, earliest_end_time=self.direct_earliest_end_time, locked=self.locked, locked_end=self.locked_end,
                          charging_power=self.charging_power, existing_vcl=self.existing_vcl, charging_unit_id=self.charging_unit_id)
