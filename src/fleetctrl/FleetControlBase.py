@@ -45,6 +45,34 @@ LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
 BUFFER_SIZE = 100
 
+INPUT_PARAMETERS_FleetControlBase = {
+    "doc" : "this class is the base class representing an MoD operator",
+    "inherit" : [],
+    "input_parameters_mandatory": {
+        G_OP_VR_CTRL_F : "(str/dict) specifying the control function TODO"
+    },
+    "input_parameters_optional": { # TODO to be completed!
+        G_RA_SOLVER : "(str) solver used for solving optimisation problems | Default : Gurobi",
+        G_RA_OPT_HOR : "(int) time horizon in seconds. if earliest pick-up of request is further ahead than this horizon it is treated as reservation request | Default : 900",
+        G_OP_MIN_WT : "(int) minimum waiting time for request | Default : 0",
+        G_OP_MAX_WT : f"(int) maximum waiting time for request | Default : {LARGE_INT}",
+        G_OP_MAX_DTF : "(int) maximum detour time factor in % | Default : None (infinity)",
+        G_OP_ADD_CDT : "(int) maximum absolut detour time in s | Default : None (infinity)",
+        G_OP_MIN_DTW : "i dont know : TODO!",
+        G_OP_CONST_BT : "(int) constant boarding time in s | Default : 0",
+        G_OP_ADD_BT : "(int) additional boarding time in s for each customer boarding at stop | Default : 0"
+    },
+    "mandatory_modules": {
+    },
+    "optional_modules": {  
+        G_RA_RES_MOD : "(str) name of reservation module used for operator",
+        G_OP_CH_M : "(str) name of charging method",
+        G_OP_REPO_M : "(str) name of repositioning method",
+        G_OP_DYN_P_M : "(str) name of dynmaic pricing method",
+        G_OP_DYN_FS_M : "(str) name of dynamic fleet sizing method"
+    }
+}
+
 # -------------------------------------------------------------------------------------------------------------------- #
 # main
 # ----
