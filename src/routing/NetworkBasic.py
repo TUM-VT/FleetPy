@@ -516,6 +516,13 @@ class NetworkBasic(NetworkBase):
         """
         This method will return the best route [list of node_indices] between two nodes,
         while origin_position[0] and destination_postion[1](or destination_position[0] if destination_postion[1]==None) is included.
+
+        Update on 03.05.2022: TRB23 - Network dynamic routing
+        between-zone trips:
+            zone_boundaries -> return_travel_costs_1to1 -> Router
+        inner-zone trips: 
+            zone_tt_matrix -> updated with -> zone_tt_factors
+
         :param origin_position: (current_edge_origin_node_index, current_edge_destination_node_index, relative_position)
         :param destination_position: (destination_edge_origin_node_index, destination_edge_destination_node_index, relative_position)
         :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_node) -> cost_value
