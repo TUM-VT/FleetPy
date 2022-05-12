@@ -520,8 +520,11 @@ class NetworkBasic(NetworkBase):
         Update on 03.05.2022: TRB23 - Network dynamic routing
         between-zone trips:
             zone_boundaries -> return_travel_costs_1to1 -> Router
-        inner-zone trips: 
-            zone_tt_matrix -> updated with -> zone_tt_factors
+            
+            return_travel_costs_1to1 (inner-zone trips):
+                zone_tt_matrix -> updated with -> zone_tt_factors
+
+        # TODO # separate TRB23 and FleetPy parts
 
         :param origin_position: (current_edge_origin_node_index, current_edge_destination_node_index, relative_position)
         :param destination_position: (destination_edge_origin_node_index, destination_edge_destination_node_index, relative_position)
