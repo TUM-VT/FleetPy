@@ -47,7 +47,7 @@ class Node():
         self.pos_x = pos_x
         self.pos_y = pos_y
         # 
-        self.edges_to = {}  #node_obj -> edge
+        self.edges_to = {}  #node_obj -> edge  # 13.05.22, Yunfei: what does it mean actually?
         self.edges_from = {}    #node_obj -> edge
         #
         self.travel_infos_from = {} #node_index -> (tt, dis)
