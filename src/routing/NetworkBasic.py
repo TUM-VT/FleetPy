@@ -47,7 +47,7 @@ class Node():
         self.pos_x = pos_x
         self.pos_y = pos_y
         # 
-        self.edges_to = {}  #node_obj -> edge  # 13.05.22, Yunfei: what does it mean actually?
+        self.edges_to = {}  #node_obj -> edge
         self.edges_from = {}    #node_obj -> edge
         #
         self.travel_infos_from = {} #node_index -> (tt, dis)
@@ -87,7 +87,8 @@ class Node():
         """
         return self.edges_from.items()
 
-    def add_next_edge_to(self, other_node, edge):
+    def add_next_edge_to(self, other_node, edge):  
+        # 13.05.22, Yunfei: why do we need to specify the other node and edge together?
         #print("add next edge to: {} -> {}".format(self.node_index, other_node.node_index))
         self.edges_to[other_node] = edge
         self.travel_infos_to[other_node.node_index] = edge.get_tt_distance()
@@ -144,6 +145,11 @@ class Edge():
 
 
 class NetworkBasic(NetworkBase):
+    """
+    13.05.22, Yunfei: we define the NetworkBase with ABC as the metaclass and therefore, different abstract methods;
+    therefore, for different network descendents classes, we could override during definition, right? 
+    """
+    
     def __init__(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
         """
         The network will be initialized.
@@ -194,8 +200,9 @@ class NetworkBasic(NetworkBase):
                 self.load_tt_file(latest_tt)
 
     def _load_tt_folder_path(self, network_dynamics_file_name=None):
-        """ this method searches in the network-folder for travel_times folder. the name of the folder is defined by the simulation time from which these travel times are valid
-        stores the corresponding time to trigger loading of new travel times ones the simulation time is reached.
+        """ this method searches in the network-folder for travel_times folder. 
+        the name of the folder is defined by the simulation time from which these travel times are valid
+        stored the corresponding time to trigger loading of new travel times once the simulation time is reached.
         """
         tt_folders = {}
         if network_dynamics_file_name is None:
