@@ -201,8 +201,8 @@ class NetworkBasic(NetworkBase):
 
     def _load_tt_folder_path(self, network_dynamics_file_name=None):
         """ this method searches in the network-folder for travel_times folder. 
-        the name of the folder is defined by the simulation time from which these travel times are valid
-        stored the corresponding time to trigger loading of new travel times once the simulation time is reached.
+        The name of the folder is defined by the simulation time from which these travel times are valid
+        stores the corresponding time to trigger loading of new travel times once the simulation time is reached.
         """
         tt_folders = {}
         if network_dynamics_file_name is None:

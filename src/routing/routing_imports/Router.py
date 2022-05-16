@@ -91,7 +91,7 @@ class Router():
         """computes routes for start -> destination_nodes
         if return_route == True:
             returns list of (route, (tt, dis))
-            route: list of node indeces ([start, end] if no route found)
+            route: list of node indices ([start, end] if no route found)
             tt: travel time (-1 if no route found)
             dis: distance (-1 if no route found)
         else:
