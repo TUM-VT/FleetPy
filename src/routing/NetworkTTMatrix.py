@@ -162,7 +162,8 @@ class NetworkTTMatrix(NetworkBase):
         self.sim_time = simulation_time
         tt_updated = False
         if self.sorted_tt_factor_times:
-            last_i = self.current_tt_factor_index - 1  # TODO # Check logic
+            last_i = self.current_tt_factor_index - 1  # TODO # Check logic 
+            # 17.05.2022, Yunfei: do we need to define this as a class variable or just need it in this loop?
             while True:
                 next_i = last_i + 1
                 if next_i < len(self.sorted_tt_factor_times):
@@ -636,6 +637,8 @@ class NetworkTTMatrix(NetworkBase):
 
     def _lookup_dijkstra_1to1(self, origin_node, destination_node):
         """This internal method computes the lookup Dijkstra between two nodes.
+
+        # 17.05.2022, Yunfei: think about the new method from this 
 
         :param origin_node: node object of origin
         :type origin_node: Node
