@@ -13,17 +13,11 @@ LARGE_INT = 100000
 
 INPUT_PARAMETERS_PoolingInsertionHeuristicOnly = {
     "doc" : "this class represents a ride-pooling MoD-operator. the operators uses an insertion heuristic for assignment",
-    "inherit" : ["FleetControlBase"],
-    "input_parameters_mandatory": {
-
-    },
-    "input_parameters_optional": { 
-
-    },
-    "mandatory_modules": {
-    },
-    "optional_modules": {  
-    }
+    "inherit" : "FleetControlBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
 }
 
 class PoolingInsertionHeuristicOnly(FleetControlBase):

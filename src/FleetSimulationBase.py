@@ -45,35 +45,18 @@ if os.environ.get('SLURM_PROCID'):
     
 INPUT_PARAMETERS_FleetSimulationBase = {
     "doc" : "this is the base simulation class used for all simulations within FleetPy",
-    "inherit" : [],
-    "input_parameters_mandatory": {
-        G_SCENARIO_NAME : "(str) name of the scenario -> defines foldername in results for simulation outputs",
-        G_SIM_START_TIME : "(int) simulation start time [s]",
-        G_SIM_END_TIME : "(int) simulation end time [s]",
-        G_NR_OPERATORS : "(int) number of MoD operators in simulation",
-        G_RANDOM_SEED : "(int) random seed",
-        G_NETWORK_NAME : "(str) name of the network used in simulations (stored in data/networks/{" + G_NETWORK_NAME + "}",
-        G_DEMAND_NAME : "(str) name of demand used in simulations (stored in data/demand/{" + G_DEMAND_NAME + "}",
-        G_RQ_FILE : "(str) name of request file used in simulations (stored in data/demand/{" + G_DEMAND_NAME + "}/matched/{" + G_NETWORK_NAME + "}/{" + G_RQ_FILE + "}"
-        # TODO fleet inputs -> FleetControlBase
-    },
-    "input_parameters_optional": { # TODO input data folder (-> rather in respective module?)
-        G_SIM_TIME_STEP : "(int) simulation time step [s] | Default: 1",
-        G_NR_CH_OPERATORS : "(int) number of public charging operators in simulation | Default: 0", # TODO -> then charging input needed!
-        G_SIM_REALTIME_PLOT_FLAG: "(bool) if True a realtime fleet representation is shown | Default : False",
-        "log_level" : "(str) defines the output written in the logging file. Possible: Error, Warning, Info, Debug, Verbose. | Default : Info",
-        G_SIM_ROUTE_OUT_FLAG : "(bool) defines if complete routes are written to the output file. | Default : True",
-        G_SIM_REPLAY_FLAG : "(bool) defines if also times for passing nodes are written to output file. | Default : False"
-    },
-    "mandatory_modules": {
-        G_SIM_ENV : "(str) name of the used simulation environment class",
-        G_NETWORK_TYPE : "(str) name of the network class used in the simulation",
-        G_RQ_TYP1 : "(str) request class used in simulation", # TODO currently also distributions are possible 
-        G_OP_MODULE : f"(str) MoD operator module class. If {G_NR_OPERATORS} > 1, multiple modules can be chosen with ';'-separators. If only one module given, all operators use the same module"
-    },
-    "optional_modules": {
-        
-    }
+    "inherit" : None,
+    "input_parameters_mandatory": [
+        G_SCENARIO_NAME, G_SIM_START_TIME, G_SIM_END_TIME, G_NR_OPERATORS, G_RANDOM_SEED, G_NETWORK_NAME,
+        G_DEMAND_NAME, G_RQ_FILE
+    ],
+    "input_parameters_optional": [
+        G_SIM_TIME_STEP, G_NR_CH_OPERATORS, G_SIM_REALTIME_PLOT_FLAG, "log_level", G_SIM_ROUTE_OUT_FLAG, G_SIM_REPLAY_FLAG
+    ],
+    "mandatory_modules": [
+        G_SIM_ENV, G_NETWORK_TYPE, G_RQ_TYP1, G_OP_MODULE
+    ], 
+    "optional_modules": []
 }
 
 

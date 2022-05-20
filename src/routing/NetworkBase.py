@@ -17,15 +17,11 @@ from abc import abstractmethod, ABCMeta
 
 INPUT_PARAMETERS_NetworkBase = {
     "doc" : "this is the base abstract network class",
-    "inherit" : [],
-    "input_parameters_mandatory": {
-    },
-    "input_parameters_optional": { 
-    },
-    "mandatory_modules": {
-    },
-    "optional_modules": {  
-    }
+    "inherit" : None,
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
 }
 
 

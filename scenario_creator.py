@@ -1,8 +1,25 @@
 import os
+from click import option
+import pandas as pd
 
 from src.misc.globals import *
 from src.FleetSimulationBase import INPUT_PARAMETERS_FleetSimulationBase
 from src.misc.init_modules import *
+
+#read md table into dataframe
+INPUT_PARAMETERS_PATH = os.path.join(os.path.dirname(__file__), "Input_Parameters.md")
+input_parameters = pd.read_table(INPUT_PARAMETERS_PATH, sep="|", header=0, index_col=1, skipinitialspace=True)
+input_parameters = input_parameters.dropna(axis=1, how='all')
+input_parameters = input_parameters.iloc[1:]
+input_parameters.columns = input_parameters.columns.str.strip()
+input_parameters["Parameter"] = input_parameters.index
+for c in input_parameters.columns:
+    input_parameters[c] = input_parameters[c].str.strip()
+input_parameters.set_index("Parameter", inplace=True)
+
+#set dictionariey
+parameter_docs = input_parameters['Description'].to_dict()
+parameter_defaults = input_parameters['Default Value'].to_dict()
 
 MODULE_PARAM_TO_DICT_LOAD = {
     G_SIM_ENV : get_src_simulation_environments,
@@ -38,65 +55,59 @@ class ScenarioCreator():
         
         self._currently_selected_modules = {}
         
+    def _add_new_params_and_modules(self, input_param_dict):
+        for mandatory_param in input_param_dict["input_parameters_mandatory"]:
+            if not mandatory_param in self._current_mandatory_params:
+                self._current_mandatory_params.append(mandatory_param)
+            if mandatory_param in self._current_optional_params:
+                self._current_optional_params.remove(mandatory_param)
+        for optional_param in input_param_dict["input_parameters_optional"]:
+            if not optional_param in self._current_mandatory_params:
+                if not optional_param in self._current_optional_params:
+                    self._current_optional_params.append(optional_param)
+        for mandatory_module in input_param_dict["mandatory_modules"]:
+            if not mandatory_module in self._current_mandatory_modules:
+                self._current_mandatory_modules.append(mandatory_module)
+            if mandatory_module in self._current_optional_modules:
+                self._current_optional_modules.remove(mandatory_module)
+        for optional_module in input_param_dict["optional_modules"]:
+            if not optional_module in self._current_mandatory_modules:
+                if not optional_module in self._current_optional_modules:
+                    self._current_optional_modules.append(optional_module)
+        
     def _load_module_params(self, module_param, module_param_value):
         print("")
         print(f"load parameters for module {module_param_value}!")
         module_dict = MODULE_PARAM_TO_DICT_LOAD[module_param]()
         input_param_dict = load_module_parameters(module_dict, module_param_value)
         
-        for mandatory_param, mandatory_param_str in input_param_dict["input_parameters_mandatory"].items():
-            self._current_mandatory_params[mandatory_param] = mandatory_param_str
-            if self._current_optional_params.get(mandatory_param) is not None:
-                del self._current_optional_params[mandatory_param]
-        for optional_param, optional_param_str in input_param_dict["input_parameters_optional"].items():
-            if self._current_mandatory_params.get(optional_param) is None:
-                self._current_optional_params[optional_param] = optional_param_str
-        for mandatory_param, mandatory_param_str in input_param_dict["mandatory_modules"].items():
-            self._current_mandatory_modules[mandatory_param] = mandatory_param_str
-            if self._current_optional_modules.get(mandatory_param) is not None:
-                del self._current_optional_modules[mandatory_param]
-        for optional_param, optional_param_str in input_param_dict["optional_modules"].items():
-            if self._current_mandatory_modules.get(optional_param) is None:
-                self._current_optional_modules[optional_param] = optional_param_str
+        self._add_new_params_and_modules(input_param_dict)
+        
+        inherit_class = input_param_dict["inherit"]    
+        while inherit_class is not None:
+            if inherit_class.endswith("Base"): # TODO!
+                base_p = list(module_dict.values())[0][0].split(".")[:-1]
+                base_p.append(inherit_class)
+                base_p = ".".join(base_p)
+                module_dict[inherit_class] = (base_p, inherit_class)
                 
-        while len(input_param_dict["inherit"]) != 0:
-            for inherit_class in input_param_dict["inherit"]:
-                input_param_dict["inherit"].remove(inherit_class)
-                if inherit_class.endswith("Base"): # TODO!
-                    base_p = list(module_dict.values())[0][0].split(".")[:-1]
-                    base_p.append(inherit_class)
-                    base_p = ".".join(base_p)
-                    module_dict[inherit_class] = (base_p, inherit_class)
-                new_input_param_dict = load_module_parameters(module_dict, inherit_class)
-                print(f" -> inherit {inherit_class} : {new_input_param_dict['doc']}")
-                for o_inherit in new_input_param_dict["inherit"]:
-                    input_param_dict["inherit"].append(o_inherit)
-                for mandatory_param, mandatory_param_str in new_input_param_dict["input_parameters_mandatory"].items():
-                    self._current_mandatory_params[mandatory_param] = mandatory_param_str
-                    if self._current_optional_params.get(mandatory_param) is not None:
-                        del self._current_optional_params[mandatory_param]
-                for optional_param, optional_param_str in new_input_param_dict["input_parameters_optional"].items():
-                    if self._current_mandatory_params.get(optional_param) is None:
-                        self._current_optional_params[optional_param] = optional_param_str
-                for mandatory_param, mandatory_param_str in new_input_param_dict["mandatory_modules"].items():
-                    self._current_mandatory_modules[mandatory_param] = mandatory_param_str
-                    if self._current_optional_modules.get(mandatory_param) is not None:
-                        del self._current_optional_modules[mandatory_param]
-                for optional_param, optional_param_str in new_input_param_dict["optional_modules"].items():
-                    if self._current_mandatory_modules.get(optional_param) is None:
-                        self._current_optional_modules[optional_param] = optional_param_str
+            new_input_param_dict = load_module_parameters(module_dict, inherit_class)
+            print(f" -> inherit {inherit_class} : {new_input_param_dict['doc']}")
+            self._add_new_params_and_modules(new_input_param_dict) 
+            inherit_class = new_input_param_dict["inherit"]
                         
-        if self._current_mandatory_modules.get(module_param) is not None:
-            del self._current_mandatory_modules[module_param]
-        if self._current_optional_modules.get(module_param) is not None:
-            del self._current_optional_modules[module_param]
+        if module_param in self._current_mandatory_modules:
+            self._current_mandatory_modules.remove(module_param)
+        if module_param in self._current_optional_modules:
+            self._current_optional_modules.remove(module_param)
         print("==========================================================")
                 
         
     def print_current_mandatory_and_optional_modules(self):
         print("Mandatory Modules:")
         print("")
-        for param, desc in self._current_mandatory_modules.items():
+        for param in self._current_mandatory_modules:
+            desc = parameter_docs[param]
             print(f"Parameter Value: {param}")
             print(f"Description: {desc}")
             if MODULE_PARAM_TO_DICT_LOAD.get(param) is not None:
@@ -108,7 +119,8 @@ class ScenarioCreator():
         print("")
         print("Optional Modules:")
         print("")
-        for param, desc in self._current_optional_modules.items():
+        for param in self._current_optional_modules:
+            desc = parameter_docs[param]
             print(f"Parameter Value: {param}")
             print(f"Description: {desc}")
             if MODULE_PARAM_TO_DICT_LOAD.get(param) is not None:
@@ -121,7 +133,8 @@ class ScenarioCreator():
     def print_current_mandatory_and_optional_parameters(self):
         print("Mandatory Parameters:")
         print("")
-        for param, desc in self._current_mandatory_params.items():
+        for param in self._current_mandatory_params:
+            desc = parameter_docs[param]
             print(f"Parameter Value: {param}")
             print(f"Description: {desc}")
             print("Options: TBD!")
@@ -129,7 +142,8 @@ class ScenarioCreator():
         print("")
         print("Optional Parameters:")
         print("")
-        for param, desc in self._current_optional_params.items():
+        for param in self._current_optional_params:
+            desc = parameter_docs[param]
             print(f"Parameter Value: {param}")
             print(f"Description: {desc}")
             print("Options: TBD!")

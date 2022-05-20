@@ -38,17 +38,11 @@ LOG = logging.getLogger(__name__)
 
 INPUT_PARAMETERS_NetworkBasic = {
     "doc" : "this routing class does all routing computations based on dijkstras algorithm",
-    "inherit" : ["NetworkBase"],
-    "input_parameters_mandatory": {
-        G_NETWORK_NAME : "(str) name of the network used in simulations (stored in data/networks/{" + G_NETWORK_NAME + "}",
-    },
-    "input_parameters_optional": { # TODO input data folder (-> rather in respective module?)
-        G_NW_DYNAMIC_F : "(str) file name specifying the dynamic attributes of the network | Default: None",
-    },
-    "mandatory_modules": {
-    },
-    "optional_modules": {  
-    }
+    "inherit" : "NetworkBase",
+    "input_parameters_mandatory": [G_NETWORK_NAME],
+    "input_parameters_optional": [G_NW_DYNAMIC_F],
+    "mandatory_modules": [],
+    "optional_modules": []
 }
 
 
