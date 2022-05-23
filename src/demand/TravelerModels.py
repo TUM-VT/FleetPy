@@ -34,6 +34,17 @@ def offer_str(rq_offer):
 # -------------------------------------------------------------------------------------------------------------------- #
 # Traveler Model Classes
 # ----------------------
+INPUT_PARAMETERS_RequestBase = {
+    "doc" : "this is the base simulation class used for all traveler classes within FleetPy",
+    "inherit" : None,
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        G_AR_MIN_WT
+    ],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
 class RequestBase(metaclass=ABCMeta):
     """Base class for customer requests."""
     type = "RequestBase"
@@ -294,6 +305,14 @@ class RequestBase(metaclass=ABCMeta):
         return False
 # -------------------------------------------------------------------------------------------------------------------- #
 
+INPUT_PARAMETERS_BasicRequest = {
+    "doc" : "This request only performs a mode choice based on if it recieved an offer or not. if an offer is recieved, it accepts the offer. if multiple offers are recieved an error is thrown",
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
 
 class BasicRequest(RequestBase):
     """This request only performs a mode choice based on if it recieved an offer or not.

@@ -19,7 +19,8 @@ input_parameters.set_index("Parameter", inplace=True)
 
 #set dictionariey
 parameter_docs = input_parameters['Description'].to_dict()
-parameter_defaults = input_parameters['Default Value'].to_dict()
+parameter_defaults = input_parameters['Default Value'].dropna().to_dict()
+parameter_types = input_parameters["Type"].to_dict()
 
 MODULE_PARAM_TO_DICT_LOAD = {
     G_SIM_ENV : get_src_simulation_environments,
@@ -54,6 +55,7 @@ class ScenarioCreator():
         self._current_optional_modules = INPUT_PARAMETERS_FleetSimulationBase["optional_modules"]
         
         self._currently_selected_modules = {}
+        self._currently_selected_parameters = {}
         
     def _add_new_params_and_modules(self, input_param_dict):
         for mandatory_param in input_param_dict["input_parameters_mandatory"]:
@@ -86,10 +88,13 @@ class ScenarioCreator():
         inherit_class = input_param_dict["inherit"]    
         while inherit_class is not None:
             if inherit_class.endswith("Base"): # TODO!
-                base_p = list(module_dict.values())[0][0].split(".")[:-1]
-                base_p.append(inherit_class)
-                base_p = ".".join(base_p)
-                module_dict[inherit_class] = (base_p, inherit_class)
+                if not inherit_class.startswith("Request"):
+                    base_p = list(module_dict.values())[0][0].split(".")[:-1]
+                    base_p.append(inherit_class)
+                    base_p = ".".join(base_p)
+                    module_dict[inherit_class] = (base_p, inherit_class)
+                else:
+                    module_dict[inherit_class] = ("src.demand.TravelerModels", inherit_class)
                 
             new_input_param_dict = load_module_parameters(module_dict, inherit_class)
             print(f" -> inherit {inherit_class} : {new_input_param_dict['doc']}")
@@ -160,6 +165,64 @@ class ScenarioCreator():
             # input_param_dict = load_module_parameters(module_dict, param_value)
             # print(input_param_dict)
             
+    def select_param(self, param, param_value):
+        if not param in self._current_mandatory_params and not param in self._current_optional_params:
+            raise EnvironmentError(f"{param} not defined or does not have to be specified!")
+        self._currently_selected_parameters[param] = param_value
+        if param in self._current_mandatory_params:
+            self._current_mandatory_params.remove(param)
+        if param in self._current_optional_params:
+            self._current_optional_params.remove(param)
+            
+    def create_filled_scenario_df(self):
+        print("")
+        print("___________________________________________________")
+        print("")
+        can_be_created = True
+        if len(self._current_mandatory_modules) != 0:
+            print("To be specified: {}".format(self._current_mandatory_modules))
+            can_be_created = False
+        if len(self._current_mandatory_params) != 0:
+            print("To be specified: {}".format(self._current_mandatory_params))
+            can_be_created = False
+        if can_be_created:
+            print("Created Scenario Table:")            
+            sc_df_list = []
+            for p, v in self._currently_selected_modules.items():
+                sc_df_list.append( {"Parameter" : p, "Value": v})
+            for p, v in self._currently_selected_parameters.items():
+                sc_df_list.append( {"Parameter" : p, "Value": v})
+            sc_df = pd.DataFrame(sc_df_list)
+            print(sc_df)
+            
+    def create_shell_scenario_df(self):
+        print("")
+        print("___________________________________________________")
+        print("")
+        if len(self._current_mandatory_modules) != 0:
+            print("To be specified: {}".format(self._current_mandatory_modules))
+            return
+        if len(self._current_optional_modules) != 0:
+            print("Not specified modules: {}".format(self._current_optional_modules))
+            print(" -> input parameters for these modules are not included in the shell scenario table!")
+        print("")
+        print("Shell scenario table:")
+        sc_df_list = []
+        for p, v in self._currently_selected_modules.items():
+            sc_df_list.append( {"Parameter" : p, "Value": v})
+        for p, v in self._currently_selected_parameters.items():
+            sc_df_list.append( {"Parameter" : p, "Value": v})
+        for p in self._current_mandatory_params + self._current_optional_params:
+            v = f"TO BE SPECIFIED: {parameter_docs[p]} | Type {parameter_types[p]}"
+            if parameter_defaults.get(p) is not None:
+                v += " | Default {}".format(parameter_defaults[p])
+            if p in self._current_optional_params:
+                v = "(OPTIONAL) " + v
+            sc_df_list.append( {"Parameter" : p, "Value": v})
+        sc_df = pd.DataFrame(sc_df_list)
+        print(sc_df)
+        
+            
 if __name__=="__main__":
     sc = ScenarioCreator()
     sc.print_current_mandatory_and_optional_modules()
@@ -172,3 +235,20 @@ if __name__=="__main__":
     sc.select_module("op_module", "PoolingIRSOnly")
     sc.print_current_mandatory_and_optional_modules()
     sc.print_current_mandatory_and_optional_parameters()
+    
+    sc.select_module("sim_env", "ImmediateDecisionsSimulation")
+    sc.select_module("rq_type", "BasicRequest")
+    
+    sc.create_shell_scenario_df()
+    
+    sc.select_param('scenario_name', "Test_Scenario")
+    sc.select_param('start_time', 0)
+    sc.select_param("end_time", 3600)
+    sc.select_param("nr_mod_operators", 1)
+    sc.select_param("random_seed", 123)
+    sc.select_param("network_name", "TestNetwork")
+    sc.select_param("demand_name", "TestDemand")
+    sc.select_param("rq_file", "TestRqFile")
+    sc.select_param("op_vr_control_func_dict", "inputForObjFunc")
+    
+    sc.create_filled_scenario_df()
