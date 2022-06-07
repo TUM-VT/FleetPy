@@ -88,6 +88,7 @@ G_RQ_TYP2 = "rq_type_distribution"
 G_RQ_TYP3 = "rq_type_od_distribution"
 
 # parcel traveler input
+G_PA_DEMAND_NAME = "parcel_demand_name"
 G_PA_RQ_FILE = "parcel_rq_file"
 G_PA_RQ_TYP1 = "parcel_rq_type"
 G_PA_RQ_TYP2 = "parcel_rq_type_distribution"
@@ -170,8 +171,12 @@ G_RA_LOCK_RID_VID = "op_lock_rid_vid_assignment" # no re-assignment if false
 G_RA_RES_MOD = "op_reservation_module"
 G_RA_OPT_HOR = "op_short_term_horizon"  # time ahead when requests will be treated as reservation requests
 G_RA_ASS_HOR = "op_res_assignment_horizon"  # time ahead when reservation plans will be assigned to vehicles (must exceed op_short_term_horizon)
+G_RA_RES_REASSIGN_SP = "op_res_reassign_sp" # True, if supproting points should be reassign after each rp optimization
 G_RA_MAX_BATCH_SIZE = "op_res_batch_size"   # size of of batches for ForwardBatchOptimization
+G_RA_MAX_BATCH_CONCAT = "op_res_batch_concat"   # how many batches are schedule in ForwardBatchOptimization
 G_RA_RES_BOPT_TS = "op_res_opt_timestep"    # time interval of reservation module
+G_RA_RES_LG_MAX_DEPTH = "op_res_loc_graph_max_depth"    # for GraphContractionTSP -> depth of local graph for evalutating new sol
+G_RA_RES_LG_MAX_CUT = "op_res_loc_graph_max_cut_time"   # for GraphContractionTSP -> only add edges wtih this max time horizon and cut rest
 
 # RV heuristics
 G_RA_MAX_VR = "op_max_VR_con"
@@ -246,6 +251,11 @@ G_BP_MAX_BPS = "bp_max_bp_to_consider"
 G_AIMSUN_STAT_INT = "aimsun_statistics_interval"
 G_AIMSUN_VEH_TYPE_NAME = "aimsun_vehicle_type_name"
 
+# RPP fleetcontrol
+G_OP_PA_ASSTH = "op_parcel_assignment_threshold"
+G_OP_PA_OBASS = "op_parcel_passenger_ob_assignment"
+G_OP_PA_REDEL = "op_parcel_remaining_delivery_time"
+
 # -------------------------------------------------------------------------------------------------------------------- #
 # Charging Stations/Depots
 # ------------------------
@@ -289,6 +299,7 @@ G_DIR_VEH = "vehicles"
 G_DIR_FCTRL = "fleetctrl"
 G_DIR_BP = "boardingpoints"
 G_DIR_INFRA = "infra"
+G_DIR_PARCEL_DEMAND = "parceldemand"
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # General
@@ -622,7 +633,7 @@ def load_scenario_inputs(output_dir):
     """This function reads the scenario config file, which enables access to all input parameters for evaluations etc.
 
     :param output_dir: scenario output directory
-    :return: scenario_parameter dictionary, directory dictionary
+    :return: scenario_parameter dictionary, list_op_attributes, directory dictionary
     """
     config_f = os.path.join(output_dir, G_SC_INP_F)
     fhin = open(config_f)
@@ -649,6 +660,7 @@ def get_directory_dict(scenario_parameters):
     fc_t_res = scenario_parameters.get(G_FC_TR, None)
     gtfs_name = scenario_parameters.get(G_GTFS_NAME, None)
     infra_name = scenario_parameters.get(G_INFRA_NAME, None)
+    parcel_demand_name = scenario_parameters.get(G_PA_DEMAND_NAME, None)
     #
     dirs = {}
     dirs[G_DIR_MAIN] = os.path.abspath(os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir))
@@ -666,4 +678,6 @@ def get_directory_dict(scenario_parameters):
         dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pubtrans", gtfs_name)
     if infra_name is not None:
         dirs[G_DIR_INFRA] = os.path.join(dirs[G_DIR_DATA], "infra", infra_name, network_name)
+    if parcel_demand_name is not None:
+        dirs[G_DIR_PARCEL_DEMAND] = os.path.join(dirs[G_DIR_DATA], "demand", parcel_demand_name, "matched", network_name)
     return dirs

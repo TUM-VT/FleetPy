@@ -233,7 +233,7 @@ class Demand:
         if self.waiting_rq.get(rid):  # TODO # in case a vehicle arrives before the customer made a decision, simplest solution: customer boards
             del self.waiting_rq[rid]
         else:
-            LOG.warning("wating rq boarding warning : rid {} -> vid {} at {}".format(rid, vid, simulation_time))
+            LOG.warning("waiting rq boarding warning : rid {} -> vid {} at {}".format(rid, vid, simulation_time))
 
     def record_alighting_start(self, rid, vid, op_id, simulation_time, do_pos=None, t_egress=None):
         """
@@ -256,6 +256,11 @@ class Demand:
             del self.rq_db[rid]
         else:
             LOG.warning(f"user_ends_alighting({rid}): user not found in database!")
+            
+    def record_remaining_users(self):
+        for rid in list(self.rq_db.keys()):
+            self.record_user(rid)
+        self.save_user_stats(force=True)
 
     def _get_all_requests(self):
         """Returns a list of (rid, Request) pairs for all requests currently in the Demand object."""

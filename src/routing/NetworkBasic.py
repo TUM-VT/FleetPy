@@ -796,7 +796,6 @@ class NetworkBasic(NetworkBase):
                 v) list_passed_node_times: list of checkpoint times at the respective passed nodes
         """
         if new_sim_time is not None:
-            # TODO # end_time = new_sime_time | last_time = new_sim_time - time_step
             end_time = new_sim_time + time_step
             last_time = new_sim_time
         else:

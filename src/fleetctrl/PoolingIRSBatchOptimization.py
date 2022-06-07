@@ -87,7 +87,7 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
         if t_pu_earliest - sim_time > self.opt_horizon:
             self.reservation_module.add_reservation_request(prq, sim_time)
-            offer = self.reservation_module.return_reservation_offer(prq.get_rid_struct(), sim_time)
+            offer = self.reservation_module.return_immediate_reservation_offer(prq.get_rid_struct(), sim_time)
             LOG.debug(f"reservation offer for rid {rid_struct} : {offer}")
             prq.set_reservation_flag(True)
             self.RPBO_Module.add_new_request(rid_struct, prq, consider_for_global_optimisation=False)
@@ -95,7 +95,7 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
             self.RPBO_Module.add_new_request(rid_struct, prq)
             list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
             if len(list_tuples) > 0:
-                (vid, vehplan, delta_cfv) = list_tuples[0]
+                (vid, vehplan, delta_cfv) = min(list_tuples, key=lambda x:x[2])
                 LOG.debug(f"before insertion: {vid} | {self.veh_plans[vid]}")
                 LOG.debug(f"after insertion: {vid} | {vehplan}")
                 self.tmp_assignment[rid_struct] = vehplan

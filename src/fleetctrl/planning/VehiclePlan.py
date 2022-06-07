@@ -292,7 +292,6 @@ class PlanStop(PlanStopBase):
         self.infeasible_locked = False
 
         self.charging_task_id: Tuple[int, str] = charging_task_id
-        self.status: Optional[VRL_STATES] = status
         
     def get_pos(self) -> tuple:
         """returns network position of this plan stop
@@ -323,10 +322,10 @@ class PlanStop(PlanStopBase):
         """
         cp_ps = PlanStop(self.pos, boarding_dict=self.boarding_dict.copy(), max_trip_time_dict=self.max_trip_time_dict.copy(),
                          latest_arrival_time_dict=self.latest_arrival_time_dict.copy(), earliest_pickup_time_dict=self.earliest_pickup_time_dict.copy(),
-                         latest_pickup_time_dict=self.latest_pickup_time_dict.copy(), change_nr_pax=self.change_nr_pax,
+                         latest_pickup_time_dict=self.latest_pickup_time_dict.copy(), change_nr_pax=self.change_nr_pax, change_nr_parcels=self.change_nr_parcels,
                          earliest_start_time=self.direct_earliest_start_time, latest_start_time=self.direct_latest_start_time,
                          duration=self.direct_duration, earliest_end_time=self.direct_earliest_end_time, locked=self.locked, locked_end=self.locked_end,
-                         charging_power=self.charging_power, charging_task_id=self.charging_task_id, status=self.status, planstop_state=self.state)
+                         charging_power=self.charging_power, charging_task_id=self.charging_task_id, planstop_state=self.state)
         cp_ps._planned_arrival_time = self._planned_arrival_time
         cp_ps._planned_departure_time = self._planned_departure_time
         cp_ps._planned_arrival_soc = self._planned_arrival_soc
@@ -498,7 +497,7 @@ class BoardingPlanStop(PlanStop):
 class RoutingTargetPlanStop(PlanStop):
     """ this plan stop can be used to schedule a routing target for vehicles with the only task to drive there
         i.e repositioning"""
-    def __init__(self, position, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None, locked=False, locked_end=False, planstop_state=G_PLANSTOP_STATES.REPO_TARGET):
+    def __init__(self, position, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None, locked=False, locked_end=True, planstop_state=G_PLANSTOP_STATES.REPO_TARGET):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param earliest_start_time: (float) absolute earliest start time this plan stop is allowed to start

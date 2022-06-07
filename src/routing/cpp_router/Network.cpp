@@ -23,9 +23,9 @@ void split(const std::string& str, Container& cont, char delim = ' '){
 }
 
 
-Network::Network(string network_path) {
+Network::Network(string node_path, string edge_path) {
 
-    string node_path = network_path + "\\base\\nodes.csv";
+    //string node_path = network_path + "\\base\\nodes.csv";
     //string node_path = network_path + "\\GraphFull_0_0.txt";
     cout << node_path << endl;
     ifstream file(node_path);
@@ -81,7 +81,7 @@ Network::Network(string network_path) {
         return;
     }
     //=============================================================
-    string edge_path = network_path + "\\base\\edges.csv";
+    //string edge_path = network_path + "\\base\\edges.csv";
     //string node_path = network_path + "\\GraphFull_0_0.txt";
     cout << edge_path << endl;
     ifstream file2(edge_path);

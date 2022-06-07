@@ -195,6 +195,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         run_scenarios(*sys.argv)
     else:
+        import time
         # touch log file
         with open(LOG_F, "w") as _:
             pass
@@ -232,7 +233,6 @@ if __name__ == "__main__":
         check_assertions(list_results, all_scenario_assert_dict)
 
         # d) Pooling with RV heuristics in ImmediateOfferEnvironment (with doubled demand)
-        import time
         log_level = "info"
         cc = os.path.join(scs_path, "constant_config_ir.csv")
         t0 = time.perf_counter()
@@ -282,3 +282,25 @@ if __name__ == "__main__":
         cc = os.path.join(scs_path, "constant_config_depot_charge.csv")
         sc = os.path.join(scs_path, "example_depot_charge.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
+        
+        # h) Pooling with multiprocessing
+        log_level = "info"
+        cc = os.path.join(scs_path, "constant_config_depot_charge.csv")
+        # no heuristic scenario single core
+        t0 = time.perf_counter()
+        sc = os.path.join(scs_path, "example_depot_charge.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
+        list_results = read_outputs_for_comparison(cc, sc)
+        all_scenario_assert_dict = {0: {"number users": 199}}
+        check_assertions(list_results, all_scenario_assert_dict)
+        print("Computation without multiprocessing took {}s".format(time.perf_counter() - t0))
+        # no heuristic scenario multiple cores
+        cores = 2
+        t0 = time.perf_counter()
+        sc = os.path.join(scs_path, "example_depot_charge.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=cores, n_parallel_sim=1)
+        list_results = read_outputs_for_comparison(cc, sc)
+        all_scenario_assert_dict = {0: {"number users": 199}}
+        check_assertions(list_results, all_scenario_assert_dict)
+        print("Computation with multiprocessing took {}s".format(time.perf_counter() - t0))
+        print(" -> multiprocessing only usefull for large vehicle fleets")

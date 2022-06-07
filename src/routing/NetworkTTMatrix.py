@@ -99,7 +99,7 @@ class NetworkTTMatrix(NetworkBase):
         self.zones = None
         self.tt_factor = 1.0
         self.network_name_dir = network_name_dir
-        with open(self.network_name_dir + "\\base\\crs.info", "r") as f:
+        with open(os.path.join(self.network_name_dir, "base", "crs.info"), "r") as f:
             self.crs = f.read()
         # load network structure: nodes
         nodes_f = os.path.join(network_name_dir, "base", "nodes.csv")
@@ -278,8 +278,8 @@ class NetworkTTMatrix(NetworkBase):
     def move_along_route(self, route, last_position, time_step, sim_vid_id=None, new_sim_time=None,
                          record_node_times=False):
         if new_sim_time is not None:
-            end_time = new_sim_time
-            last_time = new_sim_time - time_step
+            end_time = new_sim_time + time_step
+            last_time = new_sim_time
         else:
             end_time = self.sim_time + time_step
             last_time = self.sim_time

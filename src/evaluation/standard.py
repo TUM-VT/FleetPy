@@ -29,6 +29,7 @@ def get_directory_dict(scenario_parameters):
     fc_t_res = scenario_parameters.get(G_FC_TR, None)
     gtfs_name = scenario_parameters.get(G_GTFS_NAME, None)
     infra_name = scenario_parameters.get(G_INFRA_NAME, None)
+    parcel_demand_name = scenario_parameters.get(G_PA_DEMAND_NAME, None)
     #
     dirs = {}
     dirs[G_DIR_MAIN] = MAIN_DIR # here is the difference compared to the function in FLeetsimulationBase.py
@@ -46,9 +47,11 @@ def get_directory_dict(scenario_parameters):
         dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pubtrans", gtfs_name)
     if infra_name is not None:
         dirs[G_DIR_INFRA] = os.path.join(dirs[G_DIR_DATA], "infra", infra_name, network_name)
+    if parcel_demand_name is not None:
+        dirs[G_DIR_PARCEL_DEMAND] = os.path.join(dirs[G_DIR_DATA], "demand", parcel_demand_name, "matched", network_name)
     return dirs
 
-def read_op_output_file(output_dir, op_id, evaluation_start_time = None, evaluation_end_time = None):
+def read_op_output_file(output_dir, op_id, evaluation_start_time = None, evaluation_end_time = None) -> pd.DataFrame:
     """ this method reads the ouputfile for the operator and returns its dataframe
     :param output_dir: directory of the scenario results
     :param op_id: operator id to evaluate
@@ -75,7 +78,7 @@ def read_op_output_file(output_dir, op_id, evaluation_start_time = None, evaluat
             op_df[col] = op_df[col].apply(convert_str)
     return op_df
 
-def read_user_output_file(output_dir, evaluation_start_time = None, evaluation_end_time = None):
+def read_user_output_file(output_dir, evaluation_start_time = None, evaluation_end_time = None) -> pd.DataFrame:
     """ this method reads the ouputfile the users and returns its dataframe
     :param output_dir: directory of the scenario results
     :param op_id: operator id to evaluate
