@@ -877,8 +877,6 @@ class FleetControlBase(metaclass=ABCMeta):
                 else:
                     # repositioning
                     status = VRL_STATES.REPOSITION
-                if pstop.status is not None:
-                    status = pstop.status
                 # use empty boarding dict for this VRL, but do not overwrite boarding_dict!
                 list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), {1: [], -1: []}, locked=pstop.is_locked()))
                 c_pos = pstop.get_pos()

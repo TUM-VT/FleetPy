@@ -292,7 +292,6 @@ class PlanStop(PlanStopBase):
         self.infeasible_locked = False
 
         self.charging_task_id: Tuple[int, str] = charging_task_id
-        self.status: Optional[VRL_STATES] = status
         
     def get_pos(self) -> tuple:
         """returns network position of this plan stop
@@ -326,7 +325,7 @@ class PlanStop(PlanStopBase):
                          latest_pickup_time_dict=self.latest_pickup_time_dict.copy(), change_nr_pax=self.change_nr_pax,
                          earliest_start_time=self.direct_earliest_start_time, latest_start_time=self.direct_latest_start_time,
                          duration=self.direct_duration, earliest_end_time=self.direct_earliest_end_time, locked=self.locked, locked_end=self.locked_end,
-                         charging_power=self.charging_power, charging_task_id=self.charging_task_id, status=self.status, planstop_state=self.state)
+                         charging_power=self.charging_power, charging_task_id=self.charging_task_id, planstop_state=self.state)
         cp_ps._planned_arrival_time = self._planned_arrival_time
         cp_ps._planned_departure_time = self._planned_departure_time
         cp_ps._planned_arrival_soc = self._planned_arrival_soc
