@@ -13,13 +13,13 @@ from src.fleetctrl.pooling.batch.AlonsoMora.V2RB import V2RB
 from src.fleetctrl.pooling.immediate.insertion import single_insertion
 from src.fleetctrl.pooling.immediate.SelectRV import filter_directionality, filter_least_number_tasks
 from src.misc.globals import *
+from src.simulation.Legs import VehicleRouteLeg
 if TYPE_CHECKING:
     from src.routing.NetworkBase import NetworkBase
     from src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraParallelization import ParallelizationManager
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.fleetctrl.planning.PlanRequest import PlanRequest
     from src.simulation.Vehicles import SimulationVehicle
-    from src.simulation.Legs import VehicleRouteLeg
 
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000
@@ -681,7 +681,11 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         return None
         """
         self.sim_time = sim_time
-        self.vid_to_list_passed_VRLs = vid_to_list_passed_VRLs
+        self.vid_to_list_passed_VRLs = {}
+        for vid, passed_VRLs in vid_to_list_passed_VRLs.items(): # remove stationary process
+            new_passed_VRLs = [VehicleRouteLeg(x.status, x.destination_pos, x.rq_dict, power=x.power, duration = x.duration, route=x.route, locked=x.locked, earliest_start_time=x.earliest_start_time)
+                               for x in passed_VRLs]
+            self.vid_to_list_passed_VRLs[vid] = new_passed_VRLs
         if new_travel_times:
             self.rebuild_rtv = {vid : 1 for vid in self.veh_objs.keys()}
 

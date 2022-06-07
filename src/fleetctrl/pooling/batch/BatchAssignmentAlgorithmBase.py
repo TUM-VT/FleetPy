@@ -39,8 +39,10 @@ class SimulationVehicleStruct():
         self.range = simulation_vehicle.range
         self.soc_per_m = simulation_vehicle.soc_per_m
 
-        # assigned route = list of assigned vehicle legs
-        self.assigned_route = simulation_vehicle.assigned_route
+        # assigned route = list of assigned vehicle legs (copy and remove stationary process (TODO?))
+        self.assigned_route = [VehicleRouteLeg(x.status, x.destination_pos, x.rq_dict, power=x.power, duration=x.duration, route=x.route, locked=x.locked, earliest_start_time=x.earliest_start_time)
+                               for x in simulation_vehicle.assigned_route]
+
         self.locked_planstops = VehiclePlan(self, sim_time, routing_engine, [])
         self.set_locked_vehplan(assigned_veh_plan, sim_time, routing_engine)
 
