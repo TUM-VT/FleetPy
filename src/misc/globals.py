@@ -28,7 +28,9 @@ G_SIM_ROUTE_OUT_FLAG = "route_output_flag"
 G_SIM_REPLAY_FLAG = "replay_flag"
 G_SIM_REALTIME_PLOT_FLAG = "realtime_plot"
 G_SIM_REALTIME_PLOT_VEHICLE_STATUS = "realtime_plot_veh_states"
+G_SIM_REALTIME_PLOT_EXTENTS = "realtime_plot_extents"
 G_NR_OPERATORS = "nr_mod_operators"
+G_NR_CH_OPERATORS = "nr_charging_operators"
 
 # general optional input
 G_ZONE_SYSTEM_NAME = "zone_system_name"
@@ -141,6 +143,10 @@ G_OP_UTIL_EVAL_INT = "op_util_eval_interval"    # time interval utilization is e
 G_OP_ZONE_PRICE = "op_zone_price_scale_dict"
 G_OP_ELA_PRICE = "op_elastic_price_file"
 G_OP_FC_SUPPLY = "op_supply_fc_type"
+# charging
+G_OP_DEPOT_F = "op_depot_file"
+G_OP_CH_N_STATION_QUERY = "op_n_charge_station_query"   # max number of stations to query charge offers from
+G_OP_CH_N_OFFER_P_ST_QUERY = "op_n_charge_offer_per_station"    # max number of offers per station
 #parcel constraints
 G_OP_PA_EPT = "op_parcel_earliest_pickup_time"
 G_OP_PA_LPT = "op_parcel_latest_pickup_time"
@@ -166,12 +172,6 @@ G_RA_OPT_HOR = "op_short_term_horizon"  # time ahead when requests will be treat
 G_RA_ASS_HOR = "op_res_assignment_horizon"  # time ahead when reservation plans will be assigned to vehicles (must exceed op_short_term_horizon)
 G_RA_MAX_BATCH_SIZE = "op_res_batch_size"   # size of of batches for ForwardBatchOptimization
 G_RA_RES_BOPT_TS = "op_res_opt_timestep"    # time interval of reservation module
-
-# private vehicles + charging
-G_PRIVATE_TRIPS_FILE = "op_private_trips_file"  # Private vehicle trips file
-G_PRIVATE_PRIME_CUSTOMER_RATIO = "op_private_prime_vehicle_ratio"      # Percentage of private vehicles of each type to be marked as prime members for booking charging station
-G_CHARGING_STATION_SEARCH_RADIUS = "op_charging_station_search_radius"  # radius in meters
-G_DISCONNECT_ON_FULL_SOC = "op_disconnect_charging_on_full_soc"                  # Should a charging vehicle be disconnected immediately after full soc
 
 # RV heuristics
 G_RA_MAX_VR = "op_max_VR_con"
@@ -225,10 +225,10 @@ G_OP_DYFS_UNDER_UTIL_DUR = "op_dyfs_underutilization_duration"  # only remove ve
 G_OP_CH_M = "op_charging_method"
 G_OP_CHARGE_PUBLIC_ONLY = "op_charging_public_only"
 G_OP_APS_SOC = "op_min_soc_after_planstop"
-G_PUBLIC_CHARGING_FILE = "charging_stations_file"
+G_PUBLIC_CHARGING_FILE = "op_charging_stations_file"
 G_OP_MIN_SOC_CHARGE_PUBLIC = "op_min_soc_public_station"    # Minimum soc limit after which a EV must visit charging station
-G_OP_MAX_DURATION_HOURS = "max_charging_duration_hours"           # List of pairs (start_time, end_time) when the max durations are applied
-G_OP_STATIONS_MAX_DURATIONS = "max_charging_durations"            # max allowed charging durations at stations corresponding to applicable hours in G_OP_MAX_DURATION_HOURS
+G_OP_MAX_DURATION_HOURS = "op_max_charging_duration_hours"           # List of pairs (start_time, end_time) when the max durations are applied
+G_OP_STATIONS_MAX_DURATIONS = "op_max_charging_durations"            # max allowed charging durations at stations corresponding to applicable hours in G_OP_MAX_DURATION_HOURS
 
 # Broker / Multi-Operator parameters
 G_MULTIOP_PREF_OP_RSEED = "multiop_preferred_operator_random_seed"
@@ -261,6 +261,18 @@ G_INFRA_PUB_UTIL = "public_util"
 
 # active vehicle
 G_ACT_VEH_SHARE = "share_active_fleet_size"
+
+# charging operator
+G_CH_OP_F = "ch_op_public_charging_station_f"
+G_CH_DISCONNECT_ON_FULL_SOC = "ch_op_disconnect_charging_on_full_soc"                  # Should a charging vehicle be disconnected immediately after full soc
+G_CH_OP_INIT_CH_EVENTS_F = "ch_op_init_charge_events_f"
+# parameter for all charging operators
+G_CH_OP_MAX_STATION_SEARCH_RADIUS = "ch_max_station_search_radius"  # radius in seconds travel time (TODO ?)
+G_CH_OP_MAX_CHARGING_SEARCH = "ch_max_station_search"    # max number of charging stations to be considered
+
+#private vehicles
+G_PRIVATE_TRIPS_FILE = "op_private_trips_file"  # Private vehicle trips file
+G_PRIVATE_PRIME_CUSTOMER_RATIO = "op_private_prime_vehicle_ratio"      # Percentage of private vehicles of each type to be marked as prime members for booking charging station
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Directories
@@ -510,13 +522,14 @@ class VRL_STATES(Enum):
 
     @staticmethod
     def G_VEHICLE_STATUS_DICT() -> dict:
-        print("WARNING: G_VEHICLE_STATUS_DICT is still accessed! (misc.globals)")
+        # print("WARNING: G_VEHICLE_STATUS_DICT is still accessed! (misc.globals)")
         return {status.value: status.display_name for status in VRL_STATES}
 
 G_DRIVING_STATUS = [VRL_STATES.ROUTE, VRL_STATES.REPOSITION, VRL_STATES.TO_CHARGE, VRL_STATES.TO_DEPOT] # [10,11,12,13]
 G_REVENUE_STATUS = [VRL_STATES.BOARDING, VRL_STATES.WAITING, VRL_STATES.ROUTE, VRL_STATES.REPOSITION] # [1, 4, 10, 11]
 G_LAZY_STATUS = [VRL_STATES.WAITING] # [4]     # VRLs not actively planned and dont do anything (i.e. waiting)
 G_LOCK_DURATION_STATUS = [VRL_STATES.BLOCKED_INIT, VRL_STATES.BOARDING, VRL_STATES.BOARDING_WITH_CHARGING] # [-1, 1, 3]
+G_INACTIVE_STATUS = [VRL_STATES.OUT_OF_SERVICE, VRL_STATES.TO_DEPOT, VRL_STATES.CHARGING, VRL_STATES.TO_CHARGE]
 
 # TODO # after ISTTT: define all vehicle states
 

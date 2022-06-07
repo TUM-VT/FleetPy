@@ -24,7 +24,6 @@ import numpy as np
 # -----------
 from src.misc.init_modules import load_fleet_control_module, load_routing_engine
 from src.demand.demand import Demand, SlaveDemand
-from src.routing.NetworkBase import return_position_str
 from src.simulation.Vehicles import SimulationVehicle
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
@@ -131,6 +130,7 @@ class FleetSimulationBase:
         self.time_step = self.scenario_parameters.get(G_SIM_TIME_STEP, 1)
         self.check_sim_env_spec_inputs(self.scenario_parameters)
         self.n_op = self.scenario_parameters[G_NR_OPERATORS]
+        self.n_ch_op = self.scenario_parameters.get(G_NR_CH_OPERATORS, 0)
         self._manager: tp.Optional[Manager] = None
         self._shared_dict: dict = {}
         self._plot_class_instance: tp.Optional[PyPlot] = None
@@ -139,6 +139,8 @@ class FleetSimulationBase:
         # build list of operator dictionaries  # TODO: this could be eliminated with a new YAML-based config system
         self.list_op_dicts: tp.Dict[str,str] = build_operator_attribute_dicts(scenario_parameters, self.n_op,
                                                                               prefix="op_")
+        self.list_ch_op_dicts: tp.Dict[str,str] = build_operator_attribute_dicts(scenario_parameters, self.n_ch_op,
+                                                                                 prefix="ch_op_")
 
         # take care of random seeds at beginning of simulations
         random.seed(self.scenario_parameters[G_RANDOM_SEED])
@@ -235,32 +237,14 @@ class FleetSimulationBase:
 
         # attribute for demand, charging and zone module
         self.demand = None
-        self.cdp = None
         self._load_demand_module()
+        self.charging_operator_dict = {}    # dict "op" -> operator_id -> OperatorChargingInfrastructure, "pub" -> ch_op_id -> ChargingInfrastructureOperator
         self._load_charging_modules()
-
-        # take care of charging stations, depots and initially inactive vehicles
-        if self.dir_names.get(G_DIR_INFRA):
-            depot_fname = self.scenario_parameters.get(G_INFRA_DEP)
-            if depot_fname is not None:
-                depot_f = os.path.join(self.dir_names[G_DIR_INFRA], depot_fname)
-            else:
-                depot_f = os.path.join(self.dir_names[G_DIR_INFRA], "depots.csv")
-            pub_cs_fname = self.scenario_parameters.get(G_INFRA_PBCS)
-            if pub_cs_fname is not None:
-                pub_cs_f = os.path.join(self.dir_names[G_DIR_INFRA], pub_cs_fname)
-            else:
-                pub_cs_f = os.path.join(self.dir_names[G_DIR_INFRA], "public_charging_stations.csv")
-            from src.infra.ChargingStation import ChargingAndDepotManagement
-            self.cdp = ChargingAndDepotManagement(depot_f, pub_cs_f, self.routing_engine, self.scenario_parameters,
-                                                  self.list_op_dicts)
-            LOG.info("charging stations and depots initialzied!")
-        else:
-            self.cdp = None
 
         # attributes for fleet controller and vehicles
         self.sim_vehicles: tp.Dict[tp.Tuple[int, int], SimulationVehicle] = {}
         self.sorted_sim_vehicle_keys: tp.List[tp.Tuple[int, int]] = sorted(self.sim_vehicles.keys())
+        self.vehicle_update_order: tp.Dict[tp.Tuple[int, int], int] = {vid : 1 for vid in self.sim_vehicles.keys()} #value defines the order in whichvehicles are updated (i.e. charging first)
         self.operators: tp.List[FleetControlBase] = []
         self.op_output = {}
         self._load_fleetctr_vehicles()
@@ -309,25 +293,35 @@ class FleetSimulationBase:
 
     def _load_charging_modules(self):
         """ Loads necessary modules for charging """
-
-        # take care of charging stations, depots and initially inactive vehicles
+        # TODO # multiple charging operators:
+        #  either public charging operator or depot operator
+        #  add parameter list [with extra parameter list] (e.g. list of allowed fleet operators, infrastructure data file)
+        self.charging_operator_dict = {"op" : {}, "pub" : {}}
+        LOG.debug("load charging infra: charging op dicts: {}".format(self.list_ch_op_dicts))
         if self.dir_names.get(G_DIR_INFRA):
-            depot_fname = self.scenario_parameters.get(G_INFRA_DEP)
-            if depot_fname is not None:
-                depot_f = os.path.join(self.dir_names[G_DIR_INFRA], depot_fname)
-            else:
-                depot_f = os.path.join(self.dir_names[G_DIR_INFRA], "depots.csv")
-            pub_cs_fname = self.scenario_parameters.get(G_INFRA_PBCS)
-            if pub_cs_fname is not None:
-                pub_cs_f = os.path.join(self.dir_names[G_DIR_INFRA], pub_cs_fname)
-            else:
-                pub_cs_f = os.path.join(self.dir_names[G_DIR_INFRA], "public_charging_stations.csv")
-            from src.infra.ChargingStation import ChargingAndDepotManagement
-            self.cdp = ChargingAndDepotManagement(depot_f, pub_cs_f, self.routing_engine, self.scenario_parameters,
-                                                  self.list_op_dicts)
-            LOG.info("charging stations and depots initialzied!")
-        else:
-            self.cdp = None
+            # operator depots:
+            from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure
+            for op_id, op_dict in enumerate(self.list_op_dicts):
+                depot_f_name = op_dict.get(G_OP_DEPOT_F)
+                if depot_f_name is not None:
+                    depot_f = os.path.join(self.dir_names[G_DIR_INFRA], depot_f_name)
+                    op_charge = OperatorChargingAndDepotInfrastructure(op_id, depot_f, op_dict, self.scenario_parameters, self.dir_names, self.routing_engine)
+                    self.charging_operator_dict["op"][op_id] = op_charge
+                
+            # public charging
+            if len(self.list_ch_op_dicts) > 0:
+                from src.infra.ChargingInfrastructure import PublicChargingInfrastructureOperator
+                for ch_op_id, ch_op_dict in enumerate(self.list_ch_op_dicts):
+                    pub_cs_f_name = ch_op_dict.get(G_CH_OP_F)
+                    if pub_cs_f_name is None:
+                        raise EnvironmentError("Public charging stations file not given as input! parameter {} required!".format(G_CH_OP_F))
+                    pub_cs_f = os.path.join(self.dir_names[G_DIR_INFRA], pub_cs_f_name)
+                    initial_ch_events_f = None
+                    if ch_op_dict.get(G_CH_OP_INIT_CH_EVENTS_F) is not None:
+                        f_name = ch_op_dict.get(G_CH_OP_INIT_CH_EVENTS_F)
+                        initial_ch_events_f = os.path.join(self.dir_names[G_DIR_INFRA], "charging_events", f_name)
+                    ch_op = PublicChargingInfrastructureOperator(ch_op_id, pub_cs_f, ch_op_dict, self.scenario_parameters, self.dir_names, self.routing_engine, initial_charging_events_f=initial_ch_events_f)
+                    self.charging_operator_dict["pub"][ch_op_id] = ch_op
 
     def _load_fleetctr_vehicles(self):
         """ Loads the fleet controller and vehicles """
@@ -355,12 +349,12 @@ class FleetSimulationBase:
                         list_vehicles.append(tmp_veh_obj)
                         self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
                         vid += 1
-                OpClass = load_fleet_control_module(operator_module_name)
+                OpClass: FleetControlBase = load_fleet_control_module(operator_module_name)
                 self.operators.append(OpClass(op_id, operator_attributes, list_vehicles, self.routing_engine, self.zones,
-                                            self.scenario_parameters, self.dir_names, self.cdp))
+                                            self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values())))
             else:
-                from src.pubtrans.PtFleetControl import PtFleetControl
-                OpClass = PtFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, self.dir_names, charging_management=self.cdp)
+                from dev.pubtrans.PtFleetControl import PtFleetControl
+                OpClass = PtFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()))
                 init_vids = OpClass.return_vehicles_to_initialize()
                 list_vehicles = []
                 for vid, veh_type in init_vids.items():
@@ -375,6 +369,7 @@ class FleetSimulationBase:
         veh_type_f = os.path.join(self.dir_names[G_DIR_OUTPUT], "2_vehicle_types.csv")
         veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
         veh_type_df.to_csv(veh_type_f, index=False)
+        self.vehicle_update_order: tp.Dict[tp.Tuple[int, int], int] = {vid : 1 for vid in self.sim_vehicles.keys()}
 
     @staticmethod
     def get_directory_dict(scenario_parameters):
@@ -441,14 +436,16 @@ class FleetSimulationBase:
         init_f_flag = False
         init_state_f = None
         if self.scenario_parameters.get(G_INIT_STATE_SCENARIO):
-            init_state_f = os.path.join(self.dir_names[G_DIR_MAIN], "results",
-                                        self.scenario_parameters[G_STUDY_NAME],
+            init_state_f = os.path.join(self.dir_names[G_DIR_MAIN], "studies",
+                                        self.scenario_parameters[G_STUDY_NAME], "results",
                                         str(self.scenario_parameters.get(G_INIT_STATE_SCENARIO, "None")),
                                         "final_state.csv")
             init_f_flag = True
+            if not os.path.isfile(init_state_f):
+                raise FileNotFoundError(f"init state variable {G_INIT_STATE_SCENARIO} given but file {init_state_f} not found!")
         set_unassigned_vid = set([(veh_obj.op_id, veh_obj.vid) for veh_obj in self.sim_vehicles.values()
                                   if veh_obj.pos is None])
-        if init_f_flag and os.path.isfile(init_state_f):
+        if init_f_flag:
             # set according to initial state if available
             init_state_df = pd.read_csv(init_state_f)
             init_state_df.set_index([G_V_OP_ID, G_V_VID], inplace=True)
@@ -517,6 +514,9 @@ class FleetSimulationBase:
         remaining_tasks = -1
         while remaining_tasks != 0:
             self.update_sim_state_fleets(c_time - self.time_step, c_time)
+            for ch_op_dict in self.charging_operator_dict.values():
+                for ch_op in ch_op_dict.values():
+                    ch_op.time_trigger(c_time)
             remaining_tasks = 0
             for veh_obj in self.sim_vehicles.values():
                 if veh_obj.assigned_route and veh_obj.assigned_route[0].status == VRL_STATES.OUT_OF_SERVICE:
@@ -568,10 +568,15 @@ class FleetSimulationBase:
         :param force_update_plan: flag that can force vehicle plan to be updated
         """
         LOG.debug(f"updating MoD state from {last_time} to {next_time}")
-        for opid_vid_tuple, veh_obj in self.sim_vehicles.items():
+        #for opid_vid_tuple, veh_obj in self.sim_vehicles.items():
+        for opid_vid_tuple, veh_obj in sorted(self.sim_vehicles.items(), key=lambda x:self.vehicle_update_order[x[0]]):
             op_id, vid = opid_vid_tuple
             boarding_requests, alighting_requests, passed_VRL, dict_start_alighting =\
                 veh_obj.update_veh_state(last_time, next_time)
+            if veh_obj.status == VRL_STATES.CHARGING:
+                self.vehicle_update_order[opid_vid_tuple] = 0
+            else:
+                self.vehicle_update_order[opid_vid_tuple] = 1
             for rid, boarding_time_and_pos in boarding_requests.items():
                 boarding_time, boarding_pos = boarding_time_and_pos
                 LOG.debug(f"rid {rid} boarding at {boarding_time} at pos {boarding_pos}")
@@ -676,7 +681,7 @@ class FleetSimulationBase:
                 del self.demand.rq_db[rid]
                 del self.demand.waiting_rq[rid]
 
-    def run(self):
+    def run(self, tqdm_position=0):
         self._start_realtime_plot()
         t_run_start = time.perf_counter()
         if not self._started:
@@ -688,7 +693,8 @@ class FleetSimulationBase:
             elif PROGRESS_LOOP == "demand":
                 # loop over time with progress bar scaling according to future demand
                 all_requests = sum([len(x) for x in self.demand.future_requests.values()])
-                with tqdm(total=100) as pbar:
+                with tqdm(total=100, position=tqdm_position) as pbar:
+                    pbar.set_description(self.scenario_parameters.get(G_SCENARIO_NAME))
                     for sim_time in range(self.start_time, self.end_time, self.time_step):
                         remaining_requests = sum([len(x) for x in self.demand.future_requests.values()])
                         self.step(sim_time)
@@ -702,7 +708,8 @@ class FleetSimulationBase:
                         self._update_realtime_plots_dict(sim_time)
             else:
                 # loop over time with progress bar scaling with time
-                for sim_time in tqdm(range(self.start_time, self.end_time, self.time_step)):
+                for sim_time in tqdm(range(self.start_time, self.end_time, self.time_step), position=tqdm_position,
+                                     desc=self.scenario_parameters.get(G_SCENARIO_NAME)):
                     self.step(sim_time)
                     self._update_realtime_plots_dict(sim_time)
 
@@ -731,8 +738,12 @@ class FleetSimulationBase:
     def _start_realtime_plot(self):
         """ This method starts a separate process for real time python plots """
         if self.realtime_plot_flag in {1, 2}:
-            bounding = self.routing_engine.return_network_bounding_box()
-            lons, lats = list(zip(*bounding))
+            if self.scenario_parameters.get(G_SIM_REALTIME_PLOT_EXTENTS, None):
+                extents = self.scenario_parameters.get(G_SIM_REALTIME_PLOT_EXTENTS)
+                lons, lats = extents[:2], extents[2:]
+            else:
+                bounding = self.routing_engine.return_network_bounding_box()
+                lons, lats = list(zip(*bounding))
             if self.realtime_plot_flag == 1:
                 self._manager = Manager()
                 self._shared_dict = self._manager.dict()

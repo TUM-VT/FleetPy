@@ -1,0 +1,5 @@
+op_module,scenario_name,rq_file,op_fleet_composition,op_act_fs_file,op_dyn_fs_method,op_dyfs_target_utilization,op_dyfs_target_utilization_interval,op_dyfs_minimun_active_fleetsize,op_dyfs_underutilization_duration
+PoolingIRSOnly,example_depot_time_pool_irsonly_sc_1,example_100.csv,default_vehtype:5,example_active_fleetsize.csv,TimeBasedFS,,,,
+PoolingIRSAssignmentBatchOptimization,example_depot_time_pool_irsopt_sc_1,example_100.csv,default_vehtype:5,example_active_fleetsize.csv,TimeBasedFS,,,,
+PoolingIRSOnly,example_depot_util_pool_irsonly_sc_1,example_100.csv,default_vehtype:50,,UtilizationBasedFS,0.6,0.05,1,0
+PoolingIRSAssignmentBatchOptimization,example_depot_utilpool_irsopt_sc_1,example_100.csv,default_vehtype:50,,UtilizationBasedFS,0.6,0.05,1,0

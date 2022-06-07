@@ -8,7 +8,8 @@ import typing as tp
 # src imports
 # -----------
 from src.misc.globals import *
-from src.simulation.Legs import VehicleRouteLeg, VehicleChargeLeg
+from src.simulation.Legs import VehicleRouteLeg
+from src.simulation.StationaryProcess import ChargingProcess
 
 LOG = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ class SimulationVehicle:
                 init_blocked_duration = final_time-start_time
                 self.status = VRL_STATES.BLOCKED_INIT
                 fleetctrl.set_init_blocked(self, start_time, routing_engine, init_blocked_duration)
-                self.assigned_route.append(VehicleRouteLeg(VRL_STATES.BLOCKED_INIT, state_dict[G_V_INIT_NODE], {},
+                self.assigned_route.append(VehicleRouteLeg(VRL_STATES.BLOCKED_INIT, (int(state_dict[G_V_INIT_NODE]), None, None), {},
                                                            duration=init_blocked_duration, locked=True))
                 # self.start_next_leg(start_time)
                 self.start_next_leg_first = True
@@ -141,6 +142,28 @@ class SimulationVehicle:
         # beware of not blocking a vehicle for a whole day!
         final_state_dict[G_V_INIT_TIME] = end_time % (24*3600)
         return final_state_dict
+
+    def _start_next_leg_stationary_object(self, simulation_time):
+        """ Starts the next leg using the route leg with a stationary process """
+
+        # TODO: Generalize the current method and incoporate directly into the start_next_leg method
+        ca = self.assigned_route[0]
+        remaining_time_to_start = ca.stationary_process.remaining_time_to_start(simulation_time)
+        if remaining_time_to_start is not None and remaining_time_to_start > 0:
+            # insert waiting leg
+            waiting_vrl = VehicleRouteLeg(VRL_STATES.WAITING, self.pos, {}, duration=remaining_time_to_start)
+            self.assigned_route = [waiting_vrl] + self.assigned_route
+            LOG.debug("veh start next leg waiting at time {} remaining {} : {}".format(simulation_time,
+                                                                                       remaining_time_to_start,
+                                                                                       self))
+            return self.start_next_leg(simulation_time)
+        else:
+            self.cl_remaining_route = []
+            LOG.debug("start stationary process at {}: duration before : {}".format(simulation_time, self.cl_remaining_time))
+            ca.stationary_process.start_task(simulation_time)
+            self.cl_remaining_time = ca.stationary_process.remaining_duration_to_finish(simulation_time)
+            LOG.debug("duration after: {}".format(self.cl_remaining_time))
+            return [], []
     
     def start_next_leg(self, simulation_time):
         """
@@ -177,6 +200,10 @@ class SimulationVehicle:
                 self.cl_remaining_time = None
                 list_boarding_pax = []
                 list_start_alighting_pax = []
+            elif ca.stationary_process is not None:
+                list_boarding_pax = []
+                list_start_alighting_pax = []
+                self._start_next_leg_stationary_object(simulation_time)
             else:
                 # VehicleChargeLeg: check whether duration should be changed (other SOC value or late arrival)
                 if ca.status == VRL_STATES.CHARGING:
@@ -224,6 +251,8 @@ class SimulationVehicle:
         if self.assigned_route and not self.start_next_leg_first:
             ca = self.assigned_route[0]
             LOG.debug(f"Vehicle {self.vid} ends a VRL and starts {ca.__dict__} at time {simulation_time}")
+            if ca.stationary_process is not None:
+                ca.stationary_process.end_task(simulation_time)
             # record
             record_dict = {}
             record_dict[G_V_OP_ID] = self.op_id
@@ -242,10 +271,10 @@ class SimulationVehicle:
             record_dict[G_VR_LEG_START_SOC] = self.cl_start_soc
             record_dict[G_VR_LEG_END_SOC] = self.soc
             record_dict[G_VR_CHARGING_POWER] = ca.power
-            if type(ca) == VehicleChargeLeg:
-                cu_id = ca.charging_unit.get_id()
-                ca.charging_unit.remove_job_from_schedule(ca.get_vcl_id())
-                record_dict[G_VR_CHARGING_UNIT] = f"{cu_id[0]}-{cu_id[1]}"
+            if ca.stationary_process is not None and type(ca.stationary_process) == ChargingProcess:
+                station_id = ca.stationary_process.station.id
+                socket_id = ca.stationary_process.socket_id
+                record_dict[G_VR_CHARGING_UNIT] = f"{station_id}-{socket_id}"
             else:
                 record_dict[G_VR_CHARGING_UNIT] = ""
             record_dict[G_VR_TOLL] = self.cl_toll_costs
@@ -386,22 +415,20 @@ class SimulationVehicle:
                             dict_start_alighting[rid] = (c_time, self.pos)
             elif self.status != VRL_STATES.IDLE: #elif self.status != 0 and not self.status in G_IDLE_BUSY_STATUS:
                 # 2) non-moving:
-                # LOG.debug(f"Vehicle {self.vid} performs non-moving task between {c_time} and {next_time}")
+                # LOG.debug(f"Vehicle {self.vid} performs non-moving task between {c_time} and {next_time}")    
                 if remaining_step_time < self.cl_remaining_time:
                     #   a) duration is ongoing: do nothing
                     self.cl_remaining_time -= remaining_step_time
-                    if self.assigned_route[0].power > 0:
-                        self.soc += self.compute_soc_charging(self.assigned_route[0].power, remaining_step_time)
-                        self.soc = min(self.soc, 1.0)
+                    if self.assigned_route[0].stationary_process is not None:
+                        self.assigned_route[0].stationary_process.update_state(remaining_step_time)
                     remaining_step_time = 0
                 else:
                     #   b) duration is passed; end task, start next task; continue with remaining time
                     c_time += self.cl_remaining_time
                     # LOG.debug(f"cl remaining time {self.cl_remaining_time}")
                     remaining_step_time -= self.cl_remaining_time
-                    if self.assigned_route[0].power > 0:
-                        self.soc += self.compute_soc_charging(self.assigned_route[0].power, self.cl_remaining_time)
-                        self.soc = min(self.soc, 1.0)
+                    if self.assigned_route[0].stationary_process is not None:
+                        self.assigned_route[0].stationary_process.update_state(self.cl_remaining_time)
                     add_alighting_rq, passed_VRL = self.end_current_leg(c_time)
                     for rid in add_alighting_rq:
                         dict_alighting_requests[rid] = c_time
