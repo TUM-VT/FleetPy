@@ -34,7 +34,7 @@ class PavoneHailingRepositioningFC(RepositionBase):
                           f"Set them in the {G_OP_REPO_TH_DEF} scenario parameter!")
         self.optimisation_timeout = 30 # TODO #
 
-    def determine_and_create_repositioning_plans(self, sim_time, lock=True):
+    def determine_and_create_repositioning_plans(self, sim_time, lock=None):
         """This method determines and creates new repositioning plans. The repositioning plans are directly assigned
         to the vehicles. The repositioning algorithm can choose whether the generated respective plan stops are locked.
         In order to allow further database processes, the vids of vehicles with new plans are returned.
@@ -44,6 +44,8 @@ class PavoneHailingRepositioningFC(RepositionBase):
         :return: list[vid] of vehicles with changed plans
         """
         self.sim_time = sim_time
+        if lock is None:
+            lock = self.lock_repo_assignments
         # get forecast values
         # -------------------
         t0 = sim_time + self.list_horizons[0]
@@ -67,6 +69,8 @@ class PavoneHailingRepositioningFC(RepositionBase):
         # print(number_idle_vehicles)
         # print("")
         total_idle_vehicles = sum(number_idle_vehicles.values())
+        if total_idle_vehicles == 0:
+            return []
         nr_regions = len(list_zones)
         v_i_e_dict = {}
         omegas = []
@@ -104,6 +108,12 @@ class PavoneHailingRepositioningFC(RepositionBase):
 
         # optimization problem
         # --------------------
+        LOG.debug("PavoneHailingRepositioningFC input:")
+        LOG.debug("list zones: {}".format(list_zones))
+        LOG.debug("total_excess_vehicles: {}".format(total_excess_vehicles))
+        LOG.debug("v_i_e_dict: {}".format(v_i_e_dict))
+        LOG.debug("v_i_d_dict: {}".format(v_i_d_dict))
+        LOG.debug("idle vehicles: {}".format(number_idle_vehicles))
         if self.solver_key == "Gurobi":
             alpha_od, od_reposition_trips = self._optimization_gurobi(sim_time, list_zones, v_i_e_dict, v_i_d_dict,
                                                                       number_idle_vehicles, zone_dict)
@@ -133,6 +143,8 @@ class PavoneHailingRepositioningFC(RepositionBase):
         #         fhlog.write(
         #             f"{current_time},after,{sigma},{sum_idle_vehicles},{f_abs_1},{f_pos_1},{f_neg_1},{f2_val_1}\n")
         #     fhlog.close()
+        
+        LOG.debug("PavoneHailingRepositioningFC results: {}".format(od_reposition_trips))
 
         list_veh_with_changes = []
         if od_reposition_trips:
@@ -301,7 +313,7 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
     vehicles is more complex to allow negative values, but consistent solution during global vehicle shortage.
     """
 
-    def determine_and_create_repositioning_plans(self, sim_time, lock=True):
+    def determine_and_create_repositioning_plans(self, sim_time, lock=None):
         """This method determines and creates new repositioning plans. The repositioning plans are directly assigned
         to the vehicles. The repositioning algorithm can choose whether the generated respective plan stops are locked.
         In order to allow further database processes, the vids of vehicles with new plans are returned.
@@ -311,6 +323,8 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         :return: list[vid] of vehicles with changed plans
         """
         self.sim_time = sim_time
+        if lock is None:
+            lock = self.lock_repo_assignments
         # get forecast values
         # -------------------
         t0 = sim_time + self.list_horizons[0]
@@ -333,6 +347,8 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         # print(number_idle_vehicles)
         # print("")
         total_idle_vehicles = sum(number_idle_vehicles.values())
+        if total_idle_vehicles == 0:
+            return []
         nr_regions_with_demand = 0
         v_i_e_dict = {} # can also contain negative values now!
         omegas = []

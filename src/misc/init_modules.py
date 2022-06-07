@@ -210,6 +210,7 @@ def load_ride_pooling_batch_optimizer(op_batch_optimizer_string):
     # FleetPy ride pooling optimization strategy options
     rbo_dict = {}  # str -> (module path, class name)
     rbo_dict["AlonsoMora"] = ("src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignment", "AlonsoMoraAssignment")
+    rbo_dict["InsertionHeuristic"] = ("src.fleetctrl.pooling.batch.InsertionHeuristic.BatchInsertionHeuristicAssignment", "BatchInsertionHeuristicAssignment")
     # add development content
     if dev_content is not None:
         dev_rbo_dict = dev_content.add_ride_pooling_batch_optimizer_modules()

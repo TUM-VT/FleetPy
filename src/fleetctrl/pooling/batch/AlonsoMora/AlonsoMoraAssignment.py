@@ -290,7 +290,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     ext_veh_plan = self.fleetcontrol.veh_plans[vid]
                     rtv_key = getRTVkeyFromVehPlan(ext_veh_plan)
                     self.external_assignments[vid] = (rtv_key, ext_veh_plan)
-            LOG.debug(f"external assignments : {self.external_assignments}")
+            LOG.debug("external assignments : {}".format({x: (str(y[0]), str(y[1])) for x, y in self.external_assignments.items()}) )
         self.veh_objs = {}
         if len(veh_objs_to_build.keys()) == 0:
             for veh_obj in self.fleetcontrol.sim_vehicles:
@@ -489,11 +489,12 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             veh_plan = self.rtv_obj[key].getBestPlan()
             return veh_plan.copy()
 
-    def set_assignment(self, vid : int, assigned_plan : VehiclePlan, is_external_vehicle_plan : bool = False):
+    def set_assignment(self, vid : int, assigned_plan : VehiclePlan, is_external_vehicle_plan : bool = False, _is_init_sol: bool = False):
         """ sets the vehicleplan as assigned in the algorithm database; if the plan is not computed within the this algorithm, the is_external_vehicle_plan flag should be set to true
         :param vid: vehicle id
         :param assigned_plan: vehicle plan object that has been assigned
         :param is_external_vehicle_plan: should be set to True, if the assigned_plan has not been computed within this algorithm
+        :param _is_init_sol: used within the code, if the init solution creater set this solution 
         """
         if assigned_plan is None:
             self.current_assignments[vid] = None
@@ -501,9 +502,12 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             rtv_key = getRTVkeyFromVehPlan(assigned_plan)
             self.current_assignments[vid] = rtv_key
             # LOG.debug(f"assign {vid} -> {rtv_key} | is external? {is_external_vehicle_plan}")
-            if is_external_vehicle_plan:
+            if is_external_vehicle_plan and not _is_init_sol:
                 self.external_assignments[vid] = (rtv_key, None)
                 self.rebuild_rtv[vid] = 1
+                self.delete_vehicle_database_entries(vid)
+            elif _is_init_sol and not is_external_vehicle_plan:
+                self.external_assignments[vid] = (rtv_key, assigned_plan)
 
     def get_current_assignment(self, vid : int) -> VehiclePlan:
         """ returns the vehicle plan assigned to vid currently
@@ -707,8 +711,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         param rtv_obj : rtv_obj/V2RB (look V2RB.py)
         return : None
         """
-        ## LOG.debug(f"add rtv key {rtv_key}")
-        #TODO check if complete
+        LOG.debug(f"add rtv key {rtv_key} | {rtv_obj}")
         self.rtv_obj[rtv_key] = rtv_obj
         self.rtv_costs[rtv_key] = rtv_obj.cost_function_value
         list_rids = getRidsFromRTVKey(rtv_key)
@@ -1185,7 +1188,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         assigned_v2rb = self.rtv_obj.get(assigned_key)
         if assigned_v2rb is None:
             LOG.warning("assigned rtv-key not created after build! {} for vid {}".format(assigned_key, vid))
-            LOG.warning("external assignments: {}".format(self.external_assignments))
+            LOG.warning("external assignments: {}".format({x: (str(y[0]), str(y[1])) for x, y in self.external_assignments.items()}))
             assigned_plan = self.external_assignments[vid][1]
             # try:
             #     feasible = assigned_plan.update_plan(self.veh_objs[vid], self.sim_time, self.routing_engine, keep_time_infeasible = True)
@@ -1314,7 +1317,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
 
         for vid, plan in current_insertion_solutions.items():
             # LOG.debug("set init sol: {} -> {}".format(vid, plan))
-            self.set_assignment(vid, plan, is_external_vehicle_plan=True)
+            self.set_assignment(vid, plan, _is_init_sol=True)
 
 
 

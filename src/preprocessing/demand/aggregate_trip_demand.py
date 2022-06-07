@@ -70,6 +70,7 @@ def aggregate_demand_for_perfect_forecast(demand_f, node_zone_f, temporal_agg=15
     demand_df[["o_zone", "d_zone", "o_time", "d_time"]] = demand_df.apply(return_od_zones,
                                                                           args=(node_zone_dict, temporal_agg),
                                                                           axis=1, result_type="expand")
+    demand_df = demand_df.notna()
     for col in ["o_zone", "d_zone", "o_time", "d_time"]:
         demand_df[col] = demand_df[col].astype(np.int64)
     # aggregate origin

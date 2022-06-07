@@ -122,7 +122,6 @@ class SimulationVehicleStruct():
 
 class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
 
-    @abstractmethod
     def __init__(self, fleetcontrol : FleetControlBase, routing_engine : NetworkBase, sim_time : int, obj_function : Callable,
                  operator_attributes : dict, optimisation_cores : int=1, seed :int = 6061992, veh_objs_to_build : Dict[int, SimulationVehicleStruct]={}):
         """This class is used to compute new vehicle assignments with an algorithm

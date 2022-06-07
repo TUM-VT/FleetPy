@@ -12,7 +12,6 @@ from tqdm import tqdm
 import typing as tp
 from pathlib import Path
 from multiprocessing import Manager
-from src.python_plots.plot_classes import PyPlot
 
 # additional module imports (> requirements)
 # ------------------------------------------
@@ -28,6 +27,7 @@ from src.simulation.Vehicles import SimulationVehicle
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.routing.NetworkBase import NetworkBase
+    from src.python_plots.plot_classes import PyPlot
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -279,7 +279,7 @@ class FleetSimulationBase:
                                          simulation_time_step=self.time_step)
             if self.scenario_parameters.get(G_PA_RQ_FILE) is not None:
                 self.demand.load_parcel_demand_file(self.scenario_parameters[G_SIM_START_TIME],
-                                            self.scenario_parameters[G_SIM_END_TIME], self.dir_names[G_DIR_DEMAND],
+                                            self.scenario_parameters[G_SIM_END_TIME], self.dir_names[G_DIR_PARCEL_DEMAND],
                                             self.scenario_parameters[G_PA_RQ_FILE], self.scenario_parameters[G_RANDOM_SEED],
                                             self.scenario_parameters.get(G_PA_RQ_TYP1, None),
                                             self.scenario_parameters.get(G_PA_RQ_TYP2, {}),
@@ -719,6 +719,7 @@ class FleetSimulationBase:
             # save final state, record remaining travelers and vehicle tasks
             self.save_final_state()
             self.record_remaining_assignments()
+            self.demand.record_remaining_users()
         t_run_end = time.perf_counter()
         # call evaluation
         self.evaluate()

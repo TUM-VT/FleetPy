@@ -30,7 +30,7 @@ private:
 	std::vector<int> _last_found_route_bw;
 
 public:
-	Network(std::string network_path);
+	Network(std::string node_path, std::string edge_path);
 	void updateEdgeTravelTimes(std::string file_path);
 	unsigned int getNumberNodes();
 	std::vector<Resultstruct> computeTravelCosts1toX(int start_node_index, const std::vector<int>& targets, double time_range = -1, int max_targets = -1);
