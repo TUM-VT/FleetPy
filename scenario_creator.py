@@ -194,6 +194,7 @@ class ScenarioCreator():
                 sc_df_list.append( {"Parameter" : p, "Value": v})
             sc_df = pd.DataFrame(sc_df_list)
             print(sc_df)
+            return sc_df
             
     def create_shell_scenario_df(self):
         print("")
@@ -221,6 +222,7 @@ class ScenarioCreator():
             sc_df_list.append( {"Parameter" : p, "Value": v})
         sc_df = pd.DataFrame(sc_df_list)
         print(sc_df)
+        return sc_df
         
             
 if __name__=="__main__":
@@ -251,4 +253,5 @@ if __name__=="__main__":
     sc.select_param("rq_file", "TestRqFile")
     sc.select_param("op_vr_control_func_dict", "inputForObjFunc")
     
-    sc.create_filled_scenario_df()
+    sc_df = sc.create_filled_scenario_df()
+    sc_df.to_csv(r'C:\Users\ge37ser\Documents\Coding\TUM_VT_FleetSimulation\tum-vt-fleet-simulation\FleetPy\studies\SUMO_Grafing_test\scenarios\test_cfg.csv', index=False)

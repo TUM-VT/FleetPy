@@ -181,16 +181,13 @@ class NetworkBasic(NetworkBase):
         #
         edges_f = os.path.join(network_name_dir, "base", "edges.csv")
         print(f"Loading edges from {edges_f} ...")
-        with open(edges_f) as fhin:
-            header = fhin.readline()
-            for line in fhin:
-                lc = line.strip().split(",")
-                o_node = self.nodes[int(lc[0])]
-                d_node = self.nodes[int(lc[1])]
-                # for the table approach, int values are used (to avoid rounding mistakes!)
-                tmp_edge = Edge((o_node, d_node), float(lc[2]), float(lc[3]))
-                o_node.add_next_edge_to(d_node, tmp_edge)
-                d_node.add_prev_edge_from(o_node, tmp_edge)
+        edge_df = pd.read_csv(edges_f)
+        for o_node_index, d_node_index, dis, tt in zip(edge_df["from_node"].values,edge_df["to_node"].values,edge_df["distance"].values,edge_df["travel_time"].values):
+            o_node = self.nodes[o_node_index]
+            d_node = self.nodes[d_node_index]
+            tmp_edge = Edge((o_node, d_node), dis, tt)
+            o_node.add_next_edge_to(d_node, tmp_edge)
+            d_node.add_prev_edge_from(o_node, tmp_edge)
         print("... {} nodes loaded!".format(len(self.nodes)))
         if scenario_time is not None:
             latest_tt = None
