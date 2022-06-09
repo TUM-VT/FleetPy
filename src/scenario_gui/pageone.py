@@ -22,14 +22,15 @@ class PageOne(tk.Frame):
         row_count=row_count+1
         col_count=2
         man_param_dict, op_param_dict = controller.sc.get_current_mandatory_and_optional_parameters()
+        parameter_to_input_variable = {}
 
         for parameter_name, parameter in man_param_dict.items():
-
-            module = tk.StringVar()
-            module.set(parameter_name) 
-            module_view = tk.Label(self, text=module.get(), font=controller.normalfont).grid(row=row_count,column=col_count)
-            sel_module = tk.OptionMenu(self,module, *["TBD", "TBD"])
-            sel_module.config(width=30)
+            param_var = tk.StringVar()
+            param_var.set(parameter.doc_string) 
+            module_view = tk.Label(self, text=parameter_name, font=controller.normalfont).grid(row=row_count,column=col_count)
+            #sel_module = tk.OptionMenu(self,module, *["TBD", "TBD"])
+            sel_module = tk.Entry(self, textvariable=param_var)
+            sel_module.config(width=80)
             sel_module.grid(row=row_count, column=(col_count+1))  
             col_count = 2
             row_count = row_count+1                     
@@ -39,12 +40,11 @@ class PageOne(tk.Frame):
         row_count = row_count + 1
 
         for parameter_name, parameter in op_param_dict.items():
-
-            module = tk.StringVar()
-            module.set(parameter_name) 
-            module_view = tk.Label(self, text=module.get(), font=controller.normalfont).grid(row=row_count,column=col_count)
-            sel_module = tk.OptionMenu(self,module, *["TBD", "TBD"])
-            sel_module.config(width=30)
+            param_var = tk.StringVar()
+            param_var.set(parameter.doc_string) 
+            module_view = tk.Label(self, text=parameter_name, font=controller.normalfont).grid(row=row_count,column=col_count)
+            sel_module = tk.Entry(self, textvariable=param_var)
+            sel_module.config(width=80)
             sel_module.grid(row=row_count, column=(col_count+1))
             col_count = 2
             row_count = row_count+1      
