@@ -1,0 +1,3 @@
+op_module,scenario_name,rq_file,op_fleet_composition
+PoolingIRSOnly,example_charge_pool_irsonly_sc_1,example_100.csv,low_range_vehtype:5
+PoolingIRSAssignmentBatchOptimization,example_charge_pool_irsopt_sc_1,example_100.csv,low_range_vehtype:5

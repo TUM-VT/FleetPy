@@ -9,13 +9,15 @@ from Network cimport Network
 cdef class PyNetwork:
     cdef Network*c_net  # hold a pointer to the C++ instance which we're wrapping
 
-    def __cinit__(self, string network_path):
+    def __cinit__(self, string node_path, string edge_path):
         """
         loads the network in the c++ class
-        :param network_path: path to network_folder
-        :type network_path: byte string! use str.encode() to converte usual python strings
+        :param node_path: path to network/base/nodes.csv
+        :type node_path: byte string! use str.encode() to converte usual python strings
+        :param node_path: path to network/base/edges.csv
+        :type node_path: byte string! use str.encode() to converte usual python strings
         """
-        self.c_net = new Network(network_path)
+        self.c_net = new Network(node_path, edge_path)
 
     def __dealloc__(self):
         del self.c_net

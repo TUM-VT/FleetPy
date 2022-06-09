@@ -49,6 +49,7 @@ class BatchOfferSimulation(FleetSimulationBase):
             # 4) periodically for waiting requests: run decision process -> possibly leave system (cancellation)
             # 5) call time trigger -> offer to all undecided assigned requests
             # 6) sequential processes for each undecided request: user-decision
+            # 7) trigger charging ops
 
         :param sim_time: new simulation time
         :return: None
@@ -87,5 +88,10 @@ class BatchOfferSimulation(FleetSimulationBase):
                 if amod_offer is not None:
                     rq_obj.receive_offer(op_id, amod_offer, sim_time)
             self._rid_chooses_offer(rid, rq_obj, sim_time)
+            
+        # 7)
+        for ch_op_dict in self.charging_operator_dict.values():
+            for ch_op in ch_op_dict.values():
+                ch_op.time_trigger(sim_time)
 
         self.record_stats()

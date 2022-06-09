@@ -41,15 +41,15 @@ class ZoneSystem:
             self.general_info_df = None
         # network specific information
         node_zone_f = os.path.join(zone_network_dir, "node_zone_info.csv")
-        node_zone_df = pd.read_csv(node_zone_f)
+        self.node_zone_df = pd.read_csv(node_zone_f)
         # pre-process some data
-        self.zones = sorted(node_zone_df[G_ZONE_ZID].unique().tolist()) # TODO
+        self.zones = sorted(self.node_zone_df[G_ZONE_ZID].unique().tolist()) # TODO
         if self.general_info_df is not None:
             self.all_zones = self.general_info_df.index.to_list()
         else:
             self.all_zones = list(self.zones)
         if self.general_info_df is not None:
-            self.node_zone_df = pd.merge(node_zone_df, self.general_info_df, left_on=G_ZONE_ZID, right_on=G_ZONE_ZID)
+            self.node_zone_df = pd.merge(self.node_zone_df, self.general_info_df, left_on=G_ZONE_ZID, right_on=G_ZONE_ZID)
         self.node_zone_df.set_index(G_ZONE_NID, inplace=True)
         self.zone_centroids = None # zone_id -> list node_indices (centroid not unique!)
         if G_ZONE_CEN in self.node_zone_df.columns:

@@ -14,7 +14,7 @@ cdef extern from "Network.cpp":
 cdef extern from "Network.h":
 
     cdef cppclass Network:
-        Network(string) except +
+        Network(string, string) except +
         void updateEdgeTravelTimes(string) except +
         int computeTravelCosts1ToXpy(int start_node_index, int number_targets, int* targets, int* reached_targets, double* reached_target_tts, double* reached_target_dis, double time_range, int max_targets) except +
         int computeTravelCostsXTo1py(int start_node_index, int number_targets, int* targets, int* reached_targets, double* reached_target_tts, double* reached_target_dis, double time_range, int max_targets) except +

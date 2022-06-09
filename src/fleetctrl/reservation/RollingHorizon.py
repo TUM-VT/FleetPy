@@ -52,7 +52,7 @@ class RollingHorizonReservation(ReservationBase):
         :return: list of (position, latest arrival time)"""
         return []
 
-    def return_reservation_offer(self, rid, sim_time):
+    def return_immediate_reservation_offer(self, rid, sim_time):
         """ this function returns an offer if possible for an reservation request which has been added to the reservation module before 
         in this implementation, an offer is always returned discribed by the earliest and latest pick up time
         :param rid: request id

@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Dict, List, Any, Tuple, TYPE_CHECKING, Callable
 
 from src.fleetctrl.pooling.immediate.insertion import simple_insert
-from src.fleetctrl.planning.VehiclePlan import VehiclePlan, BoardingPlanStop
+from src.fleetctrl.planning.VehiclePlan import VehiclePlan, BoardingPlanStop, PlanStop
 import src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignment as AlonsoMoraAssignment
 
 if TYPE_CHECKING:
@@ -176,9 +176,14 @@ class V2RB():
             change_nr_pax -= sum([rq_dict[rid].nr_pax for rid in new_boarding_dict.get(-1, [])])
             if len(new_boarding_dict.keys()) > 0 or ps.is_locked():
                 #LOG.warning("not considering new time constraints!!!!") # TODO #
-                new_ps = BoardingPlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
+                # new_ps = BoardingPlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
+                #                           earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
+                #                           change_nr_pax=change_nr_pax, duration=ps.get_duration_and_earliest_departure()[0], locked=ps.is_locked())
+                new_ps = PlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
                                           earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
-                                          change_nr_pax=change_nr_pax, duration=ps.get_duration_and_earliest_departure()[0], locked=ps.is_locked())
+                                          change_nr_pax=change_nr_pax, duration=ps.get_duration_and_earliest_departure()[0], locked=ps.is_locked(),
+                                          charging_power=ps.get_charging_power(), planstop_state=ps.get_state(), charging_task_id=ps.get_charging_task_id(),
+                                          change_nr_parcels=ps.get_change_nr_parcels())
                 # new_ps = ps.copy()  
                 # new_ps.boarding_dict = new_boarding_dict
                 new_plan_list.append(new_ps)

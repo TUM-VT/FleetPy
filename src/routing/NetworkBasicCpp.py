@@ -36,7 +36,9 @@ class NetworkBasicCpp(NetworkBasic):
 
     def loadNetwork(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
         LOG.info("load c++ router!")
-        self.cpp_router = PyNetwork(network_name_dir.encode())
+        nodes_f = os.path.join(network_name_dir, "base", "nodes.csv")
+        edges_f = os.path.join(network_name_dir, "base", "edges.csv")
+        self.cpp_router = PyNetwork(nodes_f.encode(), edges_f.encode())
         super().loadNetwork(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
 
     def load_tt_file(self, scenario_time):

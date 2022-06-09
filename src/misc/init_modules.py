@@ -123,7 +123,7 @@ def load_repositioning_strategy(op_repo_class_string):
     repo_dict = {}  # str -> (module path, class name)
     repo_dict["PavoneFC"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingRepositioningFC")
     repo_dict["PavoneFCV2"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingV2RepositioningFC")
-    repo_dict["DensityFrontiers"] = ("src.fleetctrl.FrontiersDensityBasedRepositioning", "DensityRepositioning")
+    repo_dict["DensityFrontiers"] = ("src.fleetctrl.repositioning.FrontiersDensityBasedRepositioning", "DensityRepositioning")
     # add development content
     if dev_content is not None:
         dev_repo_dict = dev_content.add_repositioning_modules()
@@ -139,8 +139,9 @@ def load_charging_strategy(op_charging_class_string):
     :return: Charging class
     """
     # FleetPy charging options
+    # TODO # adapt charging strategy names
     cs_dict = {}  # str -> (module path, class name)
-    cs_dict["Threshold"] = ("src.fleetctrl.charging.Threshold", "ChargingThreshold")
+    cs_dict["Threshold_PCI"] = ("src.fleetctrl.charging.Threshold", "ChargingThresholdPublicInfrastructure")
     # add development content
     if dev_content is not None:
         dev_cs_dict = dev_content.add_charging_strategy_modules()
@@ -209,6 +210,7 @@ def load_ride_pooling_batch_optimizer(op_batch_optimizer_string):
     # FleetPy ride pooling optimization strategy options
     rbo_dict = {}  # str -> (module path, class name)
     rbo_dict["AlonsoMora"] = ("src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignment", "AlonsoMoraAssignment")
+    rbo_dict["InsertionHeuristic"] = ("src.fleetctrl.pooling.batch.InsertionHeuristic.BatchInsertionHeuristicAssignment", "BatchInsertionHeuristicAssignment")
     # add development content
     if dev_content is not None:
         dev_rbo_dict = dev_content.add_ride_pooling_batch_optimizer_modules()

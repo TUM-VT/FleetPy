@@ -2,16 +2,14 @@ from __future__ import annotations
 # -------------------------------------------------------------------------------------------------------------------- #
 # standard distribution imports
 # -----------------------------
-import os
 import logging
 import time
-from abc import abstractmethod, ABC, ABCMeta
+from abc import abstractmethod, ABCMeta
 from typing import Dict, List, Any, Tuple, TYPE_CHECKING
 
 # additional module imports (> requirements)
 # ------------------------------------------
 import pandas as pd
-import numpy as np
 # from IPython import embed
 
 # src imports
@@ -26,9 +24,6 @@ from src.fleetctrl.repositioning.RepositioningBase import RepositionBase
 from src.fleetctrl.pricing.DynamicPricingBase import DynamicPrizingBase
 from src.fleetctrl.fleetsizing.DynamicFleetSizingBase import DynamicFleetSizingBase
 from src.fleetctrl.reservation.ReservationBase import ReservationBase
-from src.infra.ChargingStation import ChargingAndDepotManagement
-from src.routing.NetworkBase import NetworkBase
-from src.infra.Zoning import ZoneSystem
 from src.demand.TravelerModels import RequestBase
 
 from src.misc.init_modules import load_repositioning_strategy, load_charging_strategy, \
@@ -38,6 +33,8 @@ if TYPE_CHECKING:
     from src.routing.NetworkBase import NetworkBase
     from src.simulation.Vehicles import SimulationVehicle
     from src.infra.Zoning import ZoneSystem
+    from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
+    from src.simulation.StationaryProcess import ChargingProcess
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -54,7 +51,8 @@ BUFFER_SIZE = 100
 class FleetControlBase(metaclass=ABCMeta):
     def __init__(self, op_id : int, operator_attributes : Dict, list_vehicles : List[SimulationVehicle],
                  routing_engine : NetworkBase, zone_system : ZoneSystem, scenario_parameters : Dict,
-                 dir_names : Dict, charging_management : ChargingAndDepotManagement=None):
+                 dir_names : Dict, op_charge_depot_infra : OperatorChargingAndDepotInfrastructure=None,
+                 list_pub_charging_infra: List[PublicChargingInfrastructureOperator]= []):
         """The general attributes for the fleet control module are initialized. Strategy specific attributes are
         introduced in the children classes.
 
@@ -72,8 +70,10 @@ class FleetControlBase(metaclass=ABCMeta):
         :type scenario_parameters: dict
         :param dir_names: dictionary with references to data and output directories
         :type dir_names: dict
-        :param charging_management: reference to a ChargingAndDepotManagement class (optional)
-        :type charging_management: ChargingAndDepotManagement
+        :param op_charge_depot_infra: reference to a OperatorChargingAndDepotInfrastructure class (optional) (unique for each operator)
+        :type OperatorChargingAndDepotInfrastructure: OperatorChargingAndDepotInfrastructure
+        :param list_pub_charging_infra: list of PublicChargingInfrastructureOperator classes (optional) (accesible for all agents)
+        :type list_pub_charging_infra: list of PublicChargingInfrastructureOperator
         """
         self.n_cpu = scenario_parameters["n_cpu_per_sim"]
         self.solver: str = operator_attributes.get(G_RA_SOLVER, "Gurobi")
@@ -85,6 +85,7 @@ class FleetControlBase(metaclass=ABCMeta):
         self.sim_vehicles: List[SimulationVehicle] = list_vehicles
         self.nr_vehicles = len(self.sim_vehicles)
         sim_start_time = scenario_parameters[G_SIM_START_TIME]
+        self.sim_time = sim_start_time
 
         # dynamic output base
         # -------------------
@@ -185,7 +186,9 @@ class FleetControlBase(metaclass=ABCMeta):
         # charging management and strategy
         # --------------------------------
         self.min_aps_soc = operator_attributes.get(G_OP_APS_SOC, 0.1)
-        self.charging_management = charging_management
+        # TODO # init available charging operators
+        self.op_charge_depot_infra = op_charge_depot_infra
+        self.list_pub_charging_infra = list_pub_charging_infra
         charging_method = operator_attributes.get(G_OP_CH_M)
         if charging_method is not None:
             ChargingClass = load_charging_strategy(charging_method)
@@ -195,10 +198,12 @@ class FleetControlBase(metaclass=ABCMeta):
         else:
             self.charging_strategy = None
             prt_strategy_str += "\t Charging: None\n"
+        self._active_charging_processes: Dict[Tuple[int, str], ChargingProcess] = {}     # charging task id (ch_op_id, booking_id) -> charging process
+        self._vid_to_assigned_charging_process: Dict[int, Tuple[int, str]] = {}      # vehicle id -> charging task id
 
         # on-street parking
         # -----------------
-        if self.charging_management:
+        if self.op_charge_depot_infra:
             self.allow_on_street_parking = scenario_parameters.get(G_INFRA_ALLOW_SP, True)
         else:
             self.allow_on_street_parking = True
@@ -251,24 +256,12 @@ class FleetControlBase(metaclass=ABCMeta):
         # log and print summary of additional strategies
         LOG.info(prt_strategy_str)
         print(prt_strategy_str)
-        self.sim_time = sim_start_time
 
     def add_init(self, operator_attributes, scenario_parameters):
-        # das ist notwendig, da sonst die child-classes nicht komplett initialisiert werden können
-        # initiate vehicles in depot for simulations with elastic fleet size
-        active_vehicle_file_name = operator_attributes.get(G_OP_ACT_FLEET_SIZE)
-        if active_vehicle_file_name is None:
-            active_vehicle_file = None
-        else:
-            active_vehicle_file = os.path.join(self.dir_names[G_DIR_FCTRL], "elastic_fleet_size",
-                                               active_vehicle_file_name)
-            if not os.path.isfile(active_vehicle_file):
-                raise IOError(f"Could not find active vehicle file {active_vehicle_file}")
-        if self.charging_management is not None and active_vehicle_file is not None:
-            self.charging_management.read_active_vehicle_file(self, active_vehicle_file, scenario_parameters)
-            LOG.info("active vehicle file loaded!")
-
-        # self.vid_finished_VRLs = {}
+        """ additional init for stuff that has to be loaded (i.e. in modules) that requires full init of fleetcontrol
+        """
+        if self.dyn_fleet_sizing is not None:
+            self.dyn_fleet_sizing.add_init(operator_attributes)
 
     @abstractmethod
     def receive_status_update(self, vid : int, simulation_time : int, list_finished_VRL : List[VehicleRouteLeg], force_update : bool=True):
@@ -284,7 +277,24 @@ class FleetControlBase(metaclass=ABCMeta):
         :param force_update: indicates if also current vehicle plan feasibilities have to be checked
         :type force_update: bool
         """
-        pass
+        veh_obj = self.sim_vehicles[vid]
+        # the vehicle plans should be up to date from assignments of previous time steps
+        if list_finished_VRL or force_update:
+            self.veh_plans[vid].update_plan(veh_obj, simulation_time, self.routing_engine, list_finished_VRL)
+            if self._vid_to_assigned_charging_process.get(vid) is not None:
+                finished_charging_task_id = None
+                for vrl in list_finished_VRL:
+                    if vrl.stationary_process is not None:
+                        finished_charging_task_id = vrl.stationary_process.id
+                        break
+                if finished_charging_task_id is not None:
+                    assigned_id = self._vid_to_assigned_charging_process[vid]
+                    if assigned_id[1] != finished_charging_task_id:
+                        LOG.warning("inconsitent charging task finished! assigned : {} finished: {}".format(assigned_id, finished_charging_task_id))
+                    del self._active_charging_processes[assigned_id]
+                    del self._vid_to_assigned_charging_process[vid]
+        upd_utility_val = self.compute_VehiclePlan_utility(simulation_time, veh_obj, self.veh_plans[vid])
+        self.veh_plans[vid].set_utility(upd_utility_val)
 
     @abstractmethod
     def user_request(self, rq : RequestBase, simulation_time : int):
@@ -425,7 +435,8 @@ class FleetControlBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def assign_vehicle_plan(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, sim_time : int, force_assign : bool=False, add_arg : Any=None):
+    def assign_vehicle_plan(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, sim_time : int,
+                            force_assign : bool=False, assigned_charging_task: Tuple[Tuple[str, int], ChargingProcess]=None, add_arg : Any=None):
         """ this method should be used to assign a new vehicle plan to a vehicle
 
         WHEN OVERWRITING THIS FUNCTION MAKE SURE TO CALL AT LEAST THE LINES BELOW (i.e. super())
@@ -438,13 +449,33 @@ class FleetControlBase(metaclass=ABCMeta):
         :type sim_time: int
         :param force_assign: this parameter can be used to enforce the assignment, when a plan is (partially) locked
         :type force_assign: bool
+        :param assigned_charging_task: this parameter has to be set if a new charging task is assigned to the vehicle
+        :type assigned_charging_task: tuple( tuple(charging_operator_id, booking_id), corresponding charging process object )
         :param add_arg: possible additional argument if needed
         :type add_arg: not defined here
         """
         LOG.debug(f"assign to {veh_obj.vid} at time {sim_time} : {vehicle_plan}")
         vehicle_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
-        new_vrl = vehicle_plan.build_VRL(veh_obj, self.rq_dict, charging_management=self.charging_management)
-        veh_obj.assign_vehicle_plan(new_vrl, sim_time, force_ignore_lock=force_assign)
+        if self._vid_to_assigned_charging_process.get(veh_obj.vid) is not None:
+            veh_plan_ch_task = None
+            for ps in vehicle_plan.list_plan_stops:
+                if ps.get_charging_task_id() is not None:
+                    veh_plan_ch_task = ps.get_charging_task_id()
+            if veh_plan_ch_task is None:
+                LOG.warning(f"charging task {self._vid_to_assigned_charging_process.get(veh_obj.vid)} no longer assigned! -> cancel booking!")
+                assigned_veh_charge_task = self._vid_to_assigned_charging_process[veh_obj.vid]
+                ch_op_id = assigned_veh_charge_task[0]
+                if type(ch_op_id) == str and ch_op_id.startswith("op"):
+                    self.op_charge_depot_infra.cancel_booking(sim_time, self._active_charging_processes[assigned_veh_charge_task])
+                else:
+                    self.list_pub_charging_infra[ch_op_id].cancel_booking(sim_time, self._active_charging_processes[assigned_veh_charge_task])
+                del self._active_charging_processes[self._vid_to_assigned_charging_process[veh_obj.vid]]
+                del self._vid_to_assigned_charging_process[veh_obj.vid]
+        if assigned_charging_task is not None:
+            self._active_charging_processes[assigned_charging_task[0]] = assigned_charging_task[1]
+            self._vid_to_assigned_charging_process[veh_obj.vid] = assigned_charging_task[0]
+        new_list_vrls = self._build_VRLs(vehicle_plan, veh_obj)
+        veh_obj.assign_vehicle_plan(new_list_vrls, sim_time, force_ignore_lock=force_assign)
         self.veh_plans[veh_obj.vid] = vehicle_plan
         for rid in get_assigned_rids_from_vehplan(vehicle_plan):
             pax_info = vehicle_plan.get_pax_info(rid)
@@ -585,25 +616,13 @@ class FleetControlBase(metaclass=ABCMeta):
         n_active_vehicles = 0
         n_effective_utilized_vehicles = 0.0
         for veh in self.sim_vehicles:
-            # if veh.status == 5 or veh.status == 2: #out_of_service or charging
-            #     continue
-            # if len(self.veh_plans[veh.vid].list_plan_stops) == 0:
-            #     n_active_vehicles += 1
-            #     continue
-            # ass_plan = self.veh_plans[veh.vid]
-            # if veh.status == 11 and not ass_plan.list_plan_stops[0].locked:    #not locked relocation
-            #     n_active_vehicles +=1
-            #     continue
             ass_plan = self.veh_plans[veh.vid]
             if len(ass_plan.list_plan_stops) == 0:
                 n_active_vehicles += 1
                 continue
-            if ass_plan.list_plan_stops[0].is_locked() and\
-                    len(ass_plan.list_plan_stops[0].get_list_boarding_rids()) == 0 and\
-                    len(ass_plan.list_plan_stops[0].get_list_alighting_rids()) == 0:  # out of service and locked reloc
+            if veh.status in G_INACTIVE_STATUS:
                 continue
-            if len(ass_plan.list_plan_stops[0].get_list_boarding_rids()) == 0 and\
-                    len(ass_plan.list_plan_stops[0].get_list_alighting_rids()) == 0:  # unlocked reloc
+            if ass_plan.list_plan_stops[0].is_empty() and not ass_plan.list_plan_stops[0].is_locked():
                 n_active_vehicles += 1
                 continue
             _, end_assignment = ass_plan.list_plan_stops[-1].get_planned_arrival_and_departure_time()
@@ -801,3 +820,96 @@ class FleetControlBase(metaclass=ABCMeta):
         # additionally save repositioning output if repositioning module is available
         if self.repo:
             self.repo.record_repo_stats()
+            
+    def _build_VRLs(self, vehicle_plan : VehiclePlan, veh_obj : SimulationVehicle) -> List[VehicleRouteLeg]:
+        """This method builds VRL for simulation vehicles from a given Plan. Since the vehicle could already have the
+        VRL with the correct route, the route from veh_obj.assigned_route[0] will be used if destination positions
+        are matching
+
+        :param vehicle_plan: vehicle plan to be converted
+        :param veh_obj: vehicle object to which plan is applied
+        :return: list of VRLs according to the given plan
+        """
+        list_vrl = []
+        c_pos = veh_obj.pos
+        for pstop in vehicle_plan.list_plan_stops:
+            # TODO: The following should be made as default behavior to delegate the specific tasks (e.g. boarding,
+            #  charging etc) to the StationaryProcess class. The usage of StationaryProcess class can significantly
+            #  simplify the code
+            # i dont think the following lines work
+            # if pstop.stationary_task is not None:
+            #     list_vrl.append(self._get_veh_leg(pstop))
+            #     continue
+            boarding_dict = {1: [], -1: []}
+            stationary_process = None
+            if len(pstop.get_list_boarding_rids()) > 0 or len(pstop.get_list_alighting_rids()) > 0:
+                boarding = True
+                for rid in pstop.get_list_boarding_rids():
+                    boarding_dict[1].append(self.rq_dict[rid])
+                for rid in pstop.get_list_alighting_rids():
+                    boarding_dict[-1].append(self.rq_dict[rid])
+            else:
+                boarding = False
+            if pstop.get_charging_power() > 0:
+                charging = True
+                stationary_process = self._active_charging_processes[pstop.get_charging_task_id()]
+            else:
+                charging = False
+            #if pstop.get_departure_time(0) > LARGE_INT:
+            if pstop.get_state() == G_PLANSTOP_STATES.INACTIVE:
+                inactive = True
+            else:
+                inactive = False
+            if pstop.get_departure_time(0) != 0:
+                planned_stop = True
+                repo_target = False
+            else:
+                planned_stop = False
+                repo_target = True
+            if c_pos != pstop.get_pos():
+                # driving vrl
+                if boarding:
+                    status = VRL_STATES.ROUTE
+                elif charging:
+                    status = VRL_STATES.TO_CHARGE
+                elif inactive:
+                    status = VRL_STATES.TO_DEPOT
+                else:
+                    # repositioning
+                    status = VRL_STATES.REPOSITION
+                # use empty boarding dict for this VRL, but do not overwrite boarding_dict!
+                list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), {1: [], -1: []}, locked=pstop.is_locked()))
+                c_pos = pstop.get_pos()
+            # stop vrl
+            if boarding and charging:
+                status = VRL_STATES.BOARDING_WITH_CHARGING
+            elif boarding:
+                status = VRL_STATES.BOARDING
+            elif charging:
+                status = VRL_STATES.CHARGING
+            elif inactive:
+                status = VRL_STATES.OUT_OF_SERVICE
+            elif planned_stop:
+                status = VRL_STATES.PLANNED_STOP
+            elif repo_target:
+                status = VRL_STATES.REPO_TARGET
+            else:
+                # TODO # after ISTTT: add other states if necessary; for now assume vehicle idles
+                status = VRL_STATES.IDLE
+            if status != VRL_STATES.IDLE:
+                dur, edep = pstop.get_duration_and_earliest_departure()
+                earliest_start_time = pstop.get_earliest_start_time()
+                #LOG.debug("vrl earliest departure: {} {}".format(dur, edep))
+                if edep is not None:
+                    LOG.warning("absolute earliest departure not implementen in build VRL!")
+                    departure_time = edep
+                else:
+                    departure_time = -LARGE_INT
+                if dur is not None:
+                    stop_duration = dur
+                else:
+                    stop_duration = 0
+                list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), boarding_dict, pstop.get_charging_power(),
+                                                duration=stop_duration, earliest_start_time=earliest_start_time,
+                                                locked=pstop.is_locked(), stationary_process=stationary_process))
+        return list_vrl

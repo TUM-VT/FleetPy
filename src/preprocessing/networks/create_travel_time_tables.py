@@ -9,8 +9,8 @@ LARGE = np.Inf
 
 
 def addEdgeToAdjacencyMatrix(column, A, B):
-    A[column["from_node"], column["to_node"]] = column["use_tt"]
-    B[column["from_node"], column["to_node"]] = column["distance"]
+    A[int(column["from_node"]), int(column["to_node"])] = column["use_tt"]
+    B[int(column["from_node"]), int(column["to_node"])] = column["distance"]
 
 
 def createAdjacencyMatrix(nw_dir, scenario_time=None):
@@ -24,11 +24,7 @@ def createAdjacencyMatrix(nw_dir, scenario_time=None):
     set_stop_nodes = set(stop_only_node_df["node_index"])
     # travel time: A | distance: B
     A = LARGE * np.ones((number_nodes, number_nodes))
-    for i in range(number_nodes):
-        A[i,i] = 0.0
     B = LARGE * np.ones((number_nodes, number_nodes))
-    for i in range(number_nodes):
-        B[i,i] = 0.0
     # create adjacency matrix from edges
     edge_f = os.path.join(nw_dir, "base", "edges.csv")
     edge_df = pd.read_csv(edge_f)
@@ -42,6 +38,10 @@ def createAdjacencyMatrix(nw_dir, scenario_time=None):
         edge_df = pd.merge(edge_df, tmp_edge_df, left_index=True, right_index=True)
         edge_df = edge_df.reset_index()
     edge_df.apply(addEdgeToAdjacencyMatrix, axis=1, args=(A,B))
+    for i in range(number_nodes):
+        A[i,i] = 0.0
+    for i in range(number_nodes):
+        B[i,i] = 0.0
     return A, B, number_nodes, set_stop_nodes
 
 

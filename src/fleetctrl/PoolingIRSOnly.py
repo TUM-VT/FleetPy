@@ -22,7 +22,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
     """
     # TODO # clarify dependency to fleet simulation module
     def __init__(self, op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                 dir_names, charging_management=None):
+                 dir_names, op_charge_depot_infra=None, list_pub_charging_infra= []):
         """The specific attributes for the fleet control module are initialized. Strategy specific attributes are
         introduced in the children classes.
 
@@ -36,11 +36,15 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         :type routing_engine: Network
         :param scenario_parameters: access to all scenario parameters (if necessary)
         :type scenario_parameters: dict
-        :param dir_names: directories for output and input
-        :type dir_names: dict
+        :param dirnames: directories for output and input
+        :type dirnames: dict
+        :param op_charge_depot_infra: reference to a OperatorChargingAndDepotInfrastructure class (optional) (unique for each operator)
+        :type OperatorChargingAndDepotInfrastructure: OperatorChargingAndDepotInfrastructure
+        :param list_pub_charging_infra: list of PublicChargingInfrastructureOperator classes (optional) (accesible for all agents)
+        :type list_pub_charging_infra: list of PublicChargingInfrastructureOperator
         """
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                         dir_names, charging_management=charging_management)
+                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra)
         # TODO # make standard in FleetControlBase
         self.rid_to_assigned_vid = {} # rid -> vid
         self.pos_veh_dict = {}  # pos -> list_veh
@@ -63,12 +67,8 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         :param force_update: indicates if also current vehicle plan feasibilities have to be checked
         :type force_update: bool
         """
+        super().receive_status_update(vid, simulation_time, list_finished_VRL, force_update=force_update)
         veh_obj = self.sim_vehicles[vid]
-        # the vehicle plans should be up to date from assignments of previous time steps
-        if list_finished_VRL or force_update:
-            self.veh_plans[vid].update_plan(veh_obj, simulation_time, self.routing_engine, list_finished_VRL)
-        upd_utility_val = self.compute_VehiclePlan_utility(simulation_time, veh_obj, self.veh_plans[vid])
-        self.veh_plans[vid].set_utility(upd_utility_val)
         try:
             self.pos_veh_dict[veh_obj.pos].append(veh_obj)
         except KeyError:
@@ -107,12 +107,12 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
         if t_pu_earliest - sim_time > self.opt_horizon:
             self.reservation_module.add_reservation_request(prq, sim_time)
-            offer = self.reservation_module.return_reservation_offer(prq.get_rid_struct(), sim_time)
+            offer = self.reservation_module.return_immediate_reservation_offer(prq.get_rid_struct(), sim_time)
             LOG.debug(f"reservation offer for rid {rid_struct} : {offer}")
         else:
             list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
             if len(list_tuples) > 0:
-                (vid, vehplan, delta_cfv) = list_tuples[0]
+                (vid, vehplan, delta_cfv) = min(list_tuples, key=lambda x:x[2])
                 self.tmp_assignment[rid_struct] = vehplan
                 offer = self._create_user_offer(prq, sim_time, vehplan)
                 LOG.debug(f"new offer for rid {rid_struct} : {offer}")
@@ -280,8 +280,8 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
                                                                 self.routing_engine, prq, new_lpt, new_ept=new_ept,
                                                                 keep_feasible=True)
 
-    def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, add_arg=None):
-        super().assign_vehicle_plan(veh_obj, vehicle_plan, sim_time, force_assign, add_arg)
+    def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, assigned_charging_task=None, add_arg=None):
+        super().assign_vehicle_plan(veh_obj, vehicle_plan, sim_time, force_assign=force_assign, assigned_charging_task=assigned_charging_task, add_arg=add_arg)
 
     def lock_current_vehicle_plan(self, vid):
         super().lock_current_vehicle_plan(vid)
