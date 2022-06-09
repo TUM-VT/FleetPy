@@ -9,7 +9,7 @@ if tp.TYPE_CHECKING is True:
 # ----------------------------------
 class VehicleRouteLeg:
     def __init__(self, status, destination_pos, rq_dict, power=0.0, duration=None, route=[], locked=False,
-                 earliest_start_time=-1000, stationary_process=None):
+                 earliest_start_time=-1000, earliest_end_time=-1000, stationary_process=None):
         """
         This class summarizes the minimal information for a a route leg. It only reflects a complete state
         with the information of the initial state at the start of the leg.
@@ -21,6 +21,7 @@ class VehicleRouteLeg:
         :param route: list of nodes
         :param locked: locked tasks cannot be changed anymore
         :param earliest_start_time: for e.g. boarding processes
+        :param earliest_end_time: earliest time for ending the process
         :param stationary_process:  The stationary process do be carried out at the stop
         """
         self.status = status
@@ -28,6 +29,7 @@ class VehicleRouteLeg:
         self.destination_pos = destination_pos
         self.power = power
         self.earliest_start_time = earliest_start_time
+        self.earliest_end_time = earliest_end_time
         self.duration = duration
         self.route = route
         self.locked = locked

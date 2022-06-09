@@ -922,6 +922,6 @@ class FleetControlBase(metaclass=ABCMeta):
                 else:
                     stop_duration = 0
                 list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), boarding_dict, pstop.get_charging_power(),
-                                                duration=stop_duration, earliest_start_time=earliest_start_time,
+                                                duration=stop_duration, earliest_start_time=earliest_start_time, earliest_end_time=departure_time,
                                                 locked=pstop.is_locked(), stationary_process=stationary_process))
         return list_vrl

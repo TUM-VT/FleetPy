@@ -211,6 +211,8 @@ class SimulationVehicle:
                 self.cl_remaining_route = []
                 if ca.duration is not None:
                     self.cl_remaining_time = ca.duration
+                    if ca.earliest_end_time > simulation_time + self.cl_remaining_time:
+                        self.cl_remaining_time = ca.earliest_end_time - simulation_time
                     if ca.status in G_LOCK_DURATION_STATUS:
                         ca.locked = True
                 else:

@@ -351,7 +351,7 @@ class FleetSimulationBase:
             operator_attributes = self.list_op_dicts[op_id]
             operator_module_name = operator_attributes[G_OP_MODULE]
             self.op_output[op_id] = []  # shared list among vehicles
-            if not operator_module_name == "PtFleetControl":
+            if not operator_module_name == "LinebasedFleetControl":
                 fleet_composition_dict = operator_attributes[G_OP_FLEET]
                 list_vehicles = []
                 vid = 0
@@ -369,8 +369,8 @@ class FleetSimulationBase:
                 self.operators.append(OpClass(op_id, operator_attributes, list_vehicles, self.routing_engine, self.zones,
                                             self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values())))
             else:
-                from dev.pubtrans.PtFleetControl import PtFleetControl
-                OpClass = PtFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()))
+                from dev.fleetctrl.LinebasedFleetControl import LinebasedFleetControl
+                OpClass = LinebasedFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()))
                 init_vids = OpClass.return_vehicles_to_initialize()
                 list_vehicles = []
                 for vid, veh_type in init_vids.items():
