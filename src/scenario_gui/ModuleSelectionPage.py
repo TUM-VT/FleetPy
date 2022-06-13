@@ -88,7 +88,7 @@ class ModuleSelectionPage(tk.Frame):
         man_module_dict, op_module_dict = self.controller.sc.get_current_mandatory_and_optional_modules()
         for module_name, var_mod in self.created_modules.items():
             var, module, callback_func = var_mod
-            print(module_name, var.get())
+            #print(module_name, var.get())
             module['menu'].delete(0, 'end')
             options = []
             if man_module_dict.get(module_name) is not None:

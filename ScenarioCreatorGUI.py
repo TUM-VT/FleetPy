@@ -70,7 +70,11 @@ class ScenarioCreatorMainFrame(tk.Tk):
         """Store input arguments in a dictionary"""  
         self.to_parameter_selection_page()     
 
-    def save_and_exit(self, page_name, modules ):
+    def save_and_exit(self, page_name, param_to_var ):
+        for param, var in param_to_var.items():
+            val = var.get()
+            if val != "":
+                self.sc.select_param(param, val)
         all_mandatory_params_selected = True
         for mand_param in self.sc._current_mandatory_params:
             if self.sc._currently_selected_parameters.get(mand_param) is None:

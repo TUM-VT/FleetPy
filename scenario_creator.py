@@ -178,10 +178,10 @@ class ScenarioCreator():
                 and self._currently_selected_parameters.get(param) is None:
             raise EnvironmentError(f"{param} not defined or does not have to be specified!")
         self._currently_selected_parameters[param] = param_value
-        if param in self._current_mandatory_params:
-            self._current_mandatory_params.remove(param)
-        if param in self._current_optional_params:
-            self._current_optional_params.remove(param)
+        # if param in self._current_mandatory_params:
+        #     self._current_mandatory_params.remove(param)
+        # if param in self._current_optional_params:
+        #     self._current_optional_params.remove(param)
             
     def create_filled_scenario_df(self):
         """ this function creates a dataframe from all selected modules and parameters
@@ -192,12 +192,12 @@ class ScenarioCreator():
         print("___________________________________________________")
         print("")
         can_be_created = True
-        if len(self._current_mandatory_modules) != 0:
-            print("To be specified: {}".format(self._current_mandatory_modules))
-            can_be_created = False
-        if len(self._current_mandatory_params) != 0:
-            print("To be specified: {}".format(self._current_mandatory_params))
-            can_be_created = False
+        # if len(self._current_mandatory_modules) != 0:
+        #     print("To be specified: {}".format(self._current_mandatory_modules))
+        #     can_be_created = False
+        # if len(self._current_mandatory_params) != 0:
+        #     print("To be specified: {}".format(self._current_mandatory_params))
+        #     can_be_created = False
         if can_be_created:
             print("Created Scenario Table:")            
             sc_df_list = []
