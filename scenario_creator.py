@@ -7,6 +7,8 @@ from src.FleetSimulationBase import INPUT_PARAMETERS_FleetSimulationBase
 from src.misc.init_modules import *
 from typing import Dict, Tuple
 
+FLEETPY_PATH = os.path.dirname(os.path.abspath(__file__))
+
 #read md table into dataframe
 INPUT_PARAMETERS_PATH = os.path.join(os.path.dirname(__file__), "Input_Parameters.md")
 input_parameters = pd.read_table(INPUT_PARAMETERS_PATH, sep="|", header=0, index_col=1, skipinitialspace=True)
@@ -45,6 +47,41 @@ def load_module_parameters(module_dict, module_str):
         return input_param_dict
     else:
         raise IOError(f"{module_str} is invalid!")
+    
+def create_study_directories(study_name):
+    """ creates all directories within the current directory for a new study
+    :param study_name: (str) name of the new study
+    """
+    protected = ["src", "documentation", "data"]
+    if study_name in protected:
+        raise IOError("ERROR {} can't be used as study_name!".format(study_name))
+    studies_folder = os.path.join(FLEETPY_PATH, "studies")
+    if not os.path.isdir(studies_folder):
+        print("Initializing Studies Folder {}".format(studies_folder))
+        os.mkdir(studies_folder)
+    study_folder = os.path.join(studies_folder, study_name)
+    if os.path.isdir(study_folder):
+        print("Warning: {} already existent!".format(study_name))
+    else:
+        os.mkdir(study_folder)
+        print("creating {}".format(study_folder))
+    preprocessing_folder = os.path.join(study_folder, "preprocessing")
+    if not os.path.isdir(preprocessing_folder):
+        os.mkdir(preprocessing_folder)
+        print("creating {}".format(preprocessing_folder))
+    scenarios_folder = os.path.join(study_folder, "scenarios")
+    if not os.path.isdir(scenarios_folder):
+        os.mkdir(scenarios_folder)
+        print("creating {}".format(scenarios_folder))
+    results_folder = os.path.join(study_folder, "results")
+    if not os.path.isdir(results_folder):
+        os.mkdir(results_folder)
+        print("creating {}".format(preprocessing_folder))
+    evaluation_folder = os.path.join(study_folder, "evaluation")
+    if not os.path.isdir(evaluation_folder):
+        os.mkdir(evaluation_folder)
+        print("creating {}".format(evaluation_folder))
+    return scenarios_folder
 
 class Parameter():
     def __init__(self, name, doc_string, type, default_value=None, options=None):
@@ -87,10 +124,15 @@ class ScenarioCreator():
                 continue
             self.parameter_dict[parameter_name] = Parameter(parameter_name, doc, parameter_types[parameter_name],
                                                             default_value=parameter_defaults.get(parameter_name))
+        study_name_str = "this parameter specifies the name of the simulation study. all simulation scenario configurations and simulation results \
+            are stored in the folder FleetPy\studies\{study_name}. If this folder does not exist, it will be create automatically!"
+        self.parameter_dict["study_name"] = Parameter("study_name", study_name_str, "str")
+        self._current_mandatory_params.append("study_name")
             
     def _reset_module_init(self):
         self._current_mandatory_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_mandatory"] # list of mandatory parameters that have not been selected
         self._current_optional_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_optional"]   # list of optional parameters that have not been selected
+        self._current_mandatory_params.append("study_name")
         
         self._current_mandatory_modules = INPUT_PARAMETERS_FleetSimulationBase["mandatory_modules"] # list of mandatory modules that have not been selected
         self._current_optional_modules = INPUT_PARAMETERS_FleetSimulationBase["optional_modules"]   # list of optional modules that have not been selected
@@ -187,27 +229,21 @@ class ScenarioCreator():
         """ this function creates a dataframe from all selected modules and parameters
         a dataframe is only returned if all mandatory parameters and modules have been selected
         TODO this function doesnt save the file to a csv yet
-        :return: dataframe with columns Parameter and Value"""
-        print("")
-        print("___________________________________________________")
-        print("")
-        can_be_created = True
-        # if len(self._current_mandatory_modules) != 0:
-        #     print("To be specified: {}".format(self._current_mandatory_modules))
-        #     can_be_created = False
-        # if len(self._current_mandatory_params) != 0:
-        #     print("To be specified: {}".format(self._current_mandatory_params))
-        #     can_be_created = False
-        if can_be_created:
-            print("Created Scenario Table:")            
-            sc_df_list = []
-            for p, v in self._currently_selected_modules.items():
-                sc_df_list.append( {"Parameter" : p, "Value": v})
-            for p, v in self._currently_selected_parameters.items():
-                sc_df_list.append( {"Parameter" : p, "Value": v})
-            sc_df = pd.DataFrame(sc_df_list)
-            print(sc_df)
-            return sc_df
+        :return: path to sc_df"""
+        print("Created Scenario Table:")            
+        sc_df_list = []
+        for p, v in self._currently_selected_modules.items():
+            sc_df_list.append( {"Parameter" : p, "Value": v})
+        for p, v in self._currently_selected_parameters.items():
+            if p == "study_name":
+                continue
+            sc_df_list.append( {"Parameter" : p, "Value": v})
+        sc_df = pd.DataFrame(sc_df_list)
+        study_name = self._currently_selected_parameters["study_name"]
+        scenario_path = create_study_directories(study_name)
+        f_p = os.path.join(scenario_path, "scenario_creator_config.csv")
+        sc_df.to_csv(f_p, index = False)
+        return f_p
             
     def create_shell_scenario_df(self):
         """ this function returns an empty dataframe of all parameters according to the selected modules

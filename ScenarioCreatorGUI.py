@@ -80,7 +80,10 @@ class ScenarioCreatorMainFrame(tk.Tk):
             if self.sc._currently_selected_parameters.get(mand_param) is None:
                 all_mandatory_params_selected = False
         if all_mandatory_params_selected:
-            self.sc.create_filled_scenario_df()
+            f_p = self.sc.create_filled_scenario_df()
+            from tkinter import messagebox
+            messagebox.showinfo("Config created!", f"The config-file is saved at {f_p}")
+            exit()
         else:
             from tkinter import messagebox
             messagebox.showerror("Error", "Not all mandatory parameters selected!")
