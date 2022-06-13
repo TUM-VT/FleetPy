@@ -1,12 +1,12 @@
 import tkinter as tk
 from tkinter import font as tkfont
 from scenario_creator import ScenarioCreator
-from src.scenario_gui.startpage import StartPage
-from src.scenario_gui.pageone import PageOne
+from src.scenario_gui.ModuleSelectionPage import ModuleSelectionPage
+from src.scenario_gui.ParameterSelectionPage import ParameterSelectionPage
 import csv
 # build pages all together and raise the page we need over other pages
 
-class MainFrame(tk.Tk):
+class ScenarioCreatorMainFrame(tk.Tk):
     """
     Frame object which will hold all other pages
     -acts as a controller of all the pages
@@ -44,13 +44,13 @@ class MainFrame(tk.Tk):
 
         self.page_listing = {} #stores information of the pages
 
-        for p in (StartPage, PageOne):
+        for p in (ModuleSelectionPage, ParameterSelectionPage):
             page_name = p.__name__
             frame = p(parent=container, controller = self)
             frame.grid(row=0, column = 0, sticky="nesw")
             self.page_listing[page_name] = frame
 
-        self.up_frame('StartPage')
+        self.up_frame('ModuleSelectionPage')
 
     def up_frame(self, page_name):
         """Raise the given page"""
@@ -81,14 +81,14 @@ class MainFrame(tk.Tk):
 
     def save_and_exit(self, page_name, modules ):
 
+        self.sc.create_filled_scenario_df()
         self.save_to_csv(page_name, modules)
         exit()
 
 
 if __name__ == '__main__':
 
-    sc = ScenarioCreator()
-    app = MainFrame()
+    app = ScenarioCreatorMainFrame()
     app.mainloop()
 
     #default values to the params

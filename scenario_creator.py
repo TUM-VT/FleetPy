@@ -65,6 +65,8 @@ class Parameter():
 
 class ScenarioCreator():
     def __init__(self):
+        self.possible_modules = list(MODULE_PARAM_TO_DICT_LOAD.keys())
+        
         self._current_mandatory_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_mandatory"] # list of mandatory parameters that have not been selected
         self._current_optional_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_optional"]   # list of optional parameters that have not been selected
         
@@ -84,7 +86,17 @@ class ScenarioCreator():
             if self.parameter_dict.get(parameter_name):
                 continue
             self.parameter_dict[parameter_name] = Parameter(parameter_name, doc, parameter_types[parameter_name],
-                                                            default_value=parameter_defaults.get(parameter_name))    
+                                                            default_value=parameter_defaults.get(parameter_name))
+            
+    def _reset_module_init(self):
+        self._current_mandatory_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_mandatory"] # list of mandatory parameters that have not been selected
+        self._current_optional_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_optional"]   # list of optional parameters that have not been selected
+        
+        self._current_mandatory_modules = INPUT_PARAMETERS_FleetSimulationBase["mandatory_modules"] # list of mandatory modules that have not been selected
+        self._current_optional_modules = INPUT_PARAMETERS_FleetSimulationBase["optional_modules"]   # list of optional modules that have not been selected
+
+        for mod, mod_val in self._currently_selected_modules.items():
+            self._load_module_params(mod, mod_val)
         
     def _add_new_params_and_modules(self, input_param_dict):
         """ this method adopts the current list of mandatory/optinal modules/parameters i.e. when a new module is loaded
@@ -135,10 +147,10 @@ class ScenarioCreator():
             self._add_new_params_and_modules(new_input_param_dict) 
             inherit_class = new_input_param_dict["inherit"]
                         
-        if module_param in self._current_mandatory_modules:
-            self._current_mandatory_modules.remove(module_param)
-        if module_param in self._current_optional_modules:
-            self._current_optional_modules.remove(module_param)
+        # if module_param in self._current_mandatory_modules:
+        #     self._current_mandatory_modules.remove(module_param)
+        # if module_param in self._current_optional_modules:
+        #     self._current_optional_modules.remove(module_param)
         print("==========================================================")
             
     def select_module(self, module_param, module_param_value):
@@ -147,7 +159,9 @@ class ScenarioCreator():
         :param module_param: module specification parameter
         :param module_param_value: selected module name"""
         if self._currently_selected_modules.get(module_param) is not None:
-            raise NotImplementedError(f"{module_param} allready selected. reconsidering not implemented yet")
+            print(f"{module_param} re-selected")
+            self._currently_selected_modules[module_param] = module_param_value
+            self._reset_module_init()
         else:
             self._currently_selected_modules[module_param] = module_param_value
             self._load_module_params(module_param, module_param_value)
@@ -159,7 +173,9 @@ class ScenarioCreator():
         """ this method should be called if a value for a parameter is selected in the GUI
         :param param: parameter name
         :param param_value: selected parameter value"""
-        if not param in self._current_mandatory_params and not param in self._current_optional_params:
+        print(f"Select {param_value} for parameter {param}")
+        if not param in self._current_mandatory_params and not param in self._current_optional_params \
+                and self._currently_selected_parameters.get(param) is None:
             raise EnvironmentError(f"{param} not defined or does not have to be specified!")
         self._currently_selected_parameters[param] = param_value
         if param in self._current_mandatory_params:
