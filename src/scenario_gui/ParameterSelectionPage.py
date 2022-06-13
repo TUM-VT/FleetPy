@@ -68,7 +68,7 @@ class ParameterSelectionPage(tk.Frame):
             list_of_selected_param.append([parameter_name, param_var])     
 
         back_button = tk.Button(self, text = "Back to main",
-                                command= lambda: controller.up_frame('ModuleSelectionPage')).grid(row=30, column=0, columnspan=4, padx=20, pady=10)
+                                command= controller.to_module_selection_page).grid(row=30, column=0, columnspan=4, padx=20, pady=10)
         
         save_button = tk.Button(self, text = "Save to csv and exit",
                                         command= lambda: controller.save_and_exit('ModuleSelectionPage',list_of_selected_param)).grid(row=31, column=0, columnspan=4, padx=20, pady=10)
