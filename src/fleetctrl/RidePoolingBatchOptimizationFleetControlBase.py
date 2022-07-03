@@ -494,6 +494,5 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
                                    self._compute_fare(simulation_time, prq, assigned_vehicle_plan))
             prq.set_service_offered(offer)  # has to be called
         else:
-            offer = Rejection(prq.get_rid(), self.op_id)
-            prq.set_service_offered(offer)
+            offer = self._create_rejection(prq, simulation_time)
         return offer

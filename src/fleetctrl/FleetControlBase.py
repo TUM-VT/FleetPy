@@ -381,6 +381,8 @@ class FleetControlBase(metaclass=ABCMeta):
         """
         offer = Rejection(prq.get_rid(), self.op_id)
         prq.set_service_offered(offer)
+        if self.repo:
+            self.repo.register_rejected_customer(prq, simulation_time)
         return offer
 
     def get_current_offer(self, rid : Any) -> TravellerOffer:

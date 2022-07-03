@@ -82,6 +82,13 @@ class RepositionBase(ABC):
         if lock is None:
             lock = self.lock_repo_assignments
         return []
+    
+    def register_rejected_customer(self, planrequest, sim_time):
+        """ this method is used to register and unserved request due to lack of available vehicles. The information can be stored internally
+        and used for creating repositioning plans
+        :param planrequest: plan request obj that has been rejected
+        :param sim_time: simulation time"""
+        pass
 
     def _get_demand_forecasts(self, t0, t1, aggregation_level=None):
         """This method creates a dictionary, which maps the zones to the expected demand between t0 and t1.
