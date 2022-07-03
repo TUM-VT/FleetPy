@@ -48,7 +48,7 @@ BUFFER_SIZE = 100
 INPUT_PARAMETERS_FleetControlBase = {
     "doc" : "this class is the base class representing an MoD operator",
     "inherit" : None,
-    "input_parameters_mandatory": [G_OP_VR_CTRL_F],
+    "input_parameters_mandatory": [G_OP_VR_CTRL_F, G_OP_FLEET],
     "input_parameters_optional": [
         G_RA_SOLVER, G_RA_OPT_HOR, G_OP_MIN_WT, G_OP_MIN_WT, G_OP_MAX_WT, G_OP_MAX_DTF, G_OP_ADD_CDT, G_OP_MIN_DTW,
         G_OP_CONST_BT, G_OP_ADD_BT

@@ -34,7 +34,8 @@ MODULE_PARAM_TO_DICT_LOAD = {
     G_OP_CH_M : get_src_charging_strategies,
     G_OP_REPO_M : get_src_repositioning_strategies,
     G_OP_DYN_P_M : get_src_dynamic_pricing_strategies,
-    G_OP_DYN_FS_M : get_src_dynamic_fleet_sizing_strategies
+    G_OP_DYN_FS_M : get_src_dynamic_fleet_sizing_strategies,
+    G_RA_RP_BATCH_OPT: get_src_ride_pooling_batch_optimizers
 }
 
 def load_module_parameters(module_dict, module_str):
@@ -183,8 +184,17 @@ class ScenarioCreator():
                     module_dict[inherit_class] = (base_p, inherit_class)
                 else:
                     module_dict[inherit_class] = ("src.demand.TravelerModels", inherit_class)
-                
-            new_input_param_dict = load_module_parameters(module_dict, inherit_class)
+            try:
+                new_input_param_dict = load_module_parameters(module_dict, inherit_class)
+            except ModuleNotFoundError: # TODO
+                if inherit_class.endswith("Base") and not inherit_class.startswith("Request"): # TODO!
+                    base_p = list(module_dict.values())[0][0].split(".")[:-2]
+                    base_p.append(inherit_class)
+                    base_p = ".".join(base_p)
+                    module_dict[inherit_class] = (base_p, inherit_class)
+                    new_input_param_dict = load_module_parameters(module_dict, inherit_class)
+                else:
+                    raise ModuleNotFoundError(f"no module named {base_p}")
             print(f" -> inherit {inherit_class} : {new_input_param_dict['doc']}")
             self._add_new_params_and_modules(new_input_param_dict) 
             inherit_class = new_input_param_dict["inherit"]

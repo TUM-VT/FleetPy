@@ -6,6 +6,23 @@ from src.misc.globals import *
 
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000
+
+INPUT_PARAMETERS_RidePoolingBatchAssignmentFleetcontrol = {
+    "doc" : """Batch assignment fleet control (i.e. BMW study, ITSC paper 2019)
+        ride pooling optimisation is called after every optimisation_time_step and offers are created in the time_trigger function
+        if "user_max_wait_time_2" is given:
+            if the user couldnt be assigned in the first try, it will be considered again in the next opt-step with this new max_waiting_time constraint
+        if "user_offer_time_window" is given:
+            after accepting an offer the pick-up time is constraint around the expected pick-up time with an interval of the size of this parameter""",
+    "inherit" : "RidePoolingBatchOptimizationFleetControlBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        G_OP_MAX_WT_2, G_OP_OFF_TW
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetControlBase):
     def __init__(self, op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
                  dir_names, op_charge_depot_infra=None, list_pub_charging_infra= []):

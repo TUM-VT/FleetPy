@@ -48,7 +48,7 @@ INPUT_PARAMETERS_FleetSimulationBase = {
     "inherit" : None,
     "input_parameters_mandatory": [
         G_SCENARIO_NAME, G_SIM_START_TIME, G_SIM_END_TIME, G_NR_OPERATORS, G_RANDOM_SEED, G_NETWORK_NAME,
-        G_DEMAND_NAME, G_RQ_FILE
+        G_DEMAND_NAME, G_RQ_FILE, G_AR_MAX_DEC_T
     ],
     "input_parameters_optional": [
         G_SIM_TIME_STEP, G_NR_CH_OPERATORS, G_SIM_REALTIME_PLOT_FLAG, "log_level", G_SIM_ROUTE_OUT_FLAG, G_SIM_REPLAY_FLAG
