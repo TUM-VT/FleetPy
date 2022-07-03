@@ -27,6 +27,10 @@ def get_src_simulation_environments():
     sim_env_dict = {}  # str -> (module path, class name)
     sim_env_dict["BatchOfferSimulation"] = ("src.BatchOfferSimulation", "BatchOfferSimulation")
     sim_env_dict["ImmediateDecisionsSimulation"] = ("src.ImmediateDecisionsSimulation", "ImmediateDecisionsSimulation")
+    # add development content
+    if dev_content is not None:
+        dev_sim_env_dict = dev_content.add_dev_simulation_environments()
+        sim_env_dict.update(dev_sim_env_dict)
     return sim_env_dict
 
 def get_src_routing_engines():
@@ -39,6 +43,10 @@ def get_src_routing_engines():
     re_dict["NetworkBasicWithStoreCpp"] = ("src.routing.NetworkBasicWithStoreCpp", "NetworkBasicWithStoreCpp")
     re_dict["NetworkPartialPreprocessedCpp"] = ("src.routing.NetworkPartialPreprocessedCpp", "NetworkPartialPreprocessedCpp")
     re_dict["NetworkTTMatrix"] = ("src.routing.NetworkTTMatrix", "NetworkTTMatrix")
+    # add development content
+    if dev_content is not None:
+        dev_re_dict = dev_content.add_dev_routing_engines()
+        re_dict.update(dev_re_dict)
     return re_dict
 
 def get_src_request_modules():
@@ -51,6 +59,10 @@ def get_src_request_modules():
     rm_dict["SlaveRequest"] = ("src.demand.TravelerModels", "SlaveRequest")
     rm_dict["BasicParcelRequest"] = ("src.demand.TravelerModels", "BasicParcelRequest")
     rm_dict["SlaveParcelRequest"] = ("src.demand.TravelerModels", "SlaveParcelRequest")
+    # add development content
+    if dev_content is not None:
+        dev_rm_dict = dev_content.add_request_models()
+        rm_dict.update(dev_rm_dict)
     return rm_dict
     
 def get_src_fleet_control_modules():
@@ -59,6 +71,10 @@ def get_src_fleet_control_modules():
     op_dict["PoolingIRSOnly"] = ("src.fleetctrl.PoolingIRSOnly", "PoolingInsertionHeuristicOnly")
     op_dict["PoolingIRSAssignmentBatchOptimization"] = ("src.fleetctrl.PoolingIRSBatchOptimization", "PoolingIRSAssignmentBatchOptimization")
     op_dict["RidePoolingBatchAssignmentFleetcontrol"] = ("src.fleetctrl.RidePoolingBatchAssignmentFleetcontrol", "RidePoolingBatchAssignmentFleetcontrol")
+    # add development content
+    if dev_content is not None:
+        dev_op_dict = dev_content.add_fleet_control_modules()
+        op_dict.update(dev_op_dict)
     return op_dict
 
 def get_src_repositioning_strategies():
@@ -67,6 +83,10 @@ def get_src_repositioning_strategies():
     repo_dict["PavoneFC"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingRepositioningFC")
     repo_dict["PavoneFCV2"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingV2RepositioningFC")
     repo_dict["DensityFrontiers"] = ("src.fleetctrl.repositioning.FrontiersDensityBasedRepositioning", "DensityRepositioning")
+    # add development content
+    if dev_content is not None:
+        dev_repo_dict = dev_content.add_repositioning_modules()
+        repo_dict.update(dev_repo_dict)
     return repo_dict
 
 def get_src_charging_strategies():
@@ -74,6 +94,10 @@ def get_src_charging_strategies():
     # TODO # adapt charging strategy names
     cs_dict = {}  # str -> (module path, class name)
     cs_dict["Threshold_PCI"] = ("src.fleetctrl.charging.Threshold", "ChargingThresholdPublicInfrastructure")
+    # add development content
+    if dev_content is not None:
+        dev_cs_dict = dev_content.add_charging_strategy_modules()
+        cs_dict.update(dev_cs_dict)
     return cs_dict
 
 def get_src_dynamic_pricing_strategies():
@@ -81,6 +105,10 @@ def get_src_dynamic_pricing_strategies():
     dp_dict = {}  # str -> (module path, class name)
     dp_dict["TimeBasedDP"] = ("src.fleetctrl.pricing.TimeBasedDP", "TimeBasedDP")
     dp_dict["UtilizationBasedDP"] = ("src.fleetctrl.pricing.UtilizationBasedDP", "UtilizationBasedDP")
+    # add development content
+    if dev_content is not None:
+        dev_dp_dict = dev_content.add_dynamic_pricing_strategy_modules()
+        dp_dict.update(dev_dp_dict)
     return dp_dict
 
 def get_src_dynamic_fleet_sizing_strategies():
@@ -88,12 +116,20 @@ def get_src_dynamic_fleet_sizing_strategies():
     dfs_dict = {}  # str -> (module path, class name)
     dfs_dict["TimeBasedFS"] = ("src.fleetctrl.fleetsizing.TimeBasedFS", "TimeBasedFS")
     dfs_dict["UtilizationBasedFS"] = ("src.fleetctrl.fleetsizing.UtilizationBasedFS", "UtilizationBasedFS")
+    # add development content
+    if dev_content is not None:
+        dev_dfs_dict = dev_content.add_dynamic_fleetsizing_strategy_modules()
+        dfs_dict.update(dev_dfs_dict)
     return dfs_dict
 
 def get_src_reservation_strategies():
     # FleetPy reservation control strategy options
     res_dict = {}  # str -> (module path, class name)
     res_dict["RollingHorizon"] = ("src.fleetctrl.reservation.RollingHorizon", "RollingHorizonReservation")
+    # add development content
+    if dev_content is not None:
+        dev_res_dict = dev_content.add_reservation_strategy_modules()
+        res_dict.update(dev_res_dict)
     return res_dict
 
 def get_src_ride_pooling_batch_optimizers():
@@ -101,6 +137,10 @@ def get_src_ride_pooling_batch_optimizers():
     rbo_dict = {}  # str -> (module path, class name)
     rbo_dict["AlonsoMora"] = ("src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignment", "AlonsoMoraAssignment")
     rbo_dict["InsertionHeuristic"] = ("src.fleetctrl.pooling.batch.InsertionHeuristic.BatchInsertionHeuristicAssignment", "BatchInsertionHeuristicAssignment")
+    # add development content
+    if dev_content is not None:
+        dev_rbo_dict = dev_content.add_ride_pooling_batch_optimizer_modules()
+        rbo_dict.update(dev_rbo_dict)
     return rbo_dict
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -114,10 +154,6 @@ def load_simulation_environment(scenario_parameters):
     sim_env_str = scenario_parameters.get("sim_env")
     # FleetPy simulation environments
     sim_env_dict = get_src_simulation_environments()
-    # add development content
-    if dev_content is not None:
-        dev_sim_env_dict = dev_content.add_dev_simulation_environments()
-        sim_env_dict.update(dev_sim_env_dict)
     # load simulation environment instance
     sim_env_class = load_module(sim_env_dict, sim_env_str, "Simulation environment")
     return sim_env_class(scenario_parameters)
@@ -133,10 +169,6 @@ def load_routing_engine(network_type, network_dir, network_dynamics_file_name=No
     """
     # FleetPy routing engine options
     re_dict = get_src_routing_engines()
-    # add development content
-    if dev_content is not None:
-        dev_re_dict = dev_content.add_dev_routing_engines()
-        re_dict.update(dev_re_dict)
     # load routing engine instance
     re_class = load_module(re_dict, network_type, "Network module")
     return re_class(network_dir, network_dynamics_file_name=network_dynamics_file_name)
@@ -151,10 +183,6 @@ def load_request_module(rq_type_string):
     """
     # FleetPy request model options
     rm_dict = get_src_request_modules()
-    # add development content
-    if dev_content is not None:
-        dev_rm_dict = dev_content.add_request_models()
-        rm_dict.update(dev_rm_dict)
     # get request class
     return load_module(rm_dict, rq_type_string, "Request module")
 
@@ -168,10 +196,6 @@ def load_fleet_control_module(op_fleet_control_class_string):
     """
     # FleetPy fleet control options
     op_dict = get_src_fleet_control_modules()
-    # add development content
-    if dev_content is not None:
-        dev_op_dict = dev_content.add_fleet_control_modules()
-        op_dict.update(dev_op_dict)
     # get fleet control class
     return load_module(op_dict, op_fleet_control_class_string, "Fleet control module")
 
@@ -184,10 +208,6 @@ def load_repositioning_strategy(op_repo_class_string):
     """
     # FleetPy repositioning options
     repo_dict = get_src_repositioning_strategies()
-    # add development content
-    if dev_content is not None:
-        dev_repo_dict = dev_content.add_repositioning_modules()
-        repo_dict.update(dev_repo_dict)
     # get repositioning class
     return load_module(repo_dict, op_repo_class_string, "Repositioning module")
 
@@ -200,10 +220,6 @@ def load_charging_strategy(op_charging_class_string):
     """
     # FleetPy charging options
     cs_dict = get_src_charging_strategies()
-    # add development content
-    if dev_content is not None:
-        dev_cs_dict = dev_content.add_charging_strategy_modules()
-        cs_dict.update(dev_cs_dict)
     # get charging strategy class
     return load_module(cs_dict, op_charging_class_string, "Charging strategy module")
 
@@ -216,11 +232,7 @@ def load_dynamic_pricing_strategy(op_pricing_class_string):
     """
     # FleetPy dynamic pricing options
     dp_dict = get_src_dynamic_pricing_strategies()
-    # add development content
-    if dev_content is not None:
-        dev_dp_dict = dev_content.add_dynamic_pricing_strategy_modules()
-        dp_dict.update(dev_dp_dict)
-    # get charging strategy class
+    # get pricing strategy class
     return load_module(dp_dict, op_pricing_class_string, "Dynamic pricing module")
 
 
@@ -232,11 +244,7 @@ def load_dynamic_fleet_sizing_strategy(op_fleetsizing_class_string):
     """
     # FleetPy dynamic fleet sizing options
     dfs_dict = get_src_dynamic_fleet_sizing_strategies()
-    # add development content
-    if dev_content is not None:
-        dev_dfs_dict = dev_content.add_dynamic_fleetsizing_strategy_modules()
-        dfs_dict.update(dev_dfs_dict)
-    # get charging strategy class
+    # get fleet sizing strategy class
     return load_module(dfs_dict, op_fleetsizing_class_string, "Dynamic fleet sizing module")
 
 
@@ -247,11 +255,7 @@ def load_reservation_strategy(op_reservation_class_string):
     """
     # FleetPy reservation control strategy options
     res_dict = get_src_reservation_strategies()
-    # add development content
-    if dev_content is not None:
-        dev_res_dict = dev_content.add_reservation_strategy_modules()
-        res_dict.update(dev_res_dict)
-    # get charging strategy class
+    # get reservation strategy class
     return load_module(res_dict, op_reservation_class_string, "Reservation handling module")
 
 
@@ -262,9 +266,5 @@ def load_ride_pooling_batch_optimizer(op_batch_optimizer_string):
     """
     # FleetPy ride pooling optimization strategy options
     rbo_dict = get_src_ride_pooling_batch_optimizers()
-    # add development content
-    if dev_content is not None:
-        dev_rbo_dict = dev_content.add_ride_pooling_batch_optimizer_modules()
-        rbo_dict.update(dev_rbo_dict)
     # get ridepooling batch optimizer class
     return load_module(rbo_dict, op_batch_optimizer_string, "Ridepooling batch optimizer module")
