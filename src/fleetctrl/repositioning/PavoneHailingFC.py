@@ -1,6 +1,6 @@
 import random
 import numpy as np
-from src.fleetctrl.repositioning.RepositioningBase import RepositionBase
+from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 from src.misc.globals import *
 
 # from IPython import embed
@@ -10,8 +10,20 @@ import logging
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_PavoneHailingRepositioningFC = {
+    "doc" : """This class implements an adaption of the real-time rebalancing policy formulated in section 4.3 of
+    Zhang, R.; Pavone, M. (2016): Control of robotic mobility-on-demand systems. A queueing-theoretical perspective.
+    In: The International Journal of Robotics Research 35 (1-3), S. 186–203. DOI: 10.1177/0278364915581863.
 
-class PavoneHailingRepositioningFC(RepositionBase):
+    The adaption is that the supply side is forecast using arrival forecast and excess vehicles cannot be negative.""",
+    "inherit" : "RepositioningBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
+class PavoneHailingRepositioningFC(RepositioningBase):
     """This class implements an adaption of the real-time rebalancing policy formulated in section 4.3 of
     Zhang, R.; Pavone, M. (2016): Control of robotic mobility-on-demand systems. A queueing-theoretical perspective.
     In: The International Journal of Robotics Research 35 (1-3), S. 186–203. DOI: 10.1177/0278364915581863.
@@ -303,6 +315,19 @@ class PavoneHailingRepositioningFC(RepositionBase):
                     od_reposition_trips.extend([(o_region, d_region)] * round_solution_integer)
         return alpha_od, od_reposition_trips
 
+INPUT_PARAMETERS_PavoneHailingV2RepositioningFC = {
+    "doc" : """This class implements an adaption of the real-time rebalancing policy formulated in section 4.3 of
+    Zhang, R.; Pavone, M. (2016): Control of robotic mobility-on-demand systems. A queueing-theoretical perspective.
+    In: The International Journal of Robotics Research 35 (1-3), S. 186–203. DOI: 10.1177/0278364915581863.
+
+    The adaption is that the supply side is forecast using arrival forecast. Moreover, the computation of excess
+    vehicles is more complex to allow negative values, but consistent solution during global vehicle shortage.""",
+    "inherit" : "RepositioningBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
     """This class implements an adaption of the real-time rebalancing policy formulated in section 4.3 of

@@ -16,8 +16,18 @@ if TYPE_CHECKING:
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
 
+INPUT_PARAMETERS_RepositioningBase = {
+    "doc" : "this class is the base class representing the repositioning module",
+    "inherit" : None,
+    "input_parameters_mandatory": [G_OP_REPO_TH_DEF],
+    "input_parameters_optional": [
+        G_OP_REPO_LOCK, G_OP_REPO_SR_F
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
-class RepositionBase(ABC):
+class RepositioningBase(ABC):
     def __init__(self, fleetctrl : FleetControlBase, operator_attributes : dict, dir_names : dict, solver : str="Gurobi"):
         """Initialization of repositioning class.
 

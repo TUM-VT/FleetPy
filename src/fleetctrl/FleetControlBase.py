@@ -20,7 +20,7 @@ from src.simulation.Legs import VehicleRouteLeg  # ,VehicleChargeLeg
 from src.fleetctrl.charging.ChargingBase import ChargingBase  # ,VehicleChargeLeg
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan, RoutingTargetPlanStop
 from src.fleetctrl.planning.PlanRequest import PlanRequest
-from src.fleetctrl.repositioning.RepositioningBase import RepositionBase
+from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 from src.fleetctrl.pricing.DynamicPricingBase import DynamicPrizingBase
 from src.fleetctrl.fleetsizing.DynamicFleetSizingBase import DynamicFleetSizingBase
 from src.fleetctrl.reservation.ReservationBase import ReservationBase
@@ -227,7 +227,7 @@ class FleetControlBase(metaclass=ABCMeta):
         self.repo_time_step = operator_attributes.get(G_OP_REPO_TS)
         if repo_method is not None and self.repo_time_step is not None:
             RepoClass = load_repositioning_strategy(repo_method)
-            self.repo : RepositionBase = RepoClass(self, operator_attributes, dir_names)
+            self.repo : RepositioningBase = RepoClass(self, operator_attributes, dir_names)
             prt_strategy_str += f"\t Repositioning: {self.repo.__class__.__name__}\n"
             self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_REPO)
         else:
