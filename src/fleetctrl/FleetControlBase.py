@@ -380,8 +380,9 @@ class FleetControlBase(metaclass=ABCMeta):
         :return: Rejection (child class of TravellerOffer)
         """
         offer = Rejection(prq.get_rid(), self.op_id)
+        LOG.debug(f"reject customer {prq} at time {simulation_time}")
         prq.set_service_offered(offer)
-        if self.repo:
+        if self.repo and not prq.get_reservation_flag():
             self.repo.register_rejected_customer(prq, simulation_time)
         return offer
 

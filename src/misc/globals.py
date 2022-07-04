@@ -167,6 +167,7 @@ G_RA_HEU = "op_applied_heuristic"
 G_RA_TW_HARD = "op_time_window_hardness"    # 1 -> soft | 2 -> hard # TODO # think about renaming to update_time_window_hardness
 G_RA_TW_LENGTH = "op_time_window_length"
 G_RA_LOCK_RID_VID = "op_lock_rid_vid_assignment" # no re-assignment if false
+
 # reservation
 G_RA_RES_MOD = "op_reservation_module"
 G_RA_OPT_HOR = "op_short_term_horizon"  # time ahead when requests will be treated as reservation requests
@@ -211,6 +212,7 @@ G_OP_REPO_EXP_TP = "op_repo_exp_trip_profit"
 G_OP_REPO_SR_F = "op_repo_sharing_rate_file"
 G_OP_REPO_QBT = "op_repo_quadratic_benefit_threshold"
 G_OP_REPO_FRONTIERS_M = "op_repo_frontiers_method"          # Method name for Frontier's approaches
+G_OP_REPO_RES_PUF = "op_repo_res_buffer_time"       # if reservation leg, how long in future to be considered for repo
 
 # Dynamic Pricing
 G_OP_DYN_P_M = "op_dyn_pricing_method"
