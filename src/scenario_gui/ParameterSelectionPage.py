@@ -58,10 +58,23 @@ class ParameterSelectionPage(tk.Frame):
         row_count=1
         col_count=1
         list_of_selected_param = []
-        label = tk.Label(self, text = "Parameter Selection Page\n" + controller.mandatory_module.get(), font=controller.titlefont).grid(row=0,column=0, columnspan=4,padx=20, pady=10)
+        
+        self.canvas = tk.Canvas(self, borderwidth=0, background="#ffffff")
+        self.frame = tk.Frame(self.canvas, background="#ffffff")
+        self.vsb = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.vsb.set)
+        
+        self.vsb.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.canvas.create_window((4,4), window=self.frame, anchor="nw",
+                                  tags="self.frame")
+
+        self.frame.bind("<Configure>", self.onFrameConfigure)
+        
+        label = tk.Label(self.frame, text = "Parameter Selection Page\n" + controller.mandatory_module.get(), font=controller.titlefont).grid(row=0,column=0, columnspan=4,padx=20, pady=10)
 
         #Feature 1
-        mandatory_param = tk.Label(self, text=controller.mandatory_input_params.get(), font=controller.normalfont).grid(row=row_count,column=1)
+        mandatory_param = tk.Label(self.frame, text=controller.mandatory_input_params.get(), font=controller.normalfont).grid(row=row_count,column=1)
         row_count=row_count+1
         col_count=2
         man_param_dict, op_param_dict = controller.sc.get_current_mandatory_and_optional_parameters()
@@ -75,14 +88,14 @@ class ParameterSelectionPage(tk.Frame):
             # else:   
             #     param_var = tk.StringVar()
             #     #param_var.set(controller.default_text) 
-            module_view = tk.Label(self, text=parameter_name, font=controller.normalfont)
+            module_view = tk.Label(self.frame, text=parameter_name, font=controller.normalfont)
             module_view.grid(row=row_count,column=col_count)
             parameter_describtion = f"{parameter.doc_string}\nExpected Type : {parameter.type}"
             if parameter.default_value is not None:
                 parameter_describtion += f"\nDefault Value : {parameter.default_value}"
             CreateToolTip(module_view, parameter_describtion)
             #sel_module = tk.OptionMenu(self,module, *["TBD", "TBD"])
-            sel_module = tk.Entry(self, textvariable=param_var)
+            sel_module = tk.Entry(self.frame, textvariable=param_var)
             callback_func = partial(self.select_param, parameter_name, sel_module)
             sel_module.bind('<Return>', callback_func)
             sel_module.config(width=40)
@@ -93,7 +106,7 @@ class ParameterSelectionPage(tk.Frame):
             self.parameter_to_input_variable[parameter_name] = param_var                  
 
         #Feature 2
-        optional_param = tk.Label(self, text=controller.optional_input_params.get(), font=controller.normalfont).grid(row=row_count,column=1)
+        optional_param = tk.Label(self.frame, text=controller.optional_input_params.get(), font=controller.normalfont).grid(row=row_count,column=1)
         row_count = row_count + 1
 
         for parameter_name, parameter in op_param_dict.items():
@@ -104,13 +117,13 @@ class ParameterSelectionPage(tk.Frame):
             # else:   
             #     param_var = tk.StringVar()
             #     #param_var.set(controller.default_text)            
-            module_view = tk.Label(self, text=parameter_name, font=controller.normalfont)
+            module_view = tk.Label(self.frame, text=parameter_name, font=controller.normalfont)
             module_view.grid(row=row_count,column=col_count)
             parameter_describtion = f"{parameter.doc_string}\nExpected Type : {parameter.type}"
             if parameter.default_value is not None:
                 parameter_describtion += f"\nDefault Value : {parameter.default_value}"
             CreateToolTip(module_view, parameter_describtion)
-            sel_module = tk.Entry(self, textvariable=param_var)
+            sel_module = tk.Entry(self.frame, textvariable=param_var)
             callback_func = partial(self.select_param, parameter_name, sel_module)
             sel_module.bind('<Return>', callback_func)
             sel_module.config(width=40)
@@ -120,11 +133,15 @@ class ParameterSelectionPage(tk.Frame):
             list_of_selected_param.append([parameter_name, param_var])   
             self.parameter_to_input_variable[parameter_name] = param_var  
 
-        back_button = tk.Button(self, text = "Back to main",
-                                command= controller.to_module_selection_page).grid(row=30, column=0, columnspan=4, padx=20, pady=10)
+        back_button = tk.Button(self.frame, text = "Back to main",
+                                command= controller.to_module_selection_page).grid(row=row_count, column=0, columnspan=4, padx=20, pady=10)
         
-        save_button = tk.Button(self, text = "Save to csv and exit",
-                                        command= lambda: controller.save_and_exit('ModuleSelectionPage',self.parameter_to_input_variable)).grid(row=31, column=0, columnspan=4, padx=20, pady=10)
+        save_button = tk.Button(self.frame, text = "Save to csv and exit",
+                                        command= lambda: controller.save_and_exit('ModuleSelectionPage',self.parameter_to_input_variable)).grid(row=row_count+1, column=0, columnspan=4, padx=20, pady=10)
 
     def select_param(self, param_name, module, kwargs):
         self.controller.sc.select_param(param_name, module.get())
+        
+    def onFrameConfigure(self, event):
+        '''Reset the scroll region to encompass the inner frame'''
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
