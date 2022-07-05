@@ -51,7 +51,7 @@ INPUT_PARAMETERS_FleetControlBase = {
     "input_parameters_mandatory": [G_OP_VR_CTRL_F, G_OP_FLEET],
     "input_parameters_optional": [
         G_RA_SOLVER, G_RA_OPT_HOR, G_OP_MIN_WT, G_OP_MIN_WT, G_OP_MAX_WT, G_OP_MAX_DTF, G_OP_ADD_CDT, G_OP_MIN_DTW,
-        G_OP_CONST_BT, G_OP_ADD_BT
+        G_OP_CONST_BT, G_OP_ADD_BT, G_OP_INIT_VEH_DIST
         ],
     "mandatory_modules": [],
     "optional_modules": [G_RA_RES_MOD, G_OP_CH_M, G_OP_REPO_M, G_OP_DYN_P_M, G_OP_DYN_FS_M]
