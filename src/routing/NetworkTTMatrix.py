@@ -3,6 +3,7 @@
 # -----------------------------
 import os
 import logging
+import pathlib
 
 # additional module imports (> requirements)
 # ------------------------------------------
@@ -138,20 +139,40 @@ class NetworkTTMatrix(NetworkBase):
         self.current_tt_factor_index = 0
         self.sorted_tt_factor_times = []
         self.update_tt_factors = {}
+        self._precalculated_tt_paths = {}
+        self._current_tt_path = None
         self.load_tt_file(None)
         self.sim_time = 0
-        if network_dynamics_file_name is not None:
-            tt_info_f = os.path.join(self.network_name_dir, network_dynamics_file_name)
-            if not os.path.isfile(tt_info_f):
-                raise IOError(f"Did not find network dynamics file {tt_info_f}")
-            nw_dynamics_df = pd.read_csv(tt_info_f)
-            nw_dynamics_df.set_index("simulation_time", inplace=True)
-            for sim_time, tt_factor in nw_dynamics_df["travel_time_factor"].items():
-                self.update_tt_factors[int(sim_time)] = tt_factor
-            self.sorted_tt_factor_times = sorted(self.update_tt_factors.keys())
-            LOG.info(f"Loaded travel time scaling factors from {tt_info_f}")
+        self._load_dynamic_network(network_dynamics_file_name)
+
+    def _load_dynamic_network(self, file_or_folder):
+        """ Prepares the network for the dynamic travel times using time-dependent scaling factor or travel time
+        matrices. If both scaling factor file and the folder (with precalculated travel time matrices) exist, the
+        preference is given to the scaling factor file. """
+
+        if file_or_folder is not None:
+            path = pathlib.Path(self.network_name_dir, file_or_folder)
+            # First check if its scaling factor file
+            if path.is_file():
+                path = pathlib.Path(self.network_name_dir, file_or_folder)
+                nw_dynamics_df = pd.read_csv(str(path))
+                nw_dynamics_df.set_index("simulation_time", inplace=True)
+                for sim_time, tt_factor in nw_dynamics_df["travel_time_factor"].items():
+                    self.update_tt_factors[int(sim_time)] = tt_factor
+                self.sorted_tt_factor_times = sorted(self.update_tt_factors.keys())
+                LOG.info(f"Loaded travel time scaling factors from {str(path)}")
+            elif path.is_dir():
+                if len(list(path.iterdir())) == 0:
+                    raise IOError(f"Did not find any folder for the precalculated travel time matrices for dynamic "
+                                  f"travel times within {str(path)}")
+                for folder in path.iterdir():
+                    self._precalculated_tt_paths[int(folder.name)] = folder
+                self.sorted_tt_factor_times = sorted(self._precalculated_tt_paths.keys())
+            else:
+                raise IOError(f"Did not find network dynamics scaling factor file or precalculated travel time "
+                              f"matrices folder in {file_or_folder}")
         else:
-            LOG.info("No travel time scaling factor file given.")
+            LOG.info("No travel time scaling factor file or precalculated dynamic travel time folder given.")
 
     def load_tt_file(self, scenario_time):
         pass
@@ -171,22 +192,23 @@ class NetworkTTMatrix(NetworkBase):
         self.sim_time = simulation_time
         tt_updated = False
         if self.sorted_tt_factor_times:
-            last_i = self.current_tt_factor_index - 1  # TODO # Check logic
-            while True:
-                next_i = last_i + 1
-                if next_i < len(self.sorted_tt_factor_times):
-                    next_time = self.sorted_tt_factor_times[next_i]
-                    if next_time <= simulation_time:
-                        last_i = next_i
-                        self.current_tt_factor_index = last_i
+            for inx, next_time in enumerate(self.sorted_tt_factor_times[self.current_tt_factor_index:],
+                                            self.current_tt_factor_index):
+                if next_time <= simulation_time:
+                    self.current_tt_factor_index = inx
+                    if self.update_tt_factors:
                         new_tt_factor = self.update_tt_factors[next_time]
                         if self.tt_factor != new_tt_factor:
                             self.tt_factor = new_tt_factor
                             tt_updated = True
-                    else:
-                        break # TODO # needed, otherwise eternal loop, right?
-                else:
-                    break
+                    elif self._precalculated_tt_paths:
+                        path = self._precalculated_tt_paths[next_time]
+                        if self._current_tt_path != path:
+                            self.tt = pd.DataFrame(np.load(path.joinpath("tt_matrix.npy")))
+                            self._current_tt_path = path
+                            tt_updated = True
+                    if tt_updated is True:
+                        break
         return tt_updated
 
     def get_number_network_nodes(self):
