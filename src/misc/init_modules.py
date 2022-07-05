@@ -59,6 +59,7 @@ def get_src_request_modules():
     rm_dict["SlaveRequest"] = ("src.demand.TravelerModels", "SlaveRequest")
     rm_dict["BasicParcelRequest"] = ("src.demand.TravelerModels", "BasicParcelRequest")
     rm_dict["SlaveParcelRequest"] = ("src.demand.TravelerModels", "SlaveParcelRequest")
+    rm_dict["WaitingTimeSensitiveLinearDeclineRequest"] = ("src.demand.TravelerModels", "WaitingTimeSensitiveLinearDeclineRequest")
     # add development content
     if dev_content is not None:
         dev_rm_dict = dev_content.add_request_models()

@@ -436,6 +436,69 @@ class PriceSensitiveIndividualConstraintRequest(IndividualConstraintRequest):
                 return op
 # -------------------------------------------------------------------------------------------------------------------- #
 
+INPUT_PARAMETERS_WaitingTimeSensitiveLinearDeclineRequest = {
+    "doc" :     """This request is sensitive to waiting_times:
+    - all offers are accepted if waiting time is below G_AR_MAX_WT
+    - all offers are decline if waiting time is higher than G_AR_MAX_WT_2
+    - linear decrease of probability of acceptance between G_AR_MAX_WT and G_AR_MAX_WT_2
+    """,
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [G_AR_MAX_WT, G_AR_MAX_WT_2],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
+class WaitingTimeSensitiveLinearDeclineRequest(RequestBase):
+    """This request is sensitive to waiting_times:
+    - all offers are accepted if waiting time is below G_AR_MAX_WT
+    - all offers are decline if waiting time is higher than G_AR_MAX_WT_2
+    - linear decrease of probability of acceptance between G_AR_MAX_WT and G_AR_MAX_WT_2
+    """
+    type = "WaitingTimeSensitiveLinearDeclineRequest"
+
+    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
+        self.max_wt_1 = scenario_parameters[G_AR_MAX_WT]
+        self.max_wt_2 = scenario_parameters[G_AR_MAX_WT_2]
+
+    def choose_offer(self, sc_parameters, simulation_time):
+        LOG.debug("choose offer {}".format(offer_str(self.offer)))
+        test_all_decline = super().choose_offer(sc_parameters, simulation_time)
+        if test_all_decline is not None and test_all_decline < 0:
+            return -1
+        if len(self.offer) == 0:
+            return None
+        elif len(self.offer) == 1:
+            op = list(self.offer.keys())[0]
+            if self.offer[op].service_declined:
+                LOG.debug(" -> no offer!")
+                return -1
+            wt = self.offer[op][G_OFFER_WAIT]
+            if wt <= self.max_wt_1:
+                LOG.debug(f" -> accept {wt} <= {self.max_wt_1}")
+                self.fare = self.offer[op].get(G_OFFER_FARE, 0)
+                return op
+            elif wt > self.max_wt_2:
+                LOG.debug(f" -> decline. too long?? {wt} > {self.max_wt_2}")
+                return -1
+            else:
+                acc_prob = (self.max_wt_2 - wt) / (
+                            self.max_wt_2 - self.max_wt_1)
+                r = np.random.random()
+                LOG.debug(f" -> random prob {acc_prob}")
+                if r < acc_prob:
+                    LOG.debug(f" -> accept")
+                    self.fare = self.offer[op].get(G_OFFER_FARE, 0)
+                    return op
+                else:
+                    LOG.debug(f" -> decline")
+                    return -1
+        else:
+            LOG.error(f"not implemented {offer_str(self.offer)}")
+            raise NotImplementedError
+
+#----------------------------------------------------------------------------#
 
 class MasterRandomChoiceRequest(RequestBase):
     """This request class randomly chooses between options."""
