@@ -46,7 +46,7 @@ INPUT_PARAMETERS_RidePoolingBatchOptimizationFleetControlBase = {
         this class can be used for common ride-pooling studies using a batch assignmant algorithm for optimisation
         triggered in the _time_trigger_request_batch() method""",
     "inherit" : "FleetControlBase",
-    "input_parameters_mandatory": [G_SLAVE_CPU],
+    "input_parameters_mandatory": [G_SLAVE_CPU, G_RA_REOPT_TS],
     "input_parameters_optional": [
         ],
     "mandatory_modules": [G_RA_RP_BATCH_OPT],

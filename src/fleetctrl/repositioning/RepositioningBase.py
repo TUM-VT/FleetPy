@@ -19,7 +19,7 @@ LARGE_INT = 100000000
 INPUT_PARAMETERS_RepositioningBase = {
     "doc" : "this class is the base class representing the repositioning module",
     "inherit" : None,
-    "input_parameters_mandatory": [G_OP_REPO_TH_DEF],
+    "input_parameters_mandatory": [G_OP_REPO_TH_DEF, G_OP_REPO_TS],
     "input_parameters_optional": [
         G_OP_REPO_LOCK, G_OP_REPO_SR_F
         ],
