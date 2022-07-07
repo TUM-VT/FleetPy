@@ -181,11 +181,11 @@ class NetworkBasic(NetworkBase):
         #
         edges_f = os.path.join(network_name_dir, "base", "edges.csv")
         print(f"Loading edges from {edges_f} ...")
-        edge_df = pd.read_csv(edges_f)
-        for o_node_index, d_node_index, dis, tt in zip(edge_df["from_node"].values,edge_df["to_node"].values,edge_df["distance"].values,edge_df["travel_time"].values):
-            o_node = self.nodes[o_node_index]
-            d_node = self.nodes[d_node_index]
-            tmp_edge = Edge((o_node, d_node), dis, tt)
+        edges_df = pd.read_csv(edges_f)
+        for _, row in edges_df.iterrows():
+            o_node = self.nodes[row[G_EDGE_FROM]]
+            d_node = self.nodes[row[G_EDGE_TO]]
+            tmp_edge = Edge((o_node, d_node), row[G_EDGE_DIST], row[G_EDGE_TT])
             o_node.add_next_edge_to(d_node, tmp_edge)
             d_node.add_prev_edge_from(o_node, tmp_edge)
         print("... {} nodes loaded!".format(len(self.nodes)))
