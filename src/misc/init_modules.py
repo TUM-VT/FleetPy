@@ -41,6 +41,7 @@ def get_src_routing_engines():
     re_dict["NetworkBasicWithStore"] = ("src.routing.NetworkBasicWithStore", "NetworkBasicWithStore")
     re_dict["NetworkPartialPreprocessed"] = ("src.routing.NetworkPartialPreprocessed", "NetworkPartialPreprocessed")
     re_dict["NetworkBasicWithStoreCpp"] = ("src.routing.NetworkBasicWithStoreCpp", "NetworkBasicWithStoreCpp")
+    re_dict["NetworkBasicCpp"] = ("src.routing.NetworkBasicCpp", "NetworkBasicCpp")
     re_dict["NetworkPartialPreprocessedCpp"] = ("src.routing.NetworkPartialPreprocessedCpp", "NetworkPartialPreprocessedCpp")
     re_dict["NetworkTTMatrix"] = ("src.routing.NetworkTTMatrix", "NetworkTTMatrix")
     # add development content
