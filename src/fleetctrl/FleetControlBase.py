@@ -878,6 +878,10 @@ class FleetControlBase(metaclass=ABCMeta):
                 inactive = True
             else:
                 inactive = False
+            if pstop.is_locked_end():
+                reservation = True
+            else:
+                reservation = False
             if pstop.get_departure_time(0) != 0:
                 planned_stop = True
                 repo_target = False
@@ -892,6 +896,8 @@ class FleetControlBase(metaclass=ABCMeta):
                     status = VRL_STATES.TO_CHARGE
                 elif inactive:
                     status = VRL_STATES.TO_DEPOT
+                elif reservation:
+                    status = VRL_STATES.TO_RESERVATION
                 else:
                     # repositioning
                     status = VRL_STATES.REPOSITION
