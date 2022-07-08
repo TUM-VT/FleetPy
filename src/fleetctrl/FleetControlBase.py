@@ -127,6 +127,7 @@ class FleetControlBase(metaclass=ABCMeta):
         self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_RES)
         self.rq_dict : Dict[Any, PlanRequest] = {}  # rid_struct -> PlanRequest
         self.reserved_base_rids = {}  # base_rid -> ept ; activated for optimization if ept - opt_horizon <= sim_time
+        self.begin_approach_buffer_time = operator_attributes.get(G_RA_RES_APP_BUF_TIME, 0)
 
         # required fleet control parameters -> create error if invalid entries
         # --------------------------------------------------------------------
@@ -489,7 +490,7 @@ class FleetControlBase(metaclass=ABCMeta):
         if assigned_charging_task is not None:
             self._active_charging_processes[assigned_charging_task[0]] = assigned_charging_task[1]
             self._vid_to_assigned_charging_process[veh_obj.vid] = assigned_charging_task[0]
-        new_list_vrls = self._build_VRLs(vehicle_plan, veh_obj)
+        new_list_vrls = self._build_VRLs(vehicle_plan, veh_obj, sim_time)
         veh_obj.assign_vehicle_plan(new_list_vrls, sim_time, force_ignore_lock=force_assign)
         self.veh_plans[veh_obj.vid] = vehicle_plan
         for rid in get_assigned_rids_from_vehplan(vehicle_plan):
@@ -836,17 +837,19 @@ class FleetControlBase(metaclass=ABCMeta):
         if self.repo:
             self.repo.record_repo_stats()
             
-    def _build_VRLs(self, vehicle_plan : VehiclePlan, veh_obj : SimulationVehicle) -> List[VehicleRouteLeg]:
+    def _build_VRLs(self, vehicle_plan : VehiclePlan, veh_obj : SimulationVehicle, sim_time : int) -> List[VehicleRouteLeg]:
         """This method builds VRL for simulation vehicles from a given Plan. Since the vehicle could already have the
         VRL with the correct route, the route from veh_obj.assigned_route[0] will be used if destination positions
         are matching
 
         :param vehicle_plan: vehicle plan to be converted
         :param veh_obj: vehicle object to which plan is applied
+        :param sim_time: current simulation time
         :return: list of VRLs according to the given plan
         """
         list_vrl = []
         c_pos = veh_obj.pos
+        c_time = sim_time
         for pstop in vehicle_plan.list_plan_stops:
             # TODO: The following should be made as default behavior to delegate the specific tasks (e.g. boarding,
             #  charging etc) to the StationaryProcess class. The usage of StationaryProcess class can significantly
@@ -893,8 +896,14 @@ class FleetControlBase(metaclass=ABCMeta):
                     # repositioning
                     status = VRL_STATES.REPOSITION
                 # use empty boarding dict for this VRL, but do not overwrite boarding_dict!
-                list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), {1: [], -1: []}, locked=pstop.is_locked()))
+                if pstop.get_earliest_start_time() - c_time > self.begin_approach_buffer_time \
+                        and pstop.get_earliest_start_time() - c_time - self.routing_engine.return_travel_costs_1to1(c_pos, pstop.get_pos())[1] > self.begin_approach_buffer_time:
+                    # wait at current postion until target can still be reached within self.begin_approach_buffer_time
+                    list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), {1: [], -1: []}, locked=pstop.is_locked(), earliest_start_time=pstop.get_earliest_start_time() - self.begin_approach_buffer_time - self.routing_engine.return_travel_costs_1to1(c_pos, pstop.get_pos())[1]))
+                else:
+                    list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), {1: [], -1: []}, locked=pstop.is_locked()))
                 c_pos = pstop.get_pos()
+                _, c_time = pstop.get_planned_arrival_and_departure_time()
             # stop vrl
             if boarding and charging:
                 status = VRL_STATES.BOARDING_WITH_CHARGING
@@ -924,6 +933,7 @@ class FleetControlBase(metaclass=ABCMeta):
                     stop_duration = dur
                 else:
                     stop_duration = 0
+                _, c_time = pstop.get_planned_arrival_and_departure_time()
                 list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), boarding_dict, pstop.get_charging_power(),
                                                 duration=stop_duration, earliest_start_time=earliest_start_time, earliest_end_time=departure_time,
                                                 locked=pstop.is_locked(), stationary_process=stationary_process))

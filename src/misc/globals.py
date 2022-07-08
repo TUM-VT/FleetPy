@@ -178,6 +178,7 @@ G_RA_MAX_BATCH_CONCAT = "op_res_batch_concat"   # how many batches are schedule 
 G_RA_RES_BOPT_TS = "op_res_opt_timestep"    # time interval of reservation module
 G_RA_RES_LG_MAX_DEPTH = "op_res_loc_graph_max_depth"    # for GraphContractionTSP -> depth of local graph for evalutating new sol
 G_RA_RES_LG_MAX_CUT = "op_res_loc_graph_max_cut_time"   # for GraphContractionTSP -> only add edges wtih this max time horizon and cut rest
+G_RA_RES_APP_BUF_TIME = "op_res_approach_buffer_time"   # time buffer before vehicle starts driving to the position of an assigned VRL with reservation in future
 
 # RV heuristics
 G_RA_MAX_VR = "op_max_VR_con"
