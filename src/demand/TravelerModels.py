@@ -471,7 +471,7 @@ class WaitingTimeSensitiveLinearDeclineRequest(RequestBase):
             return None
         elif len(self.offer) == 1:
             op = list(self.offer.keys())[0]
-            if self.offer[op].service_declined:
+            if self.offer[op].service_declined():
                 LOG.debug(" -> no offer!")
                 return -1
             wt = self.offer[op][G_OFFER_WAIT]

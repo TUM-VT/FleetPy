@@ -511,7 +511,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         else:
             rtv_key = getRTVkeyFromVehPlan(assigned_plan)
             self.current_assignments[vid] = rtv_key
-            # LOG.debug(f"assign {vid} -> {rtv_key} | is external? {is_external_vehicle_plan}")
+            LOG.debug(f"assign {vid} -> {rtv_key} | is external? {is_external_vehicle_plan}")
             if is_external_vehicle_plan and not _is_init_sol:
                 self.external_assignments[vid] = (rtv_key, None)
                 self.rebuild_rtv[vid] = 1
@@ -526,7 +526,11 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         """
         currently_assigned_key = self.current_assignments.get(vid)
         if currently_assigned_key is not None:
-            return self.rtv_obj[currently_assigned_key].getBestPlan()
+            assigned_rtv_obj = self.rtv_obj.get(currently_assigned_key)
+            if assigned_rtv_obj is not None:
+                return assigned_rtv_obj.getBestPlan()
+            else:
+                return self.fleetcontrol.veh_plans[vid]
         else:
             return None
 
