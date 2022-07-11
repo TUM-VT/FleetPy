@@ -82,7 +82,7 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
             assigned_plan = self.RPBO_Module.get_current_assignment(assigned_vid)
             new_best_plan = self.RPBO_Module.get_vehicle_plan_without_rid(veh_obj, assigned_plan, rid, simulation_time)
             if new_best_plan is not None:
-                self.assign_vehicle_plan(assigned_vid, new_best_plan, simulation_time, force_assign=True)
+                self.assign_vehicle_plan(veh_obj, new_best_plan, simulation_time, force_assign=True)
             else:
                 assigned_plan = VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])
                 self.assign_vehicle_plan(assigned_vid, assigned_plan, simulation_time, force_assign=True)
