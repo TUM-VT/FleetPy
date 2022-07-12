@@ -10,7 +10,7 @@ from src.fleetctrl.planning.VehiclePlan import VehiclePlan
 from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase, SimulationVehicleStruct
 from src.fleetctrl.pooling.GeneralPoolingFunctions import checkRRcomptibility
 from src.fleetctrl.pooling.batch.AlonsoMora.V2RB import V2RB
-from src.fleetctrl.pooling.immediate.insertion import single_insertion
+from src.fleetctrl.pooling.immediate.insertion import simple_remove, single_insertion
 from src.fleetctrl.pooling.immediate.SelectRV import filter_directionality, filter_least_number_tasks
 from src.misc.globals import *
 from src.simulation.Legs import VehicleRouteLeg
@@ -648,8 +648,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             for key, v2rb in v2rbs_2_keep.items():
                 self._addRtvKey(key, v2rb)
             self.requests_to_compute[rid] = 1
-            self.active_requests[rid] = prq
-            
+            self.active_requests[rid] = prq         
 
     def get_vehicle_plan_without_rid(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, rid_to_remove : Any, sim_time : int) -> VehiclePlan:
         """this function returns the best vehicle plan by removing the rid_to_remove from the vehicle plan
@@ -668,12 +667,15 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             return new_v2rb.getBestPlan()
         else:
             LOG.warning(f"lower V2RB {new_rtv_key} by removing {rid_to_remove} not found -> build lower v2rb from {rtv_key}")
-            old_v2rb = self.rtv_obj[rtv_key]
-            vid = getVidFromRTVKey(rtv_key)
-            new_v2rb = old_v2rb.createLowerV2RB(new_rtv_key, self.sim_time, self.routing_engine, self.objective_function, self.active_requests, self.std_bt, self.add_bt)
-            self._addRtvKey(new_rtv_key, new_v2rb)
-            return new_v2rb.getBestPlan()
-
+            old_v2rb = self.rtv_obj.get(rtv_key)
+            if old_v2rb is not None:
+                vid = getVidFromRTVKey(rtv_key)
+                new_v2rb = old_v2rb.createLowerV2RB(new_rtv_key, self.sim_time, self.routing_engine, self.objective_function, self.active_requests, self.std_bt, self.add_bt)
+                self._addRtvKey(new_rtv_key, new_v2rb)
+                return new_v2rb.getBestPlan()
+            else:
+                new_veh_plan = simple_remove(veh_obj, vehicle_plan, rid_to_remove, sim_time, self.routing_engine, self.objective_function, self.active_requests, self.std_bt, self.add_bt)
+                return new_veh_plan
 
     def _delRRcons(self, rid : Any, rid2 : Any = None):
         """ this function deletes rr-connections from the database
