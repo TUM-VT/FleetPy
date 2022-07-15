@@ -162,11 +162,18 @@ class NetworkTTMatrix(NetworkBase):
                         self.update_tt_factors[int(sim_time)] = tt_factor
                     self.sorted_tt_factor_times = sorted(self.update_tt_factors.keys())
                     LOG.info(f"Loaded travel time scaling factors from {str(path)}")
-                else:
+                elif "travel_time_folder" in nw_dynamics_df.columns:
                     for sim_time, tt_folder_path in nw_dynamics_df["travel_time_folder"].items():
                         self._precalculated_tt_paths[int(sim_time)] = pathlib.Path(self.network_name_dir, tt_folder_path)
                     self.sorted_tt_factor_times = sorted(self._precalculated_tt_paths.keys())
                     LOG.info(f"Loaded travel time folders from {str(path)}")
+                # elif "travel_time_folder" in nw_dynamics_df.columns:
+                #     for sim_time, tt_folder in nw_dynamics_df["travel_time_folder"].items():
+                #         self._precalculated_tt_paths[sim_time] = path.parent.joinpath(tt_folder)
+                #     self.sorted_tt_factor_times = sorted(self._precalculated_tt_paths.keys())
+                else:
+                    raise IOError(f"The file {str(path)} does not contain travel_time_factor or travel_time_folder "
+                                  f"column")
             elif path.is_dir():
                 if len(list(path.iterdir())) == 0:
                     raise IOError(f"Did not find any folder for the precalculated travel time matrices for dynamic "
