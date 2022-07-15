@@ -1,5 +1,5 @@
 from src.fleetctrl.FleetControlBase import FleetControlBase
-from src.fleetctrl.planning.VehiclePlan import BoardingPlanStop, VehiclePlan
+from src.fleetctrl.planning.VehiclePlan import BoardingPlanStop, PlanStop, VehiclePlan
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.simulation.Vehicles import SimulationVehicle
 from src.routing.NetworkBase import NetworkBase
@@ -241,11 +241,14 @@ def simple_remove(veh_obj : SimulationVehicle, veh_plan : VehiclePlan, remove_ri
             else:
                 rid_found_in_plan_flag = True
                 change_nr_pax += rq_dict[rid].nr_pax
-        if len(new_boarding_dict.keys()) > 0:
+        if len(new_boarding_dict.keys()) > 0 or ps.is_locked() or ps.is_locked_end():
             dur, _ = ps.get_duration_and_earliest_departure()
-            new_ps = BoardingPlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
+            # new_ps = BoardingPlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
+            #                           earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
+            #                           change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked())
+            new_ps = PlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
                                       earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
-                                      change_nr_pax=change_nr_pax, duration=dur)
+                                      change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked(), locked_end=ps.is_locked_end())
             new_plan_list.append(new_ps)
     #LOG.info("simple remove: {}".format([str(x) for x in new_plan_list]))
     external_pax_info = veh_plan.pax_info.copy()

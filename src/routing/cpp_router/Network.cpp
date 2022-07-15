@@ -32,34 +32,55 @@ Network::Network(string node_path, string edge_path) {
 
     if (file.is_open()) {
         cout << "is open!" << endl;
+
+        int node_index_col = -1;
+        int x_coord_col = -1;
+        int y_coord_col = -1;
+        int stop_onyl_col = -1;
+
         int row_counter = 0;
         while (!file.eof()) {
             string a;
             getline(file, a);
-            if (row_counter == 0) {
-                row_counter++;
-                continue;
-            }
-            //cout << a << endl;
             vector<string> linesplits = {};
             split(a, linesplits, ',');
             int column_counter = 0;
+
+            if (row_counter == 0) {
+                for (const auto& entry : linesplits) {
+                    if (entry == "node_index") {
+                        node_index_col = column_counter;
+                    }
+                    else if (entry == "pos_x") {
+                        x_coord_col = column_counter;
+                    }
+                    else if (entry == "pos_y") {
+                        y_coord_col = column_counter;
+                    }
+                    else if (entry == "is_stop_only") {
+                        stop_onyl_col = column_counter;
+                    }
+                    column_counter++;
+                }
+                row_counter++;
+                continue;
+            }
             int index;
             double x_coord;
             double y_coord;
             bool is_stop_only = false;
             for (const auto &entry : linesplits) {
                 //cout << " ,   " << entry;
-                if (column_counter == 0) {
+                if (column_counter == node_index_col) {
                     index = stoi(entry);
                 }
-                else if (column_counter == 2) {
+                else if (column_counter == x_coord_col) {
                     x_coord = stod(entry);
                 }
-                else if (column_counter == 3) {
+                else if (column_counter == y_coord_col) {
                     y_coord = stod(entry);
                 }
-                else if (column_counter == 1) {
+                else if (column_counter == stop_onyl_col) {
                     if (entry == "True") {
                         is_stop_only = true;
                     }
@@ -86,37 +107,57 @@ Network::Network(string node_path, string edge_path) {
     cout << edge_path << endl;
     ifstream file2(edge_path);
 
+    int from_node_col = -1;
+    int to_node_col = -1;
+    int tt_col = -1;
+    int dis_col = -1;
+
     if (file2.is_open()) {
         cout << "is open!" << endl;
         int row_counter = 0;
         while (!file2.eof()) {
             string a;
             getline(file2, a);
-            if (row_counter == 0) {
-                row_counter++;
-                continue;
-            }
-            //cout << a << endl;
             vector<string> linesplits = {};
             split(a, linesplits, ',');
             //from_node,to_node,distance,travel_time,source_edge_id
             int column_counter = 0;
+            if (row_counter == 0) {
+                for (const auto& entry : linesplits) {
+                    if (entry == "from_node") {
+                        from_node_col = column_counter;
+                    }
+                    else if (entry == "to_node") {
+                        to_node_col = column_counter;
+                    }
+                    else if (entry == "travel_time") {
+                        tt_col = column_counter;
+                    }
+                    else if (entry == "distance") {
+                        dis_col = column_counter;
+                    }
+                    column_counter++;
+                }
+                row_counter++;
+                continue;
+            }
+            //cout << a << endl;
             int start_node;
             int end_node;
             double distance;
             double travel_time;
             for (const auto& entry : linesplits) {
                 //cout << " ,   " << entry;
-                if (column_counter == 0) {
+                if (column_counter == from_node_col) {
                     start_node = stoi(entry);
                 }
-                else if (column_counter == 1) {
+                else if (column_counter == to_node_col) {
                     end_node = stoi(entry);
                 }
-                else if (column_counter == 2) {
+                else if (column_counter == dis_col) {
                     distance = stod(entry);
                 }
-                else if (column_counter == 3) {
+                else if (column_counter == tt_col) {
                     travel_time = stod(entry);
                 }
                 column_counter++;
@@ -145,29 +186,46 @@ void Network::updateEdgeTravelTimes(std::string file_path) {
     if (file.is_open()) {
         cout << "is open!" << endl;
         int row_counter = 0;
+
+        int from_node_col = -1;
+        int to_node_col = -1;
+        int tt_col = -1;
+
         while (!file.eof()) {
             string a;
             getline(file, a);
+            vector<string> linesplits = {};
+            split(a, linesplits, ',');
+            int column_counter = 0;
             if (row_counter == 0) {
+                for (const auto& entry : linesplits) {
+                    if (entry == "from_node") {
+                        from_node_col = column_counter;
+                    }
+                    else if (entry == "to_node") {
+                        to_node_col = column_counter;
+                    }
+                    else if (entry == "edge_tt") {
+                        tt_col = column_counter;
+                    }
+                    column_counter++;
+                }
                 row_counter++;
                 continue;
             }
             //from_node,to_node,edge_tt
-            vector<string> linesplits = {};
-            split(a, linesplits, ',');
-            int column_counter = 0;
             int from_node_index;
             int to_node_index;
             double edge_tt;
             for (const auto& entry : linesplits) {
                 //cout << " ,   " << entry;
-                if (column_counter == 0) {
+                if (column_counter == from_node_col) {
                     from_node_index = stoi(entry);
                 }
-                else if (column_counter == 1) {
+                else if (column_counter == to_node_col) {
                     to_node_index = stoi(entry);
                 }
-                else if (column_counter == 2) {
+                else if (column_counter == tt_col) {
                     edge_tt = stod(entry);
                 }
                 column_counter++;

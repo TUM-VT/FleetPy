@@ -244,7 +244,8 @@ class NetworkBasic(NetworkBase):
         self._reset_internal_attributes_after_travel_time_update()
         f = self.travel_time_file_folders[scenario_time]
         tt_file = os.path.join(f, "edges_td_att.csv")
-        tmp_df = pd.read_csv(tt_file, index_col=[0,1])
+        tmp_df = pd.read_csv(tt_file)
+        tmp_df.set_index(["from_node","to_node"], inplace=True)
         for edge_index_tuple, new_tt in tmp_df["edge_tt"].iteritems():
             self._set_edge_tt(edge_index_tuple[0], edge_index_tuple[1], new_tt)
 

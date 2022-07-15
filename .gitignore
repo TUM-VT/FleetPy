@@ -34,6 +34,7 @@ src/routing/extractors/cache/*
 # IDE-related files
 *.idea
 .vscode/*
+src/routing/cpp_router/.vs/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
