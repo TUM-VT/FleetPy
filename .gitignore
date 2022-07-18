@@ -12,6 +12,7 @@ data/fleetctrl/elastic_fleet_size/*
 data/infra/*
 data/networks/*
 !data/networks/example_network
+data/networks/example_network/ff/*
 data/pubtrans/*
 data/vehicles/*
 !data/vehicles/default_vehtype.csv
