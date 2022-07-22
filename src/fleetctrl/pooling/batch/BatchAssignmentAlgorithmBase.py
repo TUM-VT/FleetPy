@@ -395,4 +395,8 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
                     del self.mutually_exclusive_cluster_id_to_rids[mut_cluster_id]
                 except:
                     pass
+                
+    def delete_vehicle_database_entries(self, vid):
+        """ triggered when all database entries of vehicle vid should be deleted"""
+        pass
 
