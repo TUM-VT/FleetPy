@@ -383,20 +383,6 @@ class NetworkTTMatrix(NetworkBase):
         """
         origin_node, destination_node, add_tt, add_dist = self._get_od_nodes_and_section_overheads(origin_position,
                                                                                                    destination_position)
-        """
-        if origin_node == destination_node:
-            # if destination_position[1] is None:
-            if origin_position[1] is None:
-=======
-        if origin_node == destination_node:
-            if destination_position[1] is None:
->>>>>>> 0f006f9af0815905e8b62bc5bd0c6295632fe453
-                return 0, 0, 0
-            else:
-                scaled_add_tt = self.tt_factor * add_tt
-                return scaled_add_tt, scaled_add_tt, add_dist
-<<<<<<< HEAD
-            """
         # matrix lookup
         tt = self.tt.loc[origin_node.node_index, destination_node.node_index]
         dist = self.td.loc[origin_node.node_index, destination_node.node_index]
