@@ -250,6 +250,11 @@ class PavoneHailingRepositioningFC(RepositioningBase):
                 model.write(model_f)
                 LOG.warning(f"Operator {self.fleetctrl.op_id}: No Optimal Solution! status {model.status}"
                             f" -> no repositioning")
+                LOG.info(f"list zones: {list_zones}")
+                LOG.info(f"number vehicles: {number_idle_vehicles}")
+                LOG.info(f"vie dict: {len(v_i_e_dict.keys())} | {v_i_e_dict}")
+                LOG.info(f"vid dict: {len(v_i_d_dict.keys())} | {v_i_d_dict}")
+                LOG.info(f"zone dict: {len(zone_dict.keys())} | {zone_dict}")
         return alpha_od, od_reposition_trips
 
     def _optimization_cplex(self, sim_time, list_zones, v_i_e_dict, v_i_d_dict, number_idle_vehicles, zone_dict):
@@ -374,6 +379,7 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         total_idle_vehicles = sum(number_idle_vehicles.values())
         if total_idle_vehicles == 0:
             return []
+        #LOG.info(f"total_idle_vehicles {total_idle_vehicles}")
         nr_regions_with_demand = 0
         v_i_e_dict = {} # can also contain negative values now!
         omegas = []
@@ -393,12 +399,14 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         # 1) the number of total excess vehicles (positive or negative!) has to be smaller than the total number of
         #       idle vehicles!
         total_excess_vehicles = sum(list(v_i_e_dict.values()))
+        #LOG.info(f"total_excess_vehicles {total_excess_vehicles}")
         if abs(total_excess_vehicles) > total_idle_vehicles:
             for zone_id, old_v_i_e in v_i_e_dict.items():
-                v_i_e_dict[zone_id] = old_v_i_e / total_idle_vehicles
+                v_i_e_dict[zone_id] = old_v_i_e / total_excess_vehicles * total_idle_vehicles
         # rebalancing policy -> divide excess vehicles evenly among all zones
         v_i_d_dict = {}
         total_excess_vehicles = sum(list(v_i_e_dict.values()))
+        #LOG.info(f"total_excess_vehicles {total_excess_vehicles}")
         try:
             avg_excess_vehicles_per_zone = int(total_excess_vehicles / zone_counter)
         except ZeroDivisionError:
