@@ -51,7 +51,7 @@ class RequestBase(metaclass=ABCMeta):
 
     def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
         # input
-        self.rid = rq_row.get(G_RQ_ID, rq_row.name)  # request id is index of dataframe
+        self.rid = int(rq_row.get(G_RQ_ID, rq_row.name))  # request id is index of dataframe
         self.sub_rid_struct = None
         self.is_parcel = False  # requests are usually persons
         self.rq_time = rq_row[G_RQ_TIME] - rq_row[G_RQ_TIME] % simulation_time_step

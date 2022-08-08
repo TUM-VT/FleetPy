@@ -484,7 +484,7 @@ class FleetSimulationBase:
                     if not boarding_nodes:
                         boarding_nodes = list(range(self.routing_engine.get_number_network_nodes()))
                     op_init_distributions[op_id] = {bn : 1.0/len(boarding_nodes) for bn in boarding_nodes}
-            LOG.debug("init distributons: {}".format(op_init_distributions))
+            #LOG.debug("init distributons: {}".format(op_init_distributions))
             for sim_vid in set_unassigned_vid:
                 veh_obj = self.sim_vehicles[sim_vid]
                 if veh_obj.pos is None:
