@@ -186,6 +186,16 @@ def getRTVkeyFromVehPlan(veh_plan : VehiclePlan) -> tuple:
         return None
     return createRTVKey(vid, rids.keys())
 
+INPUT_PARAMETERS_AlonsoMoraAssignment = {
+    "doc" :  """this class is used to compute new vehicle assignments with Alonso-Mora-Algorithm """,
+    "inherit" : "BatchAssignmentAlgorithmBase",
+    "input_parameters_mandatory": [G_RA_SOLVER],
+    "input_parameters_optional": [
+        G_RA_TB_TO_PER_VEH, G_RA_MAX_VR, G_RA_OPT_TO, G_RA_HEU, G_RVH_B_DIR, G_RVH_DIR, G_RVH_B_LWL, G_RVH_LWL, G_RVH_AM_RR, G_RVH_AM_TI
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
     def __init__(self, fleetcontrol: FleetControlBase, routing_engine : NetworkBase, sim_time : int, obj_function : Callable, operator_attributes : dict, 

@@ -81,6 +81,15 @@ class Node:
 # -------------------------------------------------------------------------------------------------------------------- #
 # module class
 # ------------
+INPUT_PARAMETERS_NetworkTTMatrix = {
+    "doc" : "Routing based on TT Matrix, tt-scaling factor is read from file.",
+    "inherit" : "NetworkBase",
+    "input_parameters_mandatory": [G_NETWORK_NAME],
+    "input_parameters_optional": [G_NW_DYNAMIC_F],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 class NetworkTTMatrix(NetworkBase):
     """Routing based on TT Matrix, tt-scaling factor is read from file."""
     def __init__(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):

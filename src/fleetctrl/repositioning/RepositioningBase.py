@@ -16,8 +16,18 @@ if TYPE_CHECKING:
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
 
+INPUT_PARAMETERS_RepositioningBase = {
+    "doc" : "this class is the base class representing the repositioning module",
+    "inherit" : None,
+    "input_parameters_mandatory": [G_OP_REPO_TH_DEF],
+    "input_parameters_optional": [
+        G_OP_REPO_LOCK, G_OP_REPO_SR_F
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
-class RepositionBase(ABC):
+class RepositioningBase(ABC):
     def __init__(self, fleetctrl : FleetControlBase, operator_attributes : dict, dir_names : dict, solver : str="Gurobi"):
         """Initialization of repositioning class.
 
@@ -82,6 +92,13 @@ class RepositionBase(ABC):
         if lock is None:
             lock = self.lock_repo_assignments
         return []
+    
+    def register_rejected_customer(self, planrequest, sim_time):
+        """ this method is used to register and unserved request due to lack of available vehicles. The information can be stored internally
+        and used for creating repositioning plans
+        :param planrequest: plan request obj that has been rejected
+        :param sim_time: simulation time"""
+        pass
 
     def _get_demand_forecasts(self, t0, t1, aggregation_level=None):
         """This method creates a dictionary, which maps the zones to the expected demand between t0 and t1.

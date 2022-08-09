@@ -120,6 +120,17 @@ class SimulationVehicleStruct():
         else:
             return sum([rq.nr_pax for rq in self.pax if rq.is_parcel])
 
+INPUT_PARAMETERS_BatchAssignmentAlgorithmBase = {
+    "doc" :  """This class is used to compute new vehicle assignments with an algorithm
+        this class should be initialized when the corresponding fleet controller is initialized """,
+    "inherit" : None,
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
 
     def __init__(self, fleetcontrol : FleetControlBase, routing_engine : NetworkBase, sim_time : int, obj_function : Callable,

@@ -20,7 +20,7 @@ from src.simulation.Legs import VehicleRouteLeg  # ,VehicleChargeLeg
 from src.fleetctrl.charging.ChargingBase import ChargingBase  # ,VehicleChargeLeg
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan, RoutingTargetPlanStop
 from src.fleetctrl.planning.PlanRequest import PlanRequest
-from src.fleetctrl.repositioning.RepositioningBase import RepositionBase
+from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 from src.fleetctrl.pricing.DynamicPricingBase import DynamicPrizingBase
 from src.fleetctrl.fleetsizing.DynamicFleetSizingBase import DynamicFleetSizingBase
 from src.fleetctrl.reservation.ReservationBase import ReservationBase
@@ -48,7 +48,7 @@ BUFFER_SIZE = 100
 INPUT_PARAMETERS_FleetControlBase = {
     "doc" : "this class is the base class representing an MoD operator",
     "inherit" : None,
-    "input_parameters_mandatory": [G_OP_VR_CTRL_F],
+    "input_parameters_mandatory": [G_OP_VR_CTRL_F, G_OP_FLEET],
     "input_parameters_optional": [
         G_RA_SOLVER, G_RA_OPT_HOR, G_OP_MIN_WT, G_OP_MIN_WT, G_OP_MAX_WT, G_OP_MAX_DTF, G_OP_ADD_CDT, G_OP_MIN_DTW,
         G_OP_CONST_BT, G_OP_ADD_BT
@@ -227,7 +227,7 @@ class FleetControlBase(metaclass=ABCMeta):
         self.repo_time_step = operator_attributes.get(G_OP_REPO_TS)
         if repo_method is not None and self.repo_time_step is not None:
             RepoClass = load_repositioning_strategy(repo_method)
-            self.repo : RepositionBase = RepoClass(self, operator_attributes, dir_names)
+            self.repo : RepositioningBase = RepoClass(self, operator_attributes, dir_names)
             prt_strategy_str += f"\t Repositioning: {self.repo.__class__.__name__}\n"
             self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_REPO)
         else:
@@ -380,7 +380,10 @@ class FleetControlBase(metaclass=ABCMeta):
         :return: Rejection (child class of TravellerOffer)
         """
         offer = Rejection(prq.get_rid(), self.op_id)
+        LOG.debug(f"reject customer {prq} at time {simulation_time}")
         prq.set_service_offered(offer)
+        if self.repo and not prq.get_reservation_flag():
+            self.repo.register_rejected_customer(prq, simulation_time)
         return offer
 
     def get_current_offer(self, rid : Any) -> TravellerOffer:

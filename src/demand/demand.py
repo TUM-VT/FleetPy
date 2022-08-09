@@ -94,6 +94,8 @@ class Demand:
         tmp_df = pd.read_csv(abs_req_f, dtype={"start": int, "end": int})
         number_rq_0 = tmp_df.shape[0]
         future_requests = tmp_df[(tmp_df[G_RQ_TIME] >= start_time) & (tmp_df[G_RQ_TIME] < end_time)]
+        number_rq_1 = future_requests.shape[0]
+        future_requests = future_requests[(future_requests[G_RQ_ORIGIN] != future_requests[G_RQ_DESTINATION])]
         number_rq = future_requests.shape[0]
         future_requests[G_RQ_TIME] = future_requests[G_RQ_TIME] - np.mod(future_requests[G_RQ_TIME],
                                                                          simulation_time_step)
@@ -112,8 +114,10 @@ class Demand:
                 self.future_requests[rq_time].update(new_rq_dict)
             else:
                 self.future_requests[rq_time] = new_rq_dict
-        LOG.info(f"init(): {number_rq_0 - number_rq}/{number_rq_0}"
+        LOG.info(f"init(): {number_rq_0 - number_rq_1}/{number_rq_0}"
                  f" requests removed ({G_RQ_TIME} not in simulation time)")
+        LOG.info(f"init(): {number_rq_1 - number_rq}/{number_rq_1}"
+                 f" requests removed ({G_RQ_ORIGIN} == {G_RQ_DESTINATION})")
         # LOG.debug(f"self.future_requests = {self.future_requests}")
 
     def load_parcel_demand_file(self, start_time, end_time, parcel_rq_file_dir, parcel_rq_file_name, np_random_seed, parcel_rq_type=None,
