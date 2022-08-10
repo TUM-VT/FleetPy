@@ -132,9 +132,9 @@ class NetworkTTMatrix(NetworkBase):
         # load TT and TD matrices
         print(f"\t ... loading network travel time/distance tables ...")
         tt_table_f = os.path.join(self.network_name_dir, "ff", "tables", "nn_fastest_tt.npy")
-        self.tt = pd.DataFrame(np.load(tt_table_f))
+        self.tt = np.load(tt_table_f)
         distance_table_f = os.path.join(self.network_name_dir, "ff", "tables", "nn_fastest_distance.npy")
-        self.td = pd.DataFrame(np.load(distance_table_f))
+        self.td = np.load(distance_table_f)
         # load travel times
         self.current_tt_factor_index = 0
         self.sorted_tt_factor_times = []
@@ -217,7 +217,7 @@ class NetworkTTMatrix(NetworkBase):
                     elif self._precalculated_tt_paths:
                         path = self._precalculated_tt_paths[next_time]
                         if self._current_tt_path != path:
-                            self.tt = pd.DataFrame(np.load(path.joinpath("tt_matrix.npy")))
+                            self.tt = np.load(path.joinpath("tt_matrix.npy"))
                             self._current_tt_path = path
                             tt_updated = True
                     if tt_updated is True:
@@ -270,10 +270,10 @@ class NetworkTTMatrix(NetworkBase):
         :return: (travel time, distance); if no section between nodes (None, None)
         :rtype: list
         """
-        tt = self.tt.loc[start_node_index, end_node_index]
+        tt = self.tt[start_node_index, end_node_index]
         scaled_tt = tt * self.tt_factor
         if tt not in [None, np.nan, np.inf]:
-            return scaled_tt, self.td.loc[start_node_index, end_node_index]
+            return scaled_tt, self.td[start_node_index, end_node_index]
         else:
             return None, None
 
@@ -341,9 +341,9 @@ class NetworkTTMatrix(NetworkBase):
             if c_pos[2] is None:
                 c_pos = (c_pos[0], route[i], 0)
             rel_factor = (1 - c_pos[2])
-            # c_edge_tt = rel_factor * self.tt_factor * self.tt.loc[c_pos[0], c_pos[1]]
+            # c_edge_tt = rel_factor * self.tt_factor * self.tt[c_pos[0], c_pos[1]]
             # next_node_time = last_time + c_edge_tt
-            c_edge_tt = self.tt_factor * self.tt.loc[c_pos[0], c_pos[1]]
+            c_edge_tt = self.tt_factor * self.tt[c_pos[0], c_pos[1]]
             next_node_time = last_time + rel_factor * c_edge_tt
             end_time = np.round(end_time, 2)
             next_node_time = np.round(next_node_time, 2)  # TODO # raw value leads to 1.00000002 being recognized as > 1
@@ -351,13 +351,13 @@ class NetworkTTMatrix(NetworkBase):
             if next_node_time > end_time:
                 # move vehicle to final position of current edge
                 end_rel_factor = c_pos[2] + (end_time - last_time) / c_edge_tt
-                driven_distance += (end_rel_factor - c_pos[2]) * self.td.loc[c_pos[0], c_pos[1]]
+                driven_distance += (end_rel_factor - c_pos[2]) * self.td[c_pos[0], c_pos[1]]
                 c_pos = (c_pos[0], c_pos[1], end_rel_factor)
                 arrival_in_time_step = -1
                 break
             else:
                 # move vehicle to next node/edge and record data
-                driven_distance += rel_factor * self.td.loc[c_pos[0], c_pos[1]]
+                driven_distance += rel_factor * self.td[c_pos[0], c_pos[1]]
                 next_node = route[i]
                 list_passed_nodes.append(next_node)
                 if record_node_times:
@@ -398,8 +398,8 @@ class NetworkTTMatrix(NetworkBase):
 <<<<<<< HEAD
             """
         # matrix lookup
-        tt = self.tt.loc[origin_node.node_index, destination_node.node_index]
-        dist = self.td.loc[origin_node.node_index, destination_node.node_index]
+        tt = self.tt[origin_node.node_index, destination_node.node_index]
+        dist = self.td[origin_node.node_index, destination_node.node_index]
         # scaling
         scaled_tt = (add_tt + tt) * self.tt_factor
         return scaled_tt, scaled_tt, dist + add_dist
@@ -643,8 +643,8 @@ class NetworkTTMatrix(NetworkBase):
             return (0.0, 0.0)
         o_node_index = position[0]
         d_node_index = position[1]
-        all_travel_time = self.tt.loc[o_node_index, d_node_index]
-        all_travel_distance = self.td.loc[o_node_index, d_node_index]
+        all_travel_time = self.tt[o_node_index, d_node_index]
+        all_travel_distance = self.td[o_node_index, d_node_index]
         overhead_fraction = position[2]
         if not traveled_from_start:
             overhead_fraction = 1.0 - overhead_fraction
@@ -693,7 +693,7 @@ class NetworkTTMatrix(NetworkBase):
         node_list = [current_node.node_index]
         route_tt = 0.0
         scaled_route_tt = 0.0
-        total_tt = self.tt.loc[origin_node.node_index, destination_node.node_index]
+        total_tt = self.tt[origin_node.node_index, destination_node.node_index]
         if total_tt in [None, np.nan, np.inf]:
             prt_str = f"There is no route from {origin_node} to {destination_node}"
             raise AssertionError(prt_str)
@@ -704,8 +704,8 @@ class NetworkTTMatrix(NetworkBase):
                 # A->B + B->C = A->C
                 if next_node_obj.is_stop_only and next_node_obj != destination_node:
                     continue
-                next_tt = self.tt.loc[current_node.node_index, next_node_id]
-                from_next_tt = self.tt.loc[next_node_id, destination_node.node_index]
+                next_tt = self.tt[current_node.node_index, next_node_id]
+                from_next_tt = self.tt[next_node_id, destination_node.node_index]
                 if route_tt + next_tt + from_next_tt - total_tt < EPS:
                     found_next_node = True
                     node_list.append(next_node_id)
@@ -728,8 +728,7 @@ class NetworkTTMatrix(NetworkBase):
         :return: set of origin_node_indices that are close enough to reach destination node within max_time_value
         """
         d_node_index = destination_node.node_index
-        tmp_df = self.tt[self.tt[d_node_index] <= max_time_value]
-        d_surround = set(tmp_df.index.to_list())
+        d_surround = set(np.argwhere(self.tt[:, d_node_index] <= max_time_value).flatten())
         destination_node.surround_prev[max_time_value] = d_surround
         return d_surround
 
@@ -743,9 +742,7 @@ class NetworkTTMatrix(NetworkBase):
         :return: set of destination_node_indices that are close enough to be reached from origin within max_time_value
         """
         o_node_index = origin_node.node_index
-        tmp_series = self.tt.loc[o_node_index]
-        tmp_df = tmp_series[tmp_series <= max_time_value]
-        o_surround = set(tmp_df.index.to_list())
+        o_surround = set(np.argwhere(self.tt[o_node_index, :] <= max_time_value).flatten())
         if save:
             origin_node.surround_next[max_time_value] = o_surround
         return o_surround
