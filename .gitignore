@@ -13,6 +13,8 @@ data/infra/*
 data/networks/*
 !data/networks/example_network
 data/networks/example_network/ff/*
+data/networks/example_network/ch_graph/*
+data/networks/example_network/base/*.graph
 data/pubtrans/*
 data/vehicles/*
 !data/vehicles/default_vehtype.csv
