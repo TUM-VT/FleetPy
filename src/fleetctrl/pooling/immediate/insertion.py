@@ -4,7 +4,8 @@ from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.simulation.Vehicles import SimulationVehicle
 from src.routing.NetworkBase import NetworkBase
 from src.fleetctrl.pooling.immediate.searchVehicles import veh_search_for_immediate_request,\
-                                                            veh_search_for_reservation_request
+                                                            veh_search_for_reservation_request,\
+                                                            veh_search_for_immediate_request_no_max_cost_value
 from src.fleetctrl.pooling.immediate.SelectRV import filter_directionality, filter_least_number_tasks
 from src.misc.globals import *
 import numpy as np
@@ -16,7 +17,7 @@ LOG = logging.getLogger(__name__)
 
 def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : SimulationVehicle, orig_veh_plan : VehiclePlan, 
                   new_prq_obj : PlanRequest, std_bt : int, add_bt : int,
-                  skip_first_position_insertion : bool=False) -> List[VehiclePlan]:
+                  skip_first_position_insertion : bool=False, ignore_feasible: bool=False) -> List[VehiclePlan]:
     """This method inserts the stops for the new request at all possible positions of orig_veh_plan and returns a
     generator that only yields the feasible solutions and None in the other case.
 
@@ -79,6 +80,10 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
             if is_feasible:
                 tmp_plans[i] = next_o_plan
                 skip_next = i+1
+            elif ignore_feasible:
+                tmp_plans[i] = next_o_plan
+                skip_next = i + 1
+
         else:
             # add it before this stop else > planned departure after boarding time
             if i == skip_next:
@@ -91,6 +96,8 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
             #LOG.debug(f"test else boarding: {next_o_plan}")
             is_feasible = next_o_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
             if is_feasible:
+                tmp_plans[i] = next_o_plan
+            elif ignore_feasible:
                 tmp_plans[i] = next_o_plan
             else:
                 # if infeasible: check if o_feasible can be changed to False
@@ -112,6 +119,8 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
         #LOG.debug(f"test at end: {next_o_plan}")
         is_feasible = next_o_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
         if is_feasible:
+            tmp_plans[i] = next_o_plan
+        elif ignore_feasible:
             tmp_plans[i] = next_o_plan
 
     # add d_stop for all tmp_plans
@@ -154,6 +163,9 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                 if is_feasible:
                     skip_next = j + 1
                     yield next_d_plan
+                elif ignore_feasible:
+                    skip_next = j + 1
+                    yield next_d_plan
                 else:
                     # if infeasible: check if d_feasible can be changed to False
                     planned_pu_do = next_d_plan.get_pax_info(new_rid_struct)
@@ -171,6 +183,8 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                 is_feasible = next_d_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, init_plan_state)
                 if is_feasible:
                     yield next_d_plan
+                elif ignore_feasible:
+                    yield next_d_plan
                 else:
                     # if infeasible: check if d_feasible can be changed to False
                     planned_pu_do = next_d_plan.get_pax_info(new_rid_struct)
@@ -187,6 +201,8 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
             #LOG.debug(f"test with deboarding: {next_d_plan}")
             is_feasible = next_d_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, init_plan_state)
             if is_feasible:
+                yield next_d_plan
+            elif ignore_feasible:
                 yield next_d_plan
             else:
                 # if infeasible: check if d_feasible can be changed to False
@@ -376,7 +392,6 @@ def insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : Fle
 def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase, force_feasible_assignment : bool=True) -> List[Tuple[Any, VehiclePlan, float]]:
     """This function has access to all FleetControl attributes and therefore can trigger different heuristics and
     is easily extendable if new ideas for heuristics are developed.
-
     Here is a list of currently named heuristics that can be triggered
     1) pre vehicle-search processes
     2) vehicle-search process
@@ -393,10 +408,8 @@ def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleet
         c) only consider vehicle plans in V2RB satisfying certain criterion
     If any of these scenario input parameters are not set, no vehicles are discarded due to the respective heuristic;
     therefore consistency between old and new versions is guaranteed.
-
     The function returns a list of (vid, vehplan, delta_cfv) tuples of vehicles with feasible plans and an empty list
     if no vehicle can produce a feasible solution.
-
     :param prq: PlanRequest to insert
     :param fleetctrl: FleetControl instance
     :param force_feasible_assignment: if True, a feasible solution is assigned even with positive control function value
@@ -443,6 +456,95 @@ def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleet
     return_rv_tuples = []
     rv_con = set([])
     sorted_insertion_return_list = sorted(insertion_return_list, key=lambda x: x[2])
+    if max_rq_plans is not None:
+        return_rv_tuples = sorted_insertion_return_list[:max_rq_plans]
+    elif max_rv_con is not None:
+        for rv_tuple in sorted_insertion_return_list:
+            vid = rv_tuple[0]
+            # add all entries of a vehicle
+            if len(rv_con) < max_rv_con or vid in rv_con:
+                return_rv_tuples.append(rv_tuple)
+                rv_con.add(rv_tuple[0])
+    else:
+        return_rv_tuples = sorted_insertion_return_list
+
+    return return_rv_tuples
+
+def immediate_insertion_with_heuristics_all(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase, force_feasible_assignment : bool=True) -> List[Tuple[Any, VehiclePlan, float]]:
+    """This function has access to all FleetControl attributes and therefore can trigger different heuristics and
+    is easily extendable if new ideas for heuristics are developed.
+
+    Here is a list of currently named heuristics that can be triggered
+    1) pre vehicle-search processes
+    2) vehicle-search process
+        a) G_RH_I_NWS: maximum number of network positions in Dijkstra from which vehicles are considered
+    3) pre-insertion vehicle-selection processes
+        a) G_RVH_DIR: directionality of currently assigned route compared to vector of prq origin-destination
+        b) G_RVH_LWL: selection of vehicles with least workload
+    4) insertion processes
+        a) G_VPI_KEEP: only return a limited number of vehicle plans per vehicle [default: 1]
+        b) trigger other than simple_insert functions to check limited possibilities based on current plan
+    5) post insertion vehicle selection processes
+        a) G_RA_MAX_RP: return at most one (vid, vehplan, delta_cfv) tuple
+        b) G_RA_MAX_VR: only return (vid, vehplan, delta_cfv) tuples for certain number of vehicles
+        c) only consider vehicle plans in V2RB satisfying certain criterion
+    If any of these scenario input parameters are not set, no vehicles are discarded due to the respective heuristic;
+    therefore consistency between old and new versions is guaranteed.
+
+    The function returns a list of (vid, vehplan, delta_cfv) tuples of vehicles with feasible plans and an empty list
+    if no vehicle can produce a feasible solution.
+
+    :param prq: PlanRequest to insert
+    :param fleetctrl: FleetControl instance
+    :param force_feasible_assignment: if True, a feasible solution is assigned even with positive control function value
+    :return: list of (vid, vehplan, delta_cfv) tuples
+    :rtype: list
+    """
+    # TODO # think about generalization to use of Parallelization_Manager
+    # -> separation into multiple parts or if-clause for Parallelization_Manager in between?
+
+    # 1) pre vehicle-search processes
+    excluded_vid = []
+
+    # 2) vehicle-search process
+    rv_vehicles_max, rv_results_dict_max = veh_search_for_immediate_request_no_max_cost_value(sim_time, prq, fleetctrl, excluded_vid)
+
+    def vehicle_selection(rv_vehicles):
+        # 3) pre-insertion vehicle-selection processes
+        selected_veh = set([])
+        #   a) directionality of currently assigned route compared to vector of prq origin-destination
+        number_directionality = fleetctrl.rv_heuristics.get(G_RVH_DIR, 0)
+        if number_directionality > 0:
+            veh_dir = filter_directionality(prq, rv_vehicles, number_directionality, fleetctrl.routing_engine, selected_veh)
+            for veh_obj in veh_dir:
+                selected_veh.add(veh_obj)
+        #   b) selection of vehicles with least workload
+        number_least_load = fleetctrl.rv_heuristics.get(G_RVH_LWL, 0)
+        if number_least_load > 0:
+            veh_ll = filter_least_number_tasks(rv_vehicles, number_least_load, selected_veh)
+            for veh_obj in veh_ll:
+                selected_veh.add(veh_obj)
+
+        sum_rvh_selection = number_directionality + number_least_load
+        if sum_rvh_selection > 0:
+            rv_vehicles = list(selected_veh)
+        return rv_vehicles
+
+    rv_vehicles_max = vehicle_selection(rv_vehicles_max)
+
+    # 4) insertion processes
+    insertion_return_list_max = insert_prq_in_selected_veh_list(rv_vehicles_max, fleetctrl.veh_plans, prq, fleetctrl.vr_ctrl_f,
+                                                            fleetctrl.routing_engine, fleetctrl.rq_dict, sim_time,
+                                                            fleetctrl.const_bt, fleetctrl.add_bt,
+                                                            force_feasible_assignment, fleetctrl.rv_heuristics,
+                                                            ignore_feasible=True)
+
+    # 5) post insertion vehicle selection processes
+    max_rq_plans = fleetctrl.rv_heuristics.get(G_RA_MAX_RP, None)
+    max_rv_con = fleetctrl.rv_heuristics.get(G_RA_MAX_VR, None)
+    return_rv_tuples = []
+    rv_con = set([])
+    sorted_insertion_return_list = sorted(insertion_return_list_max, key=lambda x: x[2])
     if max_rq_plans is not None:
         return_rv_tuples = sorted_insertion_return_list[:max_rq_plans]
     elif max_rv_con is not None:
@@ -543,7 +645,7 @@ def reservation_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fle
 def insert_prq_in_selected_veh_list(selected_veh_obj_list : List[SimulationVehicle], vid_to_vehplan_assignments : Dict[Any, VehiclePlan],
                                     prq : PlanRequest, obj_function : Callable, routing_engine : NetworkBase, rq_dict : Dict[Any, PlanRequest],
                                     sim_time : int, const_bt : int, add_bt : int, force_feasible_assignment : bool=True,
-                                    insert_heuristic_dict : Dict={}):
+                                    insert_heuristic_dict : Dict={}, ignore_feasible : bool=False):
     """This method can be used to return a list of RV entries (vid, vehplan, delta_cfv) from a list of selected
     vehicles, whereas only the currently assigned vehicle plan is assumed and different VPI (vehicle plan insertion)
     heuristics can be triggered to limit the insertions.
@@ -583,7 +685,8 @@ def insert_prq_in_selected_veh_list(selected_veh_obj_list : List[SimulationVehic
             threshold = 0
         # TODO choice of insert function/heuristics per trigger
         for next_insertion_veh_plan in simple_insert(routing_engine, sim_time, veh_obj, veh_plan, prq,
-                                                     const_bt, add_bt, skip_first_position_insertion=skip_first_pos):
+                                                     const_bt, add_bt, skip_first_position_insertion=skip_first_pos,
+                                                     ignore_feasible=ignore_feasible):
             next_insertion_utility = obj_function(sim_time, veh_obj, next_insertion_veh_plan, rq_dict, routing_engine)
             delta_cfv = next_insertion_utility - current_vehplan_utility
             if threshold is None or delta_cfv < threshold:

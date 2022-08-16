@@ -43,6 +43,45 @@ def veh_search_for_immediate_request(sim_time, prq, fleetctrl, list_excluded_vid
             rv_results_dict[(prq_o_stop_pos, vid_pos)] = (cfv, tt, dis)
     return rv_vehicles, rv_results_dict
 
+def veh_search_for_immediate_request_no_max_cost_value(sim_time, prq, fleetctrl, list_excluded_vids=[]):
+    """This function can be used to find pooling vehicles for an immediate service of a request.
+
+    :param sim_time: current simulation time
+    :param prq: PlanRequest to be considered
+    :param fleetctrl: FleeControl instance
+    :param list_excluded_vids: possible list of vehicles that are excluded from prior heuristic
+    :return: list of vehicle objects considered for assignment, routing_results_dict ( (o_pos, d_pos) -> (cfv, tt, dis))
+    :rtype: tuple of list of SimulationVehicle, dict
+    """
+    if sim_time != fleetctrl.pos_veh_dict_time or not fleetctrl.pos_veh_dict:
+        veh_locations_to_vid = {}
+        for vid, veh_obj in enumerate(fleetctrl.sim_vehicles):
+            # do not consider inactive vehicles
+            if veh_obj.status == 5 or vid in list_excluded_vids:
+                continue
+            try:
+                veh_locations_to_vid[veh_obj.pos].append(vid)
+            except:
+                veh_locations_to_vid[veh_obj.pos] = [vid]
+        fleetctrl.pos_veh_dict_time = sim_time
+        fleetctrl.pos_veh_dict = veh_locations_to_vid
+
+    # stop criteria: search radius and possibly max_routes
+    prq_o_stop_pos, prq_t_pu_earliest, prq_t_pu_latest = prq.get_o_stop_info()
+    sr = prq_t_pu_latest - sim_time
+    max_routes = fleetctrl.rv_heuristics.get(G_RH_I_NWS)
+
+    # backwards Dijkstra
+    rv_routing = fleetctrl.routing_engine.return_travel_costs_Xto1(fleetctrl.pos_veh_dict.keys(), prq_o_stop_pos,
+                                                                   max_routes=max_routes, max_cost_value=None)
+    rv_vehicles = []
+    rv_results_dict = {}
+    for vid_pos, cfv,tt,dis in rv_routing:
+        for vid in fleetctrl.pos_veh_dict[vid_pos]:
+            rv_vehicles.append(fleetctrl.sim_vehicles[vid])
+            rv_results_dict[(prq_o_stop_pos, vid_pos)] = (cfv, tt, dis)
+    return rv_vehicles, rv_results_dict
+
 
 def veh_search_for_reservation_request(sim_time, prq, fleetctrl, list_excluded_vid=[], veh_plans = None):
     """This function returns a list of vehicles that should be considered for insertion of a plan request

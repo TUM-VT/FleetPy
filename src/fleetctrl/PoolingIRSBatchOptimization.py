@@ -3,7 +3,7 @@ import time
 
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.fleetctrl.RidePoolingBatchOptimizationFleetControlBase import RidePoolingBatchOptimizationFleetControlBase
-from src.fleetctrl.pooling.immediate.insertion import insertion_with_heuristics
+from src.fleetctrl.pooling.immediate.insertion import insertion_with_heuristics, insertion_with_heuristics_all
 
 from src.misc.globals import *
 
@@ -108,13 +108,25 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
         else:
             self.RPBO_Module.add_new_request(rid_struct, prq)
             list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
-            if len(list_tuples) > 0:
-                (vid, vehplan, delta_cfv) = min(list_tuples, key=lambda x:x[2])
+            list_tuples_all = insertion_with_heuristics_all(sim_time, prq, self, force_feasible_assignment=True)
+            # if len(list_tuples) > 0:
+            #     (vid, vehplan, delta_cfv) = min(list_tuples, key=lambda x:x[2])
+            #     LOG.debug(f"before insertion: {vid} | {self.veh_plans[vid]}")
+            #     LOG.debug(f"after insertion: {vid} | {vehplan}")
+            #     self.tmp_assignment[rid_struct] = vehplan
+            #     offer = self._create_user_offer(prq, sim_time, vehplan)
+            #     LOG.debug(f"new offer for rid {rid_struct} : {offer}")
+            # else:
+            #     LOG.debug(f"rejection for rid {rid_struct}")
+            #     self._create_rejection(prq, sim_time)
+
+            if len(list_tuples_all) > 0:
+                (vid, vehplan, delta_cfv) = min(list_tuples_all, key=lambda x:x[2])
                 LOG.debug(f"before insertion: {vid} | {self.veh_plans[vid]}")
                 LOG.debug(f"after insertion: {vid} | {vehplan}")
                 self.tmp_assignment[rid_struct] = vehplan
                 offer = self._create_user_offer(prq, sim_time, vehplan)
-                LOG.debug(f"new offer for rid {rid_struct} : {offer}")
+                LOG.debug(f"new all offer for rid {rid_struct} : {offer}")
             else:
                 LOG.debug(f"rejection for rid {rid_struct}")
                 self._create_rejection(prq, sim_time)
