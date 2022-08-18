@@ -5,6 +5,7 @@ import logging
 import importlib
 import os
 import json
+import pandas as pd
 
 # additional module imports (> requirements)
 # ------------------------------------------
@@ -111,3 +112,31 @@ class BatchOfferSimulation(FleetSimulationBase):
                 ch_op.time_trigger(sim_time)
 
         self.record_stats()
+
+        self.create_database(sim_time)
+
+    def create_database(self, sim_time):
+        '''
+        This method creates an additional output file containing information about user requests and fleet vehicle
+        state.
+
+        :return: None
+        '''
+        # ideally define these as globals such that they do not need to be redefined during every run
+        str_pos = 'Pos'
+        str_l_dest = 'Last Destination'
+        path_current_state = os.path.join(self.dir_names[G_DIR_OUTPUT], "current_state.csv")
+
+        sorted_sim_vehicle_keys = sorted(self.sim_vehicles.keys())
+        list_vehicle_states = [self.sim_vehicles[sim_vid].return_current_state(str_pos, str_l_dest)
+                               for sim_vid in sorted_sim_vehicle_keys]
+        dict_vehicles_states = {i[G_V_VID]: {str_pos: i[str_pos], str_l_dest: i[str_l_dest]} for i in list_vehicle_states}
+        dict_vehicles_states['Sim Time'] = sim_time
+        df_current_DB = pd.DataFrame([dict_vehicles_states])
+
+        if os.path.isfile(path_current_state):
+            write_mode, write_header = "a", False
+        else:
+            write_mode, write_header = "w", True
+        df_current_DB.set_index('Sim Time', inplace=True)
+        df_current_DB.to_csv(path_current_state, mode=write_mode, header=write_header)

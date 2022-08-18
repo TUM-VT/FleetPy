@@ -143,6 +143,22 @@ class SimulationVehicle:
         final_state_dict[G_V_INIT_TIME] = end_time % (24*3600)
         return final_state_dict
 
+    def return_current_state(self, str_pos, str_l_dest):
+        '''
+        Method that returns information about current state of the vehicle fleet.
+
+        :param str_pos: string/key to name position element in dict
+        :param str_l_dest: string/key to name last destination in current assigned route
+
+        :return: dict of vehicle ids with corresponding current position
+        '''
+        current_state_dict = {G_V_OP_ID:self.op_id, G_V_VID:self.vid, str_pos: self.pos}
+        if self.assigned_route:
+            current_state_dict[str_l_dest] = self.assigned_route[-1].destination_pos
+        else:
+            current_state_dict[str_l_dest] = self.pos
+        return current_state_dict
+
     def _start_next_leg_stationary_object(self, simulation_time):
         """ Starts the next leg using the route leg with a stationary process """
 
