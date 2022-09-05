@@ -143,7 +143,7 @@ class SimulationVehicle:
         final_state_dict[G_V_INIT_TIME] = end_time % (24*3600)
         return final_state_dict
 
-    def return_current_state(self, str_pos, str_l_dest):
+    def return_current_state(self, str_pos, str_l_dest, str_num_stops, str_pax):
         '''
         Method that returns information about current state of the vehicle fleet.
 
@@ -155,8 +155,11 @@ class SimulationVehicle:
         current_state_dict = {G_V_OP_ID:self.op_id, G_V_VID:self.vid, str_pos: self.pos}
         if self.assigned_route:
             current_state_dict[str_l_dest] = self.assigned_route[-1].destination_pos
+            current_state_dict[str_num_stops] = len(self.assigned_route)
         else:
             current_state_dict[str_l_dest] = self.pos
+            current_state_dict[str_num_stops] = 0
+        current_state_dict[str_pax] = self.get_nr_pax_without_currently_boarding()
         return current_state_dict
 
     def _start_next_leg_stationary_object(self, simulation_time):

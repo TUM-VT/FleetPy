@@ -125,12 +125,15 @@ class BatchOfferSimulation(FleetSimulationBase):
         # ideally define these as globals such that they do not need to be redefined during every run
         str_pos = 'Pos'
         str_l_dest = 'Last Destination'
+        str_num_stops = 'Number of Stops'
+        str_pax = 'Nr. Pax'
         path_current_state = os.path.join(self.dir_names[G_DIR_OUTPUT], "current_state.csv")
 
         sorted_sim_vehicle_keys = sorted(self.sim_vehicles.keys())
-        list_vehicle_states = [self.sim_vehicles[sim_vid].return_current_state(str_pos, str_l_dest)
+        list_vehicle_states = [self.sim_vehicles[sim_vid].return_current_state(str_pos, str_l_dest, str_num_stops, str_pax)
                                for sim_vid in sorted_sim_vehicle_keys]
-        dict_vehicles_states = {i[G_V_VID]: {str_pos: i[str_pos], str_l_dest: i[str_l_dest]} for i in list_vehicle_states}
+        dict_vehicles_states = {i[G_V_VID]: {str_pos: i[str_pos], str_l_dest: i[str_l_dest], str_pax: i[str_pax], str_num_stops: i[str_num_stops]}
+                                for i in list_vehicle_states}
         dict_vehicles_states['Sim Time'] = sim_time
         df_current_DB = pd.DataFrame([dict_vehicles_states])
 
