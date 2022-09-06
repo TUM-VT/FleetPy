@@ -27,6 +27,9 @@ def get_src_simulation_environments():
     sim_env_dict = {}  # str -> (module path, class name)
     sim_env_dict["BatchOfferSimulation"] = ("src.BatchOfferSimulation", "BatchOfferSimulation")
     sim_env_dict["ImmediateDecisionsSimulation"] = ("src.ImmediateDecisionsSimulation", "ImmediateDecisionsSimulation")
+    sim_env_dict["BrokerDecision"] = ("src.BrokerSimulation", "BrokerDecisionSimulation")
+    sim_env_dict["UserDecisionSimulation"] = ("src.BrokerSimulation", "UserDecisionSimulation")
+    sim_env_dict["PreferredOperatorSimulation"] = ("src.BrokerSimulation", "PreferredOperatorSimulation")
     # add development content
     if dev_content is not None:
         dev_sim_env_dict = dev_content.add_dev_simulation_environments()
@@ -61,6 +64,9 @@ def get_src_request_modules():
     rm_dict["BasicParcelRequest"] = ("src.demand.TravelerModels", "BasicParcelRequest")
     rm_dict["SlaveParcelRequest"] = ("src.demand.TravelerModels", "SlaveParcelRequest")
     rm_dict["WaitingTimeSensitiveLinearDeclineRequest"] = ("src.demand.TravelerModels", "WaitingTimeSensitiveLinearDeclineRequest")
+    rm_dict["BrokerDecisionRequest"] = ("src.demand.TravelerModels", "BrokerDecisionRequest")
+    rm_dict["UserDecisionRequest"] = ("src.demand.TravelerModels", "UserDecisionRequest")
+    rm_dict["PreferredOperatorRequest"] = ("src.demand.TravelerModels", "PreferredOperatorRequest")
     # add development content
     if dev_content is not None:
         dev_rm_dict = dev_content.add_request_models()
@@ -73,6 +79,9 @@ def get_src_fleet_control_modules():
     op_dict["PoolingIRSOnly"] = ("src.fleetctrl.PoolingIRSOnly", "PoolingInsertionHeuristicOnly")
     op_dict["PoolingIRSAssignmentBatchOptimization"] = ("src.fleetctrl.PoolingIRSBatchOptimization", "PoolingIRSAssignmentBatchOptimization")
     op_dict["RidePoolingBatchAssignmentFleetcontrol"] = ("src.fleetctrl.RidePoolingBatchAssignmentFleetcontrol", "RidePoolingBatchAssignmentFleetcontrol")
+    op_dict["BrokerExChangeCtrl"] = ("src.fleetctrl.BrokerAndExchangeFleetControl", "BrokerExChangeCtrl")
+    op_dict["BrokerBaseCtrl"] = ("src.fleetctrl.BrokerAndExchangeFleetControl", "BrokerBaseCtrl")
+    op_dict["BrokerDecisionCtrl"] = ("src.fleetctrl.BrokerAndExchangeFleetControl", "BrokerDecisionCtrl")
     # add development content
     if dev_content is not None:
         dev_op_dict = dev_content.add_fleet_control_modules()
@@ -85,6 +94,7 @@ def get_src_repositioning_strategies():
     repo_dict["PavoneFC"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingRepositioningFC")
     repo_dict["PavoneFCV2"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingV2RepositioningFC")
     repo_dict["DensityFrontiers"] = ("src.fleetctrl.repositioning.FrontiersDensityBasedRepositioning", "DensityRepositioning")
+    repo_dict["AlonsoMoraRepositioning"] = ("src.fleetctrl.repositioning.AlonsoMoraRepositioning", "AlonsoMoraRepositioning")
     # add development content
     if dev_content is not None:
         dev_repo_dict = dev_content.add_repositioning_modules()

@@ -497,6 +497,77 @@ class WaitingTimeSensitiveLinearDeclineRequest(RequestBase):
         else:
             LOG.error(f"not implemented {offer_str(self.offer)}")
             raise NotImplementedError
+        
+# -------------------------------------------------------------------------------------------------------------------- #
+# Broker Requests
+
+class PreferredOperatorRequest(RequestBase):
+    """ this request is used for the broker scenarios as base case of (quasi) independent operators 
+    rid chooses:
+    - self.preferred op, if an offer is recieved from this op
+    - declines else
+    this is used to meassure if the unpreferred op was able to create an offer"""
+    type = "PreferredOperatorRequest"
+    
+    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
+        self.preferred_operator = None  # will be set in the simulation class
+        
+    def choose_offer(self, scenario_parameters, simulation_time):
+        list_options = [i for i, off in self.offer.items() if not off.service_declined()]
+        if self.preferred_operator in list_options:
+            self.fare = self.offer[self.preferred_operator].get(G_OFFER_FARE, 0)
+            return self.preferred_operator
+        else:
+            return None
+
+class BrokerDecisionRequest(RequestBase):
+    """
+    This request class is used for the easyride broker decision simulation.
+    It represents the broker's decision of offer (not the customer's), based on the metric "add_fleet_vmt"
+    the broker marks offers, that it has been chosen by the flag G_OFFER_BROKER_FLAG which is unique
+    """
+    type = "BrokerDecisionRequest"
+
+    def choose_offer(self, scenario_parameters, simulation_time):
+        selected_offer = None
+        selected_op = None
+        for op_id, offer in self.offer.items():
+            if offer.get(G_OFFER_BROKER_FLAG):
+                selected_offer = offer
+                selected_op = op_id
+                break
+        if selected_offer is not None:
+            self.fare = selected_offer.get(G_OFFER_FARE, 0)
+        return selected_op
+
+class UserDecisionRequest(RequestBase):
+    """
+    This request class is used for the easyride user decision simulation.
+    The user chooses the offer with the lowest overall travel time
+    """
+    type = "UserDecisionRequest"
+
+    def choose_offer(self, scenario_parameters, simulation_time):
+        selected_offer = None
+        selected_op = None
+        best_overall_tt = float("inf")
+        for op_id, offer in self.offer.items():
+            if not offer.service_declined():
+                tt = offer[G_OFFER_WAIT] + offer[G_OFFER_DRIVE]
+                if tt < best_overall_tt:
+                    best_overall_tt = tt
+                    selected_offer = offer
+                    selected_op = op_id
+                elif tt == best_overall_tt:
+                    r = np.random.randint(2)
+                    if r == 0:
+                        best_overall_tt = tt
+                        selected_offer = offer
+                        selected_op = op_id
+        if selected_offer is not None:
+            self.fare = selected_offer.get(G_OFFER_FARE, 0)
+        return selected_op
 
 #----------------------------------------------------------------------------#
 

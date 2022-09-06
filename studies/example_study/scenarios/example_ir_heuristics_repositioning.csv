@@ -1,2 +1,3 @@
-op_module,scenario_name,rq_file,op_fleet_composition,op_max_VR_con,forecast_f,op_repo_method,op_repo_horizons
-PoolingIRSAssignmentBatchOptimization,example_pool_repo_Pavone_sc_1,example_200.csv,default_vehtype:12,3,agg_example_200.csv,PavoneFC,0;900
+op_module,scenario_name,rq_file,op_fleet_composition,op_max_VR_con,forecast_f,op_repo_method,op_repo_horizons,op_repo_timestep
+PoolingIRSAssignmentBatchOptimization,example_pool_repo_Pavone_sc_1,example_200.csv,default_vehtype:12,3,agg_example_200.csv,PavoneFC,0;900,300
+PoolingIRSAssignmentBatchOptimization,example_pool_repo_AM_sc_1,example_200.csv,default_vehtype:12,3,,AlonsoMoraRepositioning,60
