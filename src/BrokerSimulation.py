@@ -28,6 +28,25 @@ LOG = logging.getLogger(__name__)
 # main
 # ----
 
+INPUT_PARAMETERS_BrokerDecisionSimulation = {
+    "doc" :     """
+    this fleetsimulation is used in the publication
+    Competition and Cooperation of Autonomous Ridepooling Services: Game-Based Simulation of a Broker Concept; Engelhardt, Malcolm, Dandl, Bogenberger (2022)
+    in this case offer from 2 different fleetcontrols are collected and a broker decides which of these
+    offers will be forwarded to the customer
+    the customer always chooses this offer
+    the BrokerDescisionFleetCtrl has to be used for operators to create all needed offer attributes for the broker deciscion
+    """,
+    "inherit" : "FleetSimulationBase",
+    "input_parameters_mandatory": [
+    ],
+    "input_parameters_optional": [
+    ],
+    "mandatory_modules": [
+    ], 
+    "optional_modules": []
+}
+
 class BrokerDecisionSimulation(FleetSimulationBase):
     """
     this fleetsimulation is used in the publication
@@ -169,6 +188,25 @@ class BrokerDecisionSimulation(FleetSimulationBase):
         from src.evaluation.standard import standard_evaluation
         standard_evaluation(output_dir)
 
+# ---------------------------------------------------------------------------------------------------------------
+
+INPUT_PARAMETERS_UserDecisionSimulation = {
+    "doc" :     """
+    this fleetsimulation is used 
+    Competition and Cooperation of Autonomous Ridepooling Services: Game-Based Simulation of a Broker Concept; Engelhardt, Malcolm, Dandl, Bogenberger (2022)
+    in this case offer from 2 different fleetcontrols are directly forwarded to the customer and the customer
+    decides on an offer based on a simple choice model
+    all needed implementations are already implemented in the ImmediateDecisionSimulation class
+    """,
+    "inherit" : "ImmediateDecisionsSimulation",
+    "input_parameters_mandatory": [
+    ],
+    "input_parameters_optional": [
+    ],
+    "mandatory_modules": [
+    ], 
+    "optional_modules": []
+}
 
 class UserDecisionSimulation(ImmediateDecisionsSimulation):
     """
@@ -178,6 +216,26 @@ class UserDecisionSimulation(ImmediateDecisionsSimulation):
     decides on an offer based on a simple choice model
     all needed implementations are already implemented in the ImmediateDecisionSimulation class
     """
+
+# ---------------------------------------------------------------------------------------------------------------
+
+INPUT_PARAMETERS_PreferredOperatorSimulation = {
+    "doc" :     """
+    this fleetsimulation is used 
+    Competition and Cooperation of Autonomous Ridepooling Services: Game-Based Simulation of a Broker Concept; Engelhardt, Malcolm, Dandl, Bogenberger (2022)
+    in this scenario a "preferred_operator" attribute is set for all customers. The customers ("PreferredOperatorRequest" - class) only accepts offers from this operator
+    -> serves as base scenario for independent operators, but can also track if other operator was able to create an offer
+    """,
+    "inherit" : "ImmediateDecisionsSimulation",
+    "input_parameters_mandatory": [
+    ],
+    "input_parameters_optional": [
+        G_MULTIOP_PREF_OP_RSEED
+    ],
+    "mandatory_modules": [
+    ], 
+    "optional_modules": []
+}
     
 class PreferredOperatorSimulation(ImmediateDecisionsSimulation):
     """

@@ -342,6 +342,15 @@ class BasicRequest(RequestBase):
 
 # -------------------------------------------------------------------------------------------------------------------- #
 
+INPUT_PARAMETERS_IndividualConstraintRequest = {
+    "doc" : """This request class makes decisions based on hard constraints; individual constraints can be read from demand file columns. If an operator offer
+    satisfies these, it will be accepted. Moreover, it can be used to communicate earliest and latest pick-up time to the operators.""",
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [G_AR_MAX_WT, G_AR_MAX_DTF],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
 
 class IndividualConstraintRequest(RequestBase):
     """This request class makes decisions based on hard constraints; individual constraints can be read from demand file columns. If an operator offer
@@ -393,6 +402,15 @@ class IndividualConstraintRequest(RequestBase):
                 self.fare = self.offer[op].get(G_OFFER_FARE, 0)
                 return op
 
+INPUT_PARAMETERS_PriceSensitiveIndividualConstraintRequest = {
+    "doc" : """This request class can be used to communicate earliest and latest pick-up time to the operators.
+    Moreover, the requests have a maximum price they are willing to pay.""",
+    "inherit" : "IndividualConstraintRequest",
+    "input_parameters_mandatory": [G_RQ_MAX_FARE],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
 
 # -------------------------------------------------------------------------------------------------------------------- #
 class PriceSensitiveIndividualConstraintRequest(IndividualConstraintRequest):
@@ -501,12 +519,28 @@ class WaitingTimeSensitiveLinearDeclineRequest(RequestBase):
 # -------------------------------------------------------------------------------------------------------------------- #
 # Broker Requests
 
+INPUT_PARAMETERS_PreferredOperatorRequest = {
+    "doc" :     """this request is used for the broker scenarios as base case of (quasi) independent operators 
+    rid chooses:
+    - self.preferred op, if an offer is recieved from this op
+    - declines else
+    this is used to meassure if the unpreferred op was able to create an offer
+    requires simulation class PreferredOperatorSimulation !
+    """,
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
 class PreferredOperatorRequest(RequestBase):
     """ this request is used for the broker scenarios as base case of (quasi) independent operators 
     rid chooses:
     - self.preferred op, if an offer is recieved from this op
     - declines else
-    this is used to meassure if the unpreferred op was able to create an offer"""
+    this is used to meassure if the unpreferred op was able to create an offer
+    requires simulation class PreferredOperatorSimulation"""
     type = "PreferredOperatorRequest"
     
     def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
@@ -520,6 +554,19 @@ class PreferredOperatorRequest(RequestBase):
             return self.preferred_operator
         else:
             return None
+
+INPUT_PARAMETERS_BrokerDecisionRequest = {
+    "doc" :     """    This request class is used for the easyride broker decision simulation.
+    It represents the broker's decision of offer (not the customer's), based on the metric "add_fleet_vmt"
+    the broker marks offers, that it has been chosen by the flag G_OFFER_BROKER_FLAG which is unique
+    requires simulation class BrokerDecisionSimulation !
+    """,
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
 
 class BrokerDecisionRequest(RequestBase):
     """
@@ -540,6 +587,16 @@ class BrokerDecisionRequest(RequestBase):
         if selected_offer is not None:
             self.fare = selected_offer.get(G_OFFER_FARE, 0)
         return selected_op
+
+INPUT_PARAMETERS_UserDecisionRequest = {
+    "doc" :     """This request class chooses the offer with the lowest overall travel time
+    """,
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
 
 class UserDecisionRequest(RequestBase):
     """
@@ -571,6 +628,16 @@ class UserDecisionRequest(RequestBase):
 
 #----------------------------------------------------------------------------#
 
+INPUT_PARAMETERS_MasterRandomChoiceRequest = {
+    "doc" :     """This request class randomly chooses between options.
+    """,
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
 class MasterRandomChoiceRequest(RequestBase):
     """This request class randomly chooses between options."""
     type = "MasterRandomChoiceRequest"
@@ -587,6 +654,17 @@ class MasterRandomChoiceRequest(RequestBase):
         LOG.debug(f"{self.get_rid_struct()} chooses offer {choice} from options {list_options} | offers {offer_str(self.offer)}")
         return choice
 # -------------------------------------------------------------------------------------------------------------------- #
+
+INPUT_PARAMETERS_SlaveRequest = {
+    "doc" :     """This request class does not have any choice functionality.
+    (i.e. is used when mode choice is performed outside of FleetPy)
+    """,
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
 
 class SlaveRequest(RequestBase):
     """This request class does not have any choice functionality."""

@@ -53,6 +53,20 @@ def get_in_vrl_control_included_assignment_reward_func(vr_control_func_dict : di
         LOG.error("THIS OBJECTIVE FUNCTION IS NOT REGISTERED IN EasyRideBrokerFleetControl.py")
         raise NotImplementedError
 
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+
+INPUT_PARAMETERS_BrokerDecisionCtrl = {
+    "doc" : """this fleetcontrol is used for simulations with a central broker which assigns users to operators in the publication
+    Competition and Cooperation of Autonomous Ridepooling Services: Game-Based Simulation of a Broker Concept; Engelhardt, Malcolm, Dandl, Bogenberger (2022)
+    therefore, in this fleetcontrol the attribute "add fleet vmt" (the addtional driving distance to serve a customer calculated after
+    the insertion heuristic) is added to the offer parameters which is used by the broker as a decision variable""",
+    "inherit" : "PoolingIRSAssignmentBatchOptimization",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class BrokerDecisionCtrl(PoolingIRSAssignmentBatchOptimization):
     """ this fleetcontrol is used for simulations with a central broker which assigns users to operators in the publication
@@ -157,6 +171,31 @@ class BrokerDecisionCtrl(PoolingIRSAssignmentBatchOptimization):
                 last_pos = ps.get_pos()
         return sum_dist_new - sum_dist_prev
 
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+
+INPUT_PARAMETERS_BrokerExChangeCtrl = {
+    "doc" : """Fleet control class for EasyRide Broker Exchange of requests scenario
+        request enter system continously
+            offer has to be created immediatly by an insertion heuristic, where also following decision is made:
+            operator dicides if he can and if he wants to serve the customer
+            if he wants and can:
+                request is accepted and the offer is created
+            if he cant:
+                requests is declined and send to other fltctrl
+            if he can but doesnt want:
+                offer is created, but request is also sent to other fleetctrl
+            request replies immediatly 
+            -> there can never be 2 requests at the same time waiting for an offer! 
+        reoptimisation of solution after certain time interval""",
+    "inherit" : "RidePoolingBatchOptimizationFleetControlBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        G_MULTIOP_PREF_OP_PROB, G_MULTIOP_EVAL_METHOD, G_MULTIOP_EXCH_AC_OBS_TIME, G_MULTIOP_EXCH_AC_STD_WEIGHT, G_MULTIOP_EVAL_LOOKAHEAD
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class BrokerExChangeCtrl(RidePoolingBatchOptimizationFleetControlBase):
     def __init__(self, op_id : int, operator_attributes : dict, list_vehicles : List[SimulationVehicle], routing_engine : NetworkBase, 
@@ -486,6 +525,30 @@ class BrokerExChangeCtrl(RidePoolingBatchOptimizationFleetControlBase):
         else:
             return False
 
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+
+INPUT_PARAMETERS_BrokerBaseCtrl = {
+    "doc" : """Fleet control class for the base scenario of the easyride broker
+        it mimics the EasyRide Broker Exchange of requests scenario but willingness is not used the evaluate the operator decisions
+        request enter system continously
+            offer has to be created immediatly by an insertion heuristic, where also following decision is made:
+            operator dicides if he can and if he wants to serve the customer
+            if he wants and can:
+                request is accepted and the offer is created
+            if he cant:
+                requests is declined and send to other fltctrl
+            if he can but doesnt want:
+                offer is created, but request is also sent to other fleetctrl
+            request replies immediatly 
+            -> there can never be 2 requests at the same time waiting for an offer! 
+        reoptimisation of solution after certain time interval""",
+    "inherit" : "BrokerExChangeCtrl",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class BrokerBaseCtrl(BrokerExChangeCtrl):
     def __init__(self, op_id : int, operator_attributes : dict, list_vehicles : List[SimulationVehicle], routing_engine : NetworkBase, 
