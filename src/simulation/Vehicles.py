@@ -143,22 +143,67 @@ class SimulationVehicle:
         final_state_dict[G_V_INIT_TIME] = end_time % (24*3600)
         return final_state_dict
 
-    def return_current_state(self, str_pos, str_l_dest, str_num_stops, str_pax):
+    def return_current_state(self, str_pos, str_l_dest, str_num_stops, str_pax, str_start_start, str_end_start,
+                             str_end_end, rid=None, rq_object=None):
         '''
-        Method that returns information about current state of the vehicle fleet.
+        Method that returns the current position, the last destination, the number of planned stops, the number of
+        passengers, the distance between current vehicle position and origin of a request, the distance between last
+        destination and origin of a request and the distance between last destination and destination of a request for
+        a vehicle.
 
         :param str_pos: string/key to name position element in dict
         :param str_l_dest: string/key to name last destination in current assigned route
+        :param str_num_stops: string/key to number of stops
+        :param str_pax: string/key number of passenger
+        :param tuple_request: tuple containing (id, origin, destination) of a request
+        :param str_start_start: string/key to distance current position (car) origin (request)
+        :param str_end_start: string/key to distance last destination (car) origin (request)
+        :param str_end_end: string/key to distance last destination (car) destination (request)
 
         :return: dict of vehicle ids with corresponding current position
         '''
         current_state_dict = {G_V_OP_ID:self.op_id, G_V_VID:self.vid, str_pos: self.pos}
-        if self.assigned_route:
-            current_state_dict[str_l_dest] = self.assigned_route[-1].destination_pos
-            current_state_dict[str_num_stops] = len(self.assigned_route)
+
+        if not rid == None and not rq_object == None:
+            current_state_dict[G_RQ_ID] = rid
+
+            start_pos, end_pos = rq_object.get_origin_pos(), rq_object.get_destination_pos()
+            _, tt_start_start, _ = self.routing_engine.return_travel_costs_1to1(self.pos, start_pos)
+            current_state_dict[str_start_start] = tt_start_start
+            if self.assigned_route:
+                tuple_last_position = self.assigned_route[-1].destination_pos
+                current_state_dict[str_l_dest] = tuple_last_position
+                current_state_dict[str_num_stops] = len(self.assigned_route)
+                _, tt_end_start, _ = self.routing_engine.return_travel_costs_1to1(tuple_last_position, start_pos)
+                current_state_dict[str_end_start] = tt_end_start
+                _, tt_end_end, _ = self.routing_engine.return_travel_costs_1to1(tuple_last_position, end_pos)
+                current_state_dict[str_end_end] = tt_end_end
+            else:
+                current_state_dict[str_l_dest] = self.pos
+                current_state_dict[str_num_stops] = 0
+                current_state_dict[str_end_start] = tt_start_start
+                _, tt_end_end, _ = self.routing_engine.return_travel_costs_1to1(self.pos, end_pos)
+                current_state_dict[str_end_end] = tt_end_end
         else:
-            current_state_dict[str_l_dest] = self.pos
-            current_state_dict[str_num_stops] = 0
+            if self.assigned_route:
+                current_state_dict[G_RQ_ID] = None
+
+                tuple_last_position = self.assigned_route[-1].destination_pos
+                current_state_dict[str_l_dest] = tuple_last_position
+                current_state_dict[str_num_stops] = len(self.assigned_route)
+
+                current_state_dict[str_start_start] = None
+                current_state_dict[str_end_start] = None
+                current_state_dict[str_end_end] = None
+            else:
+                current_state_dict[G_RQ_ID] = None
+
+                current_state_dict[str_l_dest] = self.pos
+                current_state_dict[str_num_stops] = 0
+
+                current_state_dict[str_start_start] = None
+                current_state_dict[str_end_start] = None
+                current_state_dict[str_end_end] = None
         current_state_dict[str_pax] = self.get_nr_pax_without_currently_boarding()
         return current_state_dict
 

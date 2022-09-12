@@ -184,6 +184,15 @@ class Demand:
             # LOG.info(f"\t ... just wrote {current_buffer_size} entries from buffer to customer output file.")
             LOG.debug(f"\t ... just wrote {current_buffer_size} entries from buffer to customer output file.")
 
+    def get_user_stats_start_end(self):
+        """
+        Method that feeds back start and end position of user stats. Initial usage for creation of database. Request ID
+        given back as additional parameter for better structure.
+
+        :return: list of (request_id, start, end) tuples
+        """
+        return [(dict['request_id'], dict['start'], dict['end']) for dict in self.user_stat_buffer]
+
     def record_user(self, rid):
         try:
             self.user_stat_buffer.append(self.rq_db[rid].record_data())
