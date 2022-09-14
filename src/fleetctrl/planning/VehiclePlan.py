@@ -841,7 +841,9 @@ class VehiclePlan:
                 self.pax_info[rid] = [rq.pu_time]
             #LOG.verbose("init pax {} | {} | {}".format(c_pax, veh_obj.pax, self.pax_info))
         # LOG.debug(f"c_time 1 {c_time}")
-        for i, pstop in enumerate(self.list_plan_stops[start_stop_index:], start=start_stop_index):
+        for i in range(start_stop_index, len(self.list_plan_stops)):
+            pstop = self.list_plan_stops[i]
+        #for i, pstop in enumerate(self.list_plan_stops[start_stop_index:], start=start_stop_index):
             pstop_pos = pstop.get_pos()
             if c_pos != pstop_pos:
                 if not is_feasible and not keep_feasible:
