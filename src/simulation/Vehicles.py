@@ -45,7 +45,7 @@ class SimulationVehicle:
         self.max_pax = int(veh_data[G_VTYPE_MAX_PAX])
         self.max_parcels = int(veh_data.get(G_VTYPE_MAX_PARCELS, 0))
         self.daily_fix_cost = float(veh_data[G_VTYPE_FIX_COST])
-        self.distance_cost = float(veh_data[G_VTYPE_DIST_COST])
+        self.distance_cost = float(veh_data[G_VTYPE_DIST_COST])/1000.0
         self.battery_size = float(veh_data[G_VTYPE_BATTERY_SIZE])
         self.range = float(veh_data[G_VTYPE_RANGE])
         self.soc_per_m = 1/(self.range*1000)
