@@ -268,6 +268,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
                     self.vid_with_reserved_rids[prev_vid] = list_reserved_rids
                 else:
                     del self.vid_with_reserved_rids[prev_vid]
+        if prq.get_reservation_flag():
+            self.reservation_module.user_cancels_request(rid, simulation_time)
         try:
             del self.rq_dict[rid]
         except KeyError:
