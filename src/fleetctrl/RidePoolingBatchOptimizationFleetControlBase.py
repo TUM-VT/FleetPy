@@ -323,6 +323,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         :return: None
         """
         if self.rid_to_assigned_vid.get(rid) is not None:
+            self.rq_dict[rid].set_reservation_flag(False)
             self.RPBO_Module.add_new_request(rid, self.rq_dict[rid], is_allready_assigned=True)
         else:
             self.RPBO_Module.add_new_request(rid, self.rq_dict[rid])

@@ -126,7 +126,6 @@ class FleetControlBase(metaclass=ABCMeta):
         self.reservation_module : ReservationBase = res_class(self, operator_attributes, dir_names, solver=self.solver)
         self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_RES)
         self.rq_dict : Dict[Any, PlanRequest] = {}  # rid_struct -> PlanRequest
-        self.reserved_base_rids = {}  # base_rid -> ept ; activated for optimization if ept - opt_horizon <= sim_time
         self.begin_approach_buffer_time = operator_attributes.get(G_RA_RES_APP_BUF_TIME, 0)
 
         # required fleet control parameters -> create error if invalid entries
@@ -513,22 +512,6 @@ class FleetControlBase(metaclass=ABCMeta):
         for rid in rids_to_reveal:
             LOG.debug(f"activate {rid} with for global optimisation at time {simulation_time}!")
             self._prq_from_reservation_to_immediate(rid, simulation_time)
-            # TODO : is the following needed? reservation flag can be usefull for assignment objective
-            # prq = self.rq_dict[base_rid]
-            # prq.set_reservation_flag(False)
-        # for base_rid, epa in sorted(self.reserved_base_rids.items(), key=lambda x: x[1]):
-        #     if epa - simulation_time > self.opt_horizon:
-        #         break
-        #     else:
-        #         prq = self.rq_dict[base_rid]
-        #         LOG.debug(f"activate {base_rid} with epa {epa} for global optimisation at time {simulation_time}!")
-        #         prq.set_reservation_flag(False)
-        #         self._prq_from_reservation_to_immediate(base_rid, simulation_time)
-        #         try:
-        #             del self.reserved_base_rids[base_rid]
-        #         except KeyError:
-        #             # TODO # no problem, but think about why the algorithm can land here.
-        #             pass
         self._call_time_trigger_request_batch(simulation_time)
         self._call_time_trigger_additional_tasks(simulation_time)
 

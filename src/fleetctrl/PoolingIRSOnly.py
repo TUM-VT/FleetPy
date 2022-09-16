@@ -210,12 +210,8 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         :param sim_time: current simulation time
         :return: None
         """
-        for base_rid, epa in sorted(self.reserved_base_rids.items(), key=lambda x: x[1]):
-            if epa - sim_time > self.opt_horizon:
-                break
-            else:
-                LOG.debug(f"activate {base_rid} with epa {epa} for global optimisation at time {sim_time}!")
-                del self.reserved_base_rids[base_rid]
+        LOG.debug(f"activate {rid} for global optimisation at time {sim_time}!")
+        self.rq_dict[rid].set_reservation_flag(False)
 
     def _call_time_trigger_request_batch(self, simulation_time):
         """This method can be used to perform time-triggered proccesses, e.g. the optimization of the current
