@@ -168,6 +168,10 @@ G_RA_TW_HARD = "op_time_window_hardness"    # 1 -> soft | 2 -> hard # TODO # thi
 G_RA_TW_LENGTH = "op_time_window_length"
 G_RA_LOCK_RID_VID = "op_lock_rid_vid_assignment" # no re-assignment if false
 
+G_RA_OP_NW_TYPE = "op_network_type"    # if given, operator loads a different network for its usage (currently only for reservation)
+G_RA_OP_NW_NAME = "op_network_name"     # if given, operator loads a different network for its usage (currently only for reservation)
+G_RA_OP_NW_DYN_F = "op_network_dynamics_file" # if given, operator loads a different network for its usage (currently only for reservation)
+
 # reservation
 G_RA_RES_MOD = "op_reservation_module"
 G_RA_OPT_HOR = "op_short_term_horizon"  # time ahead when requests will be treated as reservation requests

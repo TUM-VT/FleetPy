@@ -226,6 +226,20 @@ class NetworkTTMatrix(NetworkBase):
                         LOG.info("update network at {}".format(simulation_time))
                         break
         return tt_updated
+    
+    def reset_network(self, simulation_time: float):
+        """ this method is used in case a module changed the travel times to future states for forecasts
+        it resets the network to the travel times a stimulation_time
+        :param simulation_time: current simulation time"""
+        if self.sorted_tt_factor_times:
+            if len(self.sorted_tt_factor_times) > 2:
+                for i in range(len(self.sorted_tt_factor_times) - 1):
+                    if self.sorted_tt_factor_times[i] <= simulation_time and self.sorted_tt_factor_times[i+1] > simulation_time:
+                        self.update_network(self.sorted_tt_factor_times[i], update_state=True)
+                        return
+                if self.sorted_tt_factor_times[-1] <= simulation_time:
+                    self.update_network(self.sorted_tt_factor_times[-1], update_state=True)
+                    return
 
     def get_number_network_nodes(self):
         """This method returns a list of all street network node indices.

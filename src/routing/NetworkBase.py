@@ -202,6 +202,12 @@ class NetworkBase(metaclass=ABCMeta):
         :rtype: bool
         """
         pass
+    
+    def reset_network(self, simulation_time : float):
+        """ this method is used in case a module changed the travel times to future states for forecasts
+        it resets the network to the travel times a stimulation_time
+        :param simulation_time: current simulation time"""
+        raise NotImplementedError(f"the method reset_network is not implemented for this network class")
 
     @abstractmethod
     def get_number_network_nodes(self):
