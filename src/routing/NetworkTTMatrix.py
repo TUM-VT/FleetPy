@@ -231,7 +231,9 @@ class NetworkTTMatrix(NetworkBase):
         """ this method is used in case a module changed the travel times to future states for forecasts
         it resets the network to the travel times a stimulation_time
         :param simulation_time: current simulation time"""
+        LOG.debug("reset network at {}".format(simulation_time))
         if self.sorted_tt_factor_times:
+            self.current_tt_factor_index = 0
             if len(self.sorted_tt_factor_times) > 2:
                 for i in range(len(self.sorted_tt_factor_times) - 1):
                     if self.sorted_tt_factor_times[i] <= simulation_time and self.sorted_tt_factor_times[i+1] > simulation_time:
