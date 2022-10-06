@@ -507,6 +507,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
             offer = TravellerOffer(prq.get_rid_struct(), self.op_id, pu_time - prq.rq_time, do_time - pu_time,
                                    self._compute_fare(simulation_time, prq, assigned_vehicle_plan))
             prq.set_service_offered(offer)  # has to be called
+            self.RPBO_Module.set_request_assigned(prq.get_rid_struct())
         else:
             offer = self._create_rejection(prq, simulation_time)
         return offer
