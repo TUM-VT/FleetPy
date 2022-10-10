@@ -167,6 +167,7 @@ G_RA_HEU = "op_applied_heuristic"
 G_RA_TW_HARD = "op_time_window_hardness"    # 1 -> soft | 2 -> hard # TODO # think about renaming to update_time_window_hardness
 G_RA_TW_LENGTH = "op_time_window_length"
 G_RA_LOCK_RID_VID = "op_lock_rid_vid_assignment" # no re-assignment if false
+
 # reservation
 G_RA_RES_MOD = "op_reservation_module"
 G_RA_OPT_HOR = "op_short_term_horizon"  # time ahead when requests will be treated as reservation requests
@@ -177,6 +178,7 @@ G_RA_MAX_BATCH_CONCAT = "op_res_batch_concat"   # how many batches are schedule 
 G_RA_RES_BOPT_TS = "op_res_opt_timestep"    # time interval of reservation module
 G_RA_RES_LG_MAX_DEPTH = "op_res_loc_graph_max_depth"    # for GraphContractionTSP -> depth of local graph for evalutating new sol
 G_RA_RES_LG_MAX_CUT = "op_res_loc_graph_max_cut_time"   # for GraphContractionTSP -> only add edges wtih this max time horizon and cut rest
+G_RA_RES_APP_BUF_TIME = "op_res_approach_buffer_time"   # time buffer before vehicle starts driving to the position of an assigned VRL with reservation in future
 
 # RV heuristics
 G_RA_MAX_VR = "op_max_VR_con"
@@ -211,6 +213,7 @@ G_OP_REPO_EXP_TP = "op_repo_exp_trip_profit"
 G_OP_REPO_SR_F = "op_repo_sharing_rate_file"
 G_OP_REPO_QBT = "op_repo_quadratic_benefit_threshold"
 G_OP_REPO_FRONTIERS_M = "op_repo_frontiers_method"          # Method name for Frontier's approaches
+G_OP_REPO_RES_PUF = "op_repo_res_buffer_time"       # if reservation leg, how long in future to be considered for repo
 
 # Dynamic Pricing
 G_OP_DYN_P_M = "op_dyn_pricing_method"
@@ -522,6 +525,7 @@ class VRL_STATES(Enum):
     REPOSITION = (11, "reposition")
     TO_CHARGE = (12, "to_charge")
     TO_DEPOT = (13, "to_depot")
+    TO_RESERVATION = (14, "to_reservation")
 
     @DynamicClassAttribute
     def value(self):
@@ -536,7 +540,7 @@ class VRL_STATES(Enum):
         # print("WARNING: G_VEHICLE_STATUS_DICT is still accessed! (misc.globals)")
         return {status.value: status.display_name for status in VRL_STATES}
 
-G_DRIVING_STATUS = [VRL_STATES.ROUTE, VRL_STATES.REPOSITION, VRL_STATES.TO_CHARGE, VRL_STATES.TO_DEPOT] # [10,11,12,13]
+G_DRIVING_STATUS = [VRL_STATES.ROUTE, VRL_STATES.REPOSITION, VRL_STATES.TO_CHARGE, VRL_STATES.TO_DEPOT, VRL_STATES.TO_RESERVATION] # [10,11,12,13]
 G_REVENUE_STATUS = [VRL_STATES.BOARDING, VRL_STATES.WAITING, VRL_STATES.ROUTE, VRL_STATES.REPOSITION] # [1, 4, 10, 11]
 G_LAZY_STATUS = [VRL_STATES.WAITING] # [4]     # VRLs not actively planned and dont do anything (i.e. waiting)
 G_LOCK_DURATION_STATUS = [VRL_STATES.BLOCKED_INIT, VRL_STATES.BOARDING, VRL_STATES.BOARDING_WITH_CHARGING] # [-1, 1, 3]

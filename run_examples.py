@@ -304,3 +304,9 @@ if __name__ == "__main__":
         check_assertions(list_results, all_scenario_assert_dict)
         print("Computation with multiprocessing took {}s".format(time.perf_counter() - t0))
         print(" -> multiprocessing only usefull for large vehicle fleets")
+        
+        # j) Pooling - multiple operators and broker
+        log_level = "info"
+        cc = os.path.join(scs_path, "constant_config_broker.csv")
+        sc = os.path.join(scs_path, "example_broker.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)

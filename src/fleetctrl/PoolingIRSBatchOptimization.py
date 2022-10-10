@@ -10,6 +10,20 @@ from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000
 
+INPUT_PARAMETERS_PoolingIRSAssignmentBatchOptimization = {
+    "doc" : """Pooling class that combines an immediate response and batch optimization:
+        - requests enter system continuously
+        - offer has to be created immediately by an insertion heuristic
+        - request replies immediately
+            -> there can never be 2 requests at the same time waiting for an offer!
+        - re-optimization of solution after certain time interval""",
+    "inherit" : "RidePoolingBatchOptimizationFleetControlBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetControlBase):
     """Pooling class that combines an immediate response and batch optimization:

@@ -42,6 +42,23 @@ PROGRESS_LOOP_VEHICLE_STATUS = [VRL_STATES.IDLE,VRL_STATES.CHARGING,VRL_STATES.R
 # check for computation on LRZ cluster
 if os.environ.get('SLURM_PROCID'):
     PROGRESS_LOOP = "off"
+    
+INPUT_PARAMETERS_FleetSimulationBase = {
+    "doc" : "this is the base simulation class used for all simulations within FleetPy",
+    "inherit" : None,
+    "input_parameters_mandatory": [
+        G_SCENARIO_NAME, G_SIM_START_TIME, G_SIM_END_TIME, G_NR_OPERATORS, G_RANDOM_SEED, G_NETWORK_NAME,
+        G_DEMAND_NAME, G_RQ_FILE, G_AR_MAX_DEC_T
+    ],
+    "input_parameters_optional": [
+        G_SIM_TIME_STEP, G_NR_CH_OPERATORS, G_SIM_REALTIME_PLOT_FLAG, "log_level", G_SIM_ROUTE_OUT_FLAG, G_SIM_REPLAY_FLAG, G_INIT_STATE_SCENARIO,
+        G_FC_TYPE, G_ZONE_SYSTEM_NAME, G_FC_TR, G_FC_FNAME, G_INFRA_NAME
+    ],
+    "mandatory_modules": [
+        G_SIM_ENV, G_NETWORK_TYPE, G_RQ_TYP1, G_OP_MODULE
+    ], 
+    "optional_modules": []
+}
 
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -335,7 +352,7 @@ class FleetSimulationBase:
             operator_attributes = self.list_op_dicts[op_id]
             operator_module_name = operator_attributes[G_OP_MODULE]
             self.op_output[op_id] = []  # shared list among vehicles
-            if not operator_module_name == "PtFleetControl":
+            if not operator_module_name == "LinebasedFleetControl":
                 fleet_composition_dict = operator_attributes[G_OP_FLEET]
                 list_vehicles = []
                 vid = 0
@@ -353,8 +370,8 @@ class FleetSimulationBase:
                 self.operators.append(OpClass(op_id, operator_attributes, list_vehicles, self.routing_engine, self.zones,
                                             self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values())))
             else:
-                from dev.pubtrans.PtFleetControl import PtFleetControl
-                OpClass = PtFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()))
+                from dev.fleetctrl.LinebasedFleetControl import LinebasedFleetControl
+                OpClass = LinebasedFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()))
                 init_vids = OpClass.return_vehicles_to_initialize()
                 list_vehicles = []
                 for vid, veh_type in init_vids.items():
@@ -395,35 +412,35 @@ class FleetSimulationBase:
         standard_evaluation(output_dir)
         self.add_evaluate()
 
-    def initialize_operators_and_vehicles(self):
-        """ this function loads and initialzie all operator classes and its vehicle objects
-        and sets corresponding outputs"""
-        veh_type_list = []
-        route_output_flag = self.scenario_parameters.get(G_SIM_ROUTE_OUT_FLAG, True)
-        replay_flag = self.scenario_parameters.get(G_SIM_REPLAY_FLAG, False)
-        for op_id in range(self.n_op):
-            self.op_output[op_id] = []  # shared list among vehicles
-            operator_attributes = self.list_op_dicts[op_id]
-            operator_module_name = operator_attributes[G_OP_MODULE]
-            fleet_composition_dict = operator_attributes[G_OP_FLEET]
-            list_vehicles = []
-            vid = 0
-            for veh_type, nr_veh in fleet_composition_dict.items():
-                for _ in range(nr_veh):
-                    veh_type_list.append([op_id, vid, veh_type])
-                    tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
-                                                    self.routing_engine, self.demand.rq_db,
-                                                    self.op_output[op_id], route_output_flag,
-                                                    replay_flag)
-                    list_vehicles.append(tmp_veh_obj)
-                    self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
-                    vid += 1
-            OpClass = load_fleet_control_module(operator_module_name)
-            self.operators.append(OpClass(op_id, operator_attributes, list_vehicles, self.routing_engine, self.zones,
-                                        self.scenario_parameters, self.dir_names, self.cdp))
-        veh_type_f = os.path.join(self.dir_names[G_DIR_OUTPUT], "2_vehicle_types.csv")
-        veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
-        veh_type_df.to_csv(veh_type_f, index=False)
+    # def initialize_operators_and_vehicles(self): TODO I think this is depricated!
+    #     """ this function loads and initialzie all operator classes and its vehicle objects
+    #     and sets corresponding outputs"""
+    #     veh_type_list = []
+    #     route_output_flag = self.scenario_parameters.get(G_SIM_ROUTE_OUT_FLAG, True)
+    #     replay_flag = self.scenario_parameters.get(G_SIM_REPLAY_FLAG, False)
+    #     for op_id in range(self.n_op):
+    #         self.op_output[op_id] = []  # shared list among vehicles
+    #         operator_attributes = self.list_op_dicts[op_id]
+    #         operator_module_name = operator_attributes[G_OP_MODULE]
+    #         fleet_composition_dict = operator_attributes[G_OP_FLEET]
+    #         list_vehicles = []
+    #         vid = 0
+    #         for veh_type, nr_veh in fleet_composition_dict.items():
+    #             for _ in range(nr_veh):
+    #                 veh_type_list.append([op_id, vid, veh_type])
+    #                 tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+    #                                                 self.routing_engine, self.demand.rq_db,
+    #                                                 self.op_output[op_id], route_output_flag,
+    #                                                 replay_flag)
+    #                 list_vehicles.append(tmp_veh_obj)
+    #                 self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
+    #                 vid += 1
+    #         OpClass = load_fleet_control_module(operator_module_name)
+    #         self.operators.append(OpClass(op_id, operator_attributes, list_vehicles, self.routing_engine, self.zones,
+    #                                     self.scenario_parameters, self.dir_names, self.cdp))
+    #     veh_type_f = os.path.join(self.dir_names[G_DIR_OUTPUT], "2_vehicle_types.csv")
+    #     veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
+    #     veh_type_df.to_csv(veh_type_f, index=False)
 
     def load_initial_state(self):
         """This method initializes the simulation vehicles. It can consider an initial state file. Moreover, an
@@ -468,7 +485,7 @@ class FleetSimulationBase:
                     if not boarding_nodes:
                         boarding_nodes = list(range(self.routing_engine.get_number_network_nodes()))
                     op_init_distributions[op_id] = {bn : 1.0/len(boarding_nodes) for bn in boarding_nodes}
-            LOG.debug("init distributons: {}".format(op_init_distributions))
+            #LOG.debug("init distributons: {}".format(op_init_distributions))
             for sim_vid in set_unassigned_vid:
                 veh_obj = self.sim_vehicles[sim_vid]
                 if veh_obj.pos is None:

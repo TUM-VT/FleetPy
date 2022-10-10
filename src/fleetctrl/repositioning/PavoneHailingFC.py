@@ -1,6 +1,6 @@
 import random
 import numpy as np
-from src.fleetctrl.repositioning.RepositioningBase import RepositionBase
+from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 from src.misc.globals import *
 
 # from IPython import embed
@@ -10,8 +10,20 @@ import logging
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_PavoneHailingRepositioningFC = {
+    "doc" : """This class implements an adaption of the real-time rebalancing policy formulated in section 4.3 of
+    Zhang, R.; Pavone, M. (2016): Control of robotic mobility-on-demand systems. A queueing-theoretical perspective.
+    In: The International Journal of Robotics Research 35 (1-3), S. 186–203. DOI: 10.1177/0278364915581863.
 
-class PavoneHailingRepositioningFC(RepositionBase):
+    The adaption is that the supply side is forecast using arrival forecast and excess vehicles cannot be negative.""",
+    "inherit" : "RepositioningBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
+class PavoneHailingRepositioningFC(RepositioningBase):
     """This class implements an adaption of the real-time rebalancing policy formulated in section 4.3 of
     Zhang, R.; Pavone, M. (2016): Control of robotic mobility-on-demand systems. A queueing-theoretical perspective.
     In: The International Journal of Robotics Research 35 (1-3), S. 186–203. DOI: 10.1177/0278364915581863.
@@ -238,6 +250,11 @@ class PavoneHailingRepositioningFC(RepositionBase):
                 model.write(model_f)
                 LOG.warning(f"Operator {self.fleetctrl.op_id}: No Optimal Solution! status {model.status}"
                             f" -> no repositioning")
+                LOG.info(f"list zones: {list_zones}")
+                LOG.info(f"number vehicles: {number_idle_vehicles}")
+                LOG.info(f"vie dict: {len(v_i_e_dict.keys())} | {v_i_e_dict}")
+                LOG.info(f"vid dict: {len(v_i_d_dict.keys())} | {v_i_d_dict}")
+                LOG.info(f"zone dict: {len(zone_dict.keys())} | {zone_dict}")
         return alpha_od, od_reposition_trips
 
     def _optimization_cplex(self, sim_time, list_zones, v_i_e_dict, v_i_d_dict, number_idle_vehicles, zone_dict):
@@ -303,6 +320,19 @@ class PavoneHailingRepositioningFC(RepositionBase):
                     od_reposition_trips.extend([(o_region, d_region)] * round_solution_integer)
         return alpha_od, od_reposition_trips
 
+INPUT_PARAMETERS_PavoneHailingV2RepositioningFC = {
+    "doc" : """This class implements an adaption of the real-time rebalancing policy formulated in section 4.3 of
+    Zhang, R.; Pavone, M. (2016): Control of robotic mobility-on-demand systems. A queueing-theoretical perspective.
+    In: The International Journal of Robotics Research 35 (1-3), S. 186–203. DOI: 10.1177/0278364915581863.
+
+    The adaption is that the supply side is forecast using arrival forecast. Moreover, the computation of excess
+    vehicles is more complex to allow negative values, but consistent solution during global vehicle shortage.""",
+    "inherit" : "RepositioningBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
     """This class implements an adaption of the real-time rebalancing policy formulated in section 4.3 of
@@ -349,6 +379,7 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         total_idle_vehicles = sum(number_idle_vehicles.values())
         if total_idle_vehicles == 0:
             return []
+        #LOG.info(f"total_idle_vehicles {total_idle_vehicles}")
         nr_regions_with_demand = 0
         v_i_e_dict = {} # can also contain negative values now!
         omegas = []
@@ -368,12 +399,14 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         # 1) the number of total excess vehicles (positive or negative!) has to be smaller than the total number of
         #       idle vehicles!
         total_excess_vehicles = sum(list(v_i_e_dict.values()))
+        #LOG.info(f"total_excess_vehicles {total_excess_vehicles}")
         if abs(total_excess_vehicles) > total_idle_vehicles:
             for zone_id, old_v_i_e in v_i_e_dict.items():
-                v_i_e_dict[zone_id] = old_v_i_e / total_idle_vehicles
+                v_i_e_dict[zone_id] = old_v_i_e / total_excess_vehicles * total_idle_vehicles
         # rebalancing policy -> divide excess vehicles evenly among all zones
         v_i_d_dict = {}
         total_excess_vehicles = sum(list(v_i_e_dict.values()))
+        #LOG.info(f"total_excess_vehicles {total_excess_vehicles}")
         try:
             avg_excess_vehicles_per_zone = int(total_excess_vehicles / zone_counter)
         except ZeroDivisionError:

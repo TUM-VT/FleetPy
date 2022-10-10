@@ -15,6 +15,15 @@ Definition of Route: [start_node_id, intermediary_node_id1, intermediary_node_id
 """
 from abc import abstractmethod, ABCMeta
 
+INPUT_PARAMETERS_NetworkBase = {
+    "doc" : "this is the base abstract network class",
+    "inherit" : None,
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 
 def customized_section_cost_function(travel_time, travel_distance, current_node_index):
     """computes the customized section cost for routing

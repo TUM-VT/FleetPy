@@ -120,6 +120,17 @@ class SimulationVehicleStruct():
         else:
             return sum([rq.nr_pax for rq in self.pax if rq.is_parcel])
 
+INPUT_PARAMETERS_BatchAssignmentAlgorithmBase = {
+    "doc" :  """This class is used to compute new vehicle assignments with an algorithm
+        this class should be initialized when the corresponding fleet controller is initialized """,
+    "inherit" : None,
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
 
     def __init__(self, fleetcontrol : FleetControlBase, routing_engine : NetworkBase, sim_time : int, obj_function : Callable,
@@ -140,8 +151,8 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
             self.solver = fleetcontrol.solver
         self.routing_engine = routing_engine
         self.sim_time = sim_time
-        self.std_bt = operator_attributes[G_OP_CONST_BT]
-        self.add_bt = operator_attributes[G_OP_ADD_BT]
+        self.std_bt = operator_attributes.get(G_OP_CONST_BT, 0)
+        self.add_bt = operator_attributes.get(G_OP_ADD_BT, 0)
         self.objective_function = obj_function
         self.optimisation_cores = optimisation_cores
         self.operator_attributes = operator_attributes
@@ -384,4 +395,8 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
                     del self.mutually_exclusive_cluster_id_to_rids[mut_cluster_id]
                 except:
                     pass
+                
+    def delete_vehicle_database_entries(self, vid):
+        """ triggered when all database entries of vehicle vid should be deleted"""
+        pass
 

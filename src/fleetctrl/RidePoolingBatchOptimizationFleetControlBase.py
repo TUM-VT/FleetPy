@@ -41,6 +41,17 @@ def load_parallelization_manager(rp_batch_optimizer_str):
     else:
         return None
 
+INPUT_PARAMETERS_RidePoolingBatchOptimizationFleetControlBase = {
+    "doc" : """THIS CLASS IS FOR INHERITANCE ONLY.
+        this class can be used for common ride-pooling studies using a batch assignmant algorithm for optimisation
+        triggered in the _time_trigger_request_batch() method""",
+    "inherit" : "FleetControlBase",
+    "input_parameters_mandatory": [G_SLAVE_CPU, G_RA_REOPT_TS],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [G_RA_RP_BATCH_OPT],
+    "optional_modules": []
+}
 
 class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
     def __init__(self, op_id : int, operator_attributes : dict, list_vehicles : List[SimulationVehicle],
@@ -494,6 +505,5 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
                                    self._compute_fare(simulation_time, prq, assigned_vehicle_plan))
             prq.set_service_offered(offer)  # has to be called
         else:
-            offer = Rejection(prq.get_rid(), self.op_id)
-            prq.set_service_offered(offer)
+            offer = self._create_rejection(prq, simulation_time)
         return offer

@@ -17,6 +17,16 @@ LARGE_INT = 100000
 MAX_LENGTH_OF_TREES = 1024 # TODO
 RETRY_TIME = 24*3600
 
+INPUT_PARAMETERS_BatchInsertionHeuristicAssignment = {
+    "doc" :  """this class uses a simple insertion heuristic to assign requests in batch that havent been assigned before """,
+    "inherit" : "BatchAssignmentAlgorithmBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
     """ this class uses a simple insertion heuristic to assign requests in batch that havent been assigned before """
     

@@ -21,6 +21,15 @@ from src.FleetSimulationBase import FleetSimulationBase
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_ImmediateDecisionsSimulation = {
+    "doc" : "in this simulation each request immediatly decides for or against an offer",
+    "inherit" : "FleetSimulationBase",
+    "input_parameters_mandatory": [],   # TODO requires G_AR_MAX_DEC_T == 0 (specify somehow?)
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # functions
