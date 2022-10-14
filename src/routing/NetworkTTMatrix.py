@@ -694,8 +694,10 @@ class NetworkTTMatrix(NetworkBase):
         current_node = origin_node
         node_list = [current_node.node_index]
         route_tt = 0.0
+        route_td = 0.0
         scaled_route_tt = 0.0
         total_tt = self.tt[origin_node.node_index][destination_node.node_index]
+        total_td = self.td[origin_node.node_index][destination_node.node_index]
         if total_tt in [None, np.nan, np.inf]:
             prt_str = f"There is no route from {origin_node} to {destination_node}"
             raise AssertionError(prt_str)
@@ -707,11 +709,15 @@ class NetworkTTMatrix(NetworkBase):
                 if next_node_obj.is_stop_only and next_node_obj != destination_node:
                     continue
                 next_tt = self.tt[current_node.node_index][next_node_id]
+                next_td = self.td[current_node.node_index][next_node_id]
                 from_next_tt = self.tt[next_node_id][destination_node.node_index]
-                if route_tt + next_tt + from_next_tt - total_tt < EPS:
+                from_next_td = self.td[next_node_id][destination_node.node_index]
+                if (route_tt + next_tt + from_next_tt - total_tt < EPS) and \
+                        (route_td + next_td + from_next_td - total_td < 0.1):
                     found_next_node = True
                     node_list.append(next_node_id)
                     route_tt += next_tt
+                    route_td += next_td
                     scaled_route_tt += (next_tt * self.tt_factor)
                     current_node = next_node_obj
                     break
