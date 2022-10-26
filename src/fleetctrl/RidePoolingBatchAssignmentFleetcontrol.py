@@ -179,7 +179,6 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
             offer = TravellerOffer(rq.get_rid(), self.op_id, pu_time - rq.get_rq_time(), do_time - pu_time, int(rq.init_direct_td * self.dist_fare + self.base_fare),
                     additional_parameters=add_offer)
             rq.set_service_offered(offer)
-            self.RPBO_Module.set_request_assigned(rq.get_rid_struct())
         else:
             offer = self._create_rejection(rq, simulation_time)
         return offer
