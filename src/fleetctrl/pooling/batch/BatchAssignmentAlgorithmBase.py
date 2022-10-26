@@ -220,6 +220,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         """ this function marks a request as assigned. its assignment is therefor treatet as hard constraint in the optimization problem formulation
         also all requests with the same mutually_exclusive_cluster_id are set as assigned
         :param rid: plan_request_id """
+        LOG.debug(f"set request {rid} as assigned!")
         try:
             del self.unassigned_requests[rid]
         except:
