@@ -506,6 +506,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param is_external_vehicle_plan: should be set to True, if the assigned_plan has not been computed within this algorithm
         :param _is_init_sol: used within the code, if the init solution creater set this solution 
         """
+        super().set_assignment(vid, assigned_plan, is_external_vehicle_plan=is_external_vehicle_plan)
         if assigned_plan is None:
             self.current_assignments[vid] = None
         else:
