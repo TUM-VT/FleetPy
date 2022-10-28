@@ -3,7 +3,6 @@ from typing import Dict, List, Any, Tuple, TYPE_CHECKING, Callable
 
 from src.fleetctrl.pooling.immediate.insertion import simple_insert
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan, BoardingPlanStop, PlanStop
-import src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignment as AlonsoMoraAssignment
 
 if TYPE_CHECKING:
     from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import SimulationVehicleStruct
@@ -18,6 +17,14 @@ def remove_non_routing_planstops_and_copy(veh_plan : VehiclePlan, veh_obj : Simu
                                           routing_engine : NetworkBase, sim_time : int) -> VehiclePlan:
     """this funtion removes all planstops that are empty (i.e. not locked, not end locked and not boarding/charging processes)"""
     return veh_plan.copy_and_remove_empty_planstops(veh_obj, sim_time, routing_engine)
+
+def getRidsFromRTVKey(rtv_key) -> List[Any]:
+    """ this function returns a list of plan_request_ids corresponding to the rtv_key
+    :param rtv_key: rtv_key corresponding to an v2rb-obj
+    :return: list of planrequest_ids """
+    if rtv_key is None:
+        return []
+    return rtv_key[1:]
 
 class V2RB():
     """ this class is a collection of feasible vehicle plan for a specific vehicle serving the same requests"""
@@ -143,7 +150,7 @@ class V2RB():
 
     def createLowerV2RB(self, lower_key : tuple, sim_time : int, routing_engine : NetworkBase, obj_function : Callable,
                         rq_dict : Dict[Any, PlanRequest], std_bt : int, add_bt : int) -> V2RB:
-        keep_rids = AlonsoMoraAssignment.getRidsFromRTVKey(lower_key)
+        keep_rids = getRidsFromRTVKey(lower_key)
         #only keep best route
         base_plan = self.veh_plans[0]
         new_plan_list = []
