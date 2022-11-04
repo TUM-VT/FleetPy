@@ -2,14 +2,15 @@ from src.misc.globals import *
 import typing as tp
 if tp.TYPE_CHECKING is True:
     from src.simulation.StationaryProcess import StationaryProcess
+    from src.demand.TravelerModels import RequestBase
 
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Simulation Vehicle Route Leg class
 # ----------------------------------
 class VehicleRouteLeg:
-    def __init__(self, status, destination_pos, rq_dict, power=0.0, duration=None, route=[], locked=False,
-                 earliest_start_time=-1000, earliest_end_time=-1000, stationary_process=None):
+    def __init__(self, status:VRL_STATES, destination_pos:tuple, rq_dict:tp.Dict[tp.Any, RequestBase], power:float=0.0, duration:float=None, route:tp.List[int]=[], locked:bool=False,
+                 earliest_start_time:float=-1000, earliest_end_time:float=-1000, stationary_process:StationaryProcess=None):
         """
         This class summarizes the minimal information for a a route leg. It only reflects a complete state
         with the information of the initial state at the start of the leg.
@@ -40,7 +41,7 @@ class VehicleRouteLeg:
                 raise TypeError("wrong type for duration: {}".format(duration))
         self.stationary_process: StationaryProcess = stationary_process
 
-    def __eq__(self, other):
+    def __eq__(self, other)->bool:
         """Comparison of two VehicleRouteLegs.
 
         :param other: other vehicle route leg
