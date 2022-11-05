@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from src.misc.globals import *
 import typing as tp
 if tp.TYPE_CHECKING is True:
