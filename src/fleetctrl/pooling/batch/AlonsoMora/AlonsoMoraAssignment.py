@@ -1353,6 +1353,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         """
         import gurobipy as gurobi
         
+        model_name = f"AlonsoMoraAssignment: assignment {self.sim_time}"
+        
         vids = {}   #vid -> rtv_keys
         unassigned_rids = {}  #unassigned rid (or cluster_id) -> rtv_keys
         assigned_rids = {}  #assigned rid (or cluster_id) -> rtv_keys
@@ -1365,11 +1367,19 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         while not grb_available and delta_t <= RETRY_TIME:
             try:
                 with gurobi.Env(empty=True) as env:
-                    env.setParam('OutputFlag', 0)
-                    env.setParam('LogToConsole', 0)
-                    env.start()
+                    if self.fleetcontrol.log_gurobi:
+                        with open(os.path.join(self.fleetctrl.dir_names[G_DIR_OUTPUT], "gurobi_log.log"), "a") as f:
+                            f.write(f"\n\n{model_name}\n\n")
+                        env.setParam('OutputFlag', 1)
+                        env.setParam('LogToConsole', 0)
+                        env.setParam('LogFile', os.path.join(self.fleetctrl.dir_names[G_DIR_OUTPUT], "gurobi_log.log") )
+                        env.start()
+                    else:
+                        env.setParam('OutputFlag', 0)
+                        env.setParam('LogToConsole', 0)
+                        env.start()
 
-                    m = gurobi.Model("assignment", env = env)
+                    m = gurobi.Model(model_name, env = env)
                     grb_available = True
 
                     m.setParam(gurobi.GRB.param.Threads, self.optimisation_cores)

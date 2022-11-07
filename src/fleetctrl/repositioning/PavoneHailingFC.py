@@ -175,11 +175,20 @@ class PavoneHailingRepositioningFC(RepositioningBase):
 
     def _optimization_gurobi(self, sim_time, list_zones, v_i_e_dict, v_i_d_dict, number_idle_vehicles, zone_dict):
         import gurobipy
+        model_name = f"PavoneHailingFC: _optimization_gurobi {sim_time}"
         with gurobipy.Env(empty=True) as env:
-            env.setParam('OutputFlag', 0)
-            env.setParam('LogToConsole', 0)
-            env.start()
-            model = gurobipy.Model("PavoneHailingFC", env=env)
+            if self.fleetctrl.log_gurobi:
+                with open(os.path.join(self.fleetctrl.dir_names[G_DIR_OUTPUT], "gurobi_log.log"), "a") as f:
+                    f.write(f"\n\n{model_name}\n\n")
+                env.setParam('OutputFlag', 1)
+                env.setParam('LogToConsole', 0)
+                env.setParam('LogFile', os.path.join(self.fleetctrl.dir_names[G_DIR_OUTPUT], "gurobi_log.log") )
+                env.start()
+            else:
+                env.setParam('OutputFlag', 0)
+                env.setParam('LogToConsole', 0)
+                env.start()
+            model = gurobipy.Model(model_name, env=env)
             model.setParam(gurobipy.GRB.param.Threads, self.fleetctrl.n_cpu)
             model.setObjective(gurobipy.GRB.MINIMIZE)
             # if self.optimisation_timeout:
