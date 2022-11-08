@@ -1368,11 +1368,13 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             try:
                 with gurobi.Env(empty=True) as env:
                     if self.fleetcontrol.log_gurobi:
-                        with open(os.path.join(self.fleetctrl.dir_names[G_DIR_OUTPUT], "gurobi_log.log"), "a") as f:
+                        import os
+                        from src.misc.globals import G_DIR_OUTPUT
+                        with open(os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT], "gurobi_log.log"), "a") as f:
                             f.write(f"\n\n{model_name}\n\n")
                         env.setParam('OutputFlag', 1)
                         env.setParam('LogToConsole', 0)
-                        env.setParam('LogFile', os.path.join(self.fleetctrl.dir_names[G_DIR_OUTPUT], "gurobi_log.log") )
+                        env.setParam('LogFile', os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT], "gurobi_log.log") )
                         env.start()
                     else:
                         env.setParam('OutputFlag', 0)
