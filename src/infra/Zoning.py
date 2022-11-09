@@ -9,6 +9,7 @@ import logging
 import pandas as pd
 import numpy as np
 from scipy.sparse import load_npz
+from pathlib import Path
 
 # src imports
 # -----------
@@ -67,18 +68,13 @@ class ZoneSystem:
         self.current_park_costs = {}
         self.current_park_search_durations = {}
         # reading zone-correlation matrix if available
-        if scenario_parameters.get(G_ZONE_CORR_M_F):
-            # load correlation matrix files; these are saved as sparse matrices by scipy module
-            # important: name of squared matrix depends on linear correlation matrix
-            tmp_k_f = os.path.join(self.zone_general_dir, scenario_parameters[G_ZONE_CORR_M_F])
-            tmp_k2_f = tmp_k_f.replace("zone_to_zone_correlations", "zone_to_zone_squared_correlations")
-            if not os.path.isfile(tmp_k_f) or not os.path.isfile(tmp_k2_f):
-                raise IOError(f"Could not find zone-to-zone correlation files {tmp_k_f} or {tmp_k2_f}!")
-            self.zone_corr_matrix = load_npz(tmp_k_f).todense()
-            self.zone_sq_corr_matrix = load_npz(tmp_k2_f).todense()
-        else:
-            self.zone_corr_matrix = np.eye(len(self.zones))
-            self.zone_sq_corr_matrix = np.eye(len(self.zones))
+        self.zone_corr_matrix = None
+        self.zone_sq_corr_matrix = None
+        self._dynamic_zone_corr_matrix_paths = {}
+        self.current_tt_factor_index = 0
+        self.sorted_tt_factor_times = []
+        self._current_zone_corr_path = None
+        self._load_f2_matrix(scenario_parameters)
         # read forecast files
         if scenario_parameters.get(G_FC_FNAME) and scenario_parameters.get(G_FC_TYPE):
             fc_dir = dir_names.get(G_DIR_FC)
@@ -107,6 +103,61 @@ class ZoneSystem:
             self.fc_times = []
             self.fc_temp_resolution = None
         self.demand = None
+
+    def _load_f2_matrix(self, scenario_parameters):
+        """ Reads zone correlation matrix if available """
+        self.zone_corr_matrix = np.eye(len(self.zones))
+        self.zone_sq_corr_matrix = np.eye(len(self.zones))
+        if scenario_parameters.get(G_ZONE_CORR_M_F):
+            # load correlation matrix files; these are saved as sparse matrices by scipy module
+            # important: name of squared matrix depends on linear correlation matrix
+            tmp_k_f = Path(self.zone_general_dir).joinpath(scenario_parameters[G_ZONE_CORR_M_F])
+            if not tmp_k_f.exists():
+                raise IOError(f"Could not find zone-to-zone correlation files {tmp_k_f}!")
+            file_ext = list(tmp_k_f.name.split("."))[-1]
+            if file_ext == "npz":
+                self.zone_corr_matrix = load_npz(tmp_k_f).todense()
+            elif file_ext == "csv":
+                f2_dynamics_df = pd.read_csv(tmp_k_f)
+                f2_dynamics_df.set_index("simulation_time", inplace=True)
+                for sim_time, tt_folder_path in f2_dynamics_df["matrix_path"].items():
+                    self._dynamic_zone_corr_matrix_paths[int(sim_time)] = Path(self.zone_general_dir, tt_folder_path)
+                self.sorted_tt_factor_times = sorted(self._dynamic_zone_corr_matrix_paths.keys())
+            else:
+                raise IOError(f"Unsupported format given for zone-to-zone correlation file {tmp_k_f}!")
+
+        if scenario_parameters.get(G_ZONE_SQ_CORR_M_F):
+            # load correlation matrix files; these are saved as sparse matrices by scipy module
+            # important: name of squared matrix depends on linear correlation matrix
+            tmp_k2_f = os.path.join(self.zone_general_dir, scenario_parameters[G_ZONE_SQ_CORR_M_F])
+            if not os.path.isfile(tmp_k2_f):
+                raise IOError(f"Could not find zone-to-zone correlation files {tmp_k2_f}!")
+            self.zone_sq_corr_matrix = load_npz(tmp_k2_f).todense()
+
+    def update_zone(self, simulation_time):
+        """This method provides any time updates to zones. At the moment, it only updates correlation matrix if needed
+
+        :param simulation_time: time of simulation
+        :type simulation_time: float
+        :return: True, if new correlation matrix is found; False if not
+        :rtype: bool
+        """
+        corr_updated = False
+        if self.sorted_tt_factor_times:
+            for inx, next_time in enumerate(self.sorted_tt_factor_times[self.current_tt_factor_index:],
+                                            self.current_tt_factor_index):
+                if next_time <= simulation_time:
+                    self.current_tt_factor_index = inx
+                    path = self._dynamic_zone_corr_matrix_paths[next_time]
+                    if self._current_zone_corr_path != path:
+                        assert list(path.name.split("."))[-1] == "npz", "Only sparse scipy matrix format npz is supported for correlation matrix"
+                        self.zone_corr_matrix = load_npz(path).todense()
+                        self._current_zone_corr_path = path
+                        corr_updated = True
+                    if corr_updated is True:
+                        LOG.info(f"update zone correlation at {simulation_time} to {path}")
+                        break
+        return corr_updated
 
     def register_demand_ref(self, demand_ref):
         self.demand = demand_ref

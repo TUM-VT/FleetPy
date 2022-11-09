@@ -73,6 +73,8 @@ class BatchOfferSimulation(FleetSimulationBase):
         # 1)
         self.update_sim_state_fleets(sim_time - self.time_step, sim_time)
         new_travel_times = self.routing_engine.update_network(sim_time)
+        if self.zones is not None:
+            self.zones.update_zone(sim_time)
         if new_travel_times:
             for op_id in range(self.n_op):
                 self.operators[op_id].inform_network_travel_time_update(sim_time)

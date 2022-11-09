@@ -68,6 +68,7 @@ G_NW_DYNAMIC_F = "nw_dynamic_f"
 G_PARK_COST_SCALE = "park_cost_scale"
 G_TOLL_COST_SCALE = "toll_cost_scale"
 G_ZONE_CORR_M_F = "zone_correlation_file"
+G_ZONE_SQ_CORR_M_F = "zone_square_correlation_file"
 
 # forecast attributes
 G_FC_TYPE = "fc_type"
@@ -257,6 +258,10 @@ G_AIMSUN_VEH_TYPE_NAME = "aimsun_vehicle_type_name"
 G_OP_PA_ASSTH = "op_parcel_assignment_threshold"
 G_OP_PA_OBASS = "op_parcel_passenger_ob_assignment"
 G_OP_PA_REDEL = "op_parcel_remaining_delivery_time"
+
+# Imbalance-density aware assignment
+G_OP_ID_COMPROMISE = "op_imbalance_density_compromise"
+G_OP_ID_SHORT_FORECAST_PERIOD = "op_imbalance_density_short_forecast_period"
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Charging Stations/Depots
