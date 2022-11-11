@@ -1,5 +1,9 @@
+from __future__ import annotations
+
 import logging
 LOG = logging.getLogger(__name__)
+
+from typing import TYPE_CHECKING, Tuple, List, Callable
 
 try:
     from . import PriorityQueue_python3 as PQ
@@ -8,11 +12,25 @@ except:
         import src.routing.routing_imports.PriorityQueue_python3 as PQ
     except:
         raise ImportError("couldnt import PriorityQueue_python3")
+    
+if TYPE_CHECKING:
+    from src.routing.NetworkBasic import Node, Edge, NetworkBasic
 
 RAISE_ERROR = False
 
-def shortest_travel_time_cost_function(travel_time, travel_distance, current_node_index):
-    """ standard version of a customized_section_cost_function for computing time shortest routes"""
+def shortest_travel_time_cost_function(travel_time : float, travel_distance : float, current_node_index : int, next_node_index : int) -> float:
+    """ standard version of a customized_section_cost_function for computing time shortest routes
+    :param travel_time: travel_time of a section
+    :type travel time: float
+    :param travel_distance: travel_distance of a section
+    :type travel_distance: float
+    :param current_node_index: index of current_node_obj in dijkstra computation that is already settled
+    :type current_node_index: int
+    :param next_node_index: index of next_node_obj in dijkstra computation that is explored
+    :type next_node_index: int
+    :return: travel_cost_value of section
+    :rtype: float
+    """
     return travel_time
 
 class Router():
@@ -30,7 +48,8 @@ class Router():
     with_arc_flags: if True -> arc_flag filtering for next arcs is used
     ch_flag: contraction hierarchy is used
     """
-    def __init__(self, nw, start_node, destination_nodes = [], mode = None, time_radius = None, max_settled_targets = None, forward_flag = True, ch_flag = False, customized_section_cost_function = None):
+    def __init__(self, nw: NetworkBasic, start_node:int, destination_nodes:List[int] = [], mode:str = None, time_radius:float = None, max_settled_targets:int = None, 
+                 forward_flag:bool = True, ch_flag:bool = False, customized_section_cost_function:Callable[[float,float,int,int],float] = None):
         self.nw = nw
         self.start = start_node
         self.back_end = None
@@ -87,7 +106,7 @@ class Router():
 
         self.n_settled = 0
 
-    def compute(self, return_route = True):
+    def compute(self, return_route:bool = True)->List[Tuple[List[int],Tuple[float,float]]]:
         """computes routes for start -> destination_nodes
         if return_route == True:
             returns list of (route, (tt, dis))
@@ -120,7 +139,7 @@ class Router():
             exit()
         return ret
 
-    def computeBidirectional(self, return_route = True):
+    def computeBidirectional(self, return_route:bool = True)->List[Tuple[List[int],Tuple[float,float]]]:
         """computes bidirectional dijkstra from start to end sequentially for each end_node set
         if return_route == False, only tt and dis are computed"""
         sols = []
@@ -136,7 +155,7 @@ class Router():
             self.dijkstra_number += 1
         return sols
 
-    def createRoutes(self, return_route = True):
+    def createRoutes(self, return_route:bool = True)->List[Tuple[List[int],Tuple[float,float]]]:
         """looks at solutions of standard dijkstras
         returns list of (route, (tt, dis)) for each destination
         tt, dis = -1, -1 if no route is found
@@ -179,7 +198,7 @@ class Router():
                 sol.append( (route, d_node.cost_back))
         return sol
 
-    def createBidirectionalRoute(self, common_node, end, return_route = True):
+    def createBidirectionalRoute(self, common_node:Node, end:int, return_route:bool = True)->List[Tuple[List[int],Tuple[float,float]]]:
         """looks at solutions of standard dijkstras
         input is common_node, where forward and backward dijkstra met
         returns  (route, (tt, dis))
@@ -556,7 +575,7 @@ class Router():
 
 
 
-    def dijkstraStepForwards(self, frontier, current_node_obj, current_cost):
+    def dijkstraStepForwards(self, frontier:PQ.PriorityQueue, current_node_obj:Node, current_cost:float):
         """ one dijkstra step forward
         checks all nodes at end of outgoing arcs
         arcs are filtered depending on preprocessing flags (ch/arcs)
@@ -576,7 +595,7 @@ class Router():
 
         for next_node_obj, next_edge_obj in next_nodes_and_edges:
             edge_tt, edge_distance = next_edge_obj.get_tt_distance()
-            new_end_cost = current_cost + self.customized_section_cost_function(edge_tt, edge_distance, next_node_obj.node_index)
+            new_end_cost = current_cost + self.customized_section_cost_function(edge_tt, edge_distance, current_node_obj.node_index, next_node_obj.node_index)
 
             if next_node_obj.settled != self.dijkstra_number:
                 if next_node_obj.cost_index != -self.dijkstra_number:
@@ -590,7 +609,7 @@ class Router():
                         next_node_obj.prev = current_node_obj
                         frontier.addTask(next_node_obj, new_end_cost)
 
-    def dijkstraStepBackwards(self, frontier, current_node_obj, current_cost):
+    def dijkstraStepBackwards(self, frontier:PQ.PriorityQueue, current_node_obj:Node, current_cost:float):
         """ one dijkstra step backward
         checks all nodes at start of incoming arcs
         arcs are filtered depending on preprocessing flags (ch/arcs)
@@ -606,7 +625,7 @@ class Router():
 
         for next_node_obj, next_edge_obj in next_nodes_and_edges:
             edge_tt, edge_distance = next_edge_obj.get_tt_distance()
-            new_end_cost = current_cost + self.customized_section_cost_function(edge_tt, edge_distance, next_node_obj.node_index)
+            new_end_cost = current_cost + self.customized_section_cost_function(edge_tt, edge_distance, current_node_obj.node_index, next_node_obj.node_index)
 
             if next_node_obj.settled_back != self.dijkstra_number:
                 if next_node_obj.cost_index_back != -self.dijkstra_number:
