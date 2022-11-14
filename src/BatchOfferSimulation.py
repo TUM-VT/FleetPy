@@ -83,6 +83,7 @@ class BatchOfferSimulation(FleetSimulationBase):
             last_time = None
         list_new_traveler_rid_obj = self.demand.get_new_travelers(sim_time, since=last_time)
 
+        self.create_database_2(sim_time, list_new_traveler_rid_obj)
         # 3)
         for rid, rq_obj in list_new_traveler_rid_obj:
             for op_id in range(self.n_op):
@@ -111,7 +112,7 @@ class BatchOfferSimulation(FleetSimulationBase):
             for ch_op in ch_op_dict.values():
                 ch_op.time_trigger(sim_time)
 
-        self.create_database(sim_time, list_new_traveler_rid_obj)
+        # self.create_database(sim_time, list_new_traveler_rid_obj)
 
         self.record_stats()
 
@@ -131,6 +132,8 @@ class BatchOfferSimulation(FleetSimulationBase):
         str_dist_end_start = 'Distance End Vehicle Start Request'
         str_dist_end_end = 'Distance End Vehicle End Request'
         str_rid = 'Request ID'
+        str_cl_remaining_time = 'Remaining Time CL'
+        str_n_assigned_route = 'Number of Assigned Routes'
         path_current_state = os.path.join(self.dir_names[G_DIR_OUTPUT], "current_state.csv")
 
         sorted_sim_vehicle_keys = sorted(self.sim_vehicles.keys())
@@ -141,14 +144,19 @@ class BatchOfferSimulation(FleetSimulationBase):
                                                                                        str_num_stops, str_pax,
                                                                                        str_dist_start_start,
                                                                                        str_dist_end_start,
-                                                                                       str_dist_end_end, rid,
+                                                                                       str_dist_end_end,
+                                                                                       str_cl_remaining_time,
+                                                                                       str_n_assigned_route,
+                                                                                       rid,
                                                                                        rq_obj)
                                        for sim_vid in sorted_sim_vehicle_keys]
                 dict_vehicles_states = {i[G_V_VID]: {str_pos: i[str_pos], str_l_dest: i[str_l_dest], str_pax: i[str_pax],
                                                      str_num_stops: i[str_num_stops],
                                                      str_dist_start_start: i[str_dist_start_start],
                                                      str_dist_end_start: i[str_dist_end_start],
-                                                     str_dist_end_end: i[str_dist_end_end], str_rid: rid}
+                                                     str_dist_end_end: i[str_dist_end_end], str_cl_remaining_time:
+                                                     i[str_cl_remaining_time], str_n_assigned_route:
+                                                     i[str_n_assigned_route], str_rid: rid}
                                         for i in list_vehicle_states}
                 dict_vehicles_states['Sim Time'] = sim_time
                 list_vehicle_state_requests.append(dict_vehicles_states)
@@ -156,13 +164,17 @@ class BatchOfferSimulation(FleetSimulationBase):
             list_vehicle_states = [self.sim_vehicles[sim_vid].return_current_state(str_pos, str_l_dest, str_num_stops,
                                                                                    str_pax, list_start_end_position,
                                                                                    str_dist_start_start,
-                                                                                   str_dist_end_start, str_dist_end_end)
+                                                                                   str_dist_end_start, str_dist_end_end,
+                                                                                   str_cl_remaining_time,
+                                                                                   str_n_assigned_route)
                                    for sim_vid in sorted_sim_vehicle_keys]
             dict_vehicles_states = {i[G_V_VID]: {str_pos: i[str_pos], str_l_dest: i[str_l_dest], str_pax: i[str_pax],
                                                  str_num_stops: i[str_num_stops],
                                                  str_dist_start_start: i[str_dist_start_start],
                                                  str_dist_end_start: i[str_dist_end_start],
-                                                 str_dist_end_end: i[str_dist_end_end]}
+                                                 str_dist_end_end: i[str_dist_end_end], str_cl_remaining_time:
+                                                 i[str_cl_remaining_time], str_n_assigned_route:
+                                                 i[str_n_assigned_route]}
                                     for i in list_vehicle_states}
             dict_vehicles_states['Sim Time'] = sim_time
             list_vehicle_state_requests.append(dict_vehicles_states)
@@ -174,3 +186,56 @@ class BatchOfferSimulation(FleetSimulationBase):
             write_mode, write_header = "w", True
         df_current_DB.set_index('Sim Time', inplace=True)
         df_current_DB.to_csv(path_current_state, mode=write_mode, header=write_header)
+
+    def create_database_2(self, sim_time, list_new_traveler_rid_obj):
+        '''
+        This method creates an additional output file containing information about user requests and fleet vehicle
+        state.
+
+        :return: None
+        '''
+        # ideally define these as globals such that they do not need to be redefined during every run
+        str_pos = 'Pos'
+        str_l_dest = 'Last Destination'
+        str_num_stops = 'Number of Stops'
+        str_pax = 'Nr. Pax'
+        str_dist_start_start = 'Distance Start Vehicle Start Request'
+        str_dist_end_start = 'Distance End Vehicle Start Request'
+        str_dist_end_end = 'Distance End Vehicle End Request'
+        str_rid = 'Request ID'
+        str_cl_remaining_time = 'Remaining Time CL'
+        str_n_assigned_route = 'Number of Assigned Routes'
+        str_vehicle_status = 'Current Vehicle Status'
+        path_current_state = os.path.join(self.dir_names[G_DIR_OUTPUT], "current_state.csv")
+
+        sorted_sim_vehicle_keys = sorted(self.sim_vehicles.keys())
+        list_vehicle_states = [self.sim_vehicles[sim_vid].return_current_vehicle_state(str_pos, str_l_dest,
+                                                                                       str_num_stops, str_pax,
+                                                                                       str_cl_remaining_time,
+                                                                                       str_vehicle_status)
+                               for sim_vid in sorted_sim_vehicle_keys]
+        list_vehicle_state_dict = []
+        if list_new_traveler_rid_obj:
+            for rid, rq_obj in list_new_traveler_rid_obj:
+                list_vehicle_request_states = [self.sim_vehicles[sim_vid].return_current_vehicle_state_request(
+                    str_dist_start_start, str_dist_end_start, str_dist_end_end, rid, rq_obj)
+                                       for sim_vid in sorted_sim_vehicle_keys]
+                list_complete_vehicle_state = [dict(i, **j) for i,j in zip(list_vehicle_states, list_vehicle_request_states)]
+                dict_vehicles_states = {
+                    i[G_V_VID]: {str_rid: rid, str_pos: i[str_pos], str_l_dest: i[str_l_dest], str_pax: i[str_pax],
+                                 str_num_stops: i[str_num_stops],
+                                 str_dist_start_start: i[str_dist_start_start],
+                                 str_dist_end_start: i[str_dist_end_start],
+                                 str_dist_end_end: i[str_dist_end_end], str_cl_remaining_time:
+                                     i[str_cl_remaining_time], str_vehicle_status: i [str_vehicle_status]}
+                    for i in list_complete_vehicle_state}
+                dict_vehicles_states['Sim Time'] = sim_time
+                list_vehicle_state_dict.append(dict_vehicles_states)
+            df_current_DB = pd.DataFrame(list_vehicle_state_dict)
+
+            if os.path.isfile(path_current_state):
+                write_mode, write_header = "a", False
+            else:
+                write_mode, write_header = "w", True
+            df_current_DB.set_index('Sim Time', inplace=True)
+            df_current_DB.to_csv(path_current_state, mode=write_mode, header=write_header)

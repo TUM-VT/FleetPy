@@ -144,7 +144,7 @@ class SimulationVehicle:
         return final_state_dict
 
     def return_current_state(self, str_pos, str_l_dest, str_num_stops, str_pax, str_start_start, str_end_start,
-                             str_end_end, rid=None, rq_object=None):
+                             str_end_end, str_cl_remaining_time, str_n_assigned_route, rid=None, rq_object=None):
         '''
         Method that returns the current position, the last destination, the number of planned stops, the number of
         passengers, the distance between current vehicle position and origin of a request, the distance between last
@@ -170,20 +170,25 @@ class SimulationVehicle:
             start_pos, end_pos = rq_object.get_origin_pos(), rq_object.get_destination_pos()
             _, tt_start_start, _ = self.routing_engine.return_travel_costs_1to1(self.pos, start_pos)
             current_state_dict[str_start_start] = tt_start_start
+            current_state_dict[str_n_assigned_route] = len(self.assigned_route)
             if self.assigned_route:
                 tuple_last_position = self.assigned_route[-1].destination_pos
                 current_state_dict[str_l_dest] = tuple_last_position
                 current_state_dict[str_num_stops] = len(self.assigned_route)
-                _, tt_end_start, _ = self.routing_engine.return_travel_costs_1to1(tuple_last_position, start_pos)
-                current_state_dict[str_end_start] = tt_end_start
-                _, tt_end_end, _ = self.routing_engine.return_travel_costs_1to1(tuple_last_position, end_pos)
-                current_state_dict[str_end_end] = tt_end_end
+                # _, tt_end_start, _ = self.routing_engine.return_travel_costs_1to1(tuple_last_position, start_pos)
+                current_state_dict[str_end_start] = 0 # tt_end_start
+                # _, tt_end_end, _ = self.routing_engine.return_travel_costs_1to1(tuple_last_position, end_pos)
+                current_state_dict[str_end_end] = 0 # tt_end_end
+                _, remaining_time, _ = self.routing_engine.return_travel_costs_1to1(self.pos,
+                                       self.assigned_route[0].destination_pos)
+                current_state_dict[str_cl_remaining_time] = remaining_time
             else:
                 current_state_dict[str_l_dest] = self.pos
                 current_state_dict[str_num_stops] = 0
                 current_state_dict[str_end_start] = tt_start_start
-                _, tt_end_end, _ = self.routing_engine.return_travel_costs_1to1(self.pos, end_pos)
-                current_state_dict[str_end_end] = tt_end_end
+                # _, tt_end_end, _ = self.routing_engine.return_travel_costs_1to1(self.pos, end_pos)
+                current_state_dict[str_end_end] = 0 # tt_end_end
+                current_state_dict[str_cl_remaining_time] = 0
         else:
             if self.assigned_route:
                 current_state_dict[G_RQ_ID] = None
@@ -205,6 +210,49 @@ class SimulationVehicle:
                 current_state_dict[str_end_start] = None
                 current_state_dict[str_end_end] = None
         current_state_dict[str_pax] = self.get_nr_pax_without_currently_boarding()
+        return current_state_dict
+
+    def return_current_vehicle_state(self, str_pos, str_l_dest, str_num_stops, str_pax, str_cl_remaining_time,
+                                     str_vehicle_status):
+        """ Return information about the current state of the vehicle """
+
+        current_state_dict = {G_V_OP_ID: self.op_id, G_V_VID: self.vid, str_pos: self.pos}
+
+        current_state_dict[str_num_stops] = len(self.assigned_route)
+        current_state_dict[str_pax] = self.get_nr_pax_without_currently_boarding()
+        current_state_dict[str_vehicle_status] = self.status.value
+
+        if self.assigned_route:
+            _, remaining_time, _ = self.routing_engine.return_travel_costs_1to1(self.pos,
+                                                                                self.assigned_route[0].destination_pos)
+            current_state_dict[str_cl_remaining_time] = remaining_time
+            current_state_dict[str_l_dest] = self.assigned_route[-1].destination_pos
+        else:
+            current_state_dict[str_cl_remaining_time] = 0
+            current_state_dict[str_l_dest] = self.pos
+
+        return current_state_dict
+
+    def return_current_vehicle_state_request(self,str_start_start, str_end_start, str_end_end, rid, rq_object):
+        """ Return information about vehicle in regard to specific request """
+
+        current_state_dict = {G_RQ_ID: rid}
+
+        start_pos, end_pos = rq_object.get_origin_pos(), rq_object.get_destination_pos()
+        _, tt_start_start, _ = self.routing_engine.return_travel_costs_1to1(self.pos, start_pos)
+        current_state_dict[str_start_start] = tt_start_start
+
+        if self.assigned_route:
+            tuple_last_position = self.assigned_route[-1].destination_pos
+            _, tt_end_start, _ = self.routing_engine.return_travel_costs_1to1(tuple_last_position, start_pos)
+            current_state_dict[str_end_start] = tt_end_start
+            _, tt_end_end, _ = self.routing_engine.return_travel_costs_1to1(tuple_last_position, end_pos)
+            current_state_dict[str_end_end] = tt_end_end
+        else:
+            current_state_dict[str_end_start] = tt_start_start
+            _, tt_end_end, _ = self.routing_engine.return_travel_costs_1to1(start_pos, end_pos)
+            current_state_dict[str_end_end] = tt_end_end
+
         return current_state_dict
 
     def _start_next_leg_stationary_object(self, simulation_time):
