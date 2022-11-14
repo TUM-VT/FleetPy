@@ -96,7 +96,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                             prev_end_time = veh_plan.list_plan_stops[-2].get_planned_arrival_and_departure_time()[0]
                             end_time = prev_end_time + routing_engine.return_travel_costs_1to1(veh_plan.list_plan_stops[-2].get_pos(), veh_plan.list_plan_stops[-1].get_pos())[1]
                         else:
-                             end_time = prev_end_time + routing_engine.return_travel_costs_1to1(veh_obj.pos, veh_plan.list_plan_stops[-1].get_pos())[1]   
+                            end_time = simulation_time + routing_engine.return_travel_costs_1to1(veh_obj.pos, veh_plan.list_plan_stops[-1].get_pos())[1]   
                     else:
                         end_time = veh_plan.list_plan_stops[-1].get_planned_arrival_and_departure_time()[0]
                 else:
