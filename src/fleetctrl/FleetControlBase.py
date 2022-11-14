@@ -89,6 +89,7 @@ class FleetControlBase(metaclass=ABCMeta):
         """
         self.n_cpu = scenario_parameters["n_cpu_per_sim"]
         self.solver: str = operator_attributes.get(G_RA_SOLVER, "Gurobi")
+        self.log_gurobi : bool = scenario_parameters.get(G_LOG_GUROBI, False)
         self.op_id = op_id
         self.routing_engine: NetworkBase = routing_engine
         self.zones: ZoneSystem = zone_system
