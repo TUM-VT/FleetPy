@@ -124,6 +124,27 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                 sum_user_times += (drop_off_time - rq_time)
             # utility is negative value of end_time - simulation_time
             return sum_user_times - simulation_time - assignment_reward
+        
+    elif func_key == "total_travel_times":
+        def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
+            """This function evaluates the total travel time of the vehicle (no waiting/boarding, ...).
+
+            :param simulation_time: current simulation time
+            :param veh_obj: simulation vehicle object
+            :param veh_plan: vehicle plan in question
+            :param rq_dict: rq -> Plan request dictionary
+            :param routing_engine: for routing queries
+            :return: objective function value
+            """
+            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            sum_tt = 0
+            last_pos = veh_obj.pos
+            for ps in veh_plan.list_plan_stops:
+                pos = ps.get_pos()
+                if pos != last_pos:
+                    sum_tt += routing_engine.return_travel_costs_1to1(last_pos, pos)[1]
+                    last_pos = pos
+            return sum_tt - assignment_reward
 
     elif func_key == "system_and_user_time":
         user_weight = vr_control_func_dict["uw"]
