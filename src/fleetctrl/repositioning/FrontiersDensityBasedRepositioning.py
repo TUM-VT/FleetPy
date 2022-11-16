@@ -75,8 +75,7 @@ class DensityRepositioning(RepositioningBase):
         self.random_class = random.Random(sim_time)
         if lock is None:
             lock = self.lock_repo_assignments
-        list_zones_all = self.zone_system.get_complete_zone_list()
-        list_zones = sorted([zone for zone in list_zones_all if zone != -1])
+        valid_zones = self.zone_system.zones
 
         # 1) get required imbalance forecasts
         # ----------------------------------------
@@ -92,7 +91,7 @@ class DensityRepositioning(RepositioningBase):
         forecast_departures = self.zone_system._get_trip_forecasts("out", t0, t1, None)
 
         orig_zone_imbalances = []
-        for zone in list_zones:
+        for zone in valid_zones:
             orig_zone_imbalances.append(number_idle_plus_customer_arrival.get(zone, 0)
                                         + vehicles_repo_to_zone.get(zone, 0)
                                         + forecast_arrivals.get(zone, 0)
@@ -105,8 +104,8 @@ class DensityRepositioning(RepositioningBase):
         # output for debug
         # output_dir = self.fleetctrl.dir_names[G_DIR_OUTPUT]
         # output_dir = None
-        if self.solver_key == "Gurobi":
-            idle_count = [number_idle_vehicles.get(zone, 0) for zone in list_zones]
+        if "Gurobi" in self.solver_key:
+            idle_count = [number_idle_vehicles.get(zone, 0) for zone in valid_zones]
             alpha_od = self.reposition_g(np.array(orig_zone_imbalances), idle_count)
         else:
             raise NotImplementedError(f"Optimization problem in {self.__class__.__name__} only implemented for Gurobi!")
@@ -115,8 +114,9 @@ class DensityRepositioning(RepositioningBase):
         # ----------------------------------------------------
         list_veh_with_changes = []
         od_reposition_trips = []
-        for x in zip(*np.where(alpha_od != 0)):
-            od_reposition_trips.extend([x] * int(alpha_od[x]))
+        for row, col in zip(*np.where(alpha_od != 0)):
+            od_zone = (valid_zones[row], valid_zones[col])
+            od_reposition_trips.extend([od_zone] * int(alpha_od[row, col]))
         if od_reposition_trips:
             # create assignments
             # ------------------
