@@ -40,6 +40,9 @@ INPUT_PARAMETERS_DensityRepositioning = {
 
 class DensityRepositioning(RepositioningBase):
     """This class implements Density Based Repositioning Algorithm from Frontiers paper of Arslan and Florian """
+
+    random_class = random.Random(0)
+
     def __init__(self, fleetctrl, operator_attributes, dir_names):
         """Initialization of repositioning class.
 
@@ -69,6 +72,7 @@ class DensityRepositioning(RepositioningBase):
         """
 
         self.sim_time = sim_time
+        self.random_class = random.Random(sim_time)
         if lock is None:
             lock = self.lock_repo_assignments
         list_zones_all = self.zone_system.get_complete_zone_list()
@@ -116,8 +120,7 @@ class DensityRepositioning(RepositioningBase):
         if od_reposition_trips:
             # create assignments
             # ------------------
-            random.seed(sim_time)
-            random.shuffle(od_reposition_trips)
+            self.random_class.shuffle(od_reposition_trips)
             for (origin_zone_id, destination_zone_id) in od_reposition_trips:
                 list_idle_veh = cplan_arrival_idle_dict[origin_zone_id][2]
                 list_veh_obj_with_repos = self._od_to_veh_plan_assignment(sim_time, origin_zone_id,
@@ -129,7 +132,6 @@ class DensityRepositioning(RepositioningBase):
 
     def _od_to_veh_plan_assignment(self, sim_time, origin_zone_id, destination_zone_id, list_veh_to_consider,
                                    destination_node=None, lock = True):
-        random.seed(sim_time)
         destination_centroid = self.zone_system.get_random_centroid_node(destination_zone_id)
         dest_pt = (destination_centroid, None, None)
         # Get distance of all vehicles to the zone centroid and select vehicle with minimum distance
@@ -153,7 +155,7 @@ class DensityRepositioning(RepositioningBase):
         """ Get random reachable node from provided point"""
 
         zone_nodes = self.zone_system.get_all_nodes_in_zone(zone_id)
-        random.shuffle(zone_nodes)
+        self.random_class.shuffle(zone_nodes)
         travel_time = np.inf
         try:
             while np.isinf(travel_time) and len(zone_nodes) > 0:
