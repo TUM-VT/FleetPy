@@ -126,7 +126,7 @@ class PavoneHailingRepositioningFC(RepositioningBase):
         LOG.debug("v_i_e_dict: {}".format(v_i_e_dict))
         LOG.debug("v_i_d_dict: {}".format(v_i_d_dict))
         LOG.debug("idle vehicles: {}".format(number_idle_vehicles))
-        if self.solver_key == "Gurobi":
+        if "Gurobi" in self.solver_key:
             alpha_od, od_reposition_trips = self._optimization_gurobi(sim_time, list_zones, v_i_e_dict, v_i_d_dict,
                                                                       number_idle_vehicles, zone_dict)
         elif self.solver_key == "Cplex":
@@ -414,7 +414,7 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
 
         # optimization problem
         # --------------------
-        if self.solver_key == "Gurobi":
+        if "Gurobi" in self.solver_key:
             alpha_od, od_reposition_trips = self._optimization_gurobi(sim_time, list_zones, v_i_e_dict, v_i_d_dict,
                                                                       number_idle_vehicles, zone_dict)
         elif self.solver_key == "Cplex":
