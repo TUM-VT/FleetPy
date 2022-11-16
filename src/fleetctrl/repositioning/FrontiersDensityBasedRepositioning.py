@@ -439,6 +439,8 @@ def _reposition_two_steps_g(f2_matrix, cost_matrix, omegas, idle_vehicles, timeo
 
     if method == "2-RFRR":
         delta_wt_vars = np_set_gurobi_var_value(delta_wt_vars)
+        if np.all(delta_wt_vars == 0):
+            return delta_wt_vars, kpis
         delta_flow_vars = _add_rfrr_flow_g(model_flow, omegas, idle_vehicles, delta_wt_vars)
     else:
         delta_wt_vars_pos = np_set_gurobi_var_value(delta_wt_vars_pos)
