@@ -52,8 +52,6 @@ class DensityRepositioning(RepositioningBase):
         :param solver: solver for optimization problems
         """
         super().__init__(fleetctrl, operator_attributes, dir_names)
-        self.distance_cost = np.mean([veh_obj.distance_cost for veh_obj in fleetctrl.sim_vehicles])/1000
-        self.zone_corr_matrix = np.array(self._return_squared_zone_imbalance_np_array())
         self.gamma = operator_attributes.get(G_OP_REPO_GAMMA, 1.0)
         self.method = operator_attributes.get(G_OP_REPO_FRONTIERS_M, "2-RFRR")
         possible_methods = {"RFRR", "RFRRp", "RFRRf", "2-RFRR", "2-RFRRp", "2-RFRRf"}
@@ -184,18 +182,28 @@ class DensityRepositioning(RepositioningBase):
                                 driving into a zone, i.e. it has only positive values.
         """
 
+        zone_corr_matrix = np.array(self.zone_system.zone_corr_matrix)
+        centroids = self.zone_system.zone_centroids
+        centroids = [(centroids[z][0], None, None) for z in self.zone_system.zones]
+        inter_zone_dist_cost = []
+        inter_zone_time_cost = []
+        for center_node in centroids:
+            costs = [self.routing_engine.return_travel_costs_1to1(center_node, d) for d in centroids]
+            inter_zone_dist_cost.append([x[2] for x in costs])
+            inter_zone_time_cost.append([x[1] for x in costs])
+        inter_zone_dist_cost = np.array(inter_zone_dist_cost)
         start_time = default_timer()
         method = "2-" + self.method if "2-" not in self.method else self.method
-        two_step_delta_flow, two_step_kpi = _reposition_two_steps_g(self.zone_corr_matrix, self.distance_cost, omegas,
+        two_step_delta_flow, two_step_kpi = _reposition_two_steps_g(zone_corr_matrix, inter_zone_dist_cost, omegas,
                                                                     idle_vehicles, TIME_LIMIT, method)
         if "2-" in self.method:
             return two_step_delta_flow
         else:
             timeout = TIME_LIMIT - (default_timer() - start_time)
-            orginal_f2_objective = omegas.T.dot(self.zone_corr_matrix.dot(omegas))
+            orginal_f2_objective = omegas.T.dot(zone_corr_matrix.dot(omegas))
             f2_min = two_step_kpi["Heat Map Objective"]
             scale = (orginal_f2_objective - f2_min, two_step_kpi["Distance Objective"])
-            delta_flow_vars, delta_wt_vars, kpis = _general_reposition_g(self.zone_corr_matrix, self.distance_cost,
+            delta_flow_vars, delta_wt_vars, kpis = _general_reposition_g(zone_corr_matrix, inter_zone_dist_cost,
                                                                          omegas, (self.gamma, 1-self.gamma), scale,
                                                                          idle_vehicles, timeout, (f2_min, 0.0),
                                                                          self.method)
