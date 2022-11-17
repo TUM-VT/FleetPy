@@ -83,7 +83,6 @@ class ZoneSystem:
             if os.path.isfile(forecast_f):
                 fc_type = scenario_parameters.get(G_FC_TYPE)
                 self.forecast_df = pd.read_csv(forecast_f)
-                self.fc_times = sorted(self.forecast_df[G_ZONE_FC_T].unique())
                 self.forecast_df.set_index([G_ZONE_FC_T, G_ZONE_ZID], inplace=True)
                 self.in_fc_type = f"in {fc_type}"
                 self.out_fc_type = f"out {fc_type}"
@@ -100,7 +99,6 @@ class ZoneSystem:
             self.forecast_df = None
             self.in_fc_type = None
             self.out_fc_type = None
-            self.fc_times = []
             self.fc_temp_resolution = None
         self.demand = None
 
@@ -366,74 +364,35 @@ class ZoneSystem:
             tmp_forecast_df = self.forecast_df.reset_index().groubpy([G_ZONE_FC_T,
                                                                       aggregation_level]).aggregate({col: sum})
         else:
+            aggregation_level = G_ZONE_ZID
             tmp_forecast_df = self.forecast_df
-        #
-        def _create_forecast_dict(tmp_col, row_index, tmp_return_dict, tmp_scale_factor=1.0):
-            # LOG.info(f"{self.forecast_df}")
-            # LOG.info(f"{tmp_forecast_df}")
-            # LOG.info(f"{row_index} | {G_ZONE_FC_T}")
-            try:
-                tmp_df = tmp_forecast_df.xs(row_index, level=G_ZONE_FC_T)
-            except:
-                LOG.info("couldnt find forecast for t {}".format(row_index))
-                return {}
-            tmp_dict = tmp_df[tmp_col].to_dict()
-            for k, v in tmp_dict.items():
-                try:
-                    tmp_return_dict[k] += (v * tmp_scale_factor)
-                except KeyError:
-                    tmp_return_dict[k] = (v * tmp_scale_factor)
-            return tmp_return_dict
-        #
-        return_dict = {}
-        # get forecast of initial time interval
-        last_t0 = t0
-        if t0 not in self.fc_times:
-            # check whether t0 and t1 are valid times
-            if t0 > self.fc_times[-1] or t1 < self.fc_times[0]:
-                # use first/last forecast and scale
-                if t1 > self.fc_times[0]:
-                    last_t0 = self.fc_times[0]
-                else:
-                    last_t0 = self.fc_times[-1]
-                scale_factor = (t1 - t0) / self.fc_temp_resolution
-                return_dict = _create_forecast_dict(col, last_t0, return_dict, scale_factor)
-                # if scale is not None:
-                #     for key, val in return_dict.items():
-                #         return_dict[key] = val * scale
-                return return_dict
-            else:
-                # get forecast from t0 to next value in self.fc_times
-                for i in range(len(self.fc_times)):
-                    # last_t0 = self.fc_times[i]
-                    # next_t0 = self.fc_times[i+1]
-                    next_t0 = self.fc_times[i]
-                    if next_t0 > t1:
-                        if last_t0 == t0:
-                            scale_factor = (t1 - t0) / self.fc_temp_resolution
-                            return_dict = _create_forecast_dict(col, self.fc_times[i-1], return_dict, scale_factor)
-                            return return_dict
-                        break
-                    if last_t0 <= t0 and t0 < next_t0:
-                        scale_factor = (next_t0 - last_t0) / self.fc_temp_resolution
-                        # scale down the values
-                        return_dict = _create_forecast_dict(col, next_t0, return_dict, scale_factor)
-                        last_t0 = next_t0
-                        break
-        # add forecasts of next intervals as well
-        while t1 - last_t0 > self.fc_temp_resolution:
-            return_dict = _create_forecast_dict(col, last_t0, return_dict)
-            last_t0 += self.fc_temp_resolution
-            if last_t0 not in self.fc_times:
-                break
-        # append rest of last interval
-        if t1 != last_t0:
-            scale_factor = (t1 - last_t0) / self.fc_temp_resolution
-            return_dict = _create_forecast_dict(col, last_t0, return_dict, scale_factor)
-            if scale is not None:
-                for key, val in return_dict.items():
-                    return_dict[key] = val * scale
-        return return_dict
+
+        if scale is not None:
+            raise NotImplementedError("scale function is not yet implemented")
+
+        unique_time = tmp_forecast_df.index.unique(0).values
+        lower_lim, upper_lim = t0, t1
+        # Check if a different lower and upper time limit is required for interpolation
+        if t0 not in unique_time:
+            lower_lim = unique_time[np.where(unique_time < t0)][-1]
+            LOG.info(f"Lower forecast limit {t0}, doing interpolation using time {lower_lim}")
+        if t1 not in unique_time:
+            upper_lim = unique_time[np.where(unique_time > t1)][0]
+            LOG.info(f"Upper forecast limit {t1}, doing interpolation using time {upper_lim}")
+        filtered_df = tmp_forecast_df.loc[np.arange(lower_lim, upper_lim+0.1, self.fc_temp_resolution), :].reset_index()
+        pivoted_df = filtered_df.pivot(index=aggregation_level, columns="time")[col]
+        # Interpolate
+        if lower_lim != t0:
+            pivoted_df[t0] = np.NAN
+        if upper_lim != t1:
+            pivoted_df[t1] = np.NAN
+        pivoted_df = pivoted_df.reindex(sorted(pivoted_df.columns), axis=1)
+        pivoted_df = pivoted_df.interpolate(axis=1)
+        if lower_lim != t0:
+            pivoted_df = pivoted_df.drop([lower_lim], axis=1)
+        if upper_lim != t1:
+            pivoted_df = pivoted_df.drop([upper_lim], axis=1)
+        return pivoted_df.sum(axis=1).to_dict()
 
     def get_trip_arrival_forecasts(self, t0, t1, aggregation_level=None, scale = None):
         """This method returns the number of expected trip arrivals inside a zone in the time interval [t0, t1].
