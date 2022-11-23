@@ -629,7 +629,7 @@ class NetworkTTMatrix(NetworkBase):
             for d_pos in list_positions:
                 result_dict[(o_pos, d_pos)] = self.return_travel_costs_1to1(o_pos, d_pos,
                                                                             customized_section_cost_function)
-            return result_dict
+        return result_dict
 
     # internal methods
     # ----------------
@@ -681,7 +681,7 @@ class NetworkTTMatrix(NetworkBase):
                 o_node = self.nodes[origin_position[0]]
             return o_node, self.nodes[destination_position[0]], add_0_tt + add_1_tt, add_0_dist + add_1_dist
 
-    def _lookup_dijkstra_1to1(self, origin_node, destination_node):
+    def _lookup_dijkstra_1to1(self, origin_node, destination_node, use_distance=False):
         """This internal method computes the lookup Dijkstra between two nodes.
 
         :param origin_node: node object of origin
@@ -713,7 +713,7 @@ class NetworkTTMatrix(NetworkBase):
                 from_next_tt = self.tt[next_node_id][destination_node.node_index]
                 from_next_td = self.td[next_node_id][destination_node.node_index]
                 if (route_tt + next_tt + from_next_tt - total_tt < EPS) and \
-                        (route_td + next_td + from_next_td - total_td < 0.1):
+                        ((route_td + next_td + from_next_td - total_td < 0.01) or not use_distance):
                     found_next_node = True
                     node_list.append(next_node_id)
                     route_tt += next_tt
@@ -724,7 +724,11 @@ class NetworkTTMatrix(NetworkBase):
             if not found_next_node:
                 prt_str = f"Could not find next node after current node {current_node} in search" \
                           f" of route from {origin_node} to {destination_node}; current node list: {node_list}"
-                raise AssertionError(prt_str)
+                if use_distance is False:
+                    print(f"Trying to find route from {origin_node} to {destination_node} by including distance")
+                    return self._lookup_dijkstra_1to1(origin_node, destination_node, True)
+                else:
+                    raise AssertionError(prt_str)
         return node_list, scaled_route_tt
 
     def _compute_d_surround_prev(self, destination_node, max_time_value):
