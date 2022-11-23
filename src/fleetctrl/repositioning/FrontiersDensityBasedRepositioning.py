@@ -137,7 +137,7 @@ class DensityRepositioning(RepositioningBase):
                                       for v in list_veh_to_consider])
         veh_obj = list_veh_to_consider[vehicle_distances.argmin()]
         LOG.info("repositioning {} to zone {} with centroid {}".format(veh_obj.vid, destination_zone_id,
-                                                                       destination_node))
+                                                                       destination_centroid))
 
         # Send the min-distance vehicle to random point inside the destination zone
         destination_node = self._get_random_reachable_node(veh_obj.pos, destination_zone_id)
