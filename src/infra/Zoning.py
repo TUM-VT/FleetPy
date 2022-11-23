@@ -44,6 +44,9 @@ class ZoneSystem:
         node_zone_f = os.path.join(zone_network_dir, "node_zone_info.csv")
         self.node_zone_df = pd.read_csv(node_zone_f)
         # pre-process some data
+        if G_NODE_STOP_ONLY in self.node_zone_df:
+            # Exclude is_stop_only nodes
+            self.node_zone_df = self.node_zone_df[self.node_zone_df[G_NODE_STOP_ONLY] == False]
         self.zones = sorted(self.node_zone_df[G_ZONE_ZID].unique().tolist()) # TODO
         if self.general_info_df is not None:
             self.all_zones = self.general_info_df.index.to_list()
