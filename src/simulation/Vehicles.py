@@ -226,7 +226,8 @@ class SimulationVehicle:
             _, remaining_time, _ = self.routing_engine.return_travel_costs_1to1(self.pos,
                                                                                 self.assigned_route[0].destination_pos)
             current_state_dict[str_cl_remaining_time] = remaining_time
-            current_state_dict[str_l_dest] = self.assigned_route[-1].destination_pos
+            # current_state_dict[str_l_dest] = self.assigned_route[-1].destination_pos
+            current_state_dict[str_l_dest] = [route.destination_pos for route in self.assigned_route]
         else:
             current_state_dict[str_cl_remaining_time] = 0
             current_state_dict[str_l_dest] = self.pos
