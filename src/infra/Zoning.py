@@ -382,7 +382,7 @@ class ZoneSystem:
         if t1 not in unique_time:
             upper_lim = unique_time[np.where(unique_time > t1)][0]
             LOG.info(f"Upper forecast limit {t1}, doing interpolation using time {upper_lim}")
-        filtered_df = tmp_forecast_df.loc[np.arange(lower_lim, upper_lim+0.1, self.fc_temp_resolution), :].reset_index()
+        filtered_df = tmp_forecast_df.loc[np.arange(lower_lim, upper_lim, self.fc_temp_resolution), :].reset_index()
         pivoted_df = filtered_df.pivot(index=aggregation_level, columns="time")[col]
         # Interpolate
         if lower_lim != t0:
