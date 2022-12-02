@@ -620,3 +620,312 @@ if __name__ == "__main__":
     # sc = r'C:\Users\ge37ser\Documents\Coding\TUM_VT_FleetSimulation\tum-vt-fleet-simulation\results\FabianRPPsc01\sc01_200_1'
     #evaluate_folder(sc, print_comments=True)
     standard_evaluation(sc, print_comments=True)
+
+def current_state_eval(output_dir, dict_dirs):
+    """Evaluation of the data from the current position. As the current state is not stored, in memory for the whole
+    simulation, the data needs to be loaded first and then converted back to a dictionary. Contains some hardcoded
+    locations for specific folders. """
+    import ast
+
+    df_user = pd.read_csv(os.path.join(output_dir, '1_user-stats.csv'))
+    df_pos = pd.read_csv(os.path.join(output_dir, 'current_state.csv'))
+    df_zones = pd.read_csv(os.path.join(dict_dirs[G_DIR_ZONES], 'node_zone_info.csv'))
+    df_nodes = pd.read_csv(os.path.join(dict_dirs[G_DIR_NETWORK], 'base', 'nodes.csv'))
+    df_node_500 = pd.read_csv(os.path.join(dict_dirs[G_DIR_DATA], 'zones', 'manhattan_cell_500',
+                                           'manhattan_osm_network_fleetpy_trb_2022', 'node_zone_info.csv'))
+
+    drop_col = ['rq_type', 'pickup_location', 'dropoff_location', 'access_time', 'egress_time',
+                'decision_time', 'chosen_operator_id', 'operator_id', 'fare', 'modal_state', 'pickup_time',
+                'dropoff_time', 'number_passenger']
+    df_user = df_user.drop(drop_col, axis=1)
+    df_user.sort_values('request_id', inplace=True, ignore_index=True)
+
+    # extract information from offers
+    df_user['start'] = df_user['start'].str.extract('(.*?)(?=;)').astype(float)
+    df_user['end'] = df_user['end'].str.extract('(.*?)(?=;)').astype(float)
+    df_user['wait_time'] = df_user['offers'].str.extract('(?<=t_wait:)(.*?)(?=;)').astype(float)
+    df_user['travel_time'] = df_user['offers'].str.extract('(?<=t_drive:)(.*?)(?=;)').astype(float)
+
+    # format time
+    df_user['rq_time_day'] = df_user['rq_time'].apply(
+        lambda x: (int(np.floor(x / 86400)), int(x % 86400)))  # request time with date
+    df_user['rq_time'] = df_user['rq_time'].apply(lambda x: int(x % 86400))
+    df_user['earliest_pickup_time'] = df_user['earliest_pickup_time'].apply(lambda x: int(x % 86400))  # no date
+
+    # create categories
+    df_user['result'] = 3
+    df_user.loc[(df_user['wait_time'] >= 0) & (df_user['wait_time'] < 120), 'result'] = 0
+    df_user.loc[(df_user['wait_time'] >= 120) & (df_user['wait_time'] < 240), 'result'] = 1
+    df_user.loc[(df_user['wait_time'] >= 240) & (df_user['wait_time'] < 360), 'result'] = 2
+
+    # binary categories and wait time adjustements
+    df_user['order_given'] = 1  # True
+    df_user.loc[df_user['wait_time'].isnull().values, 'order_given'] = 0  # False
+    df_user.loc[df_user['wait_time'].isnull().values, 'wait_time'] = -1
+    df_user.loc[df_user['wait_time'].isnull().values, 'travel_time'] = -1
+
+    # sort start and end nodes into zones (NY taxi zones and smaller grid (500))
+    df_user['start zone'] = df_user['start'].copy()
+    df_user['end zone'] = df_user['end'].copy()
+    df_user['start zone'] = df_user['start zone'].apply(lambda x: df_zones.iloc[int(x), 1])
+    df_user['end zone'] = df_user['end zone'].apply(lambda x: df_zones.iloc[int(x), 1])
+    df_user = df_user.drop('offers', axis=1)
+    df_user['start zone 500'] = df_user['start'].apply(lambda x: df_node_500.iloc[int(x), 1])
+    df_user['end zone 500'] = df_user['end'].apply(lambda x: df_node_500.iloc[int(x), 1])
+
+    # coordinates for end and start position
+    df_user['start_coord_x'] = df_user['start'].copy()
+    df_user['start_coord_y'] = df_user['start'].copy()
+    df_user['end_coord_x'] = df_user['end'].copy()
+    df_user['end_coord_y'] = df_user['end'].copy()
+    df_user['start_coord_x'] = df_user['start'].apply(lambda x: int(df_nodes['pos_x'].iloc[int(x)]))
+    df_user['start_coord_y'] = df_user['start'].apply(lambda x: int(df_nodes['pos_y'].iloc[int(x)]))
+    df_user['end_coord_x'] = df_user['end'].apply(lambda x: int(df_nodes['pos_x'].iloc[int(x)]))
+    df_user['end_coord_y'] = df_user['end'].apply(lambda x: int(df_nodes['pos_y'].iloc[int(x)]))
+
+    # normalised direction vector
+    def get_norm_direction_vector(x_start, y_start, x_end, y_end):
+        x = x_end - x_start
+        y = y_end - y_start
+        vector = np.array([x, y]).T
+        norm = np.linalg.norm(vector, axis=1)
+        norm_vec = np.array([np.array([0, 0]) if j == 0 else i / j for i, j in zip(vector, norm)]).T
+        return norm_vec[0], norm_vec[1]
+
+    df_user['norm_vec_x'], df_user['norm_vec_y'] = get_norm_direction_vector(df_user['start_coord_x'].to_numpy(),
+                                                                   df_user['start_coord_y'].to_numpy(),
+                                                                   df_user['end_coord_x'].to_numpy(),
+                                                                   df_user['end_coord_y'].to_numpy())
+
+    # definitions for the next part
+    pos = 'Pos'
+    last_d = 'Last Destination'
+    pax = 'Nr. Pax'
+    stops = 'Number of Stops'
+    dis_start_start = 'Distance Current Position - Origin'
+    dis_end_start = 'Distance End Position - Origin'
+    dis_end_end = 'Distance End Position - Destination'
+    rid = 'Request ID'
+    remaining_time = 'Remaining Time CL'
+    status = 'Current Vehicle Status'
+    last_d_op = 'Last Pos OP'
+    last_time_op = 'Last Time OP'
+
+    def str_to_dict(x):
+        if type(x) == str:
+            return ast.literal_eval(x)
+        else:
+            return x
+
+    def nodes_to_zone(x):
+        if type(x) == dict:
+            return (df_zones.iloc[x[pos][0], 1], df_zones.iloc[x[last_d][0], 1])
+        else:
+            return x
+
+    def nodes_to_zone_only_current_pos(x):
+        if type(x) == dict:
+            return df_zones.iloc[x[pos][0], 1]
+        else:
+            return x
+
+    def get_start_position_node(x):
+        if type(x) == dict:
+            return x[pos][0]
+        else:
+            return x
+
+    def nodes_to_zone_only_end_pos(x):
+        if type(x) == dict:
+            return df_zones.iloc[x[last_d][0], 1]
+        else:
+            return x
+
+    def get_end_position_node(x):
+        if type(x) == dict:
+            try:
+                end_pos = x[last_d][-1][0]
+            except:
+                end_pos = x[last_d][0]
+            return end_pos
+        else:
+            return x
+
+    def get_pax_from_dict(x):
+        if type(x) == dict:
+            return x[pax]
+        else:
+            return x
+
+    def get_stops_from_dict(x):
+        if type(x) == dict:
+            return x[stops]
+        else:
+            return x
+
+    def get_distance_start_start(x):
+        if type(x) == dict:
+            return x[dis_start_start]
+        else:
+            return x
+
+    def get_distance_end_start(x):
+        if type(x) == dict:
+            return x[dis_end_start]
+        else:
+            return x
+
+    def get_distance_end_end(x):
+        if type(x) == dict:
+            return x[dis_end_end]
+        else:
+            return x
+
+    def get_rid(x):
+        if type(x) == dict:
+            return x[rid]
+        else:
+            return x
+
+    def get_remaining_time_CL_from_dict(x):
+        if type(x) == dict:
+            return x[remaining_time]
+        else:
+            return x
+
+    def get_status(x):
+        if type(x) == dict:
+            return x[status]
+        else:
+            return x
+
+    def nodes_to_zone_only_current_pos_hailing(x):
+        if type(x) == dict:
+            return df_node_500.iloc[x['Pos'][0], 1]
+        else:
+            return x
+
+    def nodes_to_zone_only_end_pos_hailing(x):
+        if type(x) == dict:
+            try:
+                zone_car = df_node_500.iloc[x['Last Destination'][0], 1]
+                return zone_car
+            except:
+                zone_car = df_node_500.iloc[x['Last Destination'][-1][0], 1]
+                return zone_car
+        else:
+            return x
+
+    def get_last_position_op(x):
+        if type(x) == dict:
+            end_pos = x[last_d_op][0]
+            return end_pos
+        else:
+            return x
+
+    def get_last_time_op(x):
+        if type(x) == dict:
+            last_time = x[last_time_op]
+            return last_time
+        else:
+            return x
+
+    # sort the current state data set by request id
+    ds_rq_id = df_pos['0'].str.extract("(?<='Request ID': )(.*?)(?=,)").astype(float)
+    df_pos['rq_id'] = ds_rq_id
+    df_pos.sort_values('rq_id', inplace=True, ignore_index=True)
+    df_pos.drop('rq_id', inplace=True, axis=1)
+
+    # create copies of the data frame for the individual features
+    df_end_pos = df_pos[df_pos.columns[1:]].copy()
+    df_start_pos = df_pos[df_pos.columns[1:]].copy()
+    df_pax = df_pos[df_pos.columns[1:]].copy()
+    df_stops = df_pos[df_pos.columns[1:]].copy()
+    df_start_end = df_pos[df_pos.columns[1:]].copy()
+    df_end_start = df_pos[df_pos.columns[1:]].copy()
+    df_end_end = df_pos[df_pos.columns[1:]].copy()
+    df_start_pos_coord_x = df_pos[df_pos.columns[1:]].copy()
+    df_start_pos_coord_y = df_pos[df_pos.columns[1:]].copy()
+    df_end_pos_coord_x = df_pos[df_pos.columns[1:]].copy()
+    df_end_pos_coord_y = df_pos[df_pos.columns[1:]].copy()
+    df_remaining_time_CL = df_pos[df_pos.columns[1:]].copy()
+    df_norm_vec_x = df_pos[df_pos.columns[1:]].copy()
+    df_norm_vec_y = df_pos[df_pos.columns[1:]].copy()
+    df_status = df_pos[df_pos.columns[1:]].copy()
+    df_last_time_op = df_pos[df_pos.columns[1:]].copy()
+    df_end_op = df_pos[df_pos.columns[1:]].copy()
+    df_current_pos_500 = df_pos[df_pos.columns[1:]].copy()
+    df_end_pos_500 = df_pos[df_pos.columns[1:]].copy()
+
+    # extract information from dictionaries and save them into data frames
+    for x in df_pos.columns.values[1:]:
+        df_pos[x] = df_pos[x].apply(str_to_dict)
+        # df_pos[x] = df_pos[x].apply(nodes_to_zone)
+        df_start_pos[x] = df_pos[x].apply(get_start_position_node)
+        df_end_pos[x] = df_pos[x].apply(get_end_position_node)
+        df_pax[x] = df_pos[x].apply(get_pax_from_dict)
+        df_stops[x] = df_pos[x].apply(get_stops_from_dict)
+        df_start_end[x] = df_pos[x].apply(get_distance_start_start)
+        df_end_start[x] = df_pos[x].apply(get_distance_end_start)
+        df_end_end[x] = df_pos[x].apply(get_distance_end_end)
+        df_start_pos_coord_x[x] = df_start_pos[x].apply(lambda x: int(df_nodes['pos_x'].iloc[int(x)]))
+        df_start_pos_coord_y[x] = df_start_pos[x].apply(lambda x: int(df_nodes['pos_y'].iloc[int(x)]))
+        df_end_pos_coord_x[x] = df_end_pos[x].apply(lambda x: int(df_nodes['pos_x'].iloc[int(x)]))
+        df_end_pos_coord_y[x] = df_end_pos[x].apply(lambda x: int(df_nodes['pos_y'].iloc[int(x)]))
+        df_remaining_time_CL[x] = df_pos[x].apply(get_remaining_time_CL_from_dict)
+        df_norm_vec_x[x], df_norm_vec_y[x] = get_norm_direction_vector(df_start_pos_coord_x[x].to_numpy(),
+                                                                       df_start_pos_coord_y[x].to_numpy(),
+                                                                       df_end_pos_coord_x[x].to_numpy(),
+                                                                       df_end_pos_coord_y[x].to_numpy())
+        df_status[x] = df_pos[x].apply(get_status)
+        df_last_time_op[x] = df_pos[x].apply(get_last_time_op)
+        df_end_op[x] = df_pos[x].apply(get_last_position_op)
+        df_current_pos_500[x] = df_pos[x].apply(nodes_to_zone_only_current_pos_hailing)
+        df_end_pos_500[x] = df_pos[x].apply(nodes_to_zone_only_end_pos_hailing)
+
+    # save the dataframes
+    path_database = os.path.join(output_dir, 'databases')
+    if not os.path.isdir(path_database):
+        os.makedirs(path_database)
+
+    df_user.to_csv(os.path.join(path_database, 'database_hailing.csv'))
+    df_start_pos.to_csv(os.path.join(path_database, 'database_start_pos.csv'))
+    df_end_pos.to_csv(os.path.join(path_database, 'database_end_pos.csv'))
+    df_pax.to_csv(os.path.join(path_database, 'database_pax.csv'))
+    df_stops.to_csv(os.path.join(path_database, 'database_stops.csv'))
+    df_start_end.to_csv(os.path.join(path_database, 'database_start_end.csv'))
+    df_end_start.to_csv(os.path.join(path_database, 'database_end_start.csv'))
+    df_end_end.to_csv(os.path.join(path_database, 'database_end_end.csv'))
+    df_start_pos_coord_x.to_csv(os.path.join(path_database, 'database_start_x.csv'))
+    df_start_pos_coord_y.to_csv(os.path.join(path_database, 'database_start_y.csv'))
+    df_end_pos_coord_x.to_csv(os.path.join(path_database, 'database_end_x.csv'))
+    df_end_pos_coord_y.to_csv(os.path.join(path_database, 'database_end_y.csv'))
+    df_remaining_time_CL.to_csv(os.path.join(path_database, 'database_remaining_time.csv'))
+    df_norm_vec_x.to_csv(os.path.join(path_database, 'database_norm_vec_x.csv'))
+    df_norm_vec_y.to_csv(os.path.join(path_database, 'database_norm_vec_y.csv'))
+    df_status.to_csv(os.path.join(path_database, 'database_vehicle_status.csv'))
+    df_last_time_op.to_csv(os.path.join(path_database, 'database_last_time_op.csv'))
+    df_end_op.to_csv(os.path.join(path_database, 'database_end_pos_op.csv'))
+    df_current_pos_500.to_csv(os.path.join(path_database, 'database_current_pos_500.csv'))
+    df_end_pos_500.to_csv(os.path.join(path_database, 'database_end_pos_500.csv'))
+
+    del df_pos
+    del df_user
+    del df_start_pos
+    del df_end_pos
+    del df_pax
+    del df_stops
+    del df_start_end
+    del df_end_end
+    del df_start_pos_coord_x
+    del df_start_pos_coord_y
+    del df_end_pos_coord_x
+    del df_end_pos_coord_y
+    del df_remaining_time_CL
+    del df_norm_vec_x
+    del df_norm_vec_y
+    del df_status
+    del df_last_time_op
+    del df_end_op
+    del df_current_pos_500
+    del df_end_pos_500
