@@ -632,7 +632,7 @@ def current_state_eval(output_dir, dict_dirs):
     df_zones = pd.read_csv(os.path.join(dict_dirs[G_DIR_ZONES], 'node_zone_info.csv'))
     df_nodes = pd.read_csv(os.path.join(dict_dirs[G_DIR_NETWORK], 'base', 'nodes.csv'))
     df_node_500 = pd.read_csv(os.path.join(dict_dirs[G_DIR_DATA], 'zones', 'manhattan_cell_500',
-                                           'manhattan_osm_network_fleetpy_trb_2022', 'node_zone_info.csv'))
+                                           'manhattan_osm_network_fleetpy_trb_2022', 'node_zone_info.csv'), index_col=0)
 
     drop_col = ['rq_type', 'pickup_location', 'dropoff_location', 'access_time', 'egress_time',
                 'decision_time', 'chosen_operator_id', 'operator_id', 'fare', 'modal_state', 'pickup_time',
