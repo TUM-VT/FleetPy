@@ -64,6 +64,7 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         super().add_init(scenario_parameters)
         self.list_vehicle_state_dict = []
         self.dict_dirs = get_directory_dict(scenario_parameters)
+        self.dict_step = {}
 
     def step(self, sim_time):
         """This method determines the simulation flow in a time step.
@@ -91,7 +92,6 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         list_new_traveler_rid_obj = self.demand.get_new_travelers(sim_time, since=last_time)
         # 3)
         for rid, rq_obj in list_undecided_travelers + list_new_traveler_rid_obj:
-            self._get_fleet_status_request(rid, rq_obj, sim_time)
             for op_id in range(self.n_op):
                 LOG.debug(f"Request {rid}: Checking AMoD option of operator {op_id} ...")
                 # TODO # adapt fleet control
@@ -100,6 +100,7 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
                 LOG.debug(f"amod offer {amod_offer}")
                 if amod_offer is not None:
                     rq_obj.receive_offer(op_id, amod_offer, sim_time)
+            self._get_fleet_status_request(rid, rq_obj, sim_time)
             self._rid_chooses_offer(rid, rq_obj, sim_time)
         # 4)
         self._check_waiting_request_cancellations(sim_time)
@@ -112,15 +113,15 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
                 ch_op.time_trigger(sim_time)
         # record at the end of each time step
         self.record_stats()
-        self._save_fleet_status()
+        self._save_fleet_status(sim_time)
 
     def add_evaluate(self):
         """Runs standard and simulation environment specific evaluations over simulation results."""
         output_dir = self.dir_names[G_DIR_OUTPUT]
         # from src.evaluation.temporal import run_complete_temporal_evaluation
         # run_complete_temporal_evaluation(output_dir, method="snapshot")
-        from src.evaluation.standard import current_state_eval
-        current_state_eval(output_dir, self.dict_dirs)
+        # from src.evaluation.standard import current_state_eval
+        # current_state_eval(output_dir, self.dict_dirs)
 
     def _get_fleet_status(self, sim_time):
         """"Record the current state of the fleet. Anything regarding requests is not considered."""
@@ -152,7 +153,6 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         str_l_dest = 'Last Destination'
         str_num_stops = 'Number of Stops'
         str_pax = 'Nr. Pax'
-        str_rid = 'Request ID'
         str_cl_remaining_time = 'Remaining Time CL'
         str_vehicle_status = 'Current Vehicle Status'
         str_dist_start_start = 'Distance Current Position - Origin'
@@ -161,60 +161,43 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         str_last_time_op = 'Last Time OP'
         str_last_pos_op = 'Last Pos OP'
 
+        list_str_features = [G_V_OP_ID, G_V_VID, G_RQ_ID, str_pos, str_l_dest, str_num_stops, str_pax,
+                             str_cl_remaining_time, str_vehicle_status, str_dist_start_start, str_dist_end_start,
+                             str_dist_end_end, str_last_time_op, str_last_pos_op]
+
         sorted_sim_vehicle_keys = sorted(self.sim_vehicles.keys())
 
         list_vehicle_states = []
         list_vehicle_request_states = []
+        dict_request = {feature: [] for feature in list_str_features}
         for sim_vid in sorted_sim_vehicle_keys:
-            list_vehicle_states.append(self.sim_vehicles[sim_vid].return_current_vehicle_state(str_pos, str_l_dest,
-                                                                                                    str_num_stops,
-                                                                                                    str_pax,
-                                                                                                    str_cl_remaining_time))
+            dict_request = self.sim_vehicles[sim_vid].return_current_vehicle_state(str_pos, str_l_dest, str_num_stops,
+                                                                                   str_pax, str_cl_remaining_time,
+                                                                                   dict_request)
 
-            list_vehicle_request_states.append(self.sim_vehicles[sim_vid].return_current_vehicle_state_request(str_dist_start_start,
-                                                                                                       str_dist_end_start,
-                                                                                                       str_dist_end_end,
-                                                                                                       str_vehicle_status,
-                                                                                                       rid, rq_obj))
+            dict_request = self.sim_vehicles[sim_vid].return_current_vehicle_state_request(str_dist_start_start,
+                                                                                           str_dist_end_start,
+                                                                                           str_dist_end_end,
+                                                                                           str_vehicle_status,
+                                                                                           rid, rq_obj, dict_request)
             veh_obj = self.sim_vehicles[sim_vid]
             for op_id in range(self.n_op):
                 last_time, last_pos, _ = self.operators[op_id].veh_plans[sim_vid[1]].return_after_locked_availability(veh_obj, sim_time)
-                list_vehicle_states[-1][str_last_time_op] = last_time
-                list_vehicle_states[-1][str_last_pos_op] = last_pos
-        # list_vehicle_request_states = [self.sim_vehicles[sim_vid].return_current_vehicle_state_request(str_dist_start_start,
-        #                                                                                                str_dist_end_start,
-        #                                                                                                str_dist_end_end,
-        #                                                                                                str_vehicle_status,
-        #                                                                                                rid, rq_obj)
-        #                                for sim_vid in sorted_sim_vehicle_keys]
+                dict_request[str_last_time_op].append(last_time)
+                dict_request[str_last_pos_op].append(int(last_pos[0]))
 
-        list_complete_vehicle_state = [dict(i, **j) for i, j in
-                                       zip(list_vehicle_states, list_vehicle_request_states)]
-        dict_vehicles_states = {
-            i[G_V_VID]: {str_rid: rid, str_pos: i[str_pos], str_l_dest: i[str_l_dest], str_pax: i[str_pax],
-                         str_num_stops: i[str_num_stops],
-                         str_dist_start_start: i[str_dist_start_start],
-                         str_dist_end_start: i[str_dist_end_start],
-                         str_dist_end_end: i[str_dist_end_end],
-                         str_cl_remaining_time: i[str_cl_remaining_time],
-                         str_vehicle_status: i[str_vehicle_status],
-                         str_last_time_op: i[str_last_time_op],
-                         str_last_pos_op: i [str_last_pos_op]}
-            for i in list_complete_vehicle_state}
-        dict_vehicles_states['Sim Time'] = sim_time
-        self.list_vehicle_state_dict.append(dict_vehicles_states)
+        self.dict_step[str(rid)] = dict_request
 
-    def _save_fleet_status(self):
+
+    def _save_fleet_status(self, sim_time):
         """Save previously recorded fleet states to external csv file"""
-        path_current_state = os.path.join(self.dir_names[G_DIR_OUTPUT], "current_state.csv")
+        path_current_state = os.path.join(self.dir_names[G_DIR_OUTPUT], "current_state")
+        path_current_state_file = os.path.join(path_current_state, f'data_{sim_time}.json')
 
-        df_current_DB = pd.DataFrame(self.list_vehicle_state_dict)
-        self.list_vehicle_state_dict = []
-        self.list_vehicle_states= []
+        if not os.path.isdir(path_current_state):
+            os.makedirs(path_current_state)
 
-        if os.path.isfile(path_current_state):
-            write_mode, write_header = "a", False
-        else:
-            write_mode, write_header = "w", True
-        df_current_DB.set_index('Sim Time', inplace=True)
-        df_current_DB.to_csv(path_current_state, mode=write_mode, header=write_header)
+        with open(path_current_state_file, "w") as f:
+            f.write(json.dumps(self.dict_step))
+
+        self.dict_step = {}
