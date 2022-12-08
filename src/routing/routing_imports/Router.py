@@ -18,16 +18,14 @@ if TYPE_CHECKING:
 
 RAISE_ERROR = False
 
-def shortest_travel_time_cost_function(travel_time : float, travel_distance : float, current_node_index : int, next_node_index : int) -> float:
+def shortest_travel_time_cost_function(travel_time : float, travel_distance : float, edge_obj:Edge) -> float:
     """ standard version of a customized_section_cost_function for computing time shortest routes
     :param travel_time: travel_time of a section
     :type travel time: float
     :param travel_distance: travel_distance of a section
     :type travel_distance: float
-    :param current_node_index: index of current_node_obj in dijkstra computation that is already settled
-    :type current_node_index: int
-    :param next_node_index: index of next_node_obj in dijkstra computation that is explored
-    :type next_node_index: int
+    :param edge_obj: current edge object (dependent on network implementation) in dijkstra computation that is currently checked
+    :type edge_obj: edge object
     :return: travel_cost_value of section
     :rtype: float
     """
@@ -49,7 +47,7 @@ class Router():
     ch_flag: contraction hierarchy is used
     """
     def __init__(self, nw: NetworkBasic, start_node:int, destination_nodes:List[int] = [], mode:str = None, time_radius:float = None, max_settled_targets:int = None, 
-                 forward_flag:bool = True, ch_flag:bool = False, customized_section_cost_function:Callable[[float,float,int,int],float] = None):
+                 forward_flag:bool = True, ch_flag:bool = False, customized_section_cost_function:Callable[[float,float,Edge],float] = None):
         self.nw = nw
         self.start = start_node
         self.back_end = None
@@ -595,7 +593,7 @@ class Router():
 
         for next_node_obj, next_edge_obj in next_nodes_and_edges:
             edge_tt, edge_distance = next_edge_obj.get_tt_distance()
-            new_end_cost = current_cost + self.customized_section_cost_function(edge_tt, edge_distance, current_node_obj.node_index, next_node_obj.node_index)
+            new_end_cost = current_cost + self.customized_section_cost_function(edge_tt, edge_distance, next_edge_obj)
 
             if next_node_obj.settled != self.dijkstra_number:
                 if next_node_obj.cost_index != -self.dijkstra_number:
@@ -625,7 +623,7 @@ class Router():
 
         for next_node_obj, next_edge_obj in next_nodes_and_edges:
             edge_tt, edge_distance = next_edge_obj.get_tt_distance()
-            new_end_cost = current_cost + self.customized_section_cost_function(edge_tt, edge_distance, current_node_obj.node_index, next_node_obj.node_index)
+            new_end_cost = current_cost + self.customized_section_cost_function(edge_tt, edge_distance, next_edge_obj)
 
             if next_node_obj.settled_back != self.dijkstra_number:
                 if next_node_obj.cost_index_back != -self.dijkstra_number:

@@ -27,7 +27,7 @@ INPUT_PARAMETERS_NetworkBase = {
 }
 
 
-def customized_section_cost_function(travel_time : float, travel_distance : float, current_node_index : int, next_node_index : int) -> float:
+def customized_section_cost_function(travel_time : float, travel_distance : float, edge_obj) -> float:
     """computes the customized section cost for routing
     this method should always return a positive number
 
@@ -35,10 +35,8 @@ def customized_section_cost_function(travel_time : float, travel_distance : floa
     :type travel time: float
     :param travel_distance: travel_distance of a section
     :type travel_distance: float
-    :param current_node_index: index of current_node_obj in dijkstra computation that is already settled
-    :type current_node_index: int
-    :param next_node_index: index of next_node_obj in dijkstra computation that is explored
-    :type next_node_index: int
+    :param edge_obj: current edge object (dependent on network implementation) in dijkstra computation that is currently checked
+    :type edge_obj: edge object
     :return: travel_cost_value of section
     :rtype: float
     """
