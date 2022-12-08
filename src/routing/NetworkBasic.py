@@ -165,7 +165,6 @@ class NetworkBasic(NetworkBase):
         :type network_dynamics_file_name: str
         """
         self.nodes:List[Node] = []     #list of all nodes in network (index == node.node_index)
-        self.edges:Dict[Tuple[int, int], Edge] = {} # dict of all edges ( (start_node_index, end_node_index) -> edge)
         self.network_name_dir = network_name_dir
         self.travel_time_file_folders = self._load_tt_folder_path(network_dynamics_file_name=network_dynamics_file_name)
         self.loadNetwork(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
