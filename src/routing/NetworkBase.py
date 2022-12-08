@@ -282,7 +282,7 @@ class NetworkBase(metaclass=ABCMeta):
 
     @abstractmethod
     def return_travel_costs_Xto1(self, list_origin_positions:List[Tuple[int, int, float]], destination_position:Tuple[int, int, float], max_routes:int=None,
-                                 max_cost_value:float=None, customized_section_cost_function:Callable[[float,float,int,int],float]=None)->List[Tuple[float,float,float],float,float,float]:
+                                 max_cost_value:float=None, customized_section_cost_function:Callable[[float,float,int,int],float]=None)->List[Tuple[Tuple[float,float,float],float,float,float]]:
         """This method will return a list of tuples of origin positions and cost values of the X fastest routes between
         a list of possible origin nodes and a certain destination node. Combinations that do not fulfill all constraints
         will not be returned.
@@ -308,7 +308,7 @@ class NetworkBase(metaclass=ABCMeta):
 
     @abstractmethod
     def return_travel_costs_1toX(self, origin_position:Tuple[float,float,float], list_destination_positions:List[Tuple[int, int, float]], max_routes:int=None,
-                                 max_cost_value:float=None, customized_section_cost_function:Callable[[float,float,int,int],float] = None)->List[Tuple[float,float,float],float,float,float]:
+                                 max_cost_value:float=None, customized_section_cost_function:Callable[[float,float,int,int],float] = None)->List[Tuple[Tuple[float,float,float],float,float,float]]:
         """This method will return a list of tuples of destination node and travel time of the X fastest routes between
         a list of possible destination nodes and a certain origin node. Combinations that do not fulfill all constraints
         will not be returned.
