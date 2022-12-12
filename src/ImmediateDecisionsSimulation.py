@@ -164,7 +164,7 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
 
         list_str_features = [G_V_OP_ID, G_V_VID, G_RQ_ID, str_pos, str_l_dest, str_num_stops, str_pax,
                              str_cl_remaining_time, str_vehicle_status, str_dist_start_start, str_dist_end_start,
-                             str_dist_end_end, str_last_time_op, str_last_pos_op]
+                             str_dist_end_end, str_last_time_op, str_last_pos_op, str_time_until_free]
 
         sorted_sim_vehicle_keys = sorted(self.sim_vehicles.keys())
 
@@ -198,6 +198,6 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
             os.makedirs(path_current_state)
 
         with open(path_current_state_file, "w") as f:
-            f.write(json.dumps(self.dict_step), indent=4)
+            f.write(json.dumps(self.dict_step))
 
         self.dict_step = {}
