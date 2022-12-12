@@ -92,6 +92,7 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         list_new_traveler_rid_obj = self.demand.get_new_travelers(sim_time, since=last_time)
         # 3)
         for rid, rq_obj in list_undecided_travelers + list_new_traveler_rid_obj:
+            self._get_fleet_status_request(rid, rq_obj, sim_time)
             for op_id in range(self.n_op):
                 LOG.debug(f"Request {rid}: Checking AMoD option of operator {op_id} ...")
                 # TODO # adapt fleet control
@@ -100,7 +101,6 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
                 LOG.debug(f"amod offer {amod_offer}")
                 if amod_offer is not None:
                     rq_obj.receive_offer(op_id, amod_offer, sim_time)
-            self._get_fleet_status_request(rid, rq_obj, sim_time)
             self._rid_chooses_offer(rid, rq_obj, sim_time)
         # 4)
         self._check_waiting_request_cancellations(sim_time)
@@ -160,6 +160,7 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         str_dist_end_end = 'Distance End Position - Destination'
         str_last_time_op = 'Last Time OP'
         str_last_pos_op = 'Last Pos OP'
+        str_time_until_free = 'Time Until Free'
 
         list_str_features = [G_V_OP_ID, G_V_VID, G_RQ_ID, str_pos, str_l_dest, str_num_stops, str_pax,
                              str_cl_remaining_time, str_vehicle_status, str_dist_start_start, str_dist_end_start,
@@ -167,8 +168,6 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
 
         sorted_sim_vehicle_keys = sorted(self.sim_vehicles.keys())
 
-        list_vehicle_states = []
-        list_vehicle_request_states = []
         dict_request = {feature: [] for feature in list_str_features}
         for sim_vid in sorted_sim_vehicle_keys:
             dict_request = self.sim_vehicles[sim_vid].return_current_vehicle_state(str_pos, str_l_dest, str_num_stops,
@@ -184,6 +183,7 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
             for op_id in range(self.n_op):
                 last_time, last_pos, _ = self.operators[op_id].veh_plans[sim_vid[1]].return_after_locked_availability(veh_obj, sim_time)
                 dict_request[str_last_time_op].append(last_time)
+                dict_request[str_time_until_free].append(last_time-sim_time)
                 dict_request[str_last_pos_op].append(int(last_pos[0]))
 
         self.dict_step[str(rid)] = dict_request
@@ -198,6 +198,6 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
             os.makedirs(path_current_state)
 
         with open(path_current_state_file, "w") as f:
-            f.write(json.dumps(self.dict_step))
+            f.write(json.dumps(self.dict_step), indent=4)
 
         self.dict_step = {}
