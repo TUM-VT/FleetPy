@@ -92,7 +92,6 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         list_new_traveler_rid_obj = self.demand.get_new_travelers(sim_time, since=last_time)
         # 3)
         for rid, rq_obj in list_undecided_travelers + list_new_traveler_rid_obj:
-            self._get_fleet_status_request(rid, rq_obj, sim_time)
             for op_id in range(self.n_op):
                 LOG.debug(f"Request {rid}: Checking AMoD option of operator {op_id} ...")
                 # TODO # adapt fleet control
@@ -101,6 +100,7 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
                 LOG.debug(f"amod offer {amod_offer}")
                 if amod_offer is not None:
                     rq_obj.receive_offer(op_id, amod_offer, sim_time)
+            self._get_fleet_status_request(rid, rq_obj, sim_time)
             self._rid_chooses_offer(rid, rq_obj, sim_time)
         # 4)
         self._check_waiting_request_cancellations(sim_time)
