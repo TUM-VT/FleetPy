@@ -186,8 +186,11 @@ if __name__ == "__main__":
         network_dynamics_file = sys.argv[4]
     except:
         pass
-    if type(sys.argv[2]) == int:
-        N_max = sys.argv[2]
+    try:
+        N_max = int(sys.argv[2])
+    except:
+        N_max = None
+    if N_max is not None:
         preprocess_until_max_index(nw_name, N_max, number_cores=number_cores, network_dynamics_file=network_dynamics_file)
     else:
         infra_name = sys.argv[2]
