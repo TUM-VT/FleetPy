@@ -40,6 +40,7 @@ def get_src_routing_engines():
     # FleetPy routing engine options
     re_dict = {}  # str -> (module path, class name)
     re_dict["NetworkBasic"] = ("src.routing.NetworkBasic", "NetworkBasic")
+    re_dict["NetworkBasic_Ext"] = ("src.routing.NetworkBasic_Ext", "NetworkBasic_Ext")
     re_dict["NetworkImmediatePreproc"] = ("src.routing.NetworkImmediatePreproc", "NetworkImmediatePreproc")
     re_dict["NetworkBasicWithStore"] = ("src.routing.NetworkBasicWithStore", "NetworkBasicWithStore")
     re_dict["NetworkPartialPreprocessed"] = ("src.routing.NetworkPartialPreprocessed", "NetworkPartialPreprocessed")

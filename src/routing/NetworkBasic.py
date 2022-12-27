@@ -139,11 +139,11 @@ class Edge():
         """
         return self.distance
 
-    def get_cost_tt_distance(self):
+    def get_tt_distance(self):
         """
         :return: (travel time, distance) tuple
         """
-        return (self.travel_time, self.travel_time, self.distance)
+        return (self.travel_time, self.distance)
 
 
 # Position: (start_node_id, end_node_id, relative_pos)

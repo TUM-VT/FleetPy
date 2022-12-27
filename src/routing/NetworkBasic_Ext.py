@@ -1,6 +1,6 @@
 """
-Authors: Roman Engelhardt, Florian Dandl
-TUM, 2020
+Authors: Roman Engelhardt, Florian Dandl, Daniel Schräder
+TUM, 2022
 In order to guarantee transferability of models, Network models should follow the following conventions.
 Classes should be called
 Node
@@ -36,22 +36,23 @@ LOG = logging.getLogger(__name__)
 # import pandas as pd
 # import imports.Router as Router
 
-def customized_section_ext_cost_function(travel_time, travel_distance, external_costs):
-    """computes the customized section cost for routing
+def customized_section_ext_cost_function(travel_time : float, travel_distance : float, edge_obj) -> float:
+    """returns the external cost of an edge @Daniel -> todo?
 
     :param travel_time: travel_time of a section
     :type travel time: float
     :param travel_distance: travel_distance of a section
     :type travel_distance: float
-    :param current_node_index: index of current_node_obj in dijkstra computation to be settled
-    :type current_node_index: int
+    :param edge_obj: current edge object (dependent on network implementation) in dijkstra computation that is currently checked
+    :type edge_obj: edge object
     :return: travel_cost_value of section
     :rtype: float
     """
-    return external_costs
+    return edge_obj.get_external_cost()
 
 
 def read_node_line(columns):
+    # @Daniel -> todo ?
     return Node(int(columns["node_index"]), int(columns["is_stop_only"]), float(columns["pos_x"]), float(columns["pos_y"]))
 
 from src.routing.NetworkBasic import NetworkBasic
@@ -152,12 +153,6 @@ class Edge():
         """
         return (self.travel_time, self.distance)
 
-    def get_external_costs(self):
-        """
-        :return: (travel time, distance) tuple
-        """
-        return self.external_costs
-
 
 # Position: (start_node_id, end_node_id, relative_pos)
 #   -> (node_id, None, None) in case vehicle is on a node
@@ -166,28 +161,19 @@ class Edge():
 # while all given start-and end-position nodes are included
 
 
-class NetworkBasic_Ext(NetworkBasic):
-    def __init__(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
-        """
-        The network will be initialized.
-        This network only uses basic routing algorithms (dijkstra and bidirectional dijkstra)
-        :param network_name_dir: name of the network_directory to be loaded
-        :param type: determining whether the base or a pre-processed network will be used
-        :param scenario_time: applying travel times for a certain scenario at a given time in the scenario
-        :param network_dynamics_file_name: file-name of the network dynamics file
-        :type network_dynamics_file_name: str
-        """
-        self.nodes = []     #list of all nodes in network (index == node.node_index)
-        self.network_name_dir = network_name_dir
-        self.travel_time_file_folders = self._load_tt_folder_path(network_dynamics_file_name=network_dynamics_file_name)
-        self.loadNetwork(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
-        self.current_dijkstra_number = 1    #used in dijkstra-class
-        self.sim_time = 0   # TODO #
-        self.zones = None   # TODO #
-        with open(os.sep.join([self.network_name_dir, "base","crs.info"]), "r") as f:
-            self.crs = f.read()
+class EdgeDaniel(Edge):
+    def __init__(self, edge_index: [int, int], distance: float, travel_time: float, external_cost: float):
+        super().__init__(edge_index, distance, travel_time, external_cost)
+        self._external_cost = external_cost
 
-    def loadNetwork(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
+    def get_external_cost(self):
+        return self._external_cost
+
+class NetworkBasic_Ext(NetworkBasic):
+    def __init__(self, network_name_dir: str, network_dynamics_file_name: str = None, scenario_time: int = None):
+        super().__init__(network_name_dir, network_dynamics_file_name, scenario_time)
+
+    def loadNetwork(self, network_name_dir:str, network_dynamics_file_name:str=None, scenario_time:int=None):
         nodes_f = os.path.join(network_name_dir, "base", "nodes.csv")
         print(f"Loading nodes from {nodes_f} ...")
         nodes_df = pd.read_csv(nodes_f)
@@ -195,16 +181,13 @@ class NetworkBasic_Ext(NetworkBasic):
         #
         edges_f = os.path.join(network_name_dir, "base", "edges.csv")
         print(f"Loading edges from {edges_f} ...")
-        with open(edges_f) as fhin:
-            header = fhin.readline()
-            for line in fhin:
-                lc = line.strip().split(",")
-                o_node = self.nodes[int(lc[0])]
-                d_node = self.nodes[int(lc[1])]
-                # for the table approach, int values are used (to avoid rounding mistakes!)
-                tmp_edge = Edge((o_node, d_node), float(lc[2]), float(lc[3]), float(lc[5]))
-                o_node.add_next_edge_to(d_node, tmp_edge)
-                d_node.add_prev_edge_from(o_node, tmp_edge)
+        edges_df = pd.read_csv(edges_f)
+        for _, row in edges_df.iterrows():  # @ Daniel: Todo!
+            o_node = self.nodes[row[G_EDGE_FROM]]
+            d_node = self.nodes[row[G_EDGE_TO]]
+            tmp_edge = EdgeDaniel((o_node, d_node), row[G_EDGE_DIST], row[G_EDGE_TT], row['external_costs'])
+            o_node.add_next_edge_to(d_node, tmp_edge)
+            d_node.add_prev_edge_from(o_node, tmp_edge)
         print("... {} nodes loaded!".format(len(self.nodes)))
         if scenario_time is not None:
             latest_tt = None
@@ -254,16 +237,18 @@ class NetworkBasic_Ext(NetworkBasic):
                 return True
         return False
 
-    def load_tt_file(self, scenario_time):
+    def load_tt_file(self, scenario_time: int):  # @ Daniel: todo -> in case external costs change dynamically
         """
         loads new travel time files for scenario_time
         """
         self._reset_internal_attributes_after_travel_time_update()
         f = self.travel_time_file_folders[scenario_time]
         tt_file = os.path.join(f, "edges_td_att.csv")
-        tmp_df = pd.read_csv(tt_file, index_col=[0,1])
+        tmp_df = pd.read_csv(tt_file)
+        tmp_df.set_index(["from_node", "to_node"], inplace=True)
         for edge_index_tuple, new_tt in tmp_df["edge_tt"].iteritems():
-            self._set_edge_tt(edge_index_tuple[0], edge_index_tuple[1], new_tt)
+            self._set_edge_tt(edge_index_tuple[0], edge_index_tuple[1],
+                              new_tt)  # @ Daniel -> you then might have to adopt this function
 
     def _set_edge_tt(self, o_node_index, d_node_index, new_travel_time):
         o_node = self.nodes[o_node_index]
