@@ -65,7 +65,7 @@ class NetworkBasicWithStore(NetworkBasic):
         This method will return the travel costs of the fastest route between two nodes.
         :param origin_position: (current_edge_origin_node_index, current_edge_destination_node_index, relative_position)
         :param destination_position: (destination_edge_origin_node_index, destination_edge_destination_node_index, relative_position)
-        :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_node) -> cost_value
+        :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_edge) -> cost_value
                 if None: travel_time is considered as the cost_function of a section
         :return: (cost_function_value, travel time, travel_distance) between the two nodes
         """

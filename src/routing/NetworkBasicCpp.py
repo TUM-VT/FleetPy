@@ -55,7 +55,7 @@ class NetworkBasicCpp(NetworkBasic):
         This method will return the travel costs of the fastest route between two nodes.
         :param origin_position: (current_edge_origin_node_index, current_edge_destination_node_index, relative_position)
         :param destination_position: (destination_edge_origin_node_index, destination_edge_destination_node_index, relative_position)
-        :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_node) -> cost_value
+        :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_edge) -> cost_value
                 if None: travel_time is considered as the cost_function of a section
         :return: (cost_function_value, travel time, travel_distance) between the two nodes
         """
@@ -90,7 +90,7 @@ class NetworkBasicCpp(NetworkBasic):
         :param destination_position: destination position : (destination_edge_origin_node_index, destination_edge_destination_node_index, relative_position)
         :param max_routes: maximal number of fastest route triples that should be returned
         :param max_cost_value: latest cost function value of a route at destination to be considered as solution (max time if customized_section_cost_function == None)
-        :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_node) -> cost_value
+        :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_edge) -> cost_value
                 if None: travel_time is considered as the cost_function of a section
         :return: list of (origin_position, cost_function_value, travel time, travel_distance) tuples
         """
@@ -147,7 +147,7 @@ class NetworkBasicCpp(NetworkBasic):
         :param list_destination_positions: list of destination positions : (destination_edge_origin_node_index, destination_edge_destination_node_index, relative_position)
         :param max_routes: maximal number of fastest route triples that should be returned
         :param max_cost_value: latest cost function value of a route at destination to be considered as solution (max time if customized_section_cost_function == None)
-        :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_node) -> cost_value
+        :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_edge) -> cost_value
                 if None: travel_time is considered as the cost_function of a section
         :return: list of (destination_position, cost_function_value, travel time, travel_distance) tuples
         """
@@ -199,7 +199,7 @@ class NetworkBasicCpp(NetworkBasic):
         while origin_position[0] and destination_postion[1](or destination_position[0] if destination_postion[1]==None) is included.
         :param origin_position: (current_edge_origin_node_index, current_edge_destination_node_index, relative_position)
         :param destination_position: (destination_edge_origin_node_index, destination_edge_destination_node_index, relative_position)
-        :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_node) -> cost_value
+        :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_edge) -> cost_value
                 if None: travel_time is considered as the cost_function of a section
         :return : route (list of node_indices) of best route
         """
