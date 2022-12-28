@@ -216,7 +216,7 @@ if __name__ == "__main__":
 
         log_level = "info"
         cc = os.path.join(scs_path, "constant_config_ir_ext.csv")
-        sc = os.path.join(scs_path, "example_only1_ext.csv")
+        sc = os.path.join(scs_path, "ext_test_w_ext_1.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
         list_results = read_outputs_for_comparison(cc, sc)
         all_scenario_assert_dict = {0: {"number users": 88}}
@@ -227,7 +227,7 @@ if __name__ == "__main__":
 
         log_level = "info"
         cc = os.path.join(scs_path, "constant_config_ir.csv")
-        sc = os.path.join(scs_path, "example_only1.csv")
+        sc = os.path.join(scs_path, "ext_test_wo_ext_1.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
         list_results = read_outputs_for_comparison(cc, sc)
         all_scenario_assert_dict = {0: {"number users": 88}}

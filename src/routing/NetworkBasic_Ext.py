@@ -69,6 +69,10 @@ class Node():
         #
         self.travel_infos_from = {} #node_index -> (tt, dis)
         self.travel_infos_to = {}   #node_index -> (tt, dis)
+
+        self.travel_infos_from_ext = {}  # node_index -> (tt, dis, ext)
+        self.travel_infos_to_ext = {}  # node_index -> (tt, dis, ext)
+
         #
         # attributes set during path calculations
         self.is_target_node = False     # is set and reset in computeFromNodes
@@ -119,6 +123,27 @@ class Node():
     def get_travel_infos_from(self, other_node_index):
         return self.travel_infos_from[other_node_index]
 
+# class DanielNode(Node):
+#     def __init__(self, node_index, is_stop_only, pos_x, pos_y, node_order=None):
+#         super().__init__(node_index, is_stop_only, pos_x, pos_y, node_order=None)
+#         self.travel_infos_from_ext = {}  # node_index -> (tt, dis, ext)
+#         self.travel_infos_to_ext = {}  # node_index -> (tt, dis, ext)
+
+    def add_next_edge_to_ext(self, other_node, edge):
+        #print("add next edge to: {} -> {}".format(self.node_index, other_node.node_index))
+        self.edges_to[other_node] = edge
+        self.travel_infos_to_ext[other_node.node_index] = edge.get_tt_distance_ext()
+
+    def add_prev_edge_from_ext(self, other_node, edge):
+        self.edges_from[other_node] = edge
+        self.travel_infos_from_ext[other_node.node_index] = edge.get_tt_distance_ext()
+
+    def get_travel_infos_to_ext(self, other_node_index):
+        return self.travel_infos_to_ext[other_node_index]
+
+    def get_travel_infos_from_ext(self, other_node_index):
+        return self.travel_infos_from_ext[other_node_index]
+
 
 
 class Edge():
@@ -126,7 +151,7 @@ class Edge():
         self.edge_index = edge_index
         self.distance = distance
         self.travel_time = travel_time
-        self.external_costs = external_costs
+        self._external_costs = external_costs
         #
 
     def __str__(self):
@@ -162,12 +187,15 @@ class Edge():
 
 
 class EdgeDaniel(Edge):
-    def __init__(self, edge_index: [int, int], distance: float, travel_time: float, external_cost: float):
-        super().__init__(edge_index, distance, travel_time, external_cost)
-        self._external_cost = external_cost
+    def __init__(self, edge_index: [int, int], distance: float, travel_time: float, external_costs: float):
+        super().__init__(edge_index, distance, travel_time, external_costs)
+        self._external_costs = external_costs
 
     def get_external_cost(self):
-        return self._external_cost
+        return self._external_costs
+
+    def get_tt_distance_ext(self):
+        return (self.travel_time, self.distance, self._external_costs)
 
 class NetworkBasic_Ext(NetworkBasic):
     def __init__(self, network_name_dir: str, network_dynamics_file_name: str = None, scenario_time: int = None):
@@ -185,9 +213,9 @@ class NetworkBasic_Ext(NetworkBasic):
         for _, row in edges_df.iterrows():  # @ Daniel: Todo!
             o_node = self.nodes[row[G_EDGE_FROM]]
             d_node = self.nodes[row[G_EDGE_TO]]
-            tmp_edge = EdgeDaniel((o_node, d_node), row[G_EDGE_DIST], row[G_EDGE_TT], row['external_costs'])
-            o_node.add_next_edge_to(d_node, tmp_edge)
-            d_node.add_prev_edge_from(o_node, tmp_edge)
+            tmp_edge = EdgeDaniel((o_node, d_node), row[G_EDGE_DIST], row[G_EDGE_TT], row[G_EDGE_EXT])
+            o_node.add_next_edge_to_ext(d_node, tmp_edge)
+            d_node.add_prev_edge_from_ext(o_node, tmp_edge)
         print("... {} nodes loaded!".format(len(self.nodes)))
         if scenario_time is not None:
             latest_tt = None
@@ -352,7 +380,7 @@ class NetworkBasic_Ext(NetworkBasic):
         """
         pass
 
-    def get_section_overhead(self, position, from_start=True, customized_section_cost_function=None):
+    def get_section_overhead(self, position, from_start=True, customized_section_cost_function= None):
         """This method computes the section overhead for a certain position.
 
         :param position: (current_edge_origin_node_index, current_edge_destination_node_index, relative_position)
@@ -363,16 +391,17 @@ class NetworkBasic_Ext(NetworkBasic):
         """
         if position[1] is None:
             return 0.0, 0.0, 0.0
-        all_travel_time, all_travel_distance = self.nodes[position[0]].get_travel_infos_to(position[1])
+        all_travel_time, all_travel_distance, all_external_costs = self.nodes[position[0]].get_travel_infos_to_ext(position[1])
         overhead_fraction = position[2]
         if not from_start:
             overhead_fraction = 1.0 - overhead_fraction
         all_travel_cost = all_travel_time
         if customized_section_cost_function is not None:
-            all_travel_cost = customized_section_cost_function(all_travel_time, all_travel_distance, self.nodes[position[1]])
+            edge_obj = self.nodes[position[0]].edges_to[self.nodes[position[1]]]
+            all_travel_cost = customized_section_cost_function(all_travel_time, all_travel_distance, edge_obj)
         return all_travel_cost * overhead_fraction, all_travel_time * overhead_fraction, all_travel_distance * overhead_fraction
 
-    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = customized_section_ext_cost_function):
+    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None):
         """
         This method will return the travel costs of the fastest route between two nodes.
         :param origin_position: (current_edge_origin_node_index, current_edge_destination_node_index, relative_position)
@@ -400,7 +429,7 @@ class NetworkBasic_Ext(NetworkBasic):
             self._add_to_database(origin_node, destination_node, s[0], s[1], s[2])
         return res
 
-    def return_travel_costs_Xto1(self, list_origin_positions, destination_position, max_routes=None, max_cost_value=None, customized_section_cost_function = customized_section_ext_cost_function):
+    def return_travel_costs_Xto1(self, list_origin_positions, destination_position, max_routes=None, max_cost_value=None, customized_section_cost_function = None):
         """
         This method will return a list of tuples of origin node and travel time of the X fastest routes between
         a list of possible origin nodes and a certain destination node, whereas the route starts at certain origins can
@@ -461,7 +490,7 @@ class NetworkBasic_Ext(NetworkBasic):
             return sorted(return_list, key = lambda x:x[1])[:max_routes]
         return return_list
 
-    def return_travel_costs_1toX(self, origin_position, list_destination_positions, max_routes=None, max_cost_value=None, customized_section_cost_function = customized_section_ext_cost_function):
+    def return_travel_costs_1toX(self, origin_position, list_destination_positions, max_routes=None, max_cost_value=None, customized_section_cost_function = None):
         """
         This method will return a list of tuples of destination node and travel time of the X fastest routes between
         a list of possible origin nodes and a certain destination node, whereas the route starts at certain origins can
@@ -520,7 +549,7 @@ class NetworkBasic_Ext(NetworkBasic):
             return sorted(return_list, key = lambda x:x[1])[:max_routes]
         return return_list
 
-    def return_best_route_1to1(self, origin_position, destination_position, customized_section_cost_function = customized_section_ext_cost_function):
+    def return_best_route_1to1(self, origin_position, destination_position, customized_section_cost_function = None):
         """
         This method will return the best route [list of node_indices] between two nodes,
         while origin_position[0] and destination_postion[1](or destination_position[0] if destination_postion[1]==None) is included.
@@ -545,7 +574,7 @@ class NetworkBasic_Ext(NetworkBasic):
             node_list.append(destination_position[1])
         return node_list
 
-    def return_best_route_Xto1(self, list_origin_positions, destination_position, max_cost_value=None, customized_section_cost_function = customized_section_ext_cost_function):
+    def return_best_route_Xto1(self, list_origin_positions, destination_position, max_cost_value=None, customized_section_cost_function = None):
         """This method will return the best route between a list of possible origin nodes and a certain destination
         node. A best route is defined by [list of node_indices] between two nodes,
         while origin_position[0] and destination_position[1](or destination_position[0]
@@ -628,7 +657,7 @@ class NetworkBasic_Ext(NetworkBasic):
                         return_route = node_list 
         return return_route
 
-    def return_best_route_1toX(self, origin_position, list_destination_positions, max_cost_value=None, customized_section_cost_function = customized_section_ext_cost_function):
+    def return_best_route_1toX(self, origin_position, list_destination_positions, max_cost_value=None, customized_section_cost_function = None):
         """This method will return the best route between a list of possible destination nodes and a certain origin
         node. A best route is defined by [list of node_indices] between two nodes,
         while origin_position[0] and destination_position[1](or destination_position[0]
@@ -748,7 +777,7 @@ class NetworkBasic_Ext(NetworkBasic):
             return (route, (rest[0] + rest_dest[0], rest[1] + rest_dest[1], rest[2] + rest_dest[2]))
         return None
 
-    def return_travel_cost_matrix(self, list_positions, customized_section_cost_function = customized_section_ext_cost_function):
+    def return_travel_cost_matrix(self, list_positions, customized_section_cost_function = None):
         """This method will return the cost_function_value between all positions specified in list_positions
 
         :param list_positions: list of positions to be computed
@@ -809,6 +838,7 @@ class NetworkBasic_Ext(NetworkBasic):
         list_passed_node_times = []
         arrival_in_time_step = -1
         driven_distance = 0
+        external_costs = 0
         #
         c_cluster = None
         last_dyn_step = None
@@ -817,24 +847,27 @@ class NetworkBasic_Ext(NetworkBasic):
             if c_pos[2] is None:
                 c_pos = (c_pos[0], route[i], 0)
             rel_factor = (1 - c_pos[2])
-            tt, td = self.nodes[c_pos[0]].get_travel_infos_to(c_pos[1])
+            tt, td, ext = self.nodes[c_pos[0]].get_travel_infos_to_ext(c_pos[1])
             if tt > 86400:
                 LOG.warning(f"move_along_route: very large travel time on edge ({c_pos[0]} -> {c_pos[1]} for vid {sim_vid_id} at time {new_sim_time}) (blocked after tt update?) -> vehicle jumps this edge")
                 tt = 0
             c_edge_tt = tt
             c_edge_td = td
+            c_edge_ext = ext
             next_node_time = last_time + rel_factor * c_edge_tt
             if next_node_time > end_time:
                 # move vehicle to final position of current edge
                 end_rel_factor = (end_time - last_time) / tt + c_pos[2]
                 #print(end_rel_factor, end_time, last_time, c_edge_tt, c_pos[2])
                 driven_distance += (end_rel_factor - c_pos[2]) * c_edge_td
+                external_costs += (end_rel_factor - c_pos[2]) * c_edge_ext
                 c_pos = (c_pos[0], c_pos[1], end_rel_factor)
                 arrival_in_time_step = -1
                 break
             else:
                 # move vehicle to next node/edge and record data
                 driven_distance += rel_factor * c_edge_td
+                external_costs += rel_factor * c_edge_ext
                 next_node = route[i]
                 list_passed_nodes.append(next_node)
                 if record_node_times:
@@ -842,7 +875,7 @@ class NetworkBasic_Ext(NetworkBasic):
                 last_time = next_node_time
                 c_pos = (next_node, None, None)
                 arrival_in_time_step = last_time
-        return c_pos, driven_distance, arrival_in_time_step, list_passed_nodes, list_passed_node_times
+        return c_pos, driven_distance, external_costs, arrival_in_time_step, list_passed_nodes, list_passed_node_times
 
     def add_travel_infos_to_database(self, travel_info_dict):
         """ this function can be used to include externally computed (e.g. multiprocessing) route travel times

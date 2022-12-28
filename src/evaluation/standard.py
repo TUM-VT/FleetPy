@@ -422,6 +422,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
             except ZeroDivisionError:
                 pass
             op_total_km = op_vehicle_df[G_VR_LEG_DISTANCE].sum()/1000.0
+            op_total_ext = op_vehicle_df[G_VR_LEG_EXT_COST].sum()
 
             def weight_ob_rq(entries):
                 if pd.isnull(entries[G_VR_OB_RID]):
@@ -568,6 +569,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         result_dict["rides per veh rev hours"] = op_ride_per_veh_rev_hours
         result_dict["rides per veh rev hours rq"] = op_ride_per_veh_rev_hours_rq
         result_dict["total vkm"] = op_total_km
+        result_dict["total external costs"] = op_total_ext
         result_dict["occupancy"] = op_distance_avg_occupancy
         result_dict["occupancy rq"] = op_distance_avg_rq
         result_dict[r"% empty vkm"] = op_empty_vkm

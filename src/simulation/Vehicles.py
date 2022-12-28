@@ -62,6 +62,7 @@ class SimulationVehicle:
         self.cl_start_soc = None
         self.cl_toll_costs = 0
         self.cl_driven_distance = 0.0
+        self.cl_external_costs = 0.0
         self.cl_driven_route = []  # list of passed node_indices
         self.cl_driven_route_times = []  # list of times at which nodes were passed; only filled for replay flag
         self.cl_remaining_route = []  # list of remaining nodes to next stop
@@ -82,6 +83,7 @@ class SimulationVehicle:
         self.cl_start_soc = None
         self.cl_toll_costs = 0
         self.cl_driven_distance = 0.0
+        self.cl_external_costs = 0.0
         self.cl_driven_route = []  # list of passed node_indices
         self.cl_driven_route_times = []  # list of times at which nodes were passed; only filled for replay flag
         self.cl_remaining_route = []  # list of remaining nodes to next stop
@@ -182,6 +184,7 @@ class SimulationVehicle:
             self.cl_start_pos = self.pos
             self.cl_start_soc = self.soc
             self.cl_driven_distance = 0.0
+            self.cl_external_costs = 0.0
             self.cl_driven_route = []
             ca = self.assigned_route[0]
             self.status = ca.status
@@ -270,6 +273,7 @@ class SimulationVehicle:
             record_dict[G_VR_LEG_START_POS] = self.routing_engine.return_position_str(self.cl_start_pos)
             record_dict[G_VR_LEG_END_POS] = self.routing_engine.return_position_str(self.pos)
             record_dict[G_VR_LEG_DISTANCE] = self.cl_driven_distance
+            record_dict[G_VR_LEG_EXT_COST] = self.cl_external_costs
             record_dict[G_VR_LEG_START_SOC] = self.cl_start_soc
             record_dict[G_VR_LEG_END_SOC] = self.soc
             record_dict[G_VR_CHARGING_POWER] = ca.power
@@ -534,7 +538,7 @@ class SimulationVehicle:
         :param remaining_step_time: remaining time of the current update step
         :param update_start_time: time when update step started
         :return: arrival in time step (-1 if still moving at end of update step, time of arrival at end of route otherwise"""        
-        (new_pos, driven_distance, arrival_in_time_step, passed_nodes, passed_node_times) = \
+        (new_pos, driven_distance, external_costs, arrival_in_time_step, passed_nodes, passed_node_times) = \
             self.routing_engine.move_along_route(self.cl_remaining_route, self.pos, remaining_step_time,
                                                     sim_vid_id=(self.op_id, self.vid),
                                                     new_sim_time=c_time,
@@ -542,6 +546,7 @@ class SimulationVehicle:
         last_node = self.pos[0]
         self.pos = new_pos
         self.cl_driven_distance += driven_distance
+        self.cl_external_costs += external_costs
         self.soc -= self.compute_soc_consumption(driven_distance)
         if passed_nodes:
             self.cl_driven_route.extend(passed_nodes)
