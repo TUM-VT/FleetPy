@@ -380,6 +380,7 @@ class FleetSimulationBase:
                                                         self.op_output[op_id], route_output_flag,
                                                         replay_flag)
                     list_vehicles.append(tmp_veh_obj)
+                    veh_type_list.append([op_id, vid, veh_type])
                     self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
                 OpClass.continue_init(list_vehicles, self.start_time)
                 self.operators.append(OpClass)
