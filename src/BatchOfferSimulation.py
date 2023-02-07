@@ -83,7 +83,7 @@ class BatchOfferSimulation(FleetSimulationBase):
             last_time = None
         list_new_traveler_rid_obj = self.demand.get_new_travelers(sim_time, since=last_time)
 
-        self.create_database_2(sim_time, list_new_traveler_rid_obj)
+        # self.create_database_2(sim_time, list_new_traveler_rid_obj)
         # 3)
         for rid, rq_obj in list_new_traveler_rid_obj:
             for op_id in range(self.n_op):
