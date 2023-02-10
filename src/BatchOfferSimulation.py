@@ -57,6 +57,7 @@ class BatchOfferSimulation(FleetSimulationBase):
         :param scenario_parameters: row of pandas data-frame; entries are saved as x["key"]
         """
         super().add_init(scenario_parameters)
+        self.dict_step = {}
 
     def step(self, sim_time):
         """This method determines the simulation flow in a time step.
@@ -83,7 +84,7 @@ class BatchOfferSimulation(FleetSimulationBase):
             last_time = None
         list_new_traveler_rid_obj = self.demand.get_new_travelers(sim_time, since=last_time)
 
-        # self.create_database_2(sim_time, list_new_traveler_rid_obj)
+        self._get_fleet_status(sim_time)
         # 3)
         for rid, rq_obj in list_new_traveler_rid_obj:
             for op_id in range(self.n_op):
@@ -115,6 +116,7 @@ class BatchOfferSimulation(FleetSimulationBase):
         # self.create_database(sim_time, list_new_traveler_rid_obj)
 
         self.record_stats()
+        self._save_fleet_status(sim_time)
 
     def create_database(self, sim_time, list_new_traveler_rid_obj):
         '''
@@ -239,3 +241,39 @@ class BatchOfferSimulation(FleetSimulationBase):
                 write_mode, write_header = "w", True
             df_current_DB.set_index('Sim Time', inplace=True)
             df_current_DB.to_csv(path_current_state, mode=write_mode, header=write_header)
+
+    def _get_fleet_status(self, sim_time):
+        """"Record the current state of the fleet. Anything regarding requests is not considered."""
+        str_pos = 'Pos'
+        str_l_dest = 'Last Destination'
+        str_num_stops = 'Number of Stops'
+        str_pax = 'Nr. Pax'
+        str_cl_remaining_time = 'Remaining Time CL'
+        str_vehicle_status = 'Vehicle Status'
+
+        list_str_features = [G_V_OP_ID, G_V_VID, str_pos, str_l_dest, str_num_stops, str_pax,
+                             str_cl_remaining_time, str_vehicle_status]
+
+        sorted_sim_vehicle_keys = sorted(self.sim_vehicles.keys())
+
+        dict_request = {feature: [] for feature in list_str_features}
+        for sim_vid in sorted_sim_vehicle_keys:
+            dict_request = self.sim_vehicles[sim_vid].return_current_vehicle_state(str_pos, str_l_dest, str_num_stops,
+                                                                                   str_pax, str_cl_remaining_time,
+                                                                                   str_vehicle_status, dict_request)
+
+        self.dict_step[sim_time] = dict_request
+
+    def _save_fleet_status(self, sim_time):
+        """Save previously recorded fleet states as json/pickles. Each time step is saved in a separate file for faster
+        processing. """
+        path_current_state = os.path.join(self.dir_names[G_DIR_OUTPUT], "current_state")
+        path_current_state_file = os.path.join(path_current_state, f'data_{sim_time}.json')
+
+        if not os.path.isdir(path_current_state):
+            os.makedirs(path_current_state)
+
+        with open(path_current_state_file, "w") as f:
+            f.write(json.dumps(self.dict_step))
+
+        self.dict_step = {}

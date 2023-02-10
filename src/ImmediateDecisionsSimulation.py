@@ -174,12 +174,11 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         for sim_vid in sorted_sim_vehicle_keys:
             dict_request = self.sim_vehicles[sim_vid].return_current_vehicle_state(str_pos, str_l_dest, str_num_stops,
                                                                                    str_pax, str_cl_remaining_time,
-                                                                                   dict_request)
+                                                                                   str_vehicle_status, dict_request)
 
             dict_request = self.sim_vehicles[sim_vid].return_current_vehicle_state_request(str_dist_start_start,
                                                                                            str_dist_end_start,
                                                                                            str_dist_end_end,
-                                                                                           str_vehicle_status,
                                                                                            rid, rq_obj, dict_request)
             veh_obj = self.sim_vehicles[sim_vid]
             for op_id in range(self.n_op):

@@ -212,7 +212,8 @@ class SimulationVehicle:
         current_state_dict[str_pax] = self.get_nr_pax_without_currently_boarding()
         return current_state_dict
 
-    def return_current_vehicle_state(self, str_pos, str_l_dest, str_num_stops, str_pax, str_cl_remaining_time, dict_rq):
+    def return_current_vehicle_state(self, str_pos, str_l_dest, str_num_stops, str_pax, str_cl_remaining_time,
+                                     str_vehicle_status, dict_rq):
         """ Return information about the current state of the vehicle """
 
         dict_rq[G_V_OP_ID].append(self.op_id)
@@ -221,6 +222,7 @@ class SimulationVehicle:
 
         dict_rq[str_num_stops].append(len(self.assigned_route))
         dict_rq[str_pax].append(self.get_nr_pax_without_currently_boarding())
+        dict_rq[str_vehicle_status].append(self.status.value)
 
         if self.assigned_route:
             _, remaining_time, _ = self.routing_engine.return_travel_costs_1to1(self.pos,
@@ -234,8 +236,7 @@ class SimulationVehicle:
 
         return dict_rq
 
-    def return_current_vehicle_state_request(self,str_start_start, str_end_start, str_end_end, str_vehicle_status, rid,
-                                             rq_object, dict_rq):
+    def return_current_vehicle_state_request(self,str_start_start, str_end_start, str_end_end, rid, rq_object, dict_rq):
         """ Return information about vehicle in regard to specific request """
 
         dict_rq[G_RQ_ID].append(rid)
@@ -243,7 +244,6 @@ class SimulationVehicle:
         start_pos, end_pos = rq_object.get_origin_pos(), rq_object.get_destination_pos()
         _, tt_start_start, _ = self.routing_engine.return_travel_costs_1to1(self.pos, start_pos)
         dict_rq[str_start_start].append(tt_start_start)
-        dict_rq[str_vehicle_status].append(self.status.value)
 
         if self.assigned_route:
             tuple_last_position = self.assigned_route[-1].destination_pos
