@@ -37,6 +37,11 @@ class MainWindow(QMainWindow):
         self.label.setFont(QFont("Verdana", 20, QFont.Weight.Bold))
         # add the text label to the main window next to the icon
         grid.addWidget(self.label, 0, 1)
+        #create a help button
+        self.help_button = QPushButton("Help", self)
+        self.help_button.setToolTip("Click to see the help page")
+        self.help_button.clicked.connect(self.help)
+        grid.addWidget(self.help_button, 0, 2)
         
 
         self.setWindowTitle("FleetPy")
@@ -77,7 +82,6 @@ class MainWindow(QMainWindow):
 
 
         if self.stacked_widget.currentIndex() == 0 and self.window1.flag:
-            #self.main_modules =
             sc = self.window1.get_module_dict()
             self.window2.update(sc)
             self.stacked_widget.setCurrentIndex(1)
@@ -101,52 +105,51 @@ class MainWindow(QMainWindow):
         else:
             self.labels_for_modules, self.modules = self.window1.get_modules()
             self.labels_for_params, self.params = self.window2.get_params()
-            
-
-
-            """
-            #create a dataframe and fill it with modules names and labels 
-            df = pd.DataFrame()
-            df['Modules'] = self.modules
-            df['Labels'] = self.labels_for_modules
-            #create a dataframe and fill it with parameters and labels
-            df2 = pd.DataFrame()
-            df2['Parameters'] = self.params
-            df2['Labels'] = self.labels_for_params
-            #concatinate the two dataframes
-            df = pd.concat([df, df2], axis=1)
-            #drop the rows with empty or None values
-            df = df.dropna()
-            #drop the rows that contains the string 'None'
-            df = df[~df['Parameters'].str.contains('None')]
-            #save the dataframe to a csv file
-            df.to_csv('config.csv')
-            
-            #concat the two lists
-            #self.labels_for_modules.extend(self.labels_for_params)
-            #self.modules.extend(self.params)
-
-            df = pd.DataFrame()
-            df['labels'] = self.labels_for_modules 
-            df['modules'] = self.modules
-            df.dropna()
-            #drop the rows that contains the string 'None'
-            df = df[~df['modules'].str.contains('None')]
-            df.to_csv('config.csv')
-            """
+            study_name_idx = self.labels_for_params.index('study_name')
+            scenario_name_idx = self.labels_for_params.index('scenario_name')
+            study_name = self.params[study_name_idx]
+            scenario_name = self.params[scenario_name_idx]
+            #check if a folder is laready created with the name study_name
+            if os.path.exists(os.path.join(os.path.dirname(__file__),'studies',study_name)):
+                path = os.path.join(os.path.dirname(__file__),'studies',study_name)
+            if not os.path.exists(os.path.join(os.path.dirname(__file__),'studies',study_name)):
+                path = os.path.join(os.path.dirname(__file__),'studies',study_name)
+                os.mkdir(path)
+            file_path = os.path.join(path, scenario_name)
             df = pd.DataFrame()
             labels = self.labels_for_modules + self.labels_for_params
             entries = self.modules + self.params
             df['labels'] = labels
-            df['entries'] = entries
-            
+            df['entries'] = entries 
             #drop the rows that contains the string 'None'
             df['entries'].replace('None', np.nan, inplace=True)
             df['entries'].replace('', np.nan, inplace=True)
             #drop the rows that contains the string 'NO SELECTION'
             df['entries'].replace('NO SELECTION', np.nan, inplace=True)
             df.dropna()
-            df.to_csv('config.csv',header=False, index=False)
+            df.to_csv(file_path + '.csv',header=False, index=False)
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setText("The scenario file has been saved to the selected study folder")
+            msg.setWindowTitle("Success")
+            msg.exec()
+    def help(self):
+        #create a pop up window to show the help page
+        window = QMessageBox()
+        window.setIcon(QMessageBox.Icon.Information)
+        prompt = "<br>1. Please select the modules that you want to use in your scenario.<br>"
+        prompt += "<br>2. Please make sure that all the mandatory modules are selected.<br>"
+        prompt += "<br>3. Then, click on the 'Next' button to go to the next page.<br>"
+        prompt += "<br>4. Select the parameters that you want to use in your scenario.<br>"
+        prompt += "<br>5. Click on the 'Save' button to save the scenario file.<br>"
+        prompt += "<br>6. Click on the 'Go back' button to go back to the previous page.<br>"
+        prompt += "<br>7. The scenario file will be saved in the selected study folder.<br>"
+        prompt += "<br>For more information, please visit the FleetPy <a href='https://github.com/TUM-VT/FleetPy'> Github page </a>"
+
+        #add a hyperlink to a string
+        window.setTextFormat(Qt.TextFormat.RichText)
+        window.setText(prompt)
+        window.exec()
 
             
             

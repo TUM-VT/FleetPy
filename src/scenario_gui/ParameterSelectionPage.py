@@ -1,6 +1,6 @@
 
 import os
-from PyQt6.QtWidgets import QLabel, QWidget,QVBoxLayout,QGridLayout,QScrollArea,QComboBox,QLineEdit
+from PyQt6.QtWidgets import QMessageBox,QLabel, QWidget,QVBoxLayout,QGridLayout,QScrollArea,QComboBox,QLineEdit
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
 from os.path import dirname as up
@@ -13,7 +13,7 @@ class ParametersSelectionPage(QWidget):
         self.man_counter = 0
         self.demand_flag = self.network_flag = False
         self.flag = False
-        self.abnormal_params_list = ['network_name','demand_name','rq_file',]
+        self.abnormal_params_list = ['network_name','demand_name','rq_file','nr_mod_operators']
         self.vbox = QVBoxLayout()
         self.setWindowTitle("Parameters Selection Page")
         self.scroll = QScrollArea(self)
@@ -139,11 +139,29 @@ class ParametersSelectionPage(QWidget):
             self.textbox = QComboBox(self)
             self.textbox.setEnabled(False)
             return self.textbox
+        elif param == "nr_mod_operators":
+            textbox = QLineEdit(self)
+            textbox.textChanged.connect(self.nr_mod_operators_changed)
+            return textbox
+            """
         elif param == "study_name":
             self.textbox = QComboBox(self)
             path = os.path.join(os.path.dirname(up(up(__file__))),"data","demand")
+            """
 
-
+    def nr_mod_operators_changed(self,text):
+        if text == "1" or text == "": 
+            return
+        if int(text) >= 1:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Information)
+            prompt = "You have selected more than one operator.\n"
+            prompt += "Please make sure to select different parameters for each operator."
+            prompt += "Otherwise, the parameters will be the same for all operators."
+            prompt += " You can do this by seperating the different parameters by a comma ',' for all parameters starting with op_" 
+            msg.setText(prompt)
+            msg.setWindowTitle("Warning")
+            msg.exec()
     def update_rq(self):
         idx_rq = self.current_man_param_labels.index("rq_file")
         if self.demand_flag and self.network_flag:
