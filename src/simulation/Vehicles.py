@@ -612,7 +612,7 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                         self._route_update_needed = True
                     elif len(self.cl_remaining_route) == 0:
                         LOG.warning("no route planned anymore? {} {}".format(veh_pos, self))
-        elif veh_pos is not None:
+        elif veh_pos is not None and not self.start_next_leg_first:
             raise EnvironmentError(f"moving without having a driving task? {self}")
 
     def start_next_leg(self, simulation_time):
@@ -757,6 +757,13 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                         self.pos = target_pos
                         self.cl_driven_route.append(target_pos[0])
                         self.cl_driven_route_times.append( self.cl_driven_route_times[-1] )
+                        self._route_update_needed = False
+                    elif self.routing_engine.return_route_infos(r, 0, 0)[0] < 0.1:
+                        LOG.debug("more edges but very short edges -> assume reached destination!")
+                        self.pos = target_pos
+                        for x in r[1:]:
+                            self.cl_driven_route.append(x)
+                            self.cl_driven_route_times.append( simulation_time )
                         self._route_update_needed = False
                     else:
                         self.cl_remaining_route = r
