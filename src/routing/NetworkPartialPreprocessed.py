@@ -31,6 +31,24 @@ from src.routing.routing_imports.Router import Router
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_NetworkPartialPreprocessed = {
+    "doc" : """
+        This network uses numpy traveltime tables which are processed beforehand and stored in the data folder
+        Instead of preprocessing the whole network, only the travel time of the shortest routes between first x nodes are preprocessed.
+        Note ,that nodes should be sorted first based on their expected usage as routing targets
+        see: src/preprocessing/networks/create_partially_preprocessed_travel_time_tables.py for creating the numpy tables
+            src/preprocessing/networks/network_manipulation.py for sorting the network nodes
+
+        This network stores additionally computed traveltimes in a dictionary and reuses this data.
+        
+        As fallback, Dijkstra's algorithm implemented in Python is used.
+        """,
+    "inherit" : "NetworkBasic",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class NetworkPartialPreprocessed(NetworkBasic):
     def __init__(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):

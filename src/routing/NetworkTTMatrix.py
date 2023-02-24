@@ -83,7 +83,10 @@ class Node:
 # module class
 # ------------
 INPUT_PARAMETERS_NetworkTTMatrix = {
-    "doc" : "Routing based on TT Matrix, tt-scaling factor is read from file.",
+    "doc" : """
+        Routing based on a preprocessed TT-Matrix. For changing travel-times, tt-scaling factors can be read from a file.
+        see: src/preprocessing/networks/create_travel_time_tables.py for creating the numpy tables.
+        """,
     "inherit" : "NetworkBase",
     "input_parameters_mandatory": [G_NETWORK_NAME],
     "input_parameters_optional": [G_NW_DYNAMIC_F],
