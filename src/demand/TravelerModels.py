@@ -556,10 +556,11 @@ class PreferredOperatorRequest(RequestBase):
             return None
 
 INPUT_PARAMETERS_BrokerDecisionRequest = {
-    "doc" :     """    This request class is used for the easyride broker decision simulation.
-    It represents the broker's decision of offer (not the customer's), based on the metric "add_fleet_vmt"
-    the broker marks offers, that it has been chosen by the flag G_OFFER_BROKER_FLAG which is unique
-    requires simulation class BrokerDecisionSimulation !
+    "doc" :     """    
+    This request class is used for the broker decision simulation where a broker instead of the customer decides on which offer to take.
+    The broker marks offers, that it has been chosen by the flag G_OFFER_BROKER_FLAG which is unique.
+    This request class will only accept these marked offers.
+    Requires simulation class BrokerDecisionSimulation !
     """,
     "inherit" : "RequestBase",
     "input_parameters_mandatory": [],
@@ -570,9 +571,10 @@ INPUT_PARAMETERS_BrokerDecisionRequest = {
 
 class BrokerDecisionRequest(RequestBase):
     """
-    This request class is used for the easyride broker decision simulation.
-    It represents the broker's decision of offer (not the customer's), based on the metric "add_fleet_vmt"
-    the broker marks offers, that it has been chosen by the flag G_OFFER_BROKER_FLAG which is unique
+    This request class is used for the broker decision simulation where a broker instead of the customer decides on which offer to take.
+    The broker marks offers, that it has been chosen by the flag G_OFFER_BROKER_FLAG which is unique.
+    This request class will only accept these marked offers.
+    Requires simulation class BrokerDecisionSimulation !
     """
     type = "BrokerDecisionRequest"
 
