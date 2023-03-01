@@ -63,7 +63,8 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
 
     def user_request(self, rq, sim_time):
         super().user_request(rq, sim_time)
-        self.unassigned_requests_1[rq.get_rid_struct()] = 1
+        if not self.rq_dict[rq.get_rid_struct()].get_reservation_flag():
+            self.unassigned_requests_1[rq.get_rid_struct()] = 1
         return {}
 
     def user_cancels_request(self, rid, simulation_time):

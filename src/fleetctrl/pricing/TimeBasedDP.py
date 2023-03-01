@@ -1,9 +1,17 @@
 from src.fleetctrl.pricing.DynamicPricingBase import DynamicPrizingBase
 
+INPUT_PARAMETERS_TimeBasedDP = {
+    "doc" :  """This strategy sets fares at specific times during the simulation based on an input file. """,
+    "inherit" : "DynamicPrizingBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class TimeBasedDP(DynamicPrizingBase):
     def __init__(self, fleetctrl, operator_attributes, solver="Gurobi"):
-        """Initialization of dynamic pricing class.
+        """This strategy sets fares at specific times during the simulation based on an input file.
 
         :param fleetctrl: FleetControl class
         :param operator_attributes: operator dictionary that can contain additionally required parameters
@@ -13,6 +21,7 @@ class TimeBasedDP(DynamicPrizingBase):
         # TODO # TimeBasedDP.__init__()
         # load input file
         # define current parameters as attributes
+        raise NotImplementedError("TimeBaseDP is not implemented currently!")
 
     def get_elastic_price_factors(self, sim_time, expected_pu_time=None, o_pos=None, d_pos=None):
         """This method returns current time dependent fare scales. If it is called with sim_time, the price factors

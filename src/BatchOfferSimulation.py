@@ -30,9 +30,8 @@ LOG = logging.getLogger(__name__)
 # ----
 INPUT_PARAMETERS_BatchOfferSimulation = {
     "doc" :     """
-    this fleet simulation class is used for the ride pooling bmw study
     customers request trips from a single ride-pooling operator continously in time.
-    offers are only created after the optimisation step of the operator and fetched from the time_trigger function
+    offers are only created after the optimisation step of the operator and fetched from the time_trigger function.
     """,
     "inherit" : "FleetSimulationBase",
     "input_parameters_mandatory": [
@@ -46,7 +45,6 @@ INPUT_PARAMETERS_BatchOfferSimulation = {
 
 class BatchOfferSimulation(FleetSimulationBase):
     """
-    this fleet simulation class is used for the ride pooling bmw study
     customers request trips from a single ride-pooling operator continously in time.
     offers are only created after the optimisation step of the operator and fetched from the time_trigger function
     """
