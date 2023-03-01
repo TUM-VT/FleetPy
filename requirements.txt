@@ -4,7 +4,7 @@
 ipython
 numba
 scikit-learn
-
+pyQt6
 # Specific version requirements
 # ">=" could be replaced with "~="
 attrs==19.2.0
@@ -14,9 +14,9 @@ click==7.0
 click-plugins==1.1.1
 cligj==0.7.1
 dill==0.3.3
-Fiona==1.8.4
-Flask==1.1.2
-Flask-SocketIO==4.3.2
+Fiona>=1.8.4
+Flask>=1.1.2
+Flask-SocketIO>=4.3.2
 geopandas==0.7.0
 matplotlib==3.1.1
 numpy==1.19.5
