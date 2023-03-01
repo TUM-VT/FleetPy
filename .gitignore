@@ -4,6 +4,7 @@ run_private*.py
 # data directories except for example
 data/demand/*
 !data/demand/example_demand
+!data/demand/example_parcel_demand
 data/fleetctrl/initial_vehicle_distribution/*
 data/fleetctrl/elastic_pricing/*
 data/fleetctrl/elastic_fleet_size/*
@@ -19,6 +20,7 @@ data/pubtrans/*
 data/vehicles/*
 !data/vehicles/default_vehtype.csv
 !data/vehicles/low_range_vehtype.csv
+!data/vehicles/default_parcel_veh.csv
 data/zones/*
 !data/zones/example_zones
 !data/infra/example_infra
