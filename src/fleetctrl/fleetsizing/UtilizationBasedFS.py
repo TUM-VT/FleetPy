@@ -12,6 +12,25 @@ if tp.TYPE_CHECKING:
     
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_UtilizationBasedFS = {
+"doc" :  """ this strategy dynamically adopts the active fleet size based on the current fleet utilization
+            - a target utilization has to be given. fleet size is adopted to fit this utilization ("op_dyfs_target_utilization")
+            - an interval around this utilization has to be given which specifies the reaction time of the algorithm ("op_dyfs_target_utilization_interval")
+            - if the current utilization exceeds target_utilization + target_utilization intervall
+                vehicles are added until the utilization afterwards corresponds to target_utilization - target_utilization_interval
+            - for vehicles to be deactivated the current utilization has to deceed target_utilization - target_utilization_interval
+                for a time interval specified by "op_dyfs_underutilization_interval"
+            - if the active fleet size falls below a minimum, specified by "op_dyfs_minimum_active_fleetsize" no more vehicles are deactivated
+
+        inactive vehicles in depots are selected to charge if a charging station is present
+            - vehicles are sent to the nearest depots (idle vehicles have priority; other vehicles have to finish their task first (locks their plan))
+            - the presence of a charging station has no influence on the depot to be picked! """,
+"inherit" : "DynamicFleetSizingBase",
+"input_parameters_mandatory": [G_OP_DYFS_TARGET_UTIL, G_OP_DYFS_TARGET_UTIL_INT, G_OP_DYFS_UNDER_UTIL_DUR, G_OP_DYFS_MIN_ACT_FS],
+"input_parameters_optional": [],
+"mandatory_modules": [],
+"optional_modules": []
+}
 
 class UtilizationBasedFS(DynamicFleetSizingBase):
     def __init__(self, fleetctrl: FleetControlBase, operator_attributes: dict, solver: str="Gurobi"):

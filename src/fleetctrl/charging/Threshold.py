@@ -7,6 +7,18 @@ from src.misc.globals import *
 
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_ChargingBase = {
+    "doc" :  """this strategy looks through all fleet vehicles an triggers charging tasks in case the soc within a planned route
+            of a vehicle drops below a threshold (G_OP_APS_SOC)
+            the closest charging station possible from this position is considered for charging
+            in case multiple charging operators are present, the offer closest to postion is selected (also with depots) """,
+    "inherit" : "ChargingBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [G_OP_APS_SOC],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 
 class ChargingThresholdPublicInfrastructure(ChargingBase):
     """ this strategy looks through all fleet vehicles an triggers charging tasks in case the soc within a planned route

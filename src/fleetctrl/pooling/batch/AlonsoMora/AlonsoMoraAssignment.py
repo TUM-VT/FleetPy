@@ -187,7 +187,10 @@ def getRTVkeyFromVehPlan(veh_plan : VehiclePlan) -> tuple:
     return createRTVKey(vid, rids.keys())
 
 INPUT_PARAMETERS_AlonsoMoraAssignment = {
-    "doc" :  """this class is used to compute new vehicle assignments with Alonso-Mora-Algorithm """,
+    "doc" :  """This algorithm is a variant of the publication
+                On-demand high-capacity ride-sharing via dynamic trip-vehicle assignment; Alonso-Mora, Javier; Samaranayake, Samitha; Wallar, Alex; Frazzoli, Emilio; Rus, Daniela (2017)
+                the differences are described in
+                Speed-up Heuristic for an On-Demand Ride-Pooling Algorithm; Engelhardt, Roman; Dandl, Florian; Bogenberger, Klaus (2020) https://arxiv.org/pdf/2007.14877 """,
     "inherit" : "BatchAssignmentAlgorithmBase",
     "input_parameters_mandatory": [G_RA_SOLVER],
     "input_parameters_optional": [
