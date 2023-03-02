@@ -83,7 +83,10 @@ class Node:
 # module class
 # ------------
 INPUT_PARAMETERS_NetworkTTMatrix = {
-    "doc" : "Routing based on TT Matrix, tt-scaling factor is read from file.",
+    "doc" : """
+        Routing based on a preprocessed TT-Matrix. For changing travel-times, tt-scaling factors can be read from a file.
+        see: src/preprocessing/networks/create_travel_time_tables.py for creating the numpy tables.
+        """,
     "inherit" : "NetworkBase",
     "input_parameters_mandatory": [G_NETWORK_NAME],
     "input_parameters_optional": [G_NW_DYNAMIC_F],
@@ -226,6 +229,22 @@ class NetworkTTMatrix(NetworkBase):
                         LOG.info("update network at {}".format(simulation_time))
                         break
         return tt_updated
+    
+    def reset_network(self, simulation_time: float):
+        """ this method is used in case a module changed the travel times to future states for forecasts
+        it resets the network to the travel times a stimulation_time
+        :param simulation_time: current simulation time"""
+        LOG.debug("reset network at {}".format(simulation_time))
+        if self.sorted_tt_factor_times:
+            self.current_tt_factor_index = 0
+            if len(self.sorted_tt_factor_times) > 2:
+                for i in range(len(self.sorted_tt_factor_times) - 1):
+                    if self.sorted_tt_factor_times[i] <= simulation_time and self.sorted_tt_factor_times[i+1] > simulation_time:
+                        self.update_network(self.sorted_tt_factor_times[i], update_state=True)
+                        return
+                if self.sorted_tt_factor_times[-1] <= simulation_time:
+                    self.update_network(self.sorted_tt_factor_times[-1], update_state=True)
+                    return
 
     def get_number_network_nodes(self):
         """This method returns a list of all street network node indices.

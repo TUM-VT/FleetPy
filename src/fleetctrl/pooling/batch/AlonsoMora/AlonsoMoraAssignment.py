@@ -187,7 +187,10 @@ def getRTVkeyFromVehPlan(veh_plan : VehiclePlan) -> tuple:
     return createRTVKey(vid, rids.keys())
 
 INPUT_PARAMETERS_AlonsoMoraAssignment = {
-    "doc" :  """this class is used to compute new vehicle assignments with Alonso-Mora-Algorithm """,
+    "doc" :  """This algorithm is a variant of the publication
+                On-demand high-capacity ride-sharing via dynamic trip-vehicle assignment; Alonso-Mora, Javier; Samaranayake, Samitha; Wallar, Alex; Frazzoli, Emilio; Rus, Daniela (2017)
+                the differences are described in
+                Speed-up Heuristic for an On-Demand Ride-Pooling Algorithm; Engelhardt, Roman; Dandl, Florian; Bogenberger, Klaus (2020) https://arxiv.org/pdf/2007.14877 """,
     "inherit" : "BatchAssignmentAlgorithmBase",
     "input_parameters_mandatory": [G_RA_SOLVER],
     "input_parameters_optional": [
@@ -506,6 +509,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param is_external_vehicle_plan: should be set to True, if the assigned_plan has not been computed within this algorithm
         :param _is_init_sol: used within the code, if the init solution creater set this solution 
         """
+        super().set_assignment(vid, assigned_plan, is_external_vehicle_plan=is_external_vehicle_plan)
         if assigned_plan is None:
             self.current_assignments[vid] = None
         else:
@@ -1352,6 +1356,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         """
         import gurobipy as gurobi
         
+        model_name = f"AlonsoMoraAssignment: assignment {self.sim_time}"
+        
         vids = {}   #vid -> rtv_keys
         unassigned_rids = {}  #unassigned rid (or cluster_id) -> rtv_keys
         assigned_rids = {}  #assigned rid (or cluster_id) -> rtv_keys
@@ -1364,11 +1370,21 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         while not grb_available and delta_t <= RETRY_TIME:
             try:
                 with gurobi.Env(empty=True) as env:
-                    env.setParam('OutputFlag', 0)
-                    env.setParam('LogToConsole', 0)
-                    env.start()
+                    if self.fleetcontrol.log_gurobi:
+                        import os
+                        from src.misc.globals import G_DIR_OUTPUT
+                        with open(os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT], "gurobi_log.log"), "a") as f:
+                            f.write(f"\n\n{model_name}\n\n")
+                        env.setParam('OutputFlag', 1)
+                        env.setParam('LogToConsole', 0)
+                        env.setParam('LogFile', os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT], "gurobi_log.log") )
+                        env.start()
+                    else:
+                        env.setParam('OutputFlag', 0)
+                        env.setParam('LogToConsole', 0)
+                        env.start()
 
-                    m = gurobi.Model("assignment", env = env)
+                    m = gurobi.Model(model_name, env = env)
                     grb_available = True
 
                     m.setParam(gurobi.GRB.param.Threads, self.optimisation_cores)

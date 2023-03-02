@@ -220,6 +220,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         """ this function marks a request as assigned. its assignment is therefor treatet as hard constraint in the optimization problem formulation
         also all requests with the same mutually_exclusive_cluster_id are set as assigned
         :param rid: plan_request_id """
+        LOG.debug(f"set request {rid} as assigned!")
         try:
             del self.unassigned_requests[rid]
         except:
@@ -271,7 +272,9 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         :param assigned_plan: vehicle plan object that has been assigned
         :param is_external_vehicle_plan: should be set to True, if the assigned_plan has not been computed within this algorithm
         """
-        pass
+        if assigned_plan is not None:
+            for rid in assigned_plan.get_involved_request_ids():
+                self.set_request_assigned(rid)
 
     @abstractmethod
     def get_current_assignment(self, vid : int) -> VehiclePlan: # TODO same as get_optimisation_solution (delete?)

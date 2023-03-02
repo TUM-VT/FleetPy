@@ -6,10 +6,18 @@ from src.misc.globals import *
 
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_DynamicPrizingBase = {
+    "doc" :  """This sub-module implements strategies that dynamically set fares for trips. """,
+    "inherit" : None,
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class DynamicPrizingBase(ABC):
     def __init__(self, fleetctrl, operator_attributes, solver="Gurobi"):
-        """Initialization of dynamic pricing class.
+        """This sub-module implements strategies that dynamically set fares for trips.
 
         :param fleetctrl: FleetControl class
         :param operator_attributes: operator dictionary that can contain additionally required parameters

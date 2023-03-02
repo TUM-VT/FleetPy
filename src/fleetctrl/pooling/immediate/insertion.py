@@ -574,7 +574,10 @@ def insert_prq_in_selected_veh_list(selected_veh_obj_list : List[SimulationVehic
     insertion_return_list = []
     for veh_obj in selected_veh_obj_list:
         veh_plan = vid_to_vehplan_assignments[veh_obj.vid]
-        current_vehplan_utility = veh_plan.utility
+        current_vehplan_utility = veh_plan.get_utility()
+        if current_vehplan_utility is None:
+            current_vehplan_utility = obj_function(sim_time, veh_obj, veh_plan, rq_dict, routing_engine)
+            veh_plan.set_utility(current_vehplan_utility)
         # use (vid, vehplan, delta_cfv) tuple format from here on
         keep_plans = []
         if force_feasible_assignment:

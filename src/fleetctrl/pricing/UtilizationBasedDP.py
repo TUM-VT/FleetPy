@@ -8,9 +8,21 @@ from src.misc.functions import load_function
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_UtilizationBasedDP = {
+    "doc" : """This is a utilization dependent pricing scheme, which adjusts the general fare factor.
+            After certain simulation intervals, the current fleet utilization is measured.
+            If the utilization over-(under-)shoots a certain threshold, fares are in-(de-)creased.""",
+    "inherit" : "DynamicPrizingBase",
+    "input_parameters_mandatory": [G_OP_DYN_P_FUNC, G_OP_UTIL_EVAL_INT],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class UtilizationBasedDP(DynamicPrizingBase):
-    """This is a utilization dependent pricing scheme, which adjusts the general fare factor."""
+    """This is a utilization dependent pricing scheme, which adjusts the general fare factor.
+    After certain simulation intervals, the current fleet utilization is measured.
+    If the utilization over-(under-)shoots a certain threshold, fares are in-(de-)creased."""
     def __init__(self, fleetctrl, operator_attributes, solver="Gurobi"):
         """Initialization of dynamic pricing class.
 

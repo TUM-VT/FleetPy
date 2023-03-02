@@ -268,6 +268,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
                     self.vid_with_reserved_rids[prev_vid] = list_reserved_rids
                 else:
                     del self.vid_with_reserved_rids[prev_vid]
+        if prq.get_reservation_flag():
+            self.reservation_module.user_cancels_request(rid, simulation_time)
         try:
             del self.rq_dict[rid]
         except KeyError:
@@ -321,6 +323,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         :return: None
         """
         if self.rid_to_assigned_vid.get(rid) is not None:
+            self.rq_dict[rid].set_reservation_flag(False)
             self.RPBO_Module.add_new_request(rid, self.rq_dict[rid], is_allready_assigned=True)
         else:
             self.RPBO_Module.add_new_request(rid, self.rq_dict[rid])

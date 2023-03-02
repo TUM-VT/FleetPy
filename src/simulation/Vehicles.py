@@ -1,6 +1,7 @@
 # -------------------------------------------------------------------------------------------------------------------- #
 # standard distribution imports
 # -----------------------------
+from __future__ import annotations
 import logging
 import pandas as pd
 import typing as tp
@@ -11,14 +12,19 @@ from src.misc.globals import *
 from src.simulation.Legs import VehicleRouteLeg
 from src.simulation.StationaryProcess import ChargingProcess
 
+if tp.TYPE_CHECKING:
+    from src.demand.TravelerModels import RequestBase
+    from src.routing.NetworkBase import NetworkBase
+    from src.fleetctrl.FleetControlBase import FleetControlBase
+
 LOG = logging.getLogger(__name__)
 
 # Simulation Vehicle class
 # ------------------------
 # > guarantee consistent movements in simulation and output
 class SimulationVehicle:
-    def __init__(self, operator_id, vehicle_id, vehicle_data_dir, vehicle_type, routing_engine, rq_db, op_output,
-                 record_route_flag, replay_flag):
+    def __init__(self, operator_id : int, vehicle_id : int, vehicle_data_dir : str, vehicle_type : str, routing_engine : NetworkBase, rq_db : tp.Dict[tp.Any, RequestBase], op_output : str,
+                 record_route_flag : bool, replay_flag : bool):
         """
         Initialization of vehicle in the simulation environment.
         :param operator_id: id of fleet operator the vehicle belongs to
@@ -45,7 +51,7 @@ class SimulationVehicle:
         self.max_pax = int(veh_data[G_VTYPE_MAX_PAX])
         self.max_parcels = int(veh_data.get(G_VTYPE_MAX_PARCELS, 0))
         self.daily_fix_cost = float(veh_data[G_VTYPE_FIX_COST])
-        self.distance_cost = float(veh_data[G_VTYPE_DIST_COST])
+        self.distance_cost = float(veh_data[G_VTYPE_DIST_COST])/1000.0
         self.battery_size = float(veh_data[G_VTYPE_BATTERY_SIZE])
         self.range = float(veh_data[G_VTYPE_RANGE])
         self.soc_per_m = 1/(self.range*1000)
@@ -53,7 +59,7 @@ class SimulationVehicle:
         self.status = VRL_STATES.IDLE
         self.pos = None
         self.soc = None
-        self.pax = []  # rq_obj
+        self.pax: tp.List[RequestBase] = []  # rq_obj
         # assigned route = list of assigned vehicle legs
         self.assigned_route: tp.List[VehicleRouteLeg] = []
         # current leg (cl) info
@@ -88,7 +94,7 @@ class SimulationVehicle:
         self.cl_remaining_time = None
         self.cl_locked = False
 
-    def set_initial_state(self, fleetctrl, routing_engine, state_dict, start_time, veh_init_blocking=True):
+    def set_initial_state(self, fleetctrl:FleetControlBase, routing_engine:NetworkBase, state_dict:dict, start_time:int, veh_init_blocking:bool=True):
         """
         This method positions the vehicle at the beginning of a simulation. This method has to be called after
         the initialization of the operator FleetControl classes!
@@ -115,7 +121,7 @@ class SimulationVehicle:
                 # self.start_next_leg(start_time)
                 self.start_next_leg_first = True
 
-    def return_final_state(self, sim_end_time):
+    def return_final_state(self, sim_end_time:int)->tp.Dict[str, tp.Any]:
         """
         This method returns the required information to save the currently assigned route. For simplicity, the
         start node is used for vehicles that end up in the middle of a link and the soc at the end of the simulation
@@ -143,7 +149,7 @@ class SimulationVehicle:
         final_state_dict[G_V_INIT_TIME] = end_time % (24*3600)
         return final_state_dict
 
-    def _start_next_leg_stationary_object(self, simulation_time):
+    def _start_next_leg_stationary_object(self, simulation_time:int)->tp.Tuple[tp.List[RequestBase], tp.List[RequestBase]]:
         """ Starts the next leg using the route leg with a stationary process """
 
         # TODO: Generalize the current method and incoporate directly into the start_next_leg method
@@ -165,7 +171,7 @@ class SimulationVehicle:
             LOG.debug("duration after: {}".format(self.cl_remaining_time))
             return [], []
     
-    def start_next_leg(self, simulation_time):
+    def start_next_leg(self, simulation_time:int)->tp.Tuple[tp.List[RequestBase], tp.List[RequestBase]]:
         """
         This function resets the current task attributes of a vehicle. Furthermore, it returns a list of currently
         boarding requests.
@@ -241,7 +247,7 @@ class SimulationVehicle:
             LOG.debug("veh start next leg at time {} remaining {}: {}".format(simulation_time, self.cl_remaining_time, self))
             return [], []
 
-    def end_current_leg(self, simulation_time):
+    def end_current_leg(self, simulation_time:int)->tp.Tuple[tp.List[int], VehicleRouteLeg]:
         """
         This method stops the current leg, creates the record dictionary, and shifts the list of legs in the
         assigned route. It returns a list of alighting passengers and the record dictionary.
@@ -315,7 +321,7 @@ class SimulationVehicle:
                         f"even though no route is assigned!")
             return ([], {})
         
-    def assign_vehicle_plan(self, list_route_legs : tp.List[VehicleRouteLeg], sim_time, force_ignore_lock = False):
+    def assign_vehicle_plan(self, list_route_legs : tp.List[VehicleRouteLeg], sim_time:int, force_ignore_lock:bool = False):
         """This method enables the fleet control modules to assign a plan to the simulation vehicles. It ends the
         previously assigned leg and starts the new one if necessary.
         :param list_route_legs: list of legs to assign to vehicle
@@ -367,7 +373,7 @@ class SimulationVehicle:
                 # self.start_next_leg(sim_time)
         # LOG.info(f"Vehicle {self.vid} after new assignment: {[str(x) for x in self.assigned_route]} at time {sim_time}")
 
-    def update_veh_state(self, current_time, next_time):
+    def update_veh_state(self, current_time:float, next_time:float)->tp.Tuple[tp.Dict[tp.Any, tp.Tuple[float, tuple]], tp.Dict[tp.Any, tp.Tuple[float, tuple]], tp.List[VehicleRouteLeg], tp.Dict[tp.Any, tp.Tuple[float, tuple]]]:
         """This method updates the current state of a simulation vehicle. This includes moving, boarding etc.
         The method updates the vehicle position, soc. Additionally, it triggers the end and start of VehicleRouteLegs.
         It returns a list of boarding request, alighting requests.
@@ -465,7 +471,7 @@ class SimulationVehicle:
                     LOG.warning(f"First node in position {self.pos} not found in currently assigned route {ca.route}!")
                 # LOG.info(f"veh {self.vid} update route {self.pos} -> {ca.destination_pos} : {self.cl_remaining_route}")
 
-    def compute_soc_consumption(self, distance):
+    def compute_soc_consumption(self, distance:float)->float:
         """This method returns the SOC change for driving a certain given distance.
 
         :param distance: driving distance in meters
@@ -475,7 +481,7 @@ class SimulationVehicle:
         """
         return distance * self.soc_per_m
 
-    def compute_soc_charging(self, power, duration):
+    def compute_soc_charging(self, power:float, duration:float)->float:
         """This method returns the SOC change for charging a certain amount of power for a given duration.
 
         :param power: power of charging process in kW(!)
@@ -487,7 +493,7 @@ class SimulationVehicle:
         """
         return power * duration / (self.battery_size * 3600)
 
-    def get_charging_duration(self, power, init_soc, final_soc=1.0):
+    def get_charging_duration(self, power:float, init_soc:float, final_soc:float=1.0)->float:
         """This method computes the charging duration required to charge the vehicle from init_soc to final_soc.
 
         :param power: power of charging process in kW(!); result should be in seconds
@@ -501,7 +507,7 @@ class SimulationVehicle:
         """
         return (final_soc - init_soc) * self.battery_size * 3600 / power
 
-    def get_nr_pax_without_currently_boarding(self):
+    def get_nr_pax_without_currently_boarding(self)->int:
         """ this method returns the current number of pax for the use of setting the inititial stats for 
         the update_tt_... function in fleetControlBase.py.
         In case the vehicle is currently boarding, this method doesnt count the number of currently boarding customers
@@ -514,7 +520,7 @@ class SimulationVehicle:
         else:
             return sum([rq.nr_pax for rq in self.pax if not rq.is_parcel if not rq.is_parcel])
         
-    def get_nr_parcels_without_currently_boarding(self):
+    def get_nr_parcels_without_currently_boarding(self)->int:
         """ this method returns the current number of parcels for the use of setting the inititial stats for 
         the update_tt_... function in fleetControlBase.py.
         In case the vehicle is currently boarding, this method doesnt count the number of currently boarding parcels
@@ -527,7 +533,7 @@ class SimulationVehicle:
         else:
             return sum([rq.nr_pax for rq in self.pax if rq.is_parcel])
 
-    def _move(self, c_time, remaining_step_time, update_start_time):
+    def _move(self, c_time:float, remaining_step_time:float, update_start_time:float)->float:
         """ this function is used internally to move the vehicle when called in update_veh_state
             -> can be overwritten in case no movement is performed within the simulation framework but externally
         :param c_time: start_time of the moving process
@@ -559,7 +565,7 @@ class SimulationVehicle:
             self.cl_driven_route_times.extend(passed_node_times)
         return arrival_in_time_step
     
-    def _compute_new_route(self, target_pos):
+    def _compute_new_route(self, target_pos:tuple)->tp.List[int]:
         """ this function is used internally when the route has to be updated
         this is usefull in case it has to be overwritten to trigger additional processes
         :param target_pos: destination position tuple
@@ -606,7 +612,7 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                         self._route_update_needed = True
                     elif len(self.cl_remaining_route) == 0:
                         LOG.warning("no route planned anymore? {} {}".format(veh_pos, self))
-        elif veh_pos is not None:
+        elif veh_pos is not None and not self.start_next_leg_first:
             raise EnvironmentError(f"moving without having a driving task? {self}")
 
     def start_next_leg(self, simulation_time):
@@ -751,6 +757,13 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                         self.pos = target_pos
                         self.cl_driven_route.append(target_pos[0])
                         self.cl_driven_route_times.append( self.cl_driven_route_times[-1] )
+                        self._route_update_needed = False
+                    elif self.routing_engine.return_route_infos(r, 0, 0)[0] < 0.1:
+                        LOG.debug("more edges but very short edges -> assume reached destination!")
+                        self.pos = target_pos
+                        for x in r[1:]:
+                            self.cl_driven_route.append(x)
+                            self.cl_driven_route_times.append( simulation_time )
                         self._route_update_needed = False
                     else:
                         self.cl_remaining_route = r

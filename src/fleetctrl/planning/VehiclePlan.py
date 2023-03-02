@@ -460,7 +460,7 @@ class PlanStop(PlanStopBase):
             self.latest_arrival_time_dict[rid] = new_latest_dropoff_time
 
     def __str__(self):
-        return f"PS: {self.pos} state {self.state.name} bd {self.boarding_dict} earl dep {self._earliest_start_time} latest arr " \
+        return f"PS: {self.pos} state {self.state.name} locked {self.locked} bd {self.boarding_dict} earl dep {self._earliest_start_time} latest arr " \
                f"{self._latest_start_time} eta {self._planned_arrival_time}"
 
     def is_empty(self) -> bool:

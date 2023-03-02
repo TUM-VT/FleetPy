@@ -10,10 +10,18 @@ if TYPE_CHECKING:
 
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_ChargingBase = {
+    "doc" :  """This sub-modules deals with algorithms and strategies to sent vehicles to charging stations.. """,
+    "inherit" : None,
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class ChargingBase(ABC):
     def __init__(self, fleetctrl: FleetControlBase, operator_attributes: dict, solver="Gurobi"):
-        """Initialization of charging class.
+        """This sub-modules deals with algorithms and strategies to sent vehicles to charging stations.
 
         :param fleetctrl: FleetControl class
         :param operator_attributes: operator dictionary that can contain additionally required parameters

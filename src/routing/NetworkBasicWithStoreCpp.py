@@ -31,6 +31,19 @@ from src.routing.cpp_router.PyNetwork import PyNetwork
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_NetworkBasicWithStoreCpp = {
+    "doc" : """
+        This routing class does all routing computations based on dijkstras algorithm.
+        Compared to NetworkBasicWithStore, this module has the same methods but is implemented in C++ and included via Cython.
+        Compared to NetworkBasicCpp.py, this class stores already computed travel infos in a dictionary and returns the values from this dictionary if queried again.
+        To install the coupling to C++, you need to run `src\routing\cpp_router\setup.py`
+        """,
+    "inherit" : "NetworkBasicCpp",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class NetworkBasicWithStoreCpp(NetworkBasicCpp):
     def __init__(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):

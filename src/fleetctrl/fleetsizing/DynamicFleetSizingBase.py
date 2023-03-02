@@ -16,6 +16,16 @@ LOG = logging.getLogger(__name__)
 LARGE_INT = 10000000
 REACTIVATE_TIME = 15*60 # reactivation of another vehicle if it was not possible
 
+INPUT_PARAMETERS_DynamicFleetSizingBase = {
+    "doc" :  """This sub-module is used to dynamically active or deactive vehicles. Deactivated vehicles are sent back to the depot
+        and are not available for customer assignments. This can be used model driver shift for example. """,
+    "inherit" : None,
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 class DynamicFleetSizingBase(ABC):
     def __init__(self, fleetctrl: FleetControlBase, operator_attributes: dict, solver: str="Gurobi"):
         """Initialization of repositioning class.

@@ -1,0 +1,3 @@
+scenario_name,rq_file,parcel_rq_file,seed,op_parcel_assignment_threshold,op_parcel_passenger_ob_assignment
+example_rpp_tau_80_True_1,example_100.csv,example_parcel_rq_file.csv,1,0.8,True
+example_rpp_tau_90_True_1,example_100.csv,example_parcel_rq_file.csv,1,0.9,True

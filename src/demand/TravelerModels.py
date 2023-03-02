@@ -556,10 +556,11 @@ class PreferredOperatorRequest(RequestBase):
             return None
 
 INPUT_PARAMETERS_BrokerDecisionRequest = {
-    "doc" :     """    This request class is used for the easyride broker decision simulation.
-    It represents the broker's decision of offer (not the customer's), based on the metric "add_fleet_vmt"
-    the broker marks offers, that it has been chosen by the flag G_OFFER_BROKER_FLAG which is unique
-    requires simulation class BrokerDecisionSimulation !
+    "doc" :     """    
+    This request class is used for the broker decision simulation where a broker instead of the customer decides on which offer to take.
+    The broker marks offers, that it has been chosen by the flag G_OFFER_BROKER_FLAG which is unique.
+    This request class will only accept these marked offers.
+    Requires simulation class BrokerDecisionSimulation !
     """,
     "inherit" : "RequestBase",
     "input_parameters_mandatory": [],
@@ -570,9 +571,10 @@ INPUT_PARAMETERS_BrokerDecisionRequest = {
 
 class BrokerDecisionRequest(RequestBase):
     """
-    This request class is used for the easyride broker decision simulation.
-    It represents the broker's decision of offer (not the customer's), based on the metric "add_fleet_vmt"
-    the broker marks offers, that it has been chosen by the flag G_OFFER_BROKER_FLAG which is unique
+    This request class is used for the broker decision simulation where a broker instead of the customer decides on which offer to take.
+    The broker marks offers, that it has been chosen by the flag G_OFFER_BROKER_FLAG which is unique.
+    This request class will only accept these marked offers.
+    Requires simulation class BrokerDecisionSimulation !
     """
     type = "BrokerDecisionRequest"
 
@@ -682,6 +684,17 @@ class SlaveRequest(RequestBase):
 # -------------------------------------------------------------------------------------------------------------------- #
 # Parcel Requests #
 # -------------------------------------------------------------------------------------------------------------------- #
+
+INPUT_PARAMETERS_ParcelRequestBase = {
+    "doc" : """This request class is the base class for parcel 'travelers'. Here specific attributes for parcels are defined (i.e. ID) or type
+    """,
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
 class ParcelRequestBase(RequestBase):
     type = "ParcelRequestBase"
     """ here specific attributes for parcels are defined (i.e. ID) or type """
@@ -697,9 +710,19 @@ class ParcelRequestBase(RequestBase):
         self.earliest_drop_off_time = rq_row.get(G_RQ_PA_EDT, None)
         self.latest_drop_off_time = rq_row.get(G_RQ_PA_LDT, None)
 
+INPUT_PARAMETERS_BasicParcelRequest = {
+    "doc" : """ This parcel request can be used only for a single operator. It always accepts an offer coming from this operator.
+    """,
+    "inherit" : "ParcelRequestBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
 class BasicParcelRequest(ParcelRequestBase): # TODO
     type = "BasicParcelRequest"
-    "here only additional attributes for a parcel request are defined"
+    "This parcel request can be used only for a single operator. It always accepts an offer coming from this operator."
     def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
         # TODO RPP : für CL: zugehörige person request id
         # initialisierung für verschiedene globals
@@ -722,8 +745,19 @@ class BasicParcelRequest(ParcelRequestBase): # TODO
         else:
             return list(self.offer.keys())[0]
         return None
+    
+INPUT_PARAMETERS_SlaveParcelRequest = {
+    "doc" : """This parcel request class does not have any choice functionality. For coupled frameworks only!
+    """,
+    "inherit" : "ParcelRequestBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
 class SlaveParcelRequest(ParcelRequestBase):
-    """This request class does not have any choice functionality."""
+    """This parcel request class does not have any choice functionality. For coupled frameworks only!"""
     type = "SlaveParcelRequest"
 
     def choose_offer(self, scenario_parameters, simulation_time):
