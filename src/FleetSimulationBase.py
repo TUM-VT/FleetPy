@@ -560,7 +560,7 @@ class FleetSimulationBase:
     def record_stats(self, force=True):
         """This method records the stats at the end of the simulation."""
         self.demand.save_user_stats(force)
-        for op_id in range(self.n_op):
+        for op_id in range(len(self.operators)):
             current_buffer_size = len(self.op_output[op_id]) 
             if (current_buffer_size and force) or current_buffer_size > BUFFER_SIZE:
                 op_output_f = os.path.join(self.dir_names[G_DIR_OUTPUT], f"2-{op_id}_op-stats.csv")

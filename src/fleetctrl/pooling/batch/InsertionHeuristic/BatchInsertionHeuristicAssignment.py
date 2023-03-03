@@ -39,7 +39,7 @@ class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
         :param build_from_scratch : only for special cases needed in current alonso mora module
         """
         self.sim_time = sim_time
-        if len(veh_objs_to_build) != 0:
+        if len(veh_objs_to_build) != 0 and len(self.unassigned_requests.keys()) > 0:
             raise NotImplementedError
         for rid in list(self.unassigned_requests.keys()):
             if self.rid_to_consider_for_global_optimisation.get(rid) is None:
