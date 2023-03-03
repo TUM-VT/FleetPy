@@ -306,6 +306,7 @@ class SimulationVehicle:
                 route_replay_str = ";".join([f"{self.cl_driven_route[i]}:{self.cl_driven_route_times[i]}"\
                                              for i in range(route_length)])
                 record_dict[G_VR_REPLAY_ROUTE] = route_replay_str
+            record_dict.update(self._append_to_output_dict())
             # default status and shift to next leg
             self.reset_current_leg()
             self.assigned_route = self.assigned_route[1:]
@@ -571,6 +572,10 @@ class SimulationVehicle:
         :param target_pos: destination position tuple
         :return: list of node ids (route from pos to target_pos)"""
         return self.routing_engine.return_best_route_1to1(self.pos, target_pos)
+    
+    def _append_to_output_dict(self) -> dict:
+        """ can be used to add further stuff to ouput. should return a dictonary"""
+        return {}
 
 # ===================================================================================================== #
 
