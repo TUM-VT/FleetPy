@@ -591,6 +591,9 @@ G_VTYPE_RANGE = "range [km]"
 G_VTYPE_HOME_CHARGING_POWER = "home charging power [kW]"
 G_VTYPE_MAX_PARCELS = "maximum_parcels"
 
+# Platform-based MoD Simulation
+G_PLAT_DRIVER_FILE = "platform_driver_file"
+
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Fleet Control
