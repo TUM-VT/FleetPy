@@ -592,7 +592,8 @@ G_VTYPE_HOME_CHARGING_POWER = "home charging power [kW]"
 G_VTYPE_MAX_PARCELS = "maximum_parcels"
 
 # Platform-based MoD Simulation
-G_PLAT_DRIVER_FILE = "platform_driver_file"
+G_PLAT_DRIVER_FILE = "platform_driver_file"     # file specifing driver attributes
+G_OP_PLAT_COMMISION = "op_platform_driver_commision" # [0,1] fraction of fare distributed to drivers
 
 
 # -------------------------------------------------------------------------------------------------------------------- #
