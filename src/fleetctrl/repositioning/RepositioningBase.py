@@ -235,11 +235,12 @@ class RepositioningBase(ABC):
         random.seed(sim_time)
         veh_obj = random.choice(list_veh_to_consider)
         veh_plan = self.fleetctrl.veh_plans[veh_obj.vid]
-        destination_node = self.zone_system.get_random_centroid_node(destination_zone_id)
-        LOG.debug("repositioning {} to zone {} with centroid {}".format(veh_obj.vid, destination_zone_id,
-                                                                        destination_node))
-        if destination_node < 0:
-            destination_node = self.zone_system.get_random_node(destination_zone_id)
+        if destination_node is None:
+            destination_node = self.zone_system.get_random_centroid_node(destination_zone_id)
+            LOG.debug("repositioning {} to zone {} with centroid {}".format(veh_obj.vid, destination_zone_id,
+                                                                            destination_node))
+            if destination_node < 0:
+                destination_node = self.zone_system.get_random_node(destination_zone_id)
         ps = RoutingTargetPlanStop((destination_node, None, None), locked=lock, planstop_state=G_PLANSTOP_STATES.REPO_TARGET)
         veh_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
         self.fleetctrl.assign_vehicle_plan(veh_obj, veh_plan, sim_time)
