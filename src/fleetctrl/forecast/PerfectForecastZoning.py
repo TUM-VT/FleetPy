@@ -146,3 +146,33 @@ class PerfectForecastZoneSystem(ForecastZoneSystem):
                             future_list.append( (t, rq.o_node, rq.d_node) )
         LOG.info("perfect forecast list: {}".format(future_list))
         return future_list
+    
+    def get_trip_od_forecasts(self, t0, t1, aggregation_level=None, scale=None):
+        """ this function returns the number of expected trips from one zone to another int the time interval [t0, t1]
+        
+        :param t0: start of forecast time horizon
+        :type t0: float
+        :param t1: end of forecast time horizon
+        :type t1: float
+        :param aggregation_level: spatial aggregation level, by default zone_id is used
+        :type aggregation_level: int
+        :param scale: scales forecast distributen by this value if given
+        :type scale: float
+        :return: {}: zone -> zone -> forecast of trips
+        :rtype: dict
+        """
+        return_dict = {}
+        for t in range(t0, t1):
+            future_rqs = self.demand.future_requests.get(t, {})
+            for rq in future_rqs.values():
+                o_zone = self.get_zone_from_node(rq.o_node)
+                d_zone = self.get_zone_from_node(rq.d_node)
+                if o_zone >= 0 and d_zone >= 0:
+                    try:
+                        return_dict[o_zone][d_zone] += 1
+                    except KeyError:
+                        try:
+                            return_dict[o_zone][d_zone] = 1
+                        except KeyError:
+                            return_dict[o_zone] = {d_zone : 1}
+        return return_dict

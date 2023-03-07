@@ -23,29 +23,12 @@ LOG = logging.getLogger(__name__)
 class ForecastZoneSystem(ZoneSystem):
     def __init__(self, zone_network_dir, scenario_parameters, dir_names, operator_attributes):
         super().__init__(zone_network_dir, scenario_parameters, dir_names)
+        self.fc_temp_resolution = None
         self.demand = None
 
     def register_demand_ref(self, demand_ref):
         self.demand = demand_ref
     
-    @abstractmethod    
-    def _get_trip_forecasts(self, trip_type, t0, t1, aggregation_level, scale = None):
-        """This method returns the number of expected trip arrivals or departures inside a zone in the
-        time interval [t0, t1]. The return value is created by interpolation of the forecasts in the data frame
-        if necessary. The default if no values can be found for a zone should be 0.
-
-        :param t0: start of forecast time horizon
-        :type t0: float
-        :param t1: end of forecast time horizon
-        :type t1: float
-        :param aggregation_level: spatial aggregation level, by default zone_id is used
-        :type aggregation_level: int
-        :param scale: scales forecast distributen by this value if given
-        :type scale: float
-        :return: {}: zone -> forecast of arrivals
-        :rtype: dict
-        """
-
     @abstractmethod
     def get_trip_arrival_forecasts(self, t0, t1, aggregation_level=None, scale = None):
         """This method returns the number of expected trip arrivals inside a zone in the time interval [t0, t1].
@@ -97,3 +80,19 @@ class ForecastZoneSystem(ZoneSystem):
         :return: list of (time, origin_node, destination_node) of future requests
         :rtype: list of 3-tuples
         """ 
+        
+    @abstractmethod
+    def get_trip_od_forecasts(self, t0, t1, aggregation_level=None, scale=None):
+        """ this function returns the number of expected trips from one zone to another int the time interval [t0, t1]
+        
+        :param t0: start of forecast time horizon
+        :type t0: float
+        :param t1: end of forecast time horizon
+        :type t1: float
+        :param aggregation_level: spatial aggregation level, by default zone_id is used
+        :type aggregation_level: int
+        :param scale: scales forecast distributen by this value if given
+        :type scale: float
+        :return: {}: zone -> zone -> forecast of trips
+        :rtype: dict
+        """
