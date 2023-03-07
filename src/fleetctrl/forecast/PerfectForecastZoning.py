@@ -11,7 +11,7 @@ import numpy as np
 
 # src imports
 # -----------
-from src.infra.Zoning import ZoneSystem
+from src.fleetctrl.forecast.ForecastZoning import ForecastZoneSystem
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------
@@ -22,16 +22,14 @@ LOG_LEVEL = logging.WARNING
 LOG = logging.getLogger(__name__)
 
 
-class PerfectForecastZoneSystem(ZoneSystem):
+class PerfectForecastZoneSystem(ForecastZoneSystem):
     # this class can be used like the "basic" ZoneSystem class
     # but instead of getting values from a demand forecast dabase, this class has direct access to the demand file
     # and therefore makes perfect predictions for the corresponding forecast querries
-    def __init__(self, zone_network_dir, scenario_parameters, dir_names):
-        tmp_scenario_parameters = scenario_parameters.copy()
-        if scenario_parameters[G_FC_FNAME] is not None:
+    def __init__(self, zone_network_dir, scenario_parameters, dir_names, operator_attributes):
+        if operator_attributes.get(G_RA_FC_FNAME) is not None:
             LOG.warning("forecast file for perfact forecast given. will not be loaded!")
-            del tmp_scenario_parameters[G_FC_FNAME] 
-        super().__init__(zone_network_dir, tmp_scenario_parameters, dir_names)
+        super().__init__(zone_network_dir, scenario_parameters, dir_names, operator_attributes)
 
     def _get_trip_forecasts(self, trip_type, t0, t1, aggregation_level):
         """This method returns the number of expected trip arrivals or departures inside a zone in the
@@ -95,8 +93,6 @@ class PerfectForecastZoneSystem(ZoneSystem):
         :return: {}: zone -> forecast of arrivals
         :rtype: dict
         """
-        if self.in_fc_type is None:
-            raise AssertionError("get_trip_arrival_forecasts() called even though no forecasts are available!")
         return self._get_trip_forecasts("in", t0, t1, aggregation_level)
 
     def get_trip_departure_forecasts(self, t0, t1, aggregation_level=None):
@@ -111,8 +107,6 @@ class PerfectForecastZoneSystem(ZoneSystem):
         :return: {}: zone -> forecast of departures
         :rtype: dict
         """
-        if self.out_fc_type is None:
-            raise AssertionError("get_trip_departure_forecasts() called even though no forecasts are available!")
         return self._get_trip_forecasts("out", t0, t1, aggregation_level)
 
     def draw_future_request_sample(self, t0, t1, request_attribute = None, attribute_value = None, scale = None): #request_type=PlanRequest # TODO # cant import PlanRequest because of circular dependency of files!

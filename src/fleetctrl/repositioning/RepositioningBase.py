@@ -13,6 +13,7 @@ from src.misc.globals import *
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
+    from src.fleetctrl.forecast.ForecastZoning import ForecastZoneSystem
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
 
@@ -38,7 +39,7 @@ class RepositioningBase(ABC):
         """
         self.fleetctrl = fleetctrl
         self.routing_engine = fleetctrl.routing_engine
-        self.zone_system = fleetctrl.zones
+        self.zone_system = self._load_zone_system(operator_attributes, dir_names)
         self.list_horizons = operator_attributes[G_OP_REPO_TH_DEF]
         self.lock_repo_assignments = operator_attributes.get(G_OP_REPO_LOCK, True)
         self.solver_key = solver
@@ -92,6 +93,12 @@ class RepositioningBase(ABC):
         if lock is None:
             lock = self.lock_repo_assignments
         return []
+    
+    @abstractmethod
+    def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> ForecastZoneSystem:
+        """ this method loads the forecast zone system needed for the corresponding repositioning strategy"""
+        return ForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
+        
     
     def register_rejected_customer(self, planrequest, sim_time):
         """ this method is used to register and unserved request due to lack of available vehicles. The information can be stored internally

@@ -2,6 +2,7 @@ import random
 import numpy as np
 from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 from src.misc.globals import *
+from src.fleetctrl.forecast.AggForecastZoning import AggForecastZoneSystem
 
 # from IPython import embed
 
@@ -45,6 +46,10 @@ class PavoneHailingRepositioningFC(RepositioningBase):
             raise IOError("PavoneHailingRepositioningFC requires two time horizon values (start and end)!"
                           f"Set them in the {G_OP_REPO_TH_DEF} scenario parameter!")
         self.optimisation_timeout = 30 # TODO #
+        
+    def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> AggForecastZoneSystem:
+        """ this method loads the forecast zone system needed for the corresponding repositioning strategy"""
+        return AggForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
 
     def determine_and_create_repositioning_plans(self, sim_time, lock=None):
         """This method determines and creates new repositioning plans. The repositioning plans are directly assigned

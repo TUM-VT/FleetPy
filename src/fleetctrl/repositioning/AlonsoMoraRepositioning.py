@@ -42,6 +42,11 @@ class AlonsoMoraRepositioning(RepositioningBase):
         self._rejected_customer_origins_since_last_step = []
         self.min_reservation_buffer = operator_attributes.get(G_OP_REPO_RES_PUF, 3600)  # TODO  # minimum time for service before a vehicle has a reserved trip
         
+    def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> None:
+        """ this method loads the forecast zone system needed for the corresponding repositioning strategy
+        this class does not need a zone system (always feasible to do that? maybe other modules need it)"""
+        return None
+        
     def register_rejected_customer(self, planrequest : PlanRequest, sim_time):
         LOG.debug(f"new rejected customer at {planrequest.get_o_stop_info()[0][0]} time {sim_time}")
         self._rejected_customer_origins_since_last_step.append(planrequest.get_o_stop_info()[0][0])

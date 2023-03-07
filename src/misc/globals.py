@@ -68,12 +68,6 @@ G_NW_DYNAMIC_F = "nw_dynamic_f"
 # zone specific attributes
 G_PARK_COST_SCALE = "park_cost_scale"
 G_TOLL_COST_SCALE = "toll_cost_scale"
-G_ZONE_CORR_M_F = "zone_correlation_file"
-
-# forecast attributes
-G_FC_TYPE = "fc_type"
-G_FC_TR = "temporal_resolution"
-G_FC_FNAME = "forecast_f"
 
 # public transport specific attributes
 G_PT_TYPE = "pt_type"
@@ -170,9 +164,16 @@ G_RA_TW_HARD = "op_time_window_hardness"    # 1 -> soft | 2 -> hard # TODO # thi
 G_RA_TW_LENGTH = "op_time_window_length"
 G_RA_LOCK_RID_VID = "op_lock_rid_vid_assignment" # no re-assignment if false
 
-G_RA_OP_NW_TYPE = "op_network_type"    # if given, operator loads a different network for its usage (currently only for reservation)
-G_RA_OP_NW_NAME = "op_network_name"     # if given, operator loads a different network for its usage (currently only for reservation)
-G_RA_OP_NW_DYN_F = "op_network_dynamics_file" # if given, operator loads a different network for its usage (currently only for reservation)
+G_RA_OP_NW_TYPE = "op_network_type"    # if given, operator loads a different network for its usage
+G_RA_OP_NW_NAME = "op_network_name"     # if given, operator loads a different network for its usage
+G_RA_OP_NW_DYN_F = "op_network_dynamics_file" # if given, operator loads a different network for its usage
+
+# forecast attributes
+G_RA_OP_ZONE_SYSTEM = "op_zone_system"  # the zone system used by the operator for forecasting
+G_RA_FC_TYPE = "op_fc_type"
+G_RA_FC_TR = "op_temporal_resolution"
+G_RA_FC_FNAME = "op_forecast_f"
+G_RA_OP_CORR_M_F = "op_zone_correlation_file"   # this file be read by the operator for rebalancing
 
 # reservation
 G_RA_RES_MOD = "op_reservation_module"
@@ -658,11 +659,12 @@ def load_scenario_inputs(output_dir):
     dir_names = tmp["directories"]
     return scenario_parameters, list_operator_attributes, dir_names
 
-
-def get_directory_dict(scenario_parameters):
+def get_directory_dict(scenario_parameters, list_operator_dicts, abs_fleetpy_dir = None):
     """
     This function provides the correct paths to certain data according to the specified data directory structure.
     :param scenario_parameters: simulation input (pandas series)
+    :param list_operator_dicts: simulation input for each operator (pandas series)
+    :param abs_fleetpy_dir: if given, this base fleetpy-path is used to create all the data subdirectores
     :return: dictionary with paths to the respective data directories
     """
     study_name = scenario_parameters[G_STUDY_NAME]
@@ -670,14 +672,15 @@ def get_directory_dict(scenario_parameters):
     network_name = scenario_parameters[G_NETWORK_NAME]
     demand_name = scenario_parameters[G_DEMAND_NAME]
     zone_name = scenario_parameters.get(G_ZONE_SYSTEM_NAME, None)
-    fc_type = scenario_parameters.get(G_FC_TYPE, None)
-    fc_t_res = scenario_parameters.get(G_FC_TR, None)
     gtfs_name = scenario_parameters.get(G_GTFS_NAME, None)
     infra_name = scenario_parameters.get(G_INFRA_NAME, None)
     parcel_demand_name = scenario_parameters.get(G_PA_DEMAND_NAME, None)
     #
     dirs = {}
-    dirs[G_DIR_MAIN] = os.path.abspath(os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir))
+    if abs_fleetpy_dir is None:
+        dirs[G_DIR_MAIN] = os.path.abspath(os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir))
+    else:
+        dirs[G_DIR_MAIN] = abs_fleetpy_dir
     dirs[G_DIR_DATA] = os.path.join(dirs[G_DIR_MAIN], "data")
     dirs[G_DIR_OUTPUT] = os.path.join(dirs[G_DIR_MAIN], "studies", study_name, "results", scenario_name)
     dirs[G_DIR_NETWORK] = os.path.join(dirs[G_DIR_DATA], "networks", network_name)
@@ -686,12 +689,27 @@ def get_directory_dict(scenario_parameters):
     dirs[G_DIR_DEMAND] = os.path.join(dirs[G_DIR_DATA], "demand", demand_name, "matched", network_name)
     if zone_name is not None:
         dirs[G_DIR_ZONES] = os.path.join(dirs[G_DIR_DATA], "zones", zone_name, network_name)
-        if fc_type is not None and fc_t_res is not None:
-            dirs[G_DIR_FC] = os.path.join(dirs[G_DIR_DATA], "demand", demand_name, "aggregated", zone_name, str(fc_t_res))
     if gtfs_name is not None:
         dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pubtrans", gtfs_name)
     if infra_name is not None:
         dirs[G_DIR_INFRA] = os.path.join(dirs[G_DIR_DATA], "infra", infra_name, network_name)
     if parcel_demand_name is not None:
         dirs[G_DIR_PARCEL_DEMAND] = os.path.join(dirs[G_DIR_DATA], "demand", parcel_demand_name, "matched", network_name)
+    for i, op_dict in enumerate(list_operator_dicts):
+        op_key = f"op_{i}"
+        op_nw_name = network_name
+        if op_dict.get(G_RA_OP_NW_NAME):
+            op_nw_name = op_dict[G_RA_OP_NW_NAME]
+            if dirs.get(op_key) is None:
+                dirs[op_key] = {}
+            dirs[op_key][G_DIR_NETWORK] = os.path.join(dirs[G_DIR_DATA], "networks", op_nw_name)
+        if op_dict.get(G_RA_OP_ZONE_SYSTEM):
+            if dirs.get(op_key) is None:
+                dirs[op_key] = {}
+            op_zone_name = op_dict[G_RA_OP_ZONE_SYSTEM]
+            dirs[op_key][G_DIR_ZONES] = os.path.join(dirs[G_DIR_DATA], "zones", op_zone_name, op_nw_name)
+            fc_type = scenario_parameters.get(G_RA_FC_TYPE, None)
+            fc_t_res = scenario_parameters.get(G_RA_FC_TR, None)
+            if fc_type is not None and fc_t_res is not None:
+                dirs[op_key][G_DIR_FC] = os.path.join(dirs[G_DIR_DATA], "demand", demand_name, "aggregated", op_zone_name, str(fc_t_res))
     return dirs
