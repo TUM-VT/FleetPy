@@ -872,7 +872,7 @@ class FleetControlBase(metaclass=ABCMeta):
                 inactive = True
             else:
                 inactive = False
-            if pstop.is_locked_end():
+            if pstop.is_locked_end() and pstop.get_earliest_start_time() > 0:
                 reservation = True
             else:
                 reservation = False
