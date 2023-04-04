@@ -1,4 +1,4 @@
-from src.routing.NetworkBasic import NetworkBasic, Node, Edge
+from FleetPy.src.routing.NetworkBasic import NetworkBasic, Node, Edge
 
 class NetworkForPreprocessing(NetworkBasic):
     """ this network is only used in network_manipulation.py to evalute connectivity """

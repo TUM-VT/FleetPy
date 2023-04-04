@@ -228,11 +228,11 @@ class SimulationVehicle:
             _, remaining_time, _ = self.routing_engine.return_travel_costs_1to1(self.pos,
                                                                                 self.assigned_route[0].destination_pos)
             dict_rq[str_cl_remaining_time].append(remaining_time)
-            dict_rq[str_l_dest].append(int(self.assigned_route[-1].destination_pos[0]))
+            dict_rq[str_l_dest].append(self.assigned_route[-1].destination_pos)
             # dict_rq[str_l_dest] = [route.destination_pos for route in self.assigned_route]
         else:
             dict_rq[str_cl_remaining_time].append(0)
-            dict_rq[str_l_dest].append(int(self.pos[0]))
+            dict_rq[str_l_dest].append(self.pos)
 
         return dict_rq
 
