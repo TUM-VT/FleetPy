@@ -183,6 +183,7 @@ class RepositioningBase(ABC):
                     zone_id = self.zone_system.get_zone_from_pos(last_ps.get_pos())
                     if zone_id >= 0:
                         zone_dict[zone_id][1].append(veh_obj)
+                        zone_dict[zone_id][0] += 1  # TODO this should be here, right?
         # record
         for zone_id, info_list in zone_dict.items():
             nr_normal_incoming = info_list[0]
