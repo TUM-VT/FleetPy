@@ -72,6 +72,8 @@ class PavoneHailingRepositioningFC(RepositioningBase):
         list_zones = sorted([zone for zone in list_zones_all if zone != -1])
         demand_fc_dict = self._get_demand_forecasts(t0, t1)
         supply_fc_dict = self._get_historic_arrival_forecasts(t0, t1)
+        for zone_id in self.zone_system.get_all_zones():
+            self.record_df.loc[(sim_time, zone_id, t0, t1), "tot_fc_supply"] = max([demand_fc_dict.get(zone_id, 0) - supply_fc_dict.get(zone_id, 0), 0])
         # print(demand_fc_dict)
         # print(supply_fc_dict)
         cplan_arrival_idle_dict = self._get_current_veh_plan_arrivals_and_repo_idle_vehicles(t0, t1)
@@ -377,6 +379,8 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         list_zones = self.zone_system.get_all_zones()
         demand_fc_dict = self._get_demand_forecasts(t0, t1)
         supply_fc_dict = self._get_historic_arrival_forecasts(t0, t1)
+        for zone_id in self.zone_system.get_all_zones():
+            self.record_df.loc[(sim_time, zone_id, t0, t1), "tot_fc_supply"] = max([demand_fc_dict.get(zone_id, 0) - supply_fc_dict.get(zone_id, 0), 0])
         # print(demand_fc_dict)
         # print(supply_fc_dict)
         cplan_arrival_idle_dict = self._get_current_veh_plan_arrivals_and_repo_idle_vehicles(t0, t1)

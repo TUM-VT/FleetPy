@@ -132,8 +132,6 @@ class RepositioningBase(ABC):
         :rtype: dict
         """
         arrival_forecasts = self.zone_system.get_trip_arrival_forecasts(t0, t1, aggregation_level)
-        for zone_id, val in arrival_forecasts.items():
-            self.record_df.loc[(self.sim_time, zone_id, t0, t1), "tot_fc_demand"] = val
         return arrival_forecasts
 
     def _get_current_veh_plan_arrivals_and_repo_idle_vehicles(self, t0, t1, node_level=False):
