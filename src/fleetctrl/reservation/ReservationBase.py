@@ -13,6 +13,18 @@ if TYPE_CHECKING:
 import logging
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_ReservationBase = {
+    "doc" :  """This modules deals with request pre-booking a trip a long time in advance. 
+            As these requests are hard to handle in the online assignment algorithm 
+            (a lot of insertion possibilities into current vehicles schedules), 
+            those requests are handeled in an additional sub-module. """,
+    "inherit" : None,
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 class ReservationBase(metaclass=ABCMeta):
     def __init__(self, fleetctrl : FleetControlBase, operator_attributes : dict, dir_names : dict, solver : str="Gurobi"):
         """ this class is used as a base to treat reservations

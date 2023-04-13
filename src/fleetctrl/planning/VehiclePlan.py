@@ -460,7 +460,7 @@ class PlanStop(PlanStopBase):
             self.latest_arrival_time_dict[rid] = new_latest_dropoff_time
 
     def __str__(self):
-        return f"PS: {self.pos} state {self.state.name} bd {self.boarding_dict} earl dep {self._earliest_start_time} latest arr " \
+        return f"PS: {self.pos} state {self.state.name} locked {self.locked} bd {self.boarding_dict} earl dep {self._earliest_start_time} latest arr " \
                f"{self._latest_start_time} eta {self._planned_arrival_time}"
 
     def is_empty(self) -> bool:
@@ -803,7 +803,7 @@ class VehiclePlan:
         :return: is_feasible returns True if all
         """
         # TODO # think about update of duration of VehicleChargeLegs
-        # LOG.verbose(f"update tt an check plan {veh_obj} pax {veh_obj.pax} | at {sim_time} | pax info {self.pax_info}")
+        # LOG.debug(f"update tt an check plan {veh_obj} pax {veh_obj.pax} | at {sim_time} | pax info {self.pax_info}")
         is_feasible = True
         if len(self.list_plan_stops) == 0:
             self.pax_info = {}
@@ -841,7 +841,9 @@ class VehiclePlan:
                 self.pax_info[rid] = [rq.pu_time]
             #LOG.verbose("init pax {} | {} | {}".format(c_pax, veh_obj.pax, self.pax_info))
         # LOG.debug(f"c_time 1 {c_time}")
-        for i, pstop in enumerate(self.list_plan_stops[start_stop_index:], start=start_stop_index):
+        for i in range(start_stop_index, len(self.list_plan_stops)):
+            pstop = self.list_plan_stops[i]
+        #for i, pstop in enumerate(self.list_plan_stops[start_stop_index:], start=start_stop_index):
             pstop_pos = pstop.get_pos()
             if c_pos != pstop_pos:
                 if not is_feasible and not keep_feasible:
@@ -886,7 +888,7 @@ class VehiclePlan:
                         is_feasible = False
                         infeasible_index = i
                         raise EnvironmentError
-
+                # LOG.debug("pax info {}".format(self.pax_info))
                 latest_time = pstop.get_latest_start_time(self.pax_info)
                 if c_time > latest_time:
                     is_feasible = False

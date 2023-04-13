@@ -12,6 +12,19 @@ from src.misc.distributions import draw_from_distribution_dict
 
 if TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
+    
+INPUT_PARAMETERS_DynamicFleetSizingBase = {
+"doc" :  """information about the timedependent fleetsize has to be given with the file "op_act_fs_file"
+        according to the active fleetsize curve this strategy activates and deactivates vehicles to fit this curve
+        inactive vehicles in depots are selected to charge if a charging station is present
+            - vehicles are sent to the nearest depots (idle vehicles have priority; other vehicles have to finish their task first (locks their plan))
+            - the presence of a charging station has no influence on the depot to be picked! """,
+"inherit" : "DynamicFleetSizingBase",
+"input_parameters_mandatory": [G_OP_ACT_FLEET_SIZE],
+"input_parameters_optional": [],
+"mandatory_modules": [],
+"optional_modules": []
+}
 
 class TimeBasedFS(DynamicFleetSizingBase):
     def __init__(self, fleetctrl: FleetControlBase, operator_attributes: dict, solver: str="Gurobi"):

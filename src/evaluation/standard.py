@@ -397,12 +397,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
             # vehicle stats
             # -------------
-            try:
-                n_vehicles = sum([x for x in operator_attributes[G_OP_FLEET].values()])
-            except AttributeError:
-                if print_comments:
-                    print("Warning: {} not given for this scenario?".format(G_OP_FLEET))
-                n_vehicles = len(op_vehicle_df[G_V_VID].unique())
+            n_vehicles = veh_type_stats[veh_type_stats[G_V_OP_ID]==op_id].shape[0]
 
             sim_end_time = scenario_parameters["end_time"]
             simulation_time = scenario_parameters["end_time"] - scenario_parameters["start_time"]

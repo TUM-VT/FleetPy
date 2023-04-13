@@ -236,6 +236,20 @@ class NetworkBasic(NetworkBase):
                 self.load_tt_file(simulation_time)
                 return True
         return False
+    
+    def reset_network(self, simulation_time: float):
+        """ this method is used in case a module changed the travel times to future states for forecasts
+        it resets the network to the travel times a stimulation_time
+        :param simulation_time: current simulation time"""
+        sorted_tts = sorted(self.travel_time_file_folders.keys())
+        if len(sorted_tts) > 2:
+            for i in range(len(sorted_tts) - 1):
+                if sorted_tts[i] <= simulation_time and sorted_tts[i+1] > simulation_time:
+                    self.update_network(sorted_tts[i])
+                    return
+            if sorted_tts[-1] <= simulation_time:
+                self.update_network(sorted_tts[-1])
+                return
 
     def load_tt_file(self, scenario_time):
         """

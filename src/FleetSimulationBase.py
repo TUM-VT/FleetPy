@@ -380,6 +380,7 @@ class FleetSimulationBase:
                                                         self.op_output[op_id], route_output_flag,
                                                         replay_flag)
                     list_vehicles.append(tmp_veh_obj)
+                    veh_type_list.append([op_id, vid, veh_type])
                     self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
                 OpClass.continue_init(list_vehicles, self.start_time)
                 self.operators.append(OpClass)
@@ -485,7 +486,7 @@ class FleetSimulationBase:
                     if not boarding_nodes:
                         boarding_nodes = list(range(self.routing_engine.get_number_network_nodes()))
                     op_init_distributions[op_id] = {bn : 1.0/len(boarding_nodes) for bn in boarding_nodes}
-            LOG.debug("init distributons: {}".format(op_init_distributions))
+            #LOG.debug("init distributons: {}".format(op_init_distributions))
             for sim_vid in set_unassigned_vid:
                 veh_obj = self.sim_vehicles[sim_vid]
                 if veh_obj.pos is None:

@@ -1,104 +1,156 @@
-from __future__ import annotations
 
-import tkinter as tk
-from tkinter import font as tkfont
+from PyQt6.QtWidgets import QLabel, QWidget, QGridLayout, QComboBox
+from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 
-from functools import partial
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from ScenarioCreatorGUI import ScenarioCreatorMainFrame
-    
-NONSELECTION = "None"
 
-class ModuleSelectionPage(tk.Frame):
-    def __init__(self, parent, controller : ScenarioCreatorMainFrame):
-        tk.Frame.__init__(self,parent)
-        self.controller = controller
-        self.id = controller.mandatory_module
-        row_count=1
-        col_count=1
-        list_of_selected_modules = []
-        self.created_modules = {}
-    
-        page_heading = tk.Label(self, text = "Module Selection Page", font=controller.titlefont).grid(row=0,column=0, columnspan=4,padx=20, pady=10)
-
-        #Feature 1
-        mandatory_module = tk.Label(self, text=controller.mandatory_module.get(), font=controller.normalfont).grid(row=row_count,column=1)
-        row_count=row_count+1
-        col_count=2
-        man_module_dict, op_module_dict = controller.sc.get_current_mandatory_and_optional_modules()
-
-        for module_name in self.controller.sc.possible_modules:
-            module = tk.StringVar()
-            module.set(module_name)
+#create a second window called ModuleSelectionPage
+class ModuleSelectionPage(QWidget):
+    def __init__(self,sc):
+        super().__init__()
+        self.setWindowTitle("ModuleSelectionPage")
+        self.grid = QGridLayout()
+        self.mandatory_modules = QLabel("Mandatory modules:", self)
+        self.mandatory_modules.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.mandatory_modules.setFont(QFont("Verdana", 15, QFont.Weight.Bold))
+        self.grid.addWidget(self.mandatory_modules,0,0,1,2)
+        self.setGeometry(100, 100, 400, 400)
+        self.sc = sc
+        self.flag = False
+        self.opt_modules_loaded = False
+        self.man_module_dict, self.op_module_dict = self.sc.get_current_mandatory_and_optional_modules()
+        # create a text label to show the mandatory module
+        self.row = 0
+        self.man_labels = []
+        self.man_combos = []     
+        for module_name in self.sc.possible_modules:
             options = []
-            if man_module_dict.get(module_name) is not None:
-                options = man_module_dict[module_name].options
-            elif op_module_dict.get(module_name) is not None:
-                options = [NONSELECTION] + op_module_dict[module_name].options
-            module_view = tk.Label(self, text=module_name, font=controller.normalfont).grid(row=row_count,column=col_count)
-            callback_func = partial(self.select_module, module_name)
-            if len(options) > 0:
-                sel_module = tk.OptionMenu(self,module, *options, command=callback_func)
-            else:
-                sel_module = tk.OptionMenu(self,module, 0, command=callback_func)
-            sel_module.config(width=30)
-            sel_module.grid(row=row_count, column=(col_count+1))  
-            if len(options) == 0:
-                sel_module.configure(state="disabled")
-            col_count = 2
-            row_count = row_count+1
-            list_of_selected_modules.append([module_name, module])
-            self.created_modules[module_name] = (module, sel_module, callback_func)                   
-
-        # #Feature 2
-        # optional_module = tk.Label(self, text=controller.optional_modules.get(), font=controller.normalfont).grid(row=row_count,column=1)
-        # row_count = row_count + 1
+            if self.man_module_dict.get(module_name):
+                
+                options = ["NO SELECTION"] + self.man_module_dict[module_name].options
+                
+                self.label = QLabel(module_name, self)
+                self.label.setAlignment(Qt.AlignmentFlag.AlignTop)
+                self.man_labels.append(self.label)
+                self.grid.addWidget(self.man_labels[self.row],self.row+1,0,1,1)
+                #create options menu 
+                self.combo = QComboBox(self)
+                self.combo.addItems(options)
+                self.combo.currentIndexChanged.connect(self.onActivated)
+                self.man_combos.append(self.combo)
+                self.grid.addWidget(self.man_combos[self.row],self.row+1,1,1,3)
+                self.row += 1
+        self.optional_modules = QLabel("Optional modules:", self)
+        self.optional_modules.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.optional_modules.setFont(QFont("Verdana", 15, QFont.Weight.Bold))
+        self.optional_modules.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.grid.addWidget(self.optional_modules,self.row+1,0,1,2)
+        self.setLayout(self.grid)
+    #create a function to load optional modules
+    def load_optional_modules(self):
+        self.row += 1
         
-        # for module_name, module_specifications in op_module_dict.items():
-
-        #     if module_specifications.type == "int":
-        #         module = tk.IntVar()
-        #         module.set(controller.default_int)
-        #     else:
-        #         module = tk.StringVar()
-        #         module.set(controller.default_text) 
-        #     module_view = tk.Label(self, text=module_name, font=controller.normalfont).grid(row=row_count,column=col_count)
-        #     callback_func = partial(self.select_module, module_name)
-        #     sel_module = tk.OptionMenu(self,module, *module_specifications.options, command=callback_func)
-        #     sel_module.config(width=30)
-        #     sel_module.grid(row=row_count, column=(col_count+1))
-        #     col_count = 2
-        #     row_count = row_count+1
-        #     list_of_selected_modules.append([module_name, module]) 
-        #     self.created_modules[module_name] = (module, sel_module)         
-
-        save_and_next_page = tk.Button(self, text = "Save and Next",
-                                command= lambda: controller.store_input_args('ParameterSelectionPage', list_of_selected_modules)).grid(row=30, column=0, columnspan=4, padx=20, pady=10)
-        
-    def select_module(self, module, input):
-        print(f"select {input}")
-        if input != NONSELECTION:
-            self.controller.sc.select_module(module, input)
-            self.update_module_options()
-        
-    def update_module_options(self):
-        print("update menu")
-        man_module_dict, op_module_dict = self.controller.sc.get_current_mandatory_and_optional_modules()
-        for module_name, var_mod in self.created_modules.items():
-            var, module, callback_func = var_mod
-            #print(module_name, var.get())
-            module['menu'].delete(0, 'end')
+        self.op_labels = []
+        self.op_combos = []
+        self.row2 = 0
+        for module_name in self.sc.possible_modules:
             options = []
-            if man_module_dict.get(module_name) is not None:
-                options = man_module_dict[module_name].options
-            elif op_module_dict.get(module_name) is not None:
-                options = [NONSELECTION] + op_module_dict[module_name].options
-            for choice in options:
-                module['menu'].add_command(label=choice, command=tk._setit(var, choice, callback=callback_func))
-            if len(options) == 0:
-                module.configure(state="disabled")
-            else:
-                module.configure(state="active")
+            
 
+            if self.man_module_dict.get(module_name) == None and self.op_module_dict.get(module_name):
+                self.opt_modules_loaded = True
+                options = ["NO SELECTION"] + self.op_module_dict[module_name].options
+                self.label = QLabel(module_name, self)
+                self.label.setAlignment(Qt.AlignmentFlag.AlignTop)
+                self.op_labels.append(self.label)
+                self.grid.addWidget(self.op_labels[self.row2],self.row+1,0,1,1)
+                #create options menu 
+                self.combo_op = QComboBox(self)
+                self.combo_op.addItems(options)
+                self.combo_op.currentIndexChanged.connect(self.onActivatedOp)
+                #disable the optional modules
+                #self.combo_op.setEnabled(False)
+                self.op_combos.append(self.combo_op)
+                self.grid.addWidget(self.op_combos[self.row2],self.row+1,1,1,3)
+                self.row += 1
+                self.row2 += 1
+        self.setLayout(self.grid)
+
+    def onActivated(self, text):
+        try:
+            self.man_module_dict, self.op_module_dict = self.sc.get_current_mandatory_and_optional_modules()
+        except:
+            pass
+
+        for i in range(len(self.man_combos)):
+            if self.man_combos[i].currentText() == "NO SELECTION":
+                self.flag = False
+                return
+            else:
+                self.flag = True
+        for idx, label in enumerate(self.man_labels):
+            input = self.man_combos[idx].currentText()
+            if input != "NO SELECTION":
+                try:
+                    self.sc.select_module(self.man_labels[idx].text(), self.man_combos[idx].currentText())
+                except:
+                    pass
+        try:
+            self.man_module_dict, self.op_module_dict = self.sc.get_current_mandatory_and_optional_modules()
+        except:
+            pass      
+        if self.opt_modules_loaded == False:
+            self.load_optional_modules()
+
+
+    def onActivatedOp(self, text):
+        for idx, label in enumerate(self.op_labels):
+            input = self.op_combos[idx].currentText()
+            if input != "NO SELECTION":
+                try: 
+                    self.sc.select_module(self.op_labels[idx].text(), self.op_combos[idx].currentText())
+                except:
+                    pass
+        self.man_module_dict, self.op_module_dict = self.sc.get_current_mandatory_and_optional_modules()
+
+
+    
+    def update_selections(self):
+        if len(self.combos_op) == 0:
+            return
+        for i in range(len(self.combos_op)):
+
+            if self.combos_op[i].currentText() != "NO SELECTION":
+                self.sc.select_module(self.labels[i].text(), self.combos_op[i].currentText())
+            self.combos_op[i].options = ["NO SELECTION"] + self.op_module_dict[self.labels[i].text()].options
+        self.sc.update_module_selections()
+
+
+    def get_modules(self):
+        man_modules = []
+        for i in range(len(self.man_combos)):
+            man_modules.append(self.man_combos[i].currentText())
+        op_modules = []
+        for i in range(len(self.op_combos)):
+            if self.op_combos[i].currentText() != "NO SELECTION":
+                op_modules.append(self.op_combos[i].currentText())
+        labels = []
+        for i in range(len(self.man_labels)):
+            labels.append(self.man_labels[i].text())
+        for i in range(len(self.op_labels)):
+            if self.op_combos[i].currentText() != "NO SELECTION":
+                labels.append(self.op_labels[i].text())
+        modules = man_modules + op_modules
+        return labels, modules
+
+    def get_module_dict(self):
+        
+        return self.sc
+
+    
+
+
+        
+
+        
