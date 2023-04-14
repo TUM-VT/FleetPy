@@ -49,7 +49,17 @@ class PavoneHailingRepositioningFC(RepositioningBase):
         
     def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> AggForecastZoneSystem:
         """ this method loads the forecast zone system needed for the corresponding repositioning strategy"""
-        return AggForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
+        fc_type = operator_attributes.get(G_RA_FC_TYPE)
+        if fc_type is not None and fc_type == "perfect":
+            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastZoneSystem
+            LOG.info("load perfect zonesystem")
+            return PerfectForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
+        elif fc_type is not None and fc_type == "myopic":
+            from src.fleetctrl.forecast.MyopicForecastZoneSystem import MyopicForecastZoneSystem
+            LOG.info("load myopic zonesystem")
+            return MyopicForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes) 
+        else:
+            return AggForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes) 
 
     def determine_and_create_repositioning_plans(self, sim_time, lock=None):
         """This method determines and creates new repositioning plans. The repositioning plans are directly assigned
@@ -60,6 +70,7 @@ class PavoneHailingRepositioningFC(RepositioningBase):
         :param lock: indicates if vehplans should be locked
         :return: list[vid] of vehicles with changed plans
         """
+        self.zone_system.time_trigger(sim_time)
         self.sim_time = sim_time
         if lock is None:
             lock = self.lock_repo_assignments
@@ -368,6 +379,7 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         :param lock: indicates if vehplans should be locked
         :return: list[vid] of vehicles with changed plans
         """
+        self.zone_system.time_trigger(sim_time)
         self.sim_time = sim_time
         if lock is None:
             lock = self.lock_repo_assignments

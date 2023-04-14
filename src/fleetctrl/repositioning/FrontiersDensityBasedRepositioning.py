@@ -72,7 +72,7 @@ class DensityRepositioning(RepositioningBase):
         :param lock: indicates if vehplans should be locked
         :return: list[vid] of vehicles with changed plans
         """
-
+        self.zone_system.time_trigger(sim_time)
         self.sim_time = sim_time
         if lock is None:
             lock = self.lock_repo_assignments

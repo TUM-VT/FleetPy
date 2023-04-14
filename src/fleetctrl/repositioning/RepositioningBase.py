@@ -89,6 +89,7 @@ class RepositioningBase(ABC):
         :param lock: indicates if vehplans should be locked
         :return: list[vid] of vehicles with changed plans
         """
+        self.zone_system.time_trigger(sim_time)
         self.sim_time = sim_time
         if lock is None:
             lock = self.lock_repo_assignments
@@ -105,7 +106,15 @@ class RepositioningBase(ABC):
         and used for creating repositioning plans
         :param planrequest: plan request obj that has been rejected
         :param sim_time: simulation time"""
-        pass
+        if self.zone_system is not None:
+            self.zone_system.register_rejected_request(sim_time, planrequest)
+        
+    def register_user_request(self, planrequest, sim_time):
+        """ this method registers a new customer request and can be used to update forecasts with online information
+        :param planrequest: plan request obj
+        :param sim_time: current simulation time"""
+        if self.zone_system is not None:
+            self.zone_system.register_new_request(sim_time, planrequest)
 
     def _get_demand_forecasts(self, t0, t1, aggregation_level=None):
         """This method creates a dictionary, which maps the zones to the expected demand between t0 and t1.

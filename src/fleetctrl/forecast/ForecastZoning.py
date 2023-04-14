@@ -28,6 +28,28 @@ class ForecastZoneSystem(ZoneSystem):
 
     def register_demand_ref(self, demand_ref):
         self.demand = demand_ref
+        
+    def time_trigger(self, sim_time):
+        """"
+        this method is triggered at the beginning of a repositioning time step
+        """
+        pass
+        
+    def register_new_request(self, sim_time, plan_request):
+        """ 
+        This method is triggered when a new user requested a trip.
+        :param sim_time: current simulation time
+        :param plan_request: plan_request obj
+        """
+        pass
+    
+    def register_rejected_request(self, sim_time, plan_request):
+        """ 
+        This method is triggered when a new user has been rejected.
+        :param sim_time: current simulation time
+        :param plan_request: plan_request obj
+        """
+        pass
     
     @abstractmethod
     def get_trip_arrival_forecasts(self, t0, t1, aggregation_level=None, scale = None):

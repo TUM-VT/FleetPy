@@ -331,7 +331,9 @@ class FleetControlBase(metaclass=ABCMeta):
         :param simulation_time: current simulation time
         :type simulation_time: int
         """
-        pass
+        # this should be called:        
+        # if self.repo and not prq.get_reservation_flag():
+        #     self.repo.register_user_request(prq, sim_time)
 
     @abstractmethod
     def user_confirms_booking(self, rid : Any, simulation_time : int):
