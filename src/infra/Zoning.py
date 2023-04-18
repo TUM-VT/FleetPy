@@ -108,6 +108,8 @@ class ZoneSystem:
     def get_random_centroid_node(self, zone_id):
         if self.zone_centroids is not None:
             nodes = self.zone_centroids.get(zone_id, [])
+            if len(nodes) == 1:
+                return nodes[0]
             if len(nodes) > 0:
                 return np.random.choice(nodes)
             else:
