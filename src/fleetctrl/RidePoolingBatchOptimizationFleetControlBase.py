@@ -108,6 +108,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         self.max_rv_con = operator_attributes.get(G_RA_MAX_VR, None)
         self.applied_heuristic = operator_attributes.get(G_RA_HEU, None)
         
+        self._lock_assignments = operator_attributes.get(G_RA_LOCK_RID_VID, False)
+        
         # dynamic dicts to update database
         self.new_requests : Dict[Any, PlanRequest] = {}  # rid -> prq (new)
         self.requests_that_changed : Dict[Any, PlanRequest] = {}  # rid -> prq (already here but new constraints)
@@ -239,6 +241,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
             except KeyError:
                 self.vid_with_reserved_rids[vid] = [rid]
         self.RPBO_Module.set_request_assigned(rid)
+        if self._lock_assignments:
+            self._lock_vid_rid_pickup(simulation_time, vid, rid)
 
     def user_cancels_request(self, rid : Any, simulation_time : int):
         """This method is used to confirm a customer cancellation. This can trigger some database processes.

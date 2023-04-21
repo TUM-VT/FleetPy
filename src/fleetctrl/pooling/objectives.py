@@ -103,6 +103,37 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                     end_time = simulation_time
                 # utility is negative value of end_time - simulation_time
                 return end_time - simulation_time - assignment_reward
+            
+    elif func_key == "total_system_time_with_late_panalty":
+        DELAY_PENALTY = 10
+        def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
+            """This function evaluates the total spent time of a vehicle according to a vehicle plan.
+            additionally, it adds a panalty if the vehicle arrives after latest pick-up and drop-off constraints
+
+            :param simulation_time: current simulation time
+            :param veh_obj: simulation vehicle object
+            :param veh_plan: vehicle plan in question
+            :param rq_dict: rq -> Plan request dictionary
+            :param routing_engine: for routing queries
+            :return: objective function value
+            """
+            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            # end time (for request assignment purposes) defined by arrival at last stop
+            if veh_plan.list_plan_stops:
+                end_time = veh_plan.list_plan_stops[-1].get_planned_arrival_and_departure_time()[0]
+            else:
+                end_time = simulation_time
+            sum_delay_times = 0
+            for rid, boarding_info_list in veh_plan.pax_info.items():
+                rq = rq_dict[rid]
+                rq_time = rq.rq_time
+                pu_t, do_t = boarding_info_list
+                latest_pick_up_time = rq.get_o_stop_info()[2]
+                latest_drop_off_time = min([rq.get_d_stop_info()[1], rq.get_d_stop_info()[2] + pu_t])
+                sum_delay_times += max([0, pu_t - latest_pick_up_time])
+                sum_delay_times += max([0, do_t - latest_drop_off_time])
+            # utility is negative value of end_time - simulation_time
+            return end_time - simulation_time - assignment_reward + sum_delay_times * DELAY_PENALTY
 
     elif func_key == "user_times":
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:

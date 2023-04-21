@@ -1,0 +1,8 @@
+driver_id,veh_type,possible_operators
+0,default_vehtype,0;1
+1,default_vehtype,0;1
+2,default_vehtype,0;1
+3,default_vehtype,0
+4,default_vehtype,0
+5,default_vehtype,1
+6,default_vehtype,1
