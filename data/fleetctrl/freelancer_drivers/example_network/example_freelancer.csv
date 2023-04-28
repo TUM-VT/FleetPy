@@ -1,0 +1,11 @@
+driver_id,start_node,possible_operators,operating_times,veh_type
+1,2966,0;1,0;86400,default_vehtype
+2,2988,0;1,0;86400,default_vehtype
+3,2966,0;1,0;86400,default_vehtype
+4,2973,0;1,0;86400,default_vehtype
+5,2966,0,0;86400,default_vehtype
+6,2992,0,0;86400,default_vehtype
+7,2992,0,0;86400,default_vehtype
+8,2992,1,0;86400,default_vehtype
+9,2973,1,0;86400,default_vehtype
+10,2988,1,0;86400,default_vehtype
