@@ -58,31 +58,19 @@ conda config --describe channel_priority
 ```
 
 #### Create the virtual environment
-Create a new virtual environment in an *Anaconda Prompt* with a Python version 3.7.X.
+Create a new virtual environment in an *Anaconda Prompt* with all the packages listed in `environment.yml`. The default name of the environment is called `fleetpy`, which you could also change in the first line of `environment.yml` by changing the `name` variable.
 
 ```
-conda create -n <new_env> python=3.7
+conda env create -f environment.yml
 ```
 
-Checkout to the created virtual environment
+Check out the created virtual environment.
 
 ```
 conda activate <new_env>
 ```
 
-Check the default packages in your new and clean virtual environment :smile:
-
-```
-conda list
-```
-
-Install packages direcly using *Conda*:
-
-```
-conda install --file requirements.txt
-```
-
-It works! Looks like every package is successfully installed! Now check the installed packages again :wink:
+Now check the installed packages :wink:
 
 ```
 conda list
