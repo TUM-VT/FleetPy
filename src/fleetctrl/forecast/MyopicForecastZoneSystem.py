@@ -211,6 +211,8 @@ class MyopicForecastZoneSystem(ForecastZoneSystem):
         """
         
         future_fraction = (t1 - t0)/self.fc_temp_resolution # scaling factor
+        if scale is not None:
+            future_fraction = future_fraction*scale
         LOG.debug(f"call get od forecasts: {t0} {t1} {self.fc_temp_resolution}")
         return_dict = {}
         for _, o_zone, d_zone in self._past_request_ods:
