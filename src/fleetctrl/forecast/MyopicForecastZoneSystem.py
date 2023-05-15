@@ -172,27 +172,18 @@ class MyopicForecastZoneSystem(ForecastZoneSystem):
         :return: list of (time, origin_node, destination_node) of future requests
         :rtype: list of 3-tuples
         """ 
-        raise NotImplementedError
         future_list = []
-        if request_attribute is None and attribute_value is None:
-            for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
-                future_rqs = self.demand.future_requests.get(t, {})
-                for rq in future_rqs.values():
-                    future_list.append( (t, rq.o_node, rq.d_node) )
-        elif request_attribute is not None:
-            if attribute_value is None:
-                for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
-                    future_rqs = self.demand.future_requests.get(t, {})
-                    for rq in future_rqs.values():
-                        if rq.__dict__.get(request_attribute) is not None:
-                            future_list.append( (t, rq.o_node, rq.d_node) )
-            else:
-                for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
-                    future_rqs = self.demand.future_requests.get(t, {})
-                    for rq in future_rqs.values():
-                        if rq.__dict__.get(request_attribute) is not None and rq.__dict__.get(request_attribute) == attribute_value:
-                            future_list.append( (t, rq.o_node, rq.d_node) )
-        LOG.info("perfect forecast list: {}".format(future_list))
+        fc = self.get_trip_od_forecasts(t0, t1, scale=scale)
+        for o_z, d_z_dict in fc.items():
+            for d_z, val in d_z_dict.items():
+                n_rqs = np.random.poisson(lam=val)
+                ts = [np.random.randint(t0, high=t1) for _ in range(n_rqs)]
+                for t in ts:
+                    o_n = self.get_random_node(o_z)
+                    d_n = self.get_random_node(d_z)
+                    future_list.append( (t, o_n, d_n) )
+        future_list.sort(key=lambda x:x[0])
+        LOG.info("forecast list: {}".format(future_list))
         return future_list
     
     def get_trip_od_forecasts(self, t0, t1, aggregation_level=None, scale=None):

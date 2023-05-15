@@ -314,3 +314,94 @@ class SoftConstraintPlanRequest(PlanRequest):
         """ returns the soft max travel time constraint
         :return: soft max travel time constraint"""
         return self.max_trip_time_soft
+    
+    
+class ArtificialPlanRequest(PlanRequest):
+    """ this class is the main class describing customer requests with hard time constraints which is
+    used for planing in the fleetcontrol modules. in comparison to the traveler classes additional parameters
+    and attributes can be defined which are unique for each operator defining the service of the operator (i.e. time constraints, walking, ...)"""
+    def __init__(self, rid: int, rq_t: int, o_pos: tuple, d_pos: tuple, routing_engine : NetworkBase, min_wait_time : int=0, 
+                 max_wait_time : int=LARGE_INT, max_detour_time_factor : float=None,
+                 max_constant_detour_time : int=None, add_constant_detour_time : int=None, min_detour_time_window : int=None,
+                 boarding_time : int=0, pickup_pos : tuple=None, dropoff_pos : tuple=None, 
+                 walking_time_start : float=0, walking_time_end : float=0, sub_rid_id=None, nr_pax=1):
+        """
+        :param rq: reference to traveller object which is requesting a trip
+        :param routing_engine: reference to network object
+        :param min_wait_time: defines earliest pickup_time from request time
+        :param max_wait_time: defines latest pickup time from request time
+        :param max_detour_time_factor: defines relative increase of maximum allowed travel time relative to direct route travel time in %
+        :param max_constant_detour_time: defines absolute increase of maximum allowed travel time relative to direct route travel time
+        :param add_constant_detour_time: this detour time is added upon the detour after evaluating the max_detour_time_factor
+        :param min_detour_time_window: this detour time describes the minimum allowed detour
+        :param boarding_time: time needed for customer to board the vehicle
+        :param pickup_pos: network position tuple of pick up (used if pickup differs from request origin)
+        :param dropoff_pos: network position tuple of drop off (used if dropoff differs from request destination)
+        :param walking_time_start: walking time from origin to pickup
+        :param walking_time_end: walking time from dropoff to destination
+        :param sub_rid_id: id of this plan request that differs from the traveller id; usefull if one customer can be represented by multiple plan requests
+        """
+        # copy from rq
+        self.rid = rid
+        self.nr_pax = nr_pax
+        if sub_rid_id is not None:
+            self.sub_rid_struct = (self.rid, sub_rid_id)
+        else:
+            self.sub_rid_struct = self.rid
+        self.rq_time = rq_t
+        #
+        if pickup_pos is None:
+            self.o_pos = o_pos
+        else:
+            self.o_pos = pickup_pos
+        if dropoff_pos is None:
+            self.d_pos = d_pos
+        else:
+            self.d_pos = dropoff_pos
+        #
+        self.walking_time_start = walking_time_start
+        self.walking_time_end = walking_time_end
+        #
+        _, self.init_direct_tt, self.init_direct_td = routing_engine.return_travel_costs_1to1(self.o_pos, self.d_pos)
+        # decision/output
+        self.service_vehicle = None
+        self.pu_time = None
+        # constraints -> only in operator rq-class [pu: pick-up | do: drop-off, both start with boarding process]
+        # TODO # -> information can be used for vehicle search, optimization and computation objective function value
+        self.reservation_flag = False
+        if min_wait_time is None:
+            min_wait_time = 0
+        self.t_pu_earliest = self.rq_time + min_wait_time
+        if max_wait_time is None:
+            max_wait_time = LARGE_INT
+
+        self.t_pu_latest = self.t_pu_earliest + max_wait_time
+        self.t_do_latest = LARGE_INT
+
+        max_trip_time = self.init_direct_tt + boarding_time
+        # LOG.debug(f"max trip time: {max_trip_time}")
+        if not pd.isnull(max_detour_time_factor):
+            max_trip_time = (100 + max_detour_time_factor) * max_trip_time / 100
+            # LOG.debug(f"max trip time {max_trip_time} -> max detour factor {max_detour_time_factor}")
+        if not pd.isnull(add_constant_detour_time):
+            max_trip_time += add_constant_detour_time
+            # LOG.debug(f"max trip time {max_trip_time} -> add_constant_detour_time {add_constant_detour_time}")
+        if not pd.isnull(min_detour_time_window):
+            max_trip_time = max(self.init_direct_tt + boarding_time + min_detour_time_window, max_trip_time)
+            # LOG.debug(f"max trip time {max_trip_time} -> min_detour_time_window {min_detour_time_window}")
+        if not pd.isnull(max_constant_detour_time):
+            max_trip_time = min(self.init_direct_tt + boarding_time + max_constant_detour_time, max_trip_time)
+            # LOG.debug(f"max trip time {max_trip_time} -> max_constant_detour_time {max_constant_detour_time}")
+        self.max_trip_time = max_trip_time
+        if self.max_trip_time == self.init_direct_tt + boarding_time:
+            self.max_trip_time = LARGE_INT
+            
+        self.t_do_latest = self.t_pu_latest + self.max_trip_time
+        self.locked = False
+        # LOG.debug(f"new PlanRequest: rid {self.rid}|{self.sub_rid_struct} start {self.o_pos} dest {self.d_pos} epa
+        # {self.t_pu_earliest} lpa {self.t_pu_latest} dtt {self.init_direct_tt} mtt {self.max_trip_time}")
+        # offer
+        self.offer = None
+        self.status = G_PRQS_NO_OFFER
+        self.expected_pickup_time = None
+        self.expected_dropoff_time = None
