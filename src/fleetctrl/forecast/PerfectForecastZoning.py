@@ -30,6 +30,8 @@ class PerfectForecastZoneSystem(ForecastZoneSystem):
         if operator_attributes.get(G_RA_FC_FNAME) is not None:
             LOG.warning("forecast file for perfact forecast given. will not be loaded!")
         super().__init__(zone_network_dir, scenario_parameters, dir_names, operator_attributes)
+        if self.fc_temp_resolution is None:
+            self.fc_temp_resolution = operator_attributes[G_RA_FC_TR] # TODO ?
 
     def _get_trip_forecasts(self, trip_type, t0, t1, aggregation_level):
         """This method returns the number of expected trip arrivals or departures inside a zone in the
