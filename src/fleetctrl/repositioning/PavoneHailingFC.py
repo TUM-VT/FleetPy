@@ -46,6 +46,7 @@ class PavoneHailingRepositioningFC(RepositioningBase):
             raise IOError("PavoneHailingRepositioningFC requires two time horizon values (start and end)!"
                           f"Set them in the {G_OP_REPO_TH_DEF} scenario parameter!")
         self.optimisation_timeout = 30 # TODO #
+        self._weight_on_forecast = operator_attributes.get("op_weight_on_fc", None) # to scale the forecast by this factor (i.e. to approximate sharing)
         
     def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> AggForecastZoneSystem:
         """ this method loads the forecast zone system needed for the corresponding repositioning strategy"""
@@ -83,6 +84,9 @@ class PavoneHailingRepositioningFC(RepositioningBase):
         list_zones = sorted([zone for zone in list_zones_all if zone != -1])
         demand_fc_dict = self._get_demand_forecasts(t0, t1)
         supply_fc_dict = self._get_historic_arrival_forecasts(t0, t1)
+        if self._weight_on_forecast is not None:
+            demand_fc_dict = {z : v * self._weight_on_forecast for z, v in demand_fc_dict.items()}
+            supply_fc_dict = {z : v * self._weight_on_forecast for z, v in supply_fc_dict.items()}
         for zone_id in self.zone_system.get_all_zones():
             self.record_df.loc[(sim_time, zone_id, t0, t1), "tot_fc_supply"] = max([demand_fc_dict.get(zone_id, 0) - supply_fc_dict.get(zone_id, 0), 0])
         # print(demand_fc_dict)
@@ -391,6 +395,9 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         list_zones = self.zone_system.get_all_zones()
         demand_fc_dict = self._get_demand_forecasts(t0, t1)
         supply_fc_dict = self._get_historic_arrival_forecasts(t0, t1)
+        if self._weight_on_forecast is not None:
+            demand_fc_dict = {z : v * self._weight_on_forecast for z, v in demand_fc_dict.items()}
+            supply_fc_dict = {z : v * self._weight_on_forecast for z, v in supply_fc_dict.items()}
         for zone_id in self.zone_system.get_all_zones():
             self.record_df.loc[(sim_time, zone_id, t0, t1), "tot_fc_supply"] = max([demand_fc_dict.get(zone_id, 0) - supply_fc_dict.get(zone_id, 0), 0])
         # print(demand_fc_dict)
