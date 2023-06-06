@@ -10,6 +10,7 @@ data/fleetctrl/elastic_pricing/*
 data/fleetctrl/elastic_fleet_size/*
 data/fleetctrl/freelancer_drivers/*
 data/fleetctrl/repositioning/*
+data/fleetctrl/offline_reservation_solution/*
 !data/fleetctrl/initial_vehicle_distribution/example_network
 !data/fleetctrl/elastic_fleet_size/example_active_fleetsize.csv
 data/infra/*

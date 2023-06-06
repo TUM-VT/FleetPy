@@ -186,6 +186,8 @@ G_RA_RES_BOPT_TS = "op_res_opt_timestep"    # time interval of reservation modul
 G_RA_RES_LG_MAX_DEPTH = "op_res_loc_graph_max_depth"    # for GraphContractionTSP -> depth of local graph for evalutating new sol
 G_RA_RES_LG_MAX_CUT = "op_res_loc_graph_max_cut_time"   # for GraphContractionTSP -> only add edges wtih this max time horizon and cut rest
 G_RA_RES_APP_BUF_TIME = "op_res_approach_buffer_time"   # time buffer before vehicle starts driving to the position of an assigned VRL with reservation in future
+G_RA_RES_PRE_COMP_FOLDER = "op_precomp_off_sol_folder"
+G_RA_RES_PRE_COMP_SOL_FILE = "op_precomp_off_sol_file"  # file storing a precompute offline solution to load
 
 # RV heuristics
 G_RA_MAX_VR = "op_max_VR_con"
@@ -712,4 +714,8 @@ def get_directory_dict(scenario_parameters, list_operator_dicts, abs_fleetpy_dir
             fc_t_res = scenario_parameters.get(G_RA_FC_TR, None)
             if fc_type is not None and fc_t_res is not None:
                 dirs[op_key][G_DIR_FC] = os.path.join(dirs[G_DIR_DATA], "demand", demand_name, "aggregated", op_zone_name, str(fc_t_res))
+        if op_dict.get(G_RA_RES_PRE_COMP_FOLDER):
+            if dirs.get(op_key) is None:
+                dirs[op_key] = {}
+            dirs[op_key][G_RA_RES_PRE_COMP_FOLDER] = os.path.join(dirs[G_DIR_FCTRL], "offline_reservation_solution", demand_name, op_dict.get(G_RA_RES_PRE_COMP_FOLDER))
     return dirs
