@@ -68,13 +68,22 @@ def return_position_str(position_tuple):
     if position_tuple[1] is None:
         return "{};{};{}".format(position_tuple[0], -1, -1)
     else:
-        return "{};{};{:.3f}".format(position_tuple[0], position_tuple[1], position_tuple[2])
+        if position_tuple[2] is None:
+            return "{};{};{}".format(position_tuple[0], position_tuple[1], -1)
+        else:
+            return "{};{};{:.3f}".format(position_tuple[0], position_tuple[1], position_tuple[2])
 
 
 def return_position_from_str(position_str):
     entries = position_str.split(";")
-    first_entry = int(entries[0])
-    second_entry = int(entries[1])
+    try:
+        first_entry = int(entries[0])
+    except:
+        first_entry = float(entries[0])
+    try:
+        second_entry = int(entries[1])
+    except:
+        second_entry = float(entries[1])
     if second_entry < 0:
         second_entry = None
         third_entry = None

@@ -1,10 +1,18 @@
+from __future__ import annotations
+
 import logging
 from src.misc.globals import *
+import rtree
 LOG = logging.getLogger(__name__)
 WARNING_FOR_SEARCH_RADIUS = 900
 
+import typing
+if typing.TYPE_CHECKING:
+    from src.fleetctrl.FleetControlBase import FleetControlBase
+    from src.fleetctrl.planning.PlanRequest import PlanRequest
 
-def veh_search_for_immediate_request(sim_time, prq, fleetctrl, list_excluded_vids=[]):
+
+def veh_search_for_immediate_request(sim_time, prq:PlanRequest, fleetctrl:FleetControlBase, list_excluded_vids=[]):
     """This function can be used to find pooling vehicles for an immediate service of a request.
 
     :param sim_time: current simulation time
@@ -14,6 +22,39 @@ def veh_search_for_immediate_request(sim_time, prq, fleetctrl, list_excluded_vid
     :return: list of vehicle objects considered for assignment, routing_results_dict ( (o_pos, d_pos) -> (cfv, tt, dis))
     :rtype: tuple of list of SimulationVehicle, dict
     """
+    if fleetctrl.rv_heuristics.get("op_rh_geo_rtree") is not None:
+        if not hasattr(fleetctrl, 'vehicle_tree'):
+            fleetctrl.vehicle_tree = rtree.index.Index()
+            fleetctrl.vehicle_tree_time = -1
+        if sim_time != fleetctrl.vehicle_tree_time:
+            fleetctrl.vehicle_tree = rtree.index.Index()
+            for vid, veh_obj in enumerate(fleetctrl.sim_vehicles):
+                # do not consider inactive vehicles
+                if veh_obj.status == 5 or vid in list_excluded_vids:
+                    continue
+                coords = fleetctrl.routing_engine.return_position_coordinates( veh_obj.pos )
+                fleetctrl.vehicle_tree.insert(vid, (coords[0], coords[1], coords[0], coords[1]))
+            fleetctrl.vehicle_tree_time = sim_time
+        rq_coords = fleetctrl.routing_engine.return_position_coordinates( prq.get_o_stop_info()[0] )
+        nearest_vids = list(fleetctrl.vehicle_tree.nearest(rq_coords, fleetctrl.rv_heuristics.get("op_rh_geo_rtree")))
+
+        prq_o_stop_pos, prq_t_pu_earliest, prq_t_pu_latest = prq.get_o_stop_info()
+        sr = prq_t_pu_latest - sim_time
+        for vid in nearest_vids:
+            if fleetctrl.routing_engine.return_travel_costs_1to1( prq.get_o_stop_info()[0], fleetctrl.sim_vehicles[vid].pos )[1] > sr:
+                nearest_vids.remove(vid)
+
+        rv_vehicles = []
+        rv_results_dict = {}
+        
+        for vid in nearest_vids:
+            if vid in list_excluded_vids:
+                continue
+            rv_vehicles.append(fleetctrl.sim_vehicles[vid])
+            rv_results_dict[(prq.get_o_stop_info()[0], fleetctrl.sim_vehicles[vid].pos)] = fleetctrl.routing_engine.return_best_route_1to1( prq.get_o_stop_info()[0], fleetctrl.sim_vehicles[vid].pos )
+        
+        return rv_vehicles, rv_results_dict    
+
     if sim_time != fleetctrl.pos_veh_dict_time or not fleetctrl.pos_veh_dict:
         veh_locations_to_vid = {}
         for vid, veh_obj in enumerate(fleetctrl.sim_vehicles):

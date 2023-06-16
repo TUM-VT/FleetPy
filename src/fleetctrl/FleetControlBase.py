@@ -201,6 +201,9 @@ class FleetControlBase(metaclass=ABCMeta):
         max_req_plans = operator_attributes.get(G_RA_MAX_RP)
         if not pd.isnull(max_req_plans):
             self.rv_heuristics[G_RA_MAX_RP] = int(max_req_plans)
+        max_veh_rtree = operator_attributes.get("op_rh_geo_rtree") # todo in searchVehicles
+        if not pd.isnull(max_veh_rtree):
+            self.rv_heuristics["op_rh_geo_rtree"] = int(max_veh_rtree)
         prt_strategy_str += f"\t RV Heuristics: {self.rv_heuristics}\n"
         prt_strategy_str += f"\t Stop-Insert Heuristics: {self.insertion_heuristics}\n"
 
