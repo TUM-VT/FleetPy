@@ -136,7 +136,11 @@ class NetworkBasicCpp(NetworkBasic):
             if self._current_tt_factor is None:
                 s = self.cpp_router.computeTravelCostsXto1(destination_node, origin_nodes.keys(), max_time_range = max_cost_value, max_targets = max_routes)
             else:
-                s = self.cpp_router.computeTravelCostsXto1(destination_node, origin_nodes.keys(), max_time_range = max_cost_value/self._current_tt_factor, max_targets = max_routes)
+                if max_cost_value is not None:
+                    new_max_cost_value = max_cost_value/self._current_tt_factor
+                else:
+                    new_max_cost_value = None
+                s = self.cpp_router.computeTravelCostsXto1(destination_node, origin_nodes.keys(), max_time_range = new_max_cost_value, max_targets = max_routes)
                 s = [(x[0], x[1] * self._current_tt_factor, x[2]) for x in s]
             for org_node, tt, dis in s:
                 if tt < -0.0001:
@@ -196,7 +200,11 @@ class NetworkBasicCpp(NetworkBasic):
             if self._current_tt_factor is None:
                 s = self.cpp_router.computeTravelCosts1toX(origin_node, destination_nodes.keys(), max_time_range = max_cost_value, max_targets = max_routes)
             else:
-                s = self.cpp_router.computeTravelCosts1toX(origin_node, destination_nodes.keys(), max_time_range = max_cost_value/self._current_tt_factor, max_targets = max_routes)
+                if max_cost_value is not None:
+                    new_max_cost_value = max_cost_value/self._current_tt_factor
+                else:
+                    new_max_cost_value = None
+                s = self.cpp_router.computeTravelCosts1toX(origin_node, destination_nodes.keys(), max_time_range = new_max_cost_value, max_targets = max_routes)
                 s = [(x[0], x[1] * self._current_tt_factor, x[2]) for x in s]
             for dest_node, tt, dis in s:
                 if tt < -0.0001:

@@ -474,7 +474,11 @@ class NetworkBasic(NetworkBase):
                 R = Router(self, destination_node, destination_nodes=origin_nodes.keys(), time_radius = max_cost_value, max_settled_targets = max_routes, forward_flag = False, customized_section_cost_function=customized_section_cost_function)
                 s = R.compute(return_route=False)
             else:
-                R = Router(self, destination_node, destination_nodes=origin_nodes.keys(), time_radius = max_cost_value/self._current_tt_factor, max_settled_targets = max_routes, forward_flag = False, customized_section_cost_function=customized_section_cost_function)
+                if max_cost_value is not None:
+                    new_max_cost_value = max_cost_value/self._current_tt_factor
+                else:
+                    new_max_cost_value = None
+                R = Router(self, destination_node, destination_nodes=origin_nodes.keys(), time_radius = new_max_cost_value, max_settled_targets = max_routes, forward_flag = False, customized_section_cost_function=customized_section_cost_function)
                 s = R.compute(return_route=False)
                 s = [(entry[0], (entry[1][0] * self._current_tt_factor, entry[1][1] * self._current_tt_factor, entry[1][2])) for entry in s]
             for entry in s:
@@ -539,7 +543,11 @@ class NetworkBasic(NetworkBase):
                 R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = max_cost_value, max_settled_targets = max_routes, forward_flag = True, customized_section_cost_function=customized_section_cost_function)
                 s = R.compute(return_route=False)
             else:
-                R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = max_cost_value/self._current_tt_factor, max_settled_targets = max_routes, forward_flag = True, customized_section_cost_function=customized_section_cost_function)
+                if max_cost_value is not None:
+                    new_max_cost_value = max_cost_value/self._current_tt_factor
+                else:
+                    new_max_cost_value = None
+                R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = new_max_cost_value, max_settled_targets = max_routes, forward_flag = True, customized_section_cost_function=customized_section_cost_function)
                 s = R.compute(return_route=False)
                 s = [(entry[0], (entry[1][0] * self._current_tt_factor, entry[1][1] * self._current_tt_factor, entry[1][2])) for entry in s]
             for entry in s:
@@ -641,7 +649,11 @@ class NetworkBasic(NetworkBase):
                 R = Router(self, destination_node, destination_nodes=origin_nodes.keys(), time_radius = max_cost_value, forward_flag = False, customized_section_cost_function=customized_section_cost_function)
                 s = R.compute(return_route=True)
             else:
-                R = Router(self, destination_node, destination_nodes=origin_nodes.keys(), time_radius = max_cost_value/self._current_tt_factor, forward_flag = False, customized_section_cost_function=customized_section_cost_function)
+                if max_cost_value is not None:
+                    new_max_cost_value = max_cost_value/self._current_tt_factor
+                else:
+                    new_max_cost_value = None
+                R = Router(self, destination_node, destination_nodes=origin_nodes.keys(), time_radius = new_max_cost_value, forward_flag = False, customized_section_cost_function=customized_section_cost_function)
                 s = R.compute(return_route=True)
                 s = [(entry[0], (entry[1][0] * self._current_tt_factor, entry[1][1] * self._current_tt_factor, entry[1][2])) for entry in s]
             for entry in s:
@@ -729,7 +741,11 @@ class NetworkBasic(NetworkBase):
                 R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = max_cost_value, forward_flag = True)
                 s = R.compute(return_route=True)
             else:
-                R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = max_cost_value/self._current_tt_factor, forward_flag = True, customized_section_cost_function=customized_section_cost_function)
+                if max_cost_value is not None:
+                    new_max_cost_value = max_cost_value/self._current_tt_factor
+                else:
+                    new_max_cost_value = None
+                R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = new_max_cost_value, forward_flag = True, customized_section_cost_function=customized_section_cost_function)
                 s = R.compute(return_route=True)
                 s = [(entry[0], (entry[1][0] * self._current_tt_factor, entry[1][1] * self._current_tt_factor, entry[1][2])) for entry in s]
             for entry in s:
