@@ -101,6 +101,8 @@ class NetworkBasicWithStoreCpp(NetworkBasicCpp):
             return (s[0] + origin_overhead[0] + destination_overhead[0], s[1] + origin_overhead[1] + destination_overhead[1], s[2] + origin_overhead[2] + destination_overhead[2])
         else:
             s = self.cpp_router.computeTravelCosts1To1(origin_node, destination_node)
+            if self._current_tt_factor is not None:
+                s = (s[0] * self._current_tt_factor, s[1])
             if s[0] < -0.001:
                 s = (float("inf"), float("inf"))
             res = (s[0] + origin_overhead[0] + destination_overhead[0], s[0] + origin_overhead[1] + destination_overhead[1], s[1] + origin_overhead[2] + destination_overhead[2])

@@ -83,7 +83,7 @@ class NetworkPartialPreprocessed(NetworkBasic):
         if scenario_time is None:
             f = "base"
         else:
-            f = str(self.travel_time_file_folders[scenario_time])
+            f = str(self.travel_time_file_infos[scenario_time])
         self.tt_table = np.load(os.path.join(network_name_dir, f, "tt_matrix.npy"))
         self.dis_table = np.load(os.path.join(network_name_dir, f, "dis_matrix.npy"))
         self.max_preprocessed_index = self.tt_table.shape[0]
@@ -100,7 +100,7 @@ class NetworkPartialPreprocessed(NetworkBasic):
         LOG.debug(f"update network {simulation_time} | preproc index {self.max_preprocessed_index}")
         self.sim_time = simulation_time
         if update_state:
-            if self.travel_time_file_folders.get(simulation_time, None) is not None:
+            if self.travel_time_file_infos.get(simulation_time, None) is not None:
                 LOG.info("update travel times in network {}".format(simulation_time))
                 self.load_tt_file(simulation_time)
                 self.travel_time_infos = {}
@@ -112,7 +112,8 @@ class NetworkPartialPreprocessed(NetworkBasic):
         loads new travel time files for scenario_time
         """
         super().load_tt_file(scenario_time)
-        self._load_travel_info_tables(self.network_name_dir, scenario_time=scenario_time)
+        if self._tt_infos_from_folder:
+            self._load_travel_info_tables(self.network_name_dir, scenario_time=scenario_time)
 
     def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None):
         """
@@ -140,11 +141,18 @@ class NetworkPartialPreprocessed(NetworkBasic):
         if customized_section_cost_function is None:
             if origin_node < self.max_preprocessed_index and destination_node < self.max_preprocessed_index:
                 s = (self.tt_table[origin_node][destination_node], self.tt_table[origin_node][destination_node], self.dis_table[origin_node][destination_node])
+                if self._current_tt_factor is not None:
+                    s = (s[0] * self._current_tt_factor, s[1] * self._current_tt_factor, s[2])
             else:
                 s = self.travel_time_infos.get( (origin_node, destination_node) , None)
         if s is None:
-            R = Router(self, origin_node, destination_nodes=[destination_node], mode='bidirectional', customized_section_cost_function=customized_section_cost_function)
-            s = R.compute(return_route=False)[0][1]
+            if self._current_tt_factor is None:
+                R = Router(self, origin_node, destination_nodes=[destination_node], mode='bidirectional', customized_section_cost_function=customized_section_cost_function)
+                s = R.compute(return_route=False)[0][1]
+            else:
+                R = Router(self, origin_node, destination_nodes=[destination_node], mode='bidirectional', customized_section_cost_function=customized_section_cost_function)
+                s = R.compute(return_route=False)[0][1]
+                s = (s[0] * self._current_tt_factor, s[1] * self._current_tt_factor, s[2])
             self.travel_time_infos[(origin_node, destination_node)] = s
         return (s[0] + origin_overhead[0] + destination_overhead[0], s[1] + origin_overhead[1] + destination_overhead[1], s[2] + origin_overhead[2] + destination_overhead[2])
 
@@ -174,9 +182,10 @@ class NetworkPartialPreprocessed(NetworkBasic):
 
     def _reset_internal_attributes_after_travel_time_update(self):
         self.travel_time_infos = {}
-        self.tt_table = None
-        self.dis_table = None
-        self.max_preprocessed_index = -1
+        if self._tt_infos_from_folder:
+            self.tt_table = None
+            self.dis_table = None
+            self.max_preprocessed_index = -1
 
     def _add_to_database(self, o_node, d_node, cfv, tt, dis):
         """ this function is call when new routing results have been computed

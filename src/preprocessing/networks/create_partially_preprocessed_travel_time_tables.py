@@ -32,7 +32,7 @@ def get_travel_times_available(network_path, network_dynamics_file):
     routing_engine = Network(network_path, network_dynamics_file)
     travel_times = []
     folders_found = {}
-    for sim_time, folder in routing_engine.travel_time_file_folders.items():
+    for sim_time, folder in routing_engine.travel_time_file_infos.items():
         if folders_found.get(folder):
             continue
         folders_found[folder] = 1
