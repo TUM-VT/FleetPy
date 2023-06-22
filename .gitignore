@@ -27,6 +27,7 @@ data/vehicles/*
 data/zones/*
 !data/zones/example_zones
 !data/infra/example_infra
+data/fleetctrl/offline_reservation_solution/*
 
 # study directories except for example
 studies/*
