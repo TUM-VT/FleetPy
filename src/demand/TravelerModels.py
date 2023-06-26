@@ -628,6 +628,49 @@ class UserDecisionRequest(RequestBase):
             self.fare = selected_offer.get(G_OFFER_FARE, 0)
         return selected_op
 
+INPUT_PARAMETERS_UserDecisionUtilityRequest = {
+    "doc" :     """This request class chooses the offer with maximum utility, considering travel time and fare
+    """,
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
+class UserDecisionUtilityRequest(RequestBase):
+    """
+    This request class is used for the easyride user decision simulation.
+    The user chooses the offer that maximises utility, trading off travel time with costs
+    """
+    type = "UserDecisionUtilityRequest"
+
+    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
+        # columns for heterogeneous parameters from rq_file > scenario parameters for homogeneous parameters
+        self.value_of_time = rq_row[G_RQ_LPT]
+
+    def choose_offer(self, scenario_parameters, simulation_time):
+        selected_offer = None
+        selected_op = None
+        best_overall_util = float("inf")
+        for op_id, offer in self.offer.items():
+            if not offer.service_declined():
+                util = (offer[G_OFFER_WAIT] + offer[G_OFFER_DRIVE]) * self.value_of_time + offer[G_OFFER_FARE] # offer_fare in cents
+                if util < best_overall_util:
+                    best_overall_util = util
+                    selected_offer = offer
+                    selected_op = op_id
+                elif util == best_overall_util:
+                    r = np.random.randint(2)
+                    if r == 0:
+                        best_overall_util = util
+                        selected_offer = offer
+                        selected_op = op_id
+        if selected_offer is not None:
+            self.fare = selected_offer.get(G_OFFER_FARE, 0)
+        return selected_op
+
 #----------------------------------------------------------------------------#
 
 INPUT_PARAMETERS_MasterRandomChoiceRequest = {

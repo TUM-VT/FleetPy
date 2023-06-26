@@ -30,7 +30,7 @@ def get_src_simulation_environments():
     sim_env_dict["BrokerDecision"] = ("src.BrokerSimulation", "BrokerDecisionSimulation")
     sim_env_dict["UserDecisionSimulation"] = ("src.BrokerSimulation", "UserDecisionSimulation")
     sim_env_dict["PreferredOperatorSimulation"] = ("src.BrokerSimulation", "PreferredOperatorSimulation")
-    sim_env_dict["PlatformFleetSimulation"] = ("dev.PlatformFleetSimulation", "PlatformFleetSimulation")
+    sim_env_dict["PlatformFleetSimulation"] = ("src.PlatformFleetSimulation", "PlatformFleetSimulation")
     # add development content
     if dev_content is not None:
         dev_sim_env_dict = dev_content.add_dev_simulation_environments()
@@ -67,6 +67,7 @@ def get_src_request_modules():
     rm_dict["WaitingTimeSensitiveLinearDeclineRequest"] = ("src.demand.TravelerModels", "WaitingTimeSensitiveLinearDeclineRequest")
     rm_dict["BrokerDecisionRequest"] = ("src.demand.TravelerModels", "BrokerDecisionRequest")
     rm_dict["UserDecisionRequest"] = ("src.demand.TravelerModels", "UserDecisionRequest")
+    rm_dict["UserDecisionUtilityRequest"] = ("src.demand.TravelerModels", "UserDecisionUtilityRequest")
     rm_dict["PreferredOperatorRequest"] = ("src.demand.TravelerModels", "PreferredOperatorRequest")
     # add development content
     if dev_content is not None:
