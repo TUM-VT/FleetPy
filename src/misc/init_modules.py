@@ -87,7 +87,7 @@ def get_src_fleet_control_modules():
     op_dict["RPPFleetControlFullInsertion"] = ("src.fleetctrl.RPPFleetControl", "RPPFleetControlFullInsertion")
     op_dict["RPPFleetControlSingleStopInsertion"] = ("src.fleetctrl.RPPFleetControl", "RPPFleetControlSingleStopInsertion")
     op_dict["RPPFleetControlSingleStopInsertionGuided"] = ("src.fleetctrl.RPPFleetControl", "RPPFleetControlSingleStopInsertionGuided")
-    op_dict["RidePoolingPlatformFleetControl"] = ("dev.fleetctrl.FreelancerFleetControl", "RidePoolingPlatformFleetControl")
+    op_dict["RidePoolingPlatformFleetControl"] = ("src.fleetctrl.FreelancerFleetControl", "RidePoolingPlatformFleetControl")
     # add development content
     if dev_content is not None:
         dev_op_dict = dev_content.add_fleet_control_modules()

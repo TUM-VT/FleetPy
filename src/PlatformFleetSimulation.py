@@ -153,7 +153,7 @@ class PlatformFleetSimulation(FleetSimulationBase):
             driver_id = driver_row["driver_id"]
             veh_type = driver_row["veh_type"]
             possible_operators = driver_row["possible_operators"]
-            possible_operators = [int(op_id) for op_id in possible_operators.split(";")]
+            possible_operators = [[].append(int(op_id)) for op_id in possible_operators.split(";") if op_id != ""]
             start_node = driver_row.get("start_node")
             start_pos = None
             if start_node is not None:
