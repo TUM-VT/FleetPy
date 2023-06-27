@@ -648,7 +648,7 @@ class UserDecisionUtilityRequest(RequestBase):
     def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
         super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
         # columns for heterogeneous parameters from rq_file > scenario parameters for homogeneous parameters
-        self.value_of_time = rq_row[G_RQ_LPT]
+        self.value_of_time = rq_row[G_MC_VOT]
 
     def choose_offer(self, scenario_parameters, simulation_time):
         selected_offer = None
