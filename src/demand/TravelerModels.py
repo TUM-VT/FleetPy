@@ -72,6 +72,11 @@ class RequestBase(metaclass=ABCMeta):
         # store miscellaneous custom values from demand file
         for param, value in rq_row.drop([G_RQ_TIME, G_RQ_ID, G_RQ_ORIGIN, G_RQ_DESTINATION]).iteritems():
             setattr(self, str(param), value)
+            if param == G_AR_LIST_OPERATORS:
+                list_operators = [int(x) for x in value.split(";")]
+                if len(list_operators) == 0:
+                    list_operators = None
+                setattr(self, str(param), list_operators)
         # offer: operator_id > offer class entity
         self.offer = {}
         # decision/output
@@ -646,6 +651,7 @@ class UserDecisionUtilityRequest(RequestBase):
     type = "UserDecisionUtilityRequest"
 
     def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        self.user_list_operators = None
         super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
         # columns for heterogeneous parameters from rq_file > scenario parameters for homogeneous parameters
         self.value_of_time = rq_row[G_MC_VOT]
@@ -655,6 +661,8 @@ class UserDecisionUtilityRequest(RequestBase):
         selected_op = None
         best_overall_util = float("inf")
         for op_id, offer in self.offer.items():
+            if self.user_list_operators is not None and not op_id in self.user_list_operators: # for single/mulit homing
+                continue
             if not offer.service_declined():
                 util = (offer[G_OFFER_WAIT] + offer[G_OFFER_DRIVE]) * self.value_of_time + offer[G_OFFER_FARE] # offer_fare in cents
                 if util < best_overall_util:
