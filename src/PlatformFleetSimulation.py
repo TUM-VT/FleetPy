@@ -153,7 +153,7 @@ class PlatformFleetSimulation(FleetSimulationBase):
             driver_id = driver_row["driver_id"]
             veh_type = driver_row["veh_type"]
             possible_operators = driver_row["possible_operators"]
-            possible_operators = [[].append(int(op_id)) for op_id in possible_operators.split(";") if op_id != ""]
+            possible_operators = [int(op_id) for op_id in possible_operators.split(";") if op_id != ""]
             start_node = driver_row.get("start_node")
             start_pos = None
             if start_node is not None:
@@ -171,6 +171,7 @@ class PlatformFleetSimulation(FleetSimulationBase):
                                               possible_op_ids=possible_operators, operating_intervals=operating_times, driver_id=int(driver_id))
             list_vehicles.append(veh)
             self.sim_vehicles[(freelancer_op_id, vid)] = veh
+            veh_type_list.append( [";".join([str(x) for x in possible_operators]), vid, veh_type])
             
             vid += 1
         # TODO here hard code op input?

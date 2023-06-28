@@ -32,7 +32,7 @@ def get_directory_dict(scenario_parameters):
     parcel_demand_name = scenario_parameters.get(G_PA_DEMAND_NAME, None)
     #
     dirs = {}
-    dirs[G_DIR_MAIN] = os.path.join(MAIN_DIR, "FleetPy") # here is the difference compared to the function in FLeetsimulationBase.py
+    dirs[G_DIR_MAIN] = MAIN_DIR # here is the difference compared to the function in FLeetsimulationBase.py
     dirs[G_DIR_DATA] = os.path.join(dirs[G_DIR_MAIN], "data")
     dirs[G_DIR_OUTPUT] = os.path.join(dirs[G_DIR_MAIN], "studies", study_name, "results", scenario_name)
     dirs[G_DIR_NETWORK] = os.path.join(dirs[G_DIR_DATA], "networks", network_name)
@@ -281,7 +281,11 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
     op_stats_all = read_op_output_file(output_dir, freelancer_op, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
 
     # vehicle type data
+    dir_names[G_DIR_VEH] = os.path.join(dir_names[G_DIR_DATA], "vehicles")
     veh_type_db = create_vehicle_type_db(dir_names[G_DIR_VEH])
+    print(dir_names)
+    print(veh_type_db)
+    exit()
     x = op_stats_all[['operator_id', 'vehicle_id', 'driver_id', 'vehicle_type']].value_counts().reset_index(name='count').drop("count", axis=1)
     veh_type_stats = x
 
