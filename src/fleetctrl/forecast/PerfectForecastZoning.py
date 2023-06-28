@@ -178,3 +178,48 @@ class PerfectForecastZoneSystem(ForecastZoneSystem):
                         except KeyError:
                             return_dict[o_zone] = {d_zone : 1}
         return return_dict
+    
+#########################################################################################################
+
+class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
+    """ the only difference to PerfectForecastZoneSystem is that the sampling process does not return the exact future requests but a
+    sample from the forecast distribution
+    """
+    
+    def draw_future_request_sample(self, t0, t1, request_attribute = None, attribute_value = None, scale = None): #request_type=PlanRequest # TODO # cant import PlanRequest because of circular dependency of files!
+        """ this function returns exact future request attributes  [t0, t1]
+        currently origin is drawn from get_trip_departure_forecasts an destination is drawn form get_trip_arrival_forecast (independently! # TODO #)
+        :param t0: start of forecast time horizon
+        :type t0: float
+        :param t1: end of forecast time horizon
+        :type t1: float
+        :param request_attribute: name of the attribute of the request class. if given, only returns requests with this attribute
+        :type request_attribute: str
+        :param attribute_value: if and request_attribute given: only returns future requests with this attribute value
+        :type attribute_value: type(request_attribute)
+        :param scale: (not for this class) scales forecast distribution by this values
+        :type scale: float
+        :return: list of (time, origin_node, destination_node) of future requests
+        :rtype: list of 3-tuples
+        """ 
+        
+        if request_attribute is not None or attribute_value is not None:
+            raise NotImplementedError("request_attribute and attribute_value not implemented yet for PerfectForecastDistributionZoneSystem")
+        
+        future_poisson_rates = self.get_trip_od_forecasts(t0, t1, scale=scale)
+        
+        future_list = []
+        
+        for o_zone, d_zone_dict in future_poisson_rates.items():
+            for d_zone, poisson_rate in d_zone_dict.items():
+                number_rqs = np.random.poisson(poisson_rate)
+                ts = [np.random.randint(t0, high=t1) for _ in range(number_rqs)]
+                for t in ts:
+                    o_n = self.get_random_node(o_zone)
+                    d_n = self.get_random_node(d_zone)
+                    future_list.append( (t, o_n, d_n) )
+        future_list.sort(key=lambda x:x[0])
+
+        LOG.info("perfect forecast list: {}".format(future_list))
+        return future_list
+    

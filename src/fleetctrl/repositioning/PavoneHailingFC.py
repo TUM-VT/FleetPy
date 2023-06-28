@@ -55,6 +55,10 @@ class PavoneHailingRepositioningFC(RepositioningBase):
             from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastZoneSystem
             LOG.info("load perfect zonesystem")
             return PerfectForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
+        elif fc_type is not None and fc_type == "perfect_dist": # doesnt make a difference compared to previous one
+            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastDistributionZoneSystem
+            LOG.info("load perfect zonesystem")
+            return PerfectForecastDistributionZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
         elif fc_type is not None and fc_type == "myopic":
             from src.fleetctrl.forecast.MyopicForecastZoneSystem import MyopicForecastZoneSystem
             LOG.info("load myopic zonesystem")
