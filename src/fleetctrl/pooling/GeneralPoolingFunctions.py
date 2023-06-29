@@ -1,3 +1,6 @@
+import logging
+LOG = logging.getLogger(__name__)
+
 
 def checkRRcomptibility(plan_rq_1, plan_rq_2, routing_engine, constant_boarding_time, dynamic_boarding_time = 0):
     """This method checks the compatibility of the origins and destinations of two requests. Independent of any vehicle availability, many
@@ -34,8 +37,7 @@ def checkRRcomptibilityInOrder(plan_rq_1, plan_rq_2, routing_engine, constant_bo
 
     # TODO: implement dynamic boarding time!
     if dynamic_boarding_time != 0:
-        print("dynamic boarding time not implemented in RR!")
-        raise NotImplementedError
+        LOG.warning("dynamic boarding time not implemented in RR! -> consider it as 0")
 
     # TODO # waring: not max trip time considered!
 
