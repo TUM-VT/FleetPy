@@ -232,6 +232,28 @@ class RidePoolingPlatformFleetControl(PlatformFleetControlBase):
             output_dict = {G_FCTRL_CT_RQB: dt}
             self._add_to_dynamic_fleetcontrol_output(simulation_time, output_dict)
             
+    def _set_new_assignments(self):
+        """ this function sets the new assignments computed in the alonso-mora-module
+        it has to updated to not querry the alonso-mora-module for all vehicles but only for those that are available
+        """
+        LOG.debug("global opt sols:")
+        for vid, veh_obj in enumerate(self.sim_vehicles):
+            if len(veh_obj.current_op_id_options) == 1 and self.op_id in veh_obj.current_op_id_options: # check if vehicle was part of optimization
+                assigned_plan = self.RPBO_Module.get_optimisation_solution(vid)
+                LOG.debug("vid: {} {}".format(vid, assigned_plan))
+                rids = get_assigned_rids_from_vehplan(assigned_plan)
+                if len(rids) == 0 and len(get_assigned_rids_from_vehplan(self.veh_plans[vid])) == 0:
+                    #LOG.debug("ignore assignment")
+                    self.RPBO_Module.set_assignment(vid, None)
+                    continue
+                if assigned_plan is not None:
+                    #LOG.debug(f"assigning new plan for vid {vid} : {assigned_plan}")
+                    self.assign_vehicle_plan(veh_obj, assigned_plan, self.sim_time, add_arg=True)
+                else:
+                    #LOG.debug(f"removing assignment from {vid}")
+                    assigned_plan = VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])
+                    self.assign_vehicle_plan(veh_obj, assigned_plan, self.sim_time, add_arg=True)
+            
     def user_confirms_booking(self, rid, simulation_time):
         """This method is used to confirm a customer booking. This can trigger some database processes.
 
