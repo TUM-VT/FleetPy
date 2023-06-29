@@ -283,9 +283,7 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
     # vehicle type data
     dir_names[G_DIR_VEH] = os.path.join(dir_names[G_DIR_DATA], "vehicles")
     veh_type_db = create_vehicle_type_db(dir_names[G_DIR_VEH])
-    print(dir_names)
-    print(veh_type_db)
-    exit()
+ 
     x = op_stats_all[['operator_id', 'vehicle_id', 'driver_id', 'vehicle_type']].value_counts().reset_index(name='count').drop("count", axis=1)
     veh_type_stats = x
 
