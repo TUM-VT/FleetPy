@@ -405,3 +405,6 @@ class ArtificialPlanRequest(PlanRequest):
         self.status = G_PRQS_NO_OFFER
         self.expected_pickup_time = None
         self.expected_dropoff_time = None
+        
+        self.priority = None    # to calculate objective
+        
