@@ -311,7 +311,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 self.veh_objs[veh_obj.vid] = veh_obj_struct
         else:
             self.veh_objs = {vid : SimulationVehicleStruct(veh_obj, self.fleetcontrol.veh_plans.get(veh_obj.vid, VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])), sim_time, self.routing_engine)
-                             for vid, veh in veh_objs_to_build.items()}
+                             for vid, veh_obj in veh_objs_to_build.items()}
         if build_from_scratch or new_travel_times:
             self.requests_to_compute = {rid:1 for rid in self.rid_to_consider_for_global_optimisation.keys()}
             self._clearV2RBDataBase()
