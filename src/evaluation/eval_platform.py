@@ -425,7 +425,7 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
                 op_avg_travel_time = op_user_sum_travel_time / op_number_users
             # sum fare
             if G_RQ_FARE in op_users.columns:
-                op_revenue = op_users[G_RQ_FARE].sum() * (1.0 - operator_attributes.get(G_OP_PLAT_COMMISION, 0.0))
+                op_revenue = op_users[G_RQ_FARE].sum() * operator_attributes.get(G_OP_PLAT_COMMISION, 0.0)
             # avg waiting time
             if G_RQ_PU in op_users.columns and G_RQ_TIME in op_users.columns:
                 op_users["wait time"] = op_users[G_RQ_PU] - op_users[G_RQ_TIME]
