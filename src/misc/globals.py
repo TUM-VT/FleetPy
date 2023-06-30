@@ -269,6 +269,11 @@ G_OP_PA_ASSTH = "op_parcel_assignment_threshold"
 G_OP_PA_OBASS = "op_parcel_passenger_ob_assignment"
 G_OP_PA_REDEL = "op_parcel_remaining_delivery_time"
 
+# ML parameters
+G_ML_PREDICTION = 'use_machine_learning_prediction'
+G_N_RETRIES = 'n_retries'
+G_SAVE_FLEET_STATUS = 'save_fleet_status'
+
 # -------------------------------------------------------------------------------------------------------------------- #
 # Charging Stations/Depots
 # ------------------------

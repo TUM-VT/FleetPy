@@ -23,13 +23,13 @@ from pyproj import Transformer
 
 # src imports
 # -----------
-from FleetPy.src.routing.NetworkBase import NetworkBase
-from FleetPy.src.routing.routing_imports.Router import Router
+from src.routing.NetworkBase import NetworkBase
+from src.routing.routing_imports.Router import Router
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------
-from FleetPy.src.misc.globals import *
+from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
 # import os

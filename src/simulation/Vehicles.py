@@ -151,7 +151,8 @@ class SimulationVehicle:
 
     def return_current_state(self, str_pos, str_l_dest, str_num_stops, str_pax, str_start_start, str_end_start,
                              str_end_end, str_cl_remaining_time, str_n_assigned_route, rid=None, rq_object=None):
-        '''
+        """
+        Hailing
         Method that returns the current position, the last destination, the number of planned stops, the number of
         passengers, the distance between current vehicle position and origin of a request, the distance between last
         destination and origin of a request and the distance between last destination and destination of a request for
@@ -167,7 +168,7 @@ class SimulationVehicle:
         :param str_end_end: string/key to distance last destination (car) destination (request)
 
         :return: dict of vehicle ids with corresponding current position
-        '''
+        """
         current_state_dict = {G_V_OP_ID:self.op_id, G_V_VID:self.vid, str_pos: self.pos}
 
         if not rid == None and not rq_object == None:
@@ -224,7 +225,7 @@ class SimulationVehicle:
 
         dict_rq[G_V_OP_ID].append(self.op_id)
         dict_rq[G_V_VID].append(self.vid)
-        dict_rq[str_pos].append(self.pos)
+        dict_rq[str_pos].append(int(self.pos[0]))
 
         dict_rq[str_num_stops].append(len(self.assigned_route))
         dict_rq[str_pax].append(self.get_nr_pax_without_currently_boarding())
@@ -234,15 +235,15 @@ class SimulationVehicle:
             _, remaining_time, _ = self.routing_engine.return_travel_costs_1to1(self.pos,
                                                                                 self.assigned_route[0].destination_pos)
             dict_rq[str_cl_remaining_time].append(remaining_time)
-            dict_rq[str_l_dest].append(self.assigned_route[-1].destination_pos)
+            dict_rq[str_l_dest].append(int(self.assigned_route[-1].destination_pos[0]))
             # dict_rq[str_l_dest] = [route.destination_pos for route in self.assigned_route]
         else:
             dict_rq[str_cl_remaining_time].append(0)
-            dict_rq[str_l_dest].append(self.pos)
+            dict_rq[str_l_dest].append(int(self.pos[0]))
 
         return dict_rq
 
-    def return_current_vehicle_state_request(self,str_start_start, str_end_start, str_end_end, rid, rq_object, dict_rq):
+    def return_current_vehicle_state_request(self, str_start_start, str_end_start, str_end_end, rid, rq_object, dict_rq):
         """ Return information about vehicle in regard to specific request """
 
         dict_rq[G_RQ_ID].append(rid)
