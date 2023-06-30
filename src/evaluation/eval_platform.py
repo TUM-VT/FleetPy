@@ -543,7 +543,7 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
                 veh_co2 = co2_per_kWh * veh_kWh
                 veh_fix_costs = np.rint(scenario_parameters.get(G_OP_SHARE_FC, 1.0) * vtype_data[G_VTYPE_FIX_COST])
                 veh_var_costs = np.rint(vtype_data[G_VTYPE_DIST_COST] * veh_km)
-                revenue = op_users[op_users[G_V_VID] == vid][G_RQ_FARE].sum() * operator_attributes.get(G_OP_PLAT_COMMISION, 0.0)
+                revenue = op_users[op_users[G_V_VID] == vid][G_RQ_FARE].sum() * (1 - operator_attributes.get(G_OP_PLAT_COMMISION, 0.0))
                 # TODO # after ISTTT: idle times
                 all_vid_dict[vid] = {"type":vtype_data[G_VTYPE_NAME], "total km":veh_km, "total kWh": veh_kWh,
                                     "total CO2 [g]": veh_co2, "fix costs": veh_fix_costs,
