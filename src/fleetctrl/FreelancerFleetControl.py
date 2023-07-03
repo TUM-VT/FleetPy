@@ -19,6 +19,7 @@ from src.simulation.Offers import TravellerOffer
 from src.fleetctrl.pooling.GeneralPoolingFunctions import get_assigned_rids_from_vehplan
 from src.misc.globals import *
 from src.fleetctrl.pooling.immediate.insertion import insert_prq_in_selected_veh_list
+from src.fleetctrl.pooling.immediate.SelectRV import filter_directionality, filter_least_number_tasks
 
 from src.simulation.FreelancerSimulationVehicle import FreelancerSimulationVehicle
 
@@ -155,9 +156,21 @@ class RidePoolingPlatformFleetControl(PlatformFleetControlBase):
             self.RPBO_Module.add_new_request(rid_struct, prq, consider_for_global_optimisation=False)
         else:
             self.RPBO_Module.add_new_request(rid_struct, prq)
-            
+
+            # check for use of heuristics
+            number_directionality = self.rv_heuristics.get(G_RVH_DIR, 0)
+            number_least_load = self.rv_heuristics.get(G_RVH_LWL, 0)
+            sum_rvh_selection = number_directionality + number_least_load
+            if sum_rvh_selection > 0:
+                # this is also used so that travel_costs_Xto1 is forced to sort by cost
+                max_return_routes = self.rv_heuristics.get(G_RH_I_NWS, 1000)
+            else:
+                max_return_routes = None
+
             # backwards Dijkstra
-            rv_routing = self.routing_engine.return_travel_costs_Xto1(self._pos_to_available_vehicles.keys(), o_pos, max_cost_value=prq.t_pu_latest - sim_time)
+            rv_routing = self.routing_engine.return_travel_costs_Xto1(self._pos_to_available_vehicles.keys(), o_pos,
+                                                                      max_cost_value=prq.t_pu_latest - sim_time,
+                                                                      max_routes=max_return_routes)
             selected_veh_list = []
             for r in rv_routing:
                 pos = r[0]
@@ -165,7 +178,23 @@ class RidePoolingPlatformFleetControl(PlatformFleetControlBase):
                     veh = self._available_vehicles[vid]
                     if self.op_id in veh.current_op_id_options:
                         selected_veh_list.append(veh)
-            
+
+            # pre-insertion vehicle-selection heuristics from insertion.py (immediate_insertion_with_heuristics())
+            if sum_rvh_selection > 0:
+                selected_veh = set([])
+                #   a) directionality of currently assigned route compared to vector of prq origin-destination
+                if number_directionality > 0:
+                    veh_dir = filter_directionality(prq, selected_veh_list, number_directionality, self.routing_engine,
+                                                    selected_veh)
+                    for veh_obj in veh_dir:
+                        selected_veh.add(veh_obj)
+                #   b) selection of vehicles with least workload
+                if number_least_load > 0:
+                    veh_ll = filter_least_number_tasks(selected_veh_list, number_least_load, selected_veh)
+                    for veh_obj in veh_ll:
+                        selected_veh.add(veh_obj)
+                selected_veh_list = list(selected_veh)
+
             list_tuples = insert_prq_in_selected_veh_list(selected_veh_list, self.veh_plans, prq, self.vr_ctrl_f, self.routing_engine, self.rq_dict, sim_time, self.const_bt, self.add_bt)
             offered = False
             if len(list_tuples) > 0:
