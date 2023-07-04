@@ -175,7 +175,13 @@ class PlatformFleetSimulation(FleetSimulationBase):
             
             vid += 1
         # TODO here hard code op input?
-        freelancer_op = FreelancerFleetControl(freelancer_op_id, {G_OP_VR_CTRL_F : {"func_key" : "total_travel_times"}, "op_reoptimisation_timestep" : 900}, list_vehicles, self.routing_engine, self.zones,
+        freelancer_attributes = {G_OP_VR_CTRL_F: {"func_key" : "total_travel_times"}, G_RA_REOPT_TS: 900}
+        fl_repo_m = self.scenario_parameters.get(G_FL_REPO_M)
+        if fl_repo_m:
+            freelancer_attributes[G_OP_REPO_M] = fl_repo_m
+            freelancer_attributes[G_OP_REPO_TS] = 60
+        #
+        freelancer_op = FreelancerFleetControl(freelancer_op_id, freelancer_attributes, list_vehicles, self.routing_engine, self.zones,
                                     self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(freelancer_op_id, None), list(self.charging_operator_dict["pub"].values()))
         
         for op_id in range(self.n_op):

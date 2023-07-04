@@ -245,6 +245,9 @@ G_OP_MIN_SOC_CHARGE_PUBLIC = "op_min_soc_public_station"    # Minimum soc limit 
 G_OP_MAX_DURATION_HOURS = "op_max_charging_duration_hours"           # List of pairs (start_time, end_time) when the max durations are applied
 G_OP_STATIONS_MAX_DURATIONS = "op_max_charging_durations"            # max allowed charging durations at stations corresponding to applicable hours in G_OP_MAX_DURATION_HOURS
 
+# freelancers
+G_FL_REPO_M = "fl_repo_method"
+
 # Broker / Multi-Operator parameters
 G_MULTIOP_PREF_OP_RSEED = "multiop_preferred_operator_random_seed"
 G_MULTIOP_PREF_OP_PROB = "op_multiop_preferred_operator_probabilities"
