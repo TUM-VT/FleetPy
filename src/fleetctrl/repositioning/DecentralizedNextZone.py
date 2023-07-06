@@ -63,7 +63,7 @@ class DecentralizedNextZone(RepositioningBase):
         """
         self.sim_time = sim_time
         list_veh_with_changes = []
-        t0, t1 = 0, 0  # TODO # think about reasonable times!
+        t0, t1 = 32400, 61200  # TODO # think about way to not hard-code this.
         demand_fc_dict = self._get_demand_forecasts(t0, t1)
         cplan_arrival_idle_dict = self._get_current_veh_plan_arrivals_and_repo_idle_vehicles(t0, t1)
         for origin_zone_id, tmp_dict in cplan_arrival_idle_dict.items():
