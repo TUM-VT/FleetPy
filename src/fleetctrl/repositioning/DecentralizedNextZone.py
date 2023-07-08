@@ -32,8 +32,10 @@ INPUT_PARAMETERS_DecentralizedChoiceModel = {
 
 
 def func(x, sum_x):
-    return np.exp(x)
-
+    if sum_x != 0:
+        return x/sum_x
+    else:
+        return 1
 
 class DecentralizedNextZone(RepositioningBase):
     """ This class implements a pro-active decentralized repositioning strategy that could be applied

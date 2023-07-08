@@ -16,5 +16,8 @@ def draw_from_distribution_dict(distribution, nr_draws=1):
             return k
         choices.append(k)
         probabilities.append(v/normalize)
-    return np.random.choice(choices, p=probabilities, size=nr_draws)
+    if nr_draws == 1:
+        return np.random.choice(choices, p=probabilities)
+    else:
+        return np.random.choice(choices, p=probabilities, size=nr_draws)
 
