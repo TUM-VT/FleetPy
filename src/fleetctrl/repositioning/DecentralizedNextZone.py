@@ -67,22 +67,26 @@ class DecentralizedNextZone(RepositioningBase):
         list_veh_with_changes = []
         t0, t1 = 32400, 61200  # TODO # think about way to not hard-code this.
         demand_fc_dict = self._get_demand_forecasts(t0, t1)
-        cplan_arrival_idle_dict = self._get_current_veh_plan_arrivals_and_repo_idle_vehicles(t0, t1)
-        for origin_zone_id, tmp_dict in cplan_arrival_idle_dict.items():
-            list_idle_veh_obj = tmp_dict.get(2)
+        dict_idle_vehicles = self._get_idle_freelancers()
+        for origin_zone_id, list_idle_veh_obj in dict_idle_vehicles.items():
             nr_idle_veh_in_zone = len(list_idle_veh_obj)
             destination_utilities = {}
             destination_utilities[origin_zone_id] = demand_fc_dict.get(origin_zone_id, 0)
-            for d_zone_id in self.zone_system.general_info_df[NEIGHBOR_COL].split(";"):
+            zone_info = self.zone_system.general_info_df.loc[origin_zone_id]
+            for d_zone_id_str in zone_info[NEIGHBOR_COL].split(";"):
+                d_zone_id = int(d_zone_id_str)
                 destination_utilities[d_zone_id] = demand_fc_dict.get(d_zone_id, 0)
             sum_demand = sum(destination_utilities.values())
             destination_probs = {k: func(v, sum_demand) for k,v in destination_utilities.items()}
-            list_destinations = draw_from_distribution_dict(destination_probs, nr_idle_veh_in_zone)
+            if nr_idle_veh_in_zone > 1:
+                list_destinations = draw_from_distribution_dict(destination_probs, nr_idle_veh_in_zone)
+            else:
+                list_destinations = [draw_from_distribution_dict(destination_probs, nr_idle_veh_in_zone)]
             # draw list_idle_veh_obj
             for veh_obj, destination_zone_id in zip(list_idle_veh_obj, list_destinations):
                 if origin_zone_id != destination_zone_id:
                     # choose random node -> destination_node = -1
-                    self._od_to_veh_plan_assignment(self, sim_time, origin_zone_id, destination_zone_id, [veh_obj],
+                    self._od_to_veh_plan_assignment(sim_time, origin_zone_id, destination_zone_id, [veh_obj],
                                                     lock=False, destination_node=-1)
                     list_veh_with_changes.append(veh_obj.vid)
         return list_veh_with_changes

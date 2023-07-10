@@ -185,6 +185,19 @@ class RepositioningBase(ABC):
                 [nr_idle, nr_normal_incoming, nr_repo_incoming]
         return zone_dict
 
+    def _get_idle_freelancers(self):
+        """This method returns a dictionary with the currently idle vehicle objects per zone."""
+        zone_dict = {}
+        for zone_id in self.zone_system.get_all_zones():
+            zone_dict[zone_id] = []
+        for vid in self.fleetctrl.veh_plans.keys():
+            veh_obj = self.fleetctrl.sim_vehicles[vid]
+            if not veh_obj.assigned_route:
+                zone_id = self.zone_system.get_zone_from_pos(veh_obj.pos)
+                if zone_id >= 0:
+                    zone_dict[zone_id].append(veh_obj)
+        return zone_dict
+
     def _get_od_zone_travel_info(self, sim_time, o_zone_id, d_zone_id):
         """This method returns OD travel times on zone level.
 
@@ -220,7 +233,8 @@ class RepositioningBase(ABC):
         :param destination_zone_id: destination zone id
         :param list_veh_to_consider: list of (idle/repositioning) simulation vehicle objects
         :param destination_node: if destination node is given, it will be prioritized over picking a random node in
-                                    the destination zone
+                                    the destination zone | if None is selected, a random centroid node is selected |
+                                    if a negative number is given, it will use a random node in the zone
         :param lock: indicates if vehplan should be locked
         :return: list_veh_objs with new repositioning assignments
         """
@@ -228,11 +242,12 @@ class RepositioningBase(ABC):
         random.seed(sim_time)
         veh_obj = random.choice(list_veh_to_consider)
         veh_plan = self.fleetctrl.veh_plans[veh_obj.vid]
-        destination_node = self.zone_system.get_random_centroid_node(destination_zone_id)
+        if destination_node is None:
+            destination_node = self.zone_system.get_random_centroid_node(destination_zone_id)
+        elif destination_node < 0:
+            destination_node = self.zone_system.get_random_node(destination_zone_id)
         LOG.debug("repositioning {} to zone {} with centroid {}".format(veh_obj.vid, destination_zone_id,
                                                                         destination_node))
-        if destination_node < 0:
-            destination_node = self.zone_system.get_random_node(destination_zone_id)
         ps = RoutingTargetPlanStop((destination_node, None, None), locked=lock, planstop_state=G_PLANSTOP_STATES.REPO_TARGET)
         veh_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
         self.fleetctrl.assign_vehicle_plan(veh_obj, veh_plan, sim_time)

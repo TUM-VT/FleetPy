@@ -179,7 +179,8 @@ class PlatformFleetSimulation(FleetSimulationBase):
         fl_repo_m = self.scenario_parameters.get(G_FL_REPO_M)
         if fl_repo_m:
             freelancer_attributes[G_OP_REPO_M] = fl_repo_m
-            freelancer_attributes[G_OP_REPO_TS] = 60
+            freelancer_attributes[G_OP_REPO_TS] = 900
+            freelancer_attributes[G_OP_REPO_TH_DEF] = f"0;{self.scenario_parameters[G_SIM_END_TIME]}"
         #
         freelancer_op = FreelancerFleetControl(freelancer_op_id, freelancer_attributes, list_vehicles, self.routing_engine, self.zones,
                                     self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(freelancer_op_id, None), list(self.charging_operator_dict["pub"].values()))
