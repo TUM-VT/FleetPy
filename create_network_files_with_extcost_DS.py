@@ -45,24 +45,24 @@ for n in vehicles_df.columns[0:]:
 
     #create network files
 
-    target_path_name = os.path.join("data", "networks", f'example_network_{n}', "base")
+    target_path_name = os.path.join("data", "networks", f'munich_city_network_{n}', "base")
     os.makedirs(target_path_name)
-    source_path_name1 = os.path.join("data", "networks", "example_network", "base", "crs.info")
-    shutil.copy(source_path_name1, target_path_name)
+    # source_path_name1 = os.path.join("data", "networks", "munich_city_network", "base", "crs.info")
+    # shutil.copy(source_path_name1, target_path_name)
 
-    source_path_name2 = os.path.join("data", "networks", "example_network", "base", "edges.csv")
+    source_path_name2 = os.path.join("data", "networks", "munich_city_network", "base", "edges.csv")
     shutil.copy(source_path_name2, target_path_name)
 
-    source_path_name3 = os.path.join("data", "networks", "example_network", "base", "edges_all_infos.geojson")
+    source_path_name3 = os.path.join("data", "networks", "munich_city_network", "base", "edges_all_infos.geojson")
     shutil.copy(source_path_name3, target_path_name)
 
-    source_path_name4 = os.path.join("data", "networks", "example_network", "base", "nodes.csv")
+    source_path_name4 = os.path.join("data", "networks", "munich_city_network", "base", "nodes.csv")
     shutil.copy(source_path_name4, target_path_name)
 
-    source_path_name5 = os.path.join("data", "networks", "example_network", "base", "nodes_all_infos.geojson")
+    source_path_name5 = os.path.join("data", "networks", "munich_city_network", "base", "nodes_all_infos.geojson")
     shutil.copy(source_path_name5, target_path_name)
 
-    change_path = os.path.join("data", "networks", f'example_network_{n}', "base", "edges.csv")
+    change_path = os.path.join("data", "networks", f'munich_city_network_{n}', "base", "edges.csv")
 
     edges_df = pd.read_csv(change_path)
 
@@ -93,8 +93,8 @@ for n in vehicles_df.columns[0:]:
 
             noise_costs = noise_ref * p_other * (money_noise / noise_money_ref) * 0.001 * row["distance"]
 
-        land_use_costs = land_use_ref * (vehicles_df.loc['A_base [m^2]', n] / A_base_ref) * 0.001 * row["distance"]
-        congestion_costs = congestion_ref * (vehicles_df.loc['l [m]', n] / l_ref) * 0.001 * row["distance"]
+        land_use_costs = land_use_ref * 0.001 * row["distance"]  #* (vehicles_df.loc['A_base [m^2]', n] / A_base_ref)
+        congestion_costs = congestion_ref * 0.001 * row["distance"] #* (vehicles_df.loc['l [m]', n] / l_ref)
 
         p_fat_v = 0.0011 * np.square(row["distance"]/row["travel_time"]*3.6) - 0.0392 * (row["distance"]/row["travel_time"]*3.6) + 0.1852
         p_ser_v = 0.1 * (row["distance"] / row["travel_time"]*3.6) + 5.5

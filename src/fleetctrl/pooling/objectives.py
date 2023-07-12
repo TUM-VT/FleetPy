@@ -45,6 +45,27 @@ def return_pooling_objective_function(vr_control_func_dict):
                     last_pos = pos
             return sum_dist - assignment_reward
 
+    elif func_key == "total_customized_travel_costs":
+        def control_f(simulation_time, veh_obj, veh_plan, rq_dict, routing_engine):
+            """This function evaluates the customized travel costs according to a vehicle plan.
+
+            :param simulation_time: current simulation time
+            :param veh_obj: simulation vehicle object
+            :param veh_plan: vehicle plan in question
+            :param rq_dict: rq -> Plan request dictionary
+            :param routing_engine: for routing queries
+            :return: objective function value
+            """
+            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            sum_cost = 0
+            last_pos = veh_obj.pos
+            for ps in veh_plan.list_plan_stops:
+                pos = ps.get_pos()
+                if pos != last_pos:
+                    sum_cost += routing_engine.return_travel_costs_1to1(last_pos, pos)[0]
+                    last_pos = pos
+            return sum_cost - assignment_reward
+
     elif func_key == "total_system_time":
         def control_f(simulation_time, veh_obj, veh_plan, rq_dict, routing_engine):
             """This function evaluates the total spent time of a vehicle according to a vehicle plan.

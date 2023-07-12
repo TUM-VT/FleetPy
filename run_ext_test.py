@@ -212,23 +212,23 @@ if __name__ == "__main__":
         # all_scenario_assert_dict = {0: {"number users": 88}}
         # check_assertions(list_results, all_scenario_assert_dict)
 
-        # #with external cost routing
+        # #with external cost routing and external cost pooling
 
         log_level = "info"
-        cc = os.path.join(scs_path, "constant_config_ir_ext.csv")
-        sc = os.path.join(scs_path, "ext_test_w_ext_1.csv")
-        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
+        cc = os.path.join(scs_path, "constant_config_ir_ext_extpool.csv")
+        sc = os.path.join(scs_path, "ext_test_w_ext_extpool_1.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=4)
         list_results = read_outputs_for_comparison(cc, sc)
         all_scenario_assert_dict = {0: {"number users": 88}}
         check_assertions(list_results, all_scenario_assert_dict)
 
 
-        # #without external cost routing
+        # #without external cost routing but with external cost pooling
 
         log_level = "info"
-        cc = os.path.join(scs_path, "constant_config_ir.csv")
-        sc = os.path.join(scs_path, "ext_test_wo_ext_1.csv")
-        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
+        cc = os.path.join(scs_path, "constant_config_ir_extpool.csv")
+        sc = os.path.join(scs_path, "ext_test_wo_ext_extpool_1.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=4)
         list_results = read_outputs_for_comparison(cc, sc)
         all_scenario_assert_dict = {0: {"number users": 88}}
         check_assertions(list_results, all_scenario_assert_dict)

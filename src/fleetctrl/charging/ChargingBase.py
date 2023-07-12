@@ -30,7 +30,7 @@ class ChargingBase(ABC):
         self.solver_key = solver
         self.n_stations_to_query = operator_attributes.get(G_OP_CH_N_STATION_QUERY, 1)
         self.n_offers_p_station = operator_attributes.get(G_OP_CH_N_OFFER_P_ST_QUERY, 1)
-        self.target_soc = 1.0   #TODO
+        self.target_soc = 0.8   #TODO
         # children classes:
         # - check of additionally required attributes from operator_attributes
         # - save these as class attributes
