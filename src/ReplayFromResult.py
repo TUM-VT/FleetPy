@@ -351,7 +351,7 @@ class Replay(VehicleMovementSimulation):
         # ----------------
         print(f"... loading scenario information")
         scenario_parameters, list_operator_attributes, _ = load_scenario_inputs(output_dir)
-        dir_names = get_directory_dict(scenario_parameters)
+        dir_names = get_directory_dict(scenario_parameters, list_operator_attributes)
         replay_mode = scenario_parameters[G_SIM_REPLAY_FLAG]
         if not replay_mode:
             raise AssertionError("Original simulation was not saved in replay mode!")

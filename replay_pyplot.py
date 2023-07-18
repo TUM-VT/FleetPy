@@ -36,6 +36,8 @@ if __name__ == "__main__":
         main(sys.argv[1], sys.argv[2])
     elif len(sys.argv) == 4:
         main(sys.argv[1], sys.argv[2], start_time_in_seconds = sys.argv[3])
+    elif len(sys.argv) == 5:
+        main(sys.argv[1], sys.argv[2], start_time_in_seconds = sys.argv[3], end_time_in_seconds= sys.argv[4])
     else:
         print(main.__doc__)
         raise IOError("Incorrect number of arguments!")
