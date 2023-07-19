@@ -215,8 +215,12 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
                 number_rqs = np.random.poisson(poisson_rate)
                 ts = [np.random.randint(t0, high=t1) for _ in range(number_rqs)]
                 for t in ts:
-                    o_n = self.get_random_node(o_zone)
-                    d_n = self.get_random_node(d_zone)
+                    if self._zone_to_sampling_nodes is None:
+                        o_n = self.get_random_node(o_zone)
+                        d_n = self.get_random_node(d_zone)
+                    else:
+                        o_n = np.random.choice(self._zone_to_sampling_nodes[o_zone])
+                        d_n = np.random.choice(self._zone_to_sampling_nodes[d_zone])
                     future_list.append( (t, o_n, d_n) )
         future_list.sort(key=lambda x:x[0])
 

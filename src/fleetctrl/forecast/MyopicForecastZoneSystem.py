@@ -179,8 +179,12 @@ class MyopicForecastZoneSystem(ForecastZoneSystem):
                 n_rqs = np.random.poisson(lam=val)
                 ts = [np.random.randint(t0, high=t1) for _ in range(n_rqs)]
                 for t in ts:
-                    o_n = self.get_random_node(o_z)
-                    d_n = self.get_random_node(d_z)
+                    if self._zone_to_sampling_nodes is None:
+                        o_n = self.get_random_node(o_z)
+                        d_n = self.get_random_node(d_z)
+                    else:
+                        o_n = np.random.choice(self._zone_to_sampling_nodes[o_z])
+                        d_n = np.random.choice(self._zone_to_sampling_nodes[d_z])
                     future_list.append( (t, o_n, d_n) )
         future_list.sort(key=lambda x:x[0])
         LOG.info("forecast list: {}".format(future_list))

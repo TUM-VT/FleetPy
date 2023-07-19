@@ -253,9 +253,13 @@ class AggForecastZoneSystem(ForecastZoneSystem):
                 break
             o_zone = np.random.choice(dep_zones, p=dep_prob)
             d_zone = np.random.choice(arr_zones, p=arr_prob)
-            o_node = self.get_random_centroid_node(o_zone)
-            d_node = self.get_random_centroid_node(d_zone)
-            future_list.append( (int(tc), o_node, d_node) )
+            if self._zone_to_sampling_nodes is None:
+                o_n = self.get_random_node(o_zone)
+                d_n = self.get_random_node(d_zone)
+            else:
+                o_n = np.random.choice(self._zone_to_sampling_nodes[o_zone])
+                d_n = np.random.choice(self._zone_to_sampling_nodes[d_zone])
+            future_list.append( (int(tc), o_n, d_n) )
         #LOG.warning(f"future set: {len(future_list)} | {future_list}")
 
         return future_list
