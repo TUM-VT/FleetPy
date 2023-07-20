@@ -73,7 +73,10 @@ class RequestBase(metaclass=ABCMeta):
         for param, value in rq_row.drop([G_RQ_TIME, G_RQ_ID, G_RQ_ORIGIN, G_RQ_DESTINATION]).iteritems():
             setattr(self, str(param), value)
             if param == G_AR_LIST_OPERATORS:
-                list_operators = [int(x) for x in value.split(";")]
+                if type(value) == str:
+                    list_operators = [int(x) for x in value.split(";")]
+                else:
+                    list_operators = [int(value)]
                 if len(list_operators) == 0:
                     list_operators = None
                 setattr(self, str(param), list_operators)
