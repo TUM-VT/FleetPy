@@ -93,6 +93,58 @@ def read_user_output_file(output_dir, evaluation_start_time = None, evaluation_e
         user_stats = user_stats[user_stats[G_RQ_TIME] < evaluation_end_time]
     return user_stats
 
+def return_empty_result_dict():
+    result_dict = {"number users": 0,
+                    "number travelers": 0,
+                    "modal split": 0,
+                    "modal split rq": 0,
+                    "reservation users": 0,
+                    "reservation pax" : 0,
+                    "served reservation users [%]": 0,
+                    "served reservation pax [%]": 0,
+                    "online users" : 0,
+                    "online pax" : 0,
+                    "served online users [%]": 0,
+                    "served online pax [%]": 0,
+                    r'% created offers': 0,
+                    "utility" : 0}
+    result_dict["pt revenue"] = 0
+    result_dict["total intermodal MoD subsidy"] = 0
+    result_dict["travel time"] = 0
+    result_dict["travel distance"] = 0
+    result_dict["waiting time"] = 0
+    result_dict["waiting time from ept"] = 0
+    result_dict["waiting time (median)"] = 0
+    result_dict["waiting time (90% quantile)"] = 0
+    result_dict["detour time"] = 0
+    result_dict["rel detour"] = 0
+    result_dict[r"% fleet utilization"] = 0
+    result_dict["rides per veh rev hours"] = 0
+    result_dict["rides per veh rev hours rq"] = 0
+    result_dict["total vkm"] = 0
+    result_dict["occupancy"] = 0
+    #result_dict["occupancy rq"] = op_distance_avg_rq
+    result_dict[r"% empty vkm"] = 0
+    result_dict[r"% repositioning vkm"] = 0
+    result_dict["customer direct distance [km]"] = 0
+    result_dict["saved distance [%]"] = 0
+    result_dict["trip distance per fleet distance"] = 0
+    result_dict["trip distance per fleet distance (no reloc)"] = 0
+    result_dict["avg driving velocity [km/h]"] = 0
+    result_dict["avg trip velocity [km/h]"] = 0
+    result_dict["vehicle revenue hours [Fzg h]"] = 0
+    result_dict["total toll"] = 0
+    result_dict["mod revenue"] = 0
+    result_dict["mod fix costs"] = 0
+    result_dict["mod var costs"] = 0
+    result_dict["total CO2 emissions [t]"] = 0
+    result_dict["total external emission costs"] = 0
+    result_dict["parking cost"] = 0
+    result_dict["toll"] = 0
+    result_dict["customer in vehicle distance"] = 0
+    result_dict["shared rides [%]"] = 0
+    return result_dict
+
 def decode_offer_str(offer_str):
     """ create a dictionary from offer_str in outputfile """
     offer_dict = {}
@@ -215,10 +267,17 @@ def add_user_trip_occupancies_to_stats(output_dir, evaluation_start_time = None,
     if evaluation_end_time is None and scenario_parameters.get(G_EVAL_INT_END) is not None:
         evaluation_end_time = int(scenario_parameters[G_EVAL_INT_END])
 
-    user_stats = read_user_output_file(output_dir, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)      
+    try:
+        user_stats = read_user_output_file(output_dir, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)      
+    except FileNotFoundError:
+        return
     
     freelancer_op = scenario_parameters[G_NR_OPERATORS]
-    op_stats_all = read_op_output_file(output_dir, freelancer_op, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
+    try:
+        op_stats_all = read_op_output_file(output_dir, freelancer_op, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
+    except FileNotFoundError:
+        return
+    
     user_to_occ_stats = {}
     for op_vid, veh_df in op_stats_all.groupby([G_V_OP_ID, G_V_VID]):
         for start_time, end_time, distance, ob_str, boarding_str, alight_str, occ in \
@@ -272,13 +331,20 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
 
     if print_comments:
         print(f"Evaluating {scenario_parameters[G_SCENARIO_NAME]}\nReading user stats ...")
-    user_stats = read_user_output_file(output_dir, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
-    if print_comments:
-        print(f"\t shape of user stats: {user_stats.shape}")
+    try:
+        user_stats = read_user_output_file(output_dir, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
+        if print_comments:
+            print(f"\t shape of user stats: {user_stats.shape}")
+    except FileNotFoundError:
+        print("Could not find user stats file!")
+        user_stats = None
         
-    
     freelancer_op = scenario_parameters[G_NR_OPERATORS]
-    op_stats_all = read_op_output_file(output_dir, freelancer_op, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
+    try:
+        op_stats_all = read_op_output_file(output_dir, freelancer_op, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
+    except FileNotFoundError:
+        print("Could not find operator stats file!")
+        op_stats_all = None
 
     # vehicle type data
     dir_names[G_DIR_VEH] = os.path.join(dir_names[G_DIR_DATA], "vehicles")
@@ -292,29 +358,35 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
 
 
     # add passengers columns where necessary
-    if G_RQ_ID not in user_stats.columns:
-        user_stats[G_RQ_ID] = 1
+    if user_stats is not None:
+        if G_RQ_ID not in user_stats.columns:
+            user_stats[G_RQ_ID] = 1
 
-    row_id_to_offer_dict = {}    # user_stats_row_id -> op_id -> offer
-    op_id_to_offer_dict = {}    # op_id -> user_stats_row_id -> offer
-    active_offer_parameters = {}
-    for key, entries in user_stats.iterrows():
-        row_id_to_offer_dict[key] = entries[G_RQ_PAX]
-        offer_entry = entries[G_RQ_OFFERS]
-        offer = decode_offer_str(offer_entry)
-        row_id_to_offer_dict[key] = offer
-        for op_id, op_offer in offer.items():
-            try:
-                op_id_to_offer_dict[op_id][key] = op_offer
-            except KeyError:
-                op_id_to_offer_dict[op_id] = {key : op_offer}
-            for offer_param in op_offer.keys():
-                active_offer_parameters[offer_param] = 1
-    
-    number_users = user_stats.shape[0]
-    number_total_travelers = user_stats[G_RQ_PAX].sum()
+        row_id_to_offer_dict = {}    # user_stats_row_id -> op_id -> offer
+        op_id_to_offer_dict = {}    # op_id -> user_stats_row_id -> offer
+        active_offer_parameters = {}
+        for key, entries in user_stats.iterrows():
+            row_id_to_offer_dict[key] = entries[G_RQ_PAX]
+            offer_entry = entries[G_RQ_OFFERS]
+            offer = decode_offer_str(offer_entry)
+            row_id_to_offer_dict[key] = offer
+            for op_id, op_offer in offer.items():
+                try:
+                    op_id_to_offer_dict[op_id][key] = op_offer
+                except KeyError:
+                    op_id_to_offer_dict[op_id] = {key : op_offer}
+                for offer_param in op_offer.keys():
+                    active_offer_parameters[offer_param] = 1
+        
+        number_users = user_stats.shape[0]
+        number_total_travelers = user_stats[G_RQ_PAX].sum()
 
     for op_id in range(scenario_parameters[G_NR_OPERATORS] + 1):
+        if op_stats is None or user_stats is None:
+            result_dict = return_empty_result_dict()
+            result_dict["operator_id"] = op_id
+            result_dict_list.append(result_dict)
+            continue
         op_users = user_stats[user_stats[G_RQ_OP_ID] == op_id]
         op_stats = op_stats_all[op_stats_all[G_RQ_OP_ID] == op_id].copy()
         
