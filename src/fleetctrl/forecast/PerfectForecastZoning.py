@@ -127,6 +127,8 @@ class PerfectForecastZoneSystem(ForecastZoneSystem):
         :return: list of (time, origin_node, destination_node) of future requests
         :rtype: list of 3-tuples
         """ 
+        if scale is not None:
+            LOG.warning("scale is not used for perfect forecast and sampling!")
         future_list = []
         if request_attribute is None and attribute_value is None:
             for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
@@ -163,6 +165,8 @@ class PerfectForecastZoneSystem(ForecastZoneSystem):
         :return: {}: zone -> zone -> forecast of trips
         :rtype: dict
         """
+        if scale is None:
+            scale = 1.0
         return_dict = {}
         for t in range(t0, t1):
             future_rqs = self.demand.future_requests.get(t, {})
@@ -171,12 +175,12 @@ class PerfectForecastZoneSystem(ForecastZoneSystem):
                 d_zone = self.get_zone_from_node(rq.d_node)
                 if o_zone >= 0 and d_zone >= 0:
                     try:
-                        return_dict[o_zone][d_zone] += 1
+                        return_dict[o_zone][d_zone] += 1 * scale
                     except KeyError:
                         try:
-                            return_dict[o_zone][d_zone] = 1
+                            return_dict[o_zone][d_zone] = 1 * scale
                         except KeyError:
-                            return_dict[o_zone] = {d_zone : 1}
+                            return_dict[o_zone] = {d_zone : 1 * scale}
         return return_dict
     
 #########################################################################################################
