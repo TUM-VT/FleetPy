@@ -142,7 +142,11 @@ class PlatformFleetSimulation(FleetSimulationBase):
         # assume FreelancerFleetControl is not specified in config (will always be last operator)
         # all vehicles are initialized with all fleetcontrols
         freelancer_driver_file = self.scenario_parameters[G_PLAT_DRIVER_FILE]
-        driver_df = pd.read_csv(os.path.join(self.dir_names[G_DIR_FCTRL], "freelancer_drivers", self.scenario_parameters[G_NETWORK_NAME], freelancer_driver_file))
+        try:
+            driver_df = pd.read_csv(os.path.join(self.dir_names[G_DIR_FCTRL], "freelancer_drivers", self.scenario_parameters[G_NETWORK_NAME], freelancer_driver_file))
+        except pd.errors.EmptyDataError:
+            LOG.warning("empty driver file -> no drivers?")
+            driver_df = pd.DataFrame(columns=["driver_id", "veh_type", "possible_operators"])
         
         freelancer_op_id = self.n_op
         self.op_output = [[] for _ in range(self.n_op + 1)] # shared list among vehicles

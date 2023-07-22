@@ -91,7 +91,11 @@ class Demand:
             raise IOError("No valid traveler type found")
         # read input
         abs_req_f = os.path.join(rq_file_dir, rq_file_name)
-        tmp_df = pd.read_csv(abs_req_f)
+        try:
+            tmp_df = pd.read_csv(abs_req_f)
+        except pd.errors.EmptyDataError:
+            LOG.warning("demand file empty -> no travellers?")
+            tmp_df = pd.DataFrame(columns=[G_RQ_ID, G_RQ_TIME, G_RQ_ORIGIN, G_RQ_DESTINATION])
         number_rq_0 = tmp_df.shape[0]
         future_requests = tmp_df[(tmp_df[G_RQ_TIME] >= start_time) & (tmp_df[G_RQ_TIME] < end_time)]
         number_rq_1 = future_requests.shape[0]
