@@ -41,7 +41,7 @@ class PlatformFleetControlBase(RidePoolingBatchOptimizationFleetControlBase):
         this control provides functionality to check for available drivers + provides correct vehicle plan assignment + checks for driver acceptance
         -> needs FreelancerSimulationVehicle-objects
         """
-        if type(self.sim_vehicles[0]) != FreelancerSimulationVehicle:
+        if len(self.sim_vehicles) > 0 and type(self.sim_vehicles[0]) != FreelancerSimulationVehicle:
             raise EnvironmentError("PlatfromFleetControlBase requires FreelancerSimulationVehicle-Objects!")
         
         self._last_check_for_available_vehicles = None
