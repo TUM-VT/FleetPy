@@ -59,23 +59,30 @@ def read_op_output_file(output_dir, op_id, evaluation_start_time = None, evaluat
     :param evaluation_end_time: if given, all entries starting after this time are discarded
     :return: output dataframe of specific operator
     """
-    op_df = pd.read_csv(os.path.join(output_dir, f"2-{int(op_id)}_op-stats.csv"))
-    if evaluation_start_time is not None:
-        op_df = op_df[op_df[G_VR_LEG_START_TIME] >= evaluation_start_time]
-    if evaluation_end_time is not None:
-        op_df = op_df[op_df[G_VR_LEG_START_TIME] < evaluation_end_time]
-    # test for correct datatypes
-    def convert_str(val):
-        if val != val:
-            return val
-        if type(val) == str:
-            return val
-        else:
-            return str(int(val))
-    test_convert = [G_VR_ALIGHTING_RID, G_VR_BOARDING_RID, G_VR_OB_RID]
-    for col in test_convert:
-        if op_df.dtypes[col] != str:
-            op_df[col] = op_df[col].apply(convert_str)
+    try:
+        op_df = pd.read_csv(os.path.join(output_dir, f"2-{int(op_id)}_op-stats.csv"))
+        if evaluation_start_time is not None:
+            op_df = op_df[op_df[G_VR_LEG_START_TIME] >= evaluation_start_time]
+        if evaluation_end_time is not None:
+            op_df = op_df[op_df[G_VR_LEG_START_TIME] < evaluation_end_time]
+        # test for correct datatypes
+        def convert_str(val):
+            if val != val:
+                return val
+            if type(val) == str:
+                return val
+            else:
+                return str(int(val))
+        test_convert = [G_VR_ALIGHTING_RID, G_VR_BOARDING_RID, G_VR_OB_RID]
+        for col in test_convert:
+            if op_df.dtypes[col] != str:
+                op_df[col] = op_df[col].apply(convert_str)
+    except FileNotFoundError:
+        op_df = pd.DataFrame(columns=["operator_id","vehicle_id","vehicle_type","status","locked","start_time","end_time",
+                                      "start_pos","end_pos","driven_distance","start_soc","end_soc","charging_power",
+                                      "charging_unit","toll","rq_on_board","occupancy","rq_boarding","rq_alighting","route",
+                                      "trajectory","driver_id"])
+
     return op_df
 
 def read_user_output_file(output_dir, evaluation_start_time = None, evaluation_end_time = None) -> pd.DataFrame:
@@ -86,11 +93,18 @@ def read_user_output_file(output_dir, evaluation_start_time = None, evaluation_e
     :param evaluation_end_time: if given, all entries starting after this time are discarded
     :return: output dataframe of specific operator
     """
-    user_stats = pd.read_csv(os.path.join(output_dir, "1_user-stats.csv"))
-    if evaluation_start_time is not None:
-        user_stats = user_stats[user_stats[G_RQ_TIME] >= evaluation_start_time]
-    if evaluation_end_time is not None:
-        user_stats = user_stats[user_stats[G_RQ_TIME] < evaluation_end_time]
+    try:
+        user_stats = pd.read_csv(os.path.join(output_dir, "1_user-stats.csv"))
+        if evaluation_start_time is not None:
+            user_stats = user_stats[user_stats[G_RQ_TIME] >= evaluation_start_time]
+        if evaluation_end_time is not None:
+            user_stats = user_stats[user_stats[G_RQ_TIME] < evaluation_end_time]
+    except FileNotFoundError:
+        user_stats = pd.DataFrame(columns=["request_id","rq_type","number_passenger",
+                                           "rq_time","earliest_pickup_time","start","end","pickup_location",
+                                           "dropoff_location","access_time","egress_time","direct_route_travel_time",
+                                           "direct_route_distance","offers","decision_time","chosen_operator_id","operator_id",
+                                           "vehicle_id","pickup_time","dropoff_time","fare","modal_state"])
     return user_stats
 
 def return_empty_result_dict():
@@ -400,14 +414,22 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
         op_number_users = op_users.shape[0]
         op_number_pax = op_users[G_RQ_PAX].sum()
         op_created_offers = len(op_id_to_offer_dict.get(op_id, {}).keys())
-        op_modal_split_rq = float(op_number_users)/number_users
-        op_modal_split = float(op_number_pax)/number_total_travelers
-        if print_comments:
-            print(op_created_offers)
-        op_rel_created_offers = float(op_created_offers)/number_users*100.0
-        op_avg_utility = np.nan
-        if G_RQ_C_UTIL in op_users.columns:
-            op_avg_utility = op_users[G_RQ_C_UTIL].sum()/op_number_users  
+        try:
+            op_modal_split = float(op_number_pax)/number_total_travelers
+        except ZeroDivisionError:
+            op_modal_split = 0
+        try:
+            op_modal_split_rq = float(op_number_users)/number_users
+            if print_comments:
+                print(op_created_offers)
+            op_rel_created_offers = float(op_created_offers)/number_users*100.0
+            op_avg_utility = np.nan
+            if G_RQ_C_UTIL in op_users.columns:
+                op_avg_utility = op_users[G_RQ_C_UTIL].sum()/op_number_users  
+        except ZeroDivisionError:
+            op_modal_split_rq = 100
+            op_rel_created_offers = 100
+            op_avg_utility = np.nan
             
         op_reservation_users = op_users[op_users[G_RQ_EPT] - op_users[G_RQ_TIME] > op_reservation_horizon]
         total_reservation_users = user_stats[user_stats[G_RQ_EPT] - user_stats[G_RQ_TIME] > op_reservation_horizon]
@@ -494,7 +516,10 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
                 op_user_sum_travel_time = op_users[G_RQ_DO].sum() - op_users[G_RQ_PU].sum()
             # avg travel time
             if not np.isnan(op_user_sum_travel_time):
-                op_avg_travel_time = op_user_sum_travel_time / op_number_users
+                try:
+                    op_avg_travel_time = op_user_sum_travel_time / op_number_users
+                except ZeroDivisionError:
+                    op_avg_travel_time = 0
             # sum fare
             if G_RQ_FARE in op_users.columns:
                 op_revenue = op_users[G_RQ_FARE].sum() * operator_attributes.get(G_OP_PLAT_COMMISION, 0.0)
@@ -506,16 +531,25 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
                 op_90perquant_wait_time = op_users["wait time"].quantile(q=0.9)
             # avg waiting time from earliest pickup time
             if G_RQ_PU in op_users.columns and G_RQ_EPT in op_users.columns:
-                op_avg_wait_from_ept = (op_users[G_RQ_PU].sum() - op_users[G_RQ_EPT].sum()) / op_number_users
+                try:
+                    op_avg_wait_from_ept = (op_users[G_RQ_PU].sum() - op_users[G_RQ_EPT].sum()) / op_number_users
+                except ZeroDivisionError:
+                    op_avg_wait_from_ept = 0
             # avg abs detour time
             if not np.isnan(op_user_sum_travel_time) and G_RQ_DRT in op_users.columns:
-                op_avg_detour_time = (op_user_sum_travel_time - op_users[G_RQ_DRT].sum())/op_number_users - \
-                                     boarding_time
+                try:
+                    op_avg_detour_time = (op_user_sum_travel_time - op_users[G_RQ_DRT].sum())/op_number_users - \
+                                        boarding_time
+                except ZeroDivisionError:
+                    op_avg_detour_time = 0
             # avg rel detour time
             if not np.isnan(op_user_sum_travel_time) and G_RQ_DRT in op_users.columns:
                 rel_det_series = (op_users[G_RQ_DO] - op_users[G_RQ_PU] - boarding_time -
                                   op_users[G_RQ_DRT])/op_users[G_RQ_DRT]
-                op_avg_rel_detour = rel_det_series.sum()/op_number_users * 100.0
+                try:
+                    op_avg_rel_detour = rel_det_series.sum()/op_number_users * 100.0
+                except ZeroDivisionError:
+                    op_avg_rel_detour = 0
             # direct travel time and distance
             if G_RQ_DRD in op_users.columns:
                 op_sum_direct_travel_distance = op_users[G_RQ_DRD].sum() / 1000.0
@@ -589,15 +623,25 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
                 op_ride_distance_per_vehicle_distance_no_rel = bp_sum_direct_distance / (op_total_km * (1.0 - op_repositioning_vkm/100.0))
             elif not np.isnan(op_total_km) and not np.isnan(op_sum_direct_travel_distance):
                 trip_direct_distance = op_sum_direct_travel_distance
-                op_saved_distance = (op_sum_direct_travel_distance - op_total_km)/op_sum_direct_travel_distance * 100.0
-                op_ride_distance_per_vehicle_distance = op_sum_direct_travel_distance / op_total_km
-                op_ride_distance_per_vehicle_distance_no_rel = op_sum_direct_travel_distance / (op_total_km * (1.0 - op_repositioning_vkm/100.0))
-
+                try:
+                    op_saved_distance = (op_sum_direct_travel_distance - op_total_km)/op_sum_direct_travel_distance * 100.0
+                    op_ride_distance_per_vehicle_distance = op_sum_direct_travel_distance / op_total_km
+                    op_ride_distance_per_vehicle_distance_no_rel = op_sum_direct_travel_distance / (op_total_km * (1.0 - op_repositioning_vkm/100.0))
+                except ZeroDivisionError:
+                    op_saved_distance = 0
+                    op_ride_distance_per_vehicle_distance = 0
+                    op_ride_distance_per_vehicle_distance_no_rel = 0
             # speed
             driving = op_stats[op_stats["status"].isin([i.display_name for i in G_DRIVING_STATUS])]
             driving_time = driving["end_time"].sum() - driving["start_time"].sum()
-            op_avg_velocity = op_total_km/driving_time*3600.0
-            op_trip_velocity = trip_direct_distance/op_user_sum_travel_time*3.6
+            try:
+                op_avg_velocity = op_total_km/driving_time*3600.0
+            except ZeroDivisionError:
+                op_avg_velocity = 0
+            try:
+                op_trip_velocity = trip_direct_distance/op_user_sum_travel_time*3.6
+            except ZeroDivisionError:
+                op_trip_velocity = 0
 
             # by vehicle stats
             # ----------------
