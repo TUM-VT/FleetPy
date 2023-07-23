@@ -382,7 +382,7 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
         number_total_travelers = user_stats[G_RQ_PAX].sum()
 
     for op_id in range(scenario_parameters[G_NR_OPERATORS] + 1):
-        if op_stats is None or user_stats is None:
+        if op_stats_all is None or user_stats is None:
             result_dict = return_empty_result_dict()
             result_dict["operator_id"] = op_id
             result_dict_list.append(result_dict)
