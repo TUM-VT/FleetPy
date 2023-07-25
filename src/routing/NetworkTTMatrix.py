@@ -136,9 +136,15 @@ class NetworkTTMatrix(NetworkBase):
         print(f"\t ... loading network travel time/distance tables ...")
         tt_table_f = os.path.join(self.network_name_dir, "ff", "tables", "nn_fastest_tt.npy")
         self.tt_numpy = np.load(tt_table_f)
-        self.tt = self.tt_numpy.tolist()
+        if self.tt_numpy.shape[0] > 5000:
+            LOG.warning("network to big to convert matrix to list!")
+            self.tt = self.tt_numpy
+        else:
+            self.tt = self.tt_numpy.tolist()
         distance_table_f = os.path.join(self.network_name_dir, "ff", "tables", "nn_fastest_distance.npy")
-        self.td = np.load(distance_table_f).tolist()
+        self.td = np.load(distance_table_f)
+        if self.td.shape[0] < 5000:
+            self.td = self.td.tolist()
         # load travel times
         self.current_tt_factor_index = 0
         self.sorted_tt_factor_times = []
@@ -222,7 +228,10 @@ class NetworkTTMatrix(NetworkBase):
                         path = self._precalculated_tt_paths[next_time]
                         if self._current_tt_path != path:
                             self.tt_numpy = np.load(path.joinpath("tt_matrix.npy"))
-                            self.tt = self.tt_numpy.tolist()
+                            if self.tt_numpy.shape[0] > 5000:
+                                self.tt = self.tt_numpy
+                            else:
+                                self.tt = self.tt_numpy.tolist()
                             self._current_tt_path = path
                             tt_updated = True
                     if tt_updated is True:

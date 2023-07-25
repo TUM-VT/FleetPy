@@ -24,6 +24,7 @@ def run_single_simulation(scenario_parameters):
             traceback.print_exc()
     else:
         SF.run()
+    del SF
 
 
 def run_scenarios(constant_config_file, scenario_file, n_parallel_sim=1, n_cpu_per_sim=1, evaluate=1, log_level="info",
