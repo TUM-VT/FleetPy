@@ -37,7 +37,7 @@ from src.misc.globals import *
 DEFAULT_LOG_LEVEL = logging.INFO
 LOG = logging.getLogger(__name__)
 BUFFER_SIZE = 10
-PROGRESS_LOOP = "demand"
+PROGRESS_LOOP = "off"
 PROGRESS_LOOP_VEHICLE_STATUS = [VRL_STATES.IDLE,VRL_STATES.CHARGING,VRL_STATES.REPOSITION]
 # check for computation on LRZ cluster
 if os.environ.get('SLURM_PROCID'):

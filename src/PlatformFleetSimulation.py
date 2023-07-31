@@ -182,11 +182,11 @@ class PlatformFleetSimulation(FleetSimulationBase):
             
             vid += 1
         # TODO here hard code op input?
-        freelancer_attributes = {G_OP_VR_CTRL_F: {"func_key" : "total_travel_times"}, G_RA_REOPT_TS: 900}
+        freelancer_attributes = {G_OP_VR_CTRL_F: {"func_key" : "total_travel_times"}, G_RA_REOPT_TS: 3600}
         fl_repo_m = self.scenario_parameters.get(G_FL_REPO_M)
         if fl_repo_m:
             freelancer_attributes[G_OP_REPO_M] = fl_repo_m
-            freelancer_attributes[G_OP_REPO_TS] = 900
+            freelancer_attributes[G_OP_REPO_TS] = 3600
             freelancer_attributes[G_OP_REPO_TH_DEF] = f"0;{self.scenario_parameters[G_SIM_END_TIME]}"
         #
         freelancer_op = FreelancerFleetControl(freelancer_op_id, freelancer_attributes, list_vehicles, self.routing_engine, self.zones,
