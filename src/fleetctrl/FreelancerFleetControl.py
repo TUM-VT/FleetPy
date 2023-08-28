@@ -6,6 +6,7 @@ import logging
 import time
 from abc import abstractmethod, ABCMeta
 from typing import Dict, List, Any, Tuple, TYPE_CHECKING
+import numpy as np
 
 import logging
 import time
@@ -195,6 +196,7 @@ class RidePoolingPlatformFleetControl(PlatformFleetControlBase):
                         selected_veh.add(veh_obj)
                 selected_veh_list = list(selected_veh)
 
+            np.random.shuffle(selected_veh_list)
             list_tuples = insert_prq_in_selected_veh_list(selected_veh_list, self.veh_plans, prq, self.vr_ctrl_f, self.routing_engine, self.rq_dict, sim_time, self.const_bt, self.add_bt)
             offered = False
             if len(list_tuples) > 0:
