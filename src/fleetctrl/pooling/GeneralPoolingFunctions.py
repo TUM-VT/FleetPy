@@ -36,8 +36,9 @@ def checkRRcomptibilityInOrder(plan_rq_1, plan_rq_2, routing_engine, constant_bo
     """
 
     # TODO: implement dynamic boarding time!
-    if dynamic_boarding_time != 0:
-        LOG.warning("dynamic boarding time not implemented in RR! -> consider it as 0")
+    if dynamic_boarding_time != 0: #TODO
+        pass
+        #LOG.warning("dynamic boarding time not implemented in RR! -> consider it as 0")
 
     # TODO # waring: not max trip time considered!
 

@@ -251,6 +251,9 @@ class RidePoolingPlatformFleetControl(PlatformFleetControlBase):
             for vid, veh in self._available_vehicles.items():
                 if len(veh.current_op_id_options) == 1 and self.op_id in veh.current_op_id_options:
                     veh_objs_to_build[vid] = veh
+            LOG.debug(f"batch opt for fleetctrl {self.op_id} at time {simulation_time}")
+            LOG.debug(f"batch opt for vehicles: {list(self._available_vehicles.keys())}")
+            LOG.debug(f"and requests {list(self.rq_dict.keys())}")
             self.RPBO_Module.compute_new_vehicle_assignments(self.sim_time, self.vid_finished_VRLs, build_from_scratch=False,
                                                         new_travel_times=self.new_travel_times_loaded, veh_objs_to_build=veh_objs_to_build)
             # LOG.info(f"new assignments computed")
