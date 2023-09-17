@@ -1,8 +1,10 @@
 import time
 import datetime
+import math
 # import geojson
 # import eventlet
 
+import numpy as np 
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import LineString
@@ -111,7 +113,8 @@ def prep_output(gdf_row):
 
 
 class State:
-    def __init__(self, vid_str, time, pos, end_time, end_pos, soc, pax, moving, status, trajectory_str = None):
+    def __init__(self, vid_str, time, pos, end_time, end_pos, soc, pax,parcels,
+                 passengers, moving, status, trajectory_str = None):
         self.vid_str = vid_str
         self.time = time
         if type(pos) == str:
@@ -120,6 +123,8 @@ class State:
             self.pos = pos
         self.soc = soc
         self.pax = pax
+        self.parcels = parcels
+        self.passengers = passengers
         self.moving = moving
         self.status = status
         self.end_time = end_time
@@ -135,7 +140,7 @@ class State:
 
     def to_dict(self):
         # TODO # make definition of transferred attributes here
-        return {"vid": self.vid_str, "nw_pos": self.pos, "soc": self.soc, "pax": self.pax, "moving": self.moving,
+        return {"vid": self.vid_str, "nw_pos": self.pos, "soc": self.soc, "pax": self.pax,"parcels":self.parcels,"passengers":self.passengers, "moving": self.moving,
                 "status": self.status}
 
     def return_state(self, replay_time):
@@ -186,6 +191,54 @@ class State:
         #     return self.to_dict()
         # else:
         #     return None
+class UserState:
+    def __init__(self,usr_df,start_time,end_time,parcels=False,passengers=False) -> None:
+       # self.usr_id = usr_id
+        self.start_time = start_time
+        self.end_time = end_time
+        self.usr_df = usr_df.reset_index()
+        self.parcels = self.passengers = False
+        
+        if parcels:
+            self.usr_df = self.usr_df[self.usr_df.request_id.str.contains("p")]
+        elif passengers:
+            self.usr_df = self.usr_df[~self.usr_df.request_id.str.contains("p")]
+
+
+    def get_avg_waiting_time(self,time_step):
+        if time_step <= self.start_time or time_step >= self.end_time:
+            return 0
+        current_df = self.usr_df[self.usr_df["pickup_time"] >= time_step]
+        current_df = current_df[current_df["earliest_pickup_time"] <= time_step]
+        avg_waiting_time = (current_df['pickup_time'] - current_df['earliest_pickup_time']).mean()
+        return avg_waiting_time
+    
+    def get_avg_ride_time(self,time_step):
+        if time_step <= self.start_time or time_step >= self.end_time:
+            return 0
+        current_df = self.usr_df[self.usr_df["dropoff_time"] >= time_step]
+        current_df = current_df[current_df["pickup_time"] <= time_step]
+        avg_ride_time = (current_df['dropoff_time'] - current_df['pickup_time']).mean()
+        return avg_ride_time
+    
+    def get_avg_detour_time(self,time_step):
+        if time_step <= self.start_time or time_step >= self.end_time:
+            return 0
+        current_df = self.usr_df[self.usr_df["dropoff_time"] >= time_step]
+        current_df = current_df[current_df["pickup_time"] <= time_step]
+        avg_detour_time = (current_df['dropoff_time']
+                            - current_df['pickup_time']
+                            - current_df['direct_route_travel_time']).mean()
+        return avg_detour_time
+    
+    def get_current_info_users(self,time_step):
+        info_list = [self.get_avg_waiting_time(time_step),
+                     self.get_avg_ride_time(time_step),self.get_avg_detour_time(time_step)]
+        return info_list
+
+            
+
+        
 
 
 class ReplayVehicle:
@@ -195,16 +248,18 @@ class ReplayVehicle:
         self.vid_df = veh_df.reset_index()
         self.start_time = start_time
         self.end_time = end_time
-        #
         self.active_row = 0
         self.init_pax = 0
+        self.init_parcels = 0
+        self.init_passengers = 0
         self.init_pos = self.vid_df.loc[0, G_VR_LEG_START_POS]
         try:
             self.init_soc = self.vid_df.loc[0, G_VR_LEG_START_SOC]
         except:
             self.init_soc = 1.0
-        #
-        self.last_state = State(str(self), self.start_time, self.init_pos, self.start_time, self.init_pos, self.init_soc, self.init_pax, False, "idle")
+        self.last_state = State(str(self), self.start_time, self.init_pos, self.start_time, 
+                                self.init_pos, self.init_soc, self.init_pax, self.init_parcels, 
+                                self.init_passengers, False, "idle")
 
     def __str__(self):
         return f"{self.op_id}-{self.vid}"
@@ -227,9 +282,16 @@ class ReplayVehicle:
         if self.active_row == -1:
             self.active_row = 0
             end_time = self.vid_df.loc[self.active_row, G_VR_LEG_START_TIME]
-            self.last_state = State(str(self), replay_time, self.init_pos, end_time, self.init_pos, self.init_soc, self.init_pax, False, "idle")
+            self.last_state = State(str(self), replay_time, self.init_pos, end_time, self.init_pos, self.init_soc, self.init_pax, self.init_parcels, self.init_passengers, False, "idle")
         else:
             pax = self.vid_df.loc[self.active_row, G_VR_NR_PAX]
+            rq_on_board = self.vid_df.loc[self.active_row, G_VR_OB_RID]
+            rq_on_board = str(rq_on_board)
+            rq_on_board = rq_on_board.split(";")
+            parcels = [rq for rq in rq_on_board if rq.startswith("p")]
+            parcels = len(parcels)
+            passengers = [rq for rq in rq_on_board if not rq.startswith("p") and rq != "nan"]
+            passengers = len(passengers)
             route_start_time = self.vid_df.loc[self.active_row, G_VR_LEG_START_TIME]
             route_end_time = self.vid_df.loc[self.active_row, G_VR_LEG_END_TIME]
             # check status
@@ -245,14 +307,14 @@ class ReplayVehicle:
                     trajectory_str = None
                 # TODO # soc!
                 start_soc = self.vid_df.loc[self.active_row, G_VR_LEG_START_SOC]
-                self.last_state = State(str(self), replay_time, self.last_state.pos, route_end_time, end_pos, start_soc, pax, moving, status, trajectory_str=trajectory_str)
+                self.last_state = State(str(self), replay_time, self.last_state.pos, route_end_time, end_pos, start_soc, pax, parcels, passengers, moving, status, trajectory_str=trajectory_str)
             else:
                 status = "idle"
                 moving = False
                 end_time = self.end_time
                 if self.active_row + 1 < self.vid_df.shape[0]:
                     end_time = self.vid_df.loc[self.active_row + 1, G_VR_LEG_START_TIME]
-                self.last_state = State(str(self), replay_time, self.last_state.pos, end_time, self.last_state.pos, self.last_state.soc, 0, moving, status)
+                self.last_state = State(str(self), replay_time, self.last_state.pos, end_time, self.last_state.pos, self.last_state.soc, 0, 0, 0, moving, status)
         #
         return_state = self.last_state.return_state(replay_time)
         return return_state
@@ -329,7 +391,7 @@ class Replay(VehicleMovementSimulation):
         self.replay_vehicles = {}       # (op_id, vid) -> ReplayVehicle
         self.operator_vehicles = {}     # op_id -> list_vehicles
 
-    def load_scenario(self, output_dir, start_time_in_seconds = None, end_time_in_seconds = None):
+    def load_scenario(self, output_dir, start_time_in_seconds = None, end_time_in_seconds = None,parcels=False,passengers=False):
         """This method has to be called to load the scenario data.
 
         :param output_dir: scenario output dir to be processed
@@ -421,7 +483,10 @@ class Replay(VehicleMovementSimulation):
         states_codes = {status.display_name: status.value for status in VRL_STATES}
         self.poss_veh_states = sorted(self.poss_veh_states, key=lambda x: states_codes[x])
         print("... processing user data")
-        # TODO # load vehicle data
+        usr_stats_f = os.path.join(output_dir, "1_user-stats.csv")
+        usr_stats_df = pd.read_csv(usr_stats_f)
+        #usr_stats_df = usr_stats_df[usr_stats_df["earliest_pickup_time"] >= self.sim_start_time]
+        self.user_stats = UserState(usr_stats_df, self.sim_start_time, self.sim_end_time,parcels=parcels,passengers=passengers)
 
         print(" ... initiation successful")
         self._sc_loaded = True
@@ -445,7 +510,6 @@ class Replay(VehicleMovementSimulation):
         print(" ... running replay simulation")
         self.replay_time = self.sim_start_time
         while self.replay_time <= self.sim_end_time:
-            print(self.replay_time)
             if self.replay_time % 600 == 0:
                 print(f"simulation time: {self.replay_time}/{self.sim_end_time}")
             self.step()
@@ -534,7 +598,8 @@ class Replay(VehicleMovementSimulation):
 
 
 class ReplayPyPlot(Replay):
-    def __init__(self, live_plot: bool = True, create_images: bool = True):
+    def __init__(self, live_plot: bool = True, create_images: bool = True,
+                 parcels = False,passengers = False,status_type = 1,plot_args="111000"):
         """ Class for python based visualization of the simulation results
 
         :param live_plot: If True, the plots are displayed in real time using a separate CPU process. If False,
@@ -554,9 +619,14 @@ class ReplayPyPlot(Replay):
         self.plots_dir: Optional[Path] = None
         self._plot_class_instance: Optional[PyPlot] = None
         self._map_extent = None
+        self.parcels = parcels
+        self.passengers = passengers
+        self.status_type = status_type
+        self.plot_args = plot_args
 
     def load_scenario(self, output_dir, start_time_in_seconds = None, end_time_in_seconds = None, plot_extend=None):
-        super().load_scenario(output_dir, start_time_in_seconds=start_time_in_seconds, end_time_in_seconds=end_time_in_seconds)
+        super().load_scenario(output_dir, start_time_in_seconds=start_time_in_seconds, 
+                              end_time_in_seconds=end_time_in_seconds,parcels=self.parcels,passengers=self.passengers)
         self.plots_dir = Path(output_dir).joinpath("plots")
         if plot_extend is None:
             bounds = self.node_gdf.bounds
@@ -586,7 +656,6 @@ class ReplayPyPlot(Replay):
         print(" ... running replay simulation")
         self.replay_time = self.sim_start_time
         while self.replay_time <= self.sim_end_time:
-            print(self.replay_time)
             if self.replay_time % 600 == 0:
                 print(f"simulation time: {self.replay_time}/{self.sim_end_time}")
             self.step()
@@ -604,19 +673,121 @@ class ReplayPyPlot(Replay):
         list_pos_df["coordinates"] = list_pos_df.apply(interpolate_coordinates, args=(self.node_gdf,), axis=1,
                                                        result_type="reduce")
         list_pos_df.set_index("vid", inplace=True)
-        #
+        user_stats = self.user_stats.get_current_info_users(self.replay_time) # return [avg_wait_time,avg_ride_time,avg_detour_time]
+        if self.status_type == 1:               
+            counts = {}
+            for status in self.poss_veh_states:
+                counts[status] = len(list_pos_df[list_pos_df["status"] == status])
+            
+        if self.status_type == 2:
+            intra_pos_df = list_pos_df[list_pos_df['status'] != 'idle']
+            counts = {}
+            counts['idle'] = len(list_pos_df[list_pos_df["status"] == 'idle'])
+            for i in range(0,5):
+                if self.parcels:
+                    counts[str(i)] = len(intra_pos_df[intra_pos_df["parcels"] == i])
+                elif self.passengers:
+                    counts[str(i)] = len(intra_pos_df[intra_pos_df["passengers"] == i])
+                else:
+                    counts[str(i)] = len(intra_pos_df[intra_pos_df["pax"] == i])
+
+        if "pax_list" not in self._shared_dict:
+            pax_list = []
+        else:
+            pax_list = self._shared_dict["pax_list"]
+        if "pax_info"  not in self._shared_dict:
+            pax_info= {}
+        else:
+            pax_info = self._shared_dict["pax_info"]
+        intra_pax_list = list_pos_df[list_pos_df['status'] != 'idle']
+        state = ''
+        if self.parcels:
+            state = 'parcels'
+        elif self.passengers:
+            state = 'passengers'
+        else:
+            state = 'pax'
+        
+        if len(list(intra_pax_list[state])) > 0:
+            pax_list.append(sum(list(intra_pax_list[state])) / len(list(intra_pax_list[state])))
+        else:
+            pax_list.append(0)
+
+        if "avg_wait_time" not in self._shared_dict:
+            avg_wait_time = []
+        else:
+            avg_wait_time = self._shared_dict["avg_wait_time"]
+            if not math.isnan(user_stats[0]):
+                avg_wait_time.append(user_stats[0])
+            else:
+                try:
+                    avg_wait_time.append(avg_wait_time[-1])
+                except:
+                    avg_wait_time.append(0)
+        if "avg_ride_time" not in self._shared_dict:
+            avg_ride_time = []
+        else:
+            avg_ride_time = self._shared_dict["avg_ride_time"]
+            if not math.isnan(user_stats[1]):
+                avg_ride_time.append(user_stats[1])
+            else:
+                try:
+                    avg_ride_time.append(avg_ride_time[-1])
+                except:
+                    avg_ride_time.append(0)
+        if "avg_detour_time" not in self._shared_dict:
+            avg_detour_time = []
+        else:
+            avg_detour_time = self._shared_dict["avg_detour_time"]
+            if not math.isnan(user_stats[2]):
+                avg_detour_time.append(user_stats[2])
+            else:
+                try:
+                    avg_detour_time.append(avg_detour_time[-1])
+                except:
+                    avg_detour_time.append(0)
+        total_parcels = list(list_pos_df['parcels'])
+        total_parcels = [int(x) for x in total_parcels]
+        total_parcels = sum(total_parcels)
+        total_passengers = list(list_pos_df['passengers'])
+        total_passengers = [int(x) for x in total_passengers]
+        total_passengers = sum(total_passengers)
+        if 0 in pax_info:
+            pax_info[-1] = np.append(pax_info[-1], list_pos_df[list_pos_df['status'] == 'idle'].shape[0])
+        else:
+            pax_info[-1] = list_pos_df[list_pos_df['status'] == 'idle'].shape[0]
+        for i in range(0,5):
+            if i in pax_info:
+                pax_info[i] = np.append(pax_info[i], intra_pax_list[intra_pax_list[state] == i].shape[0])  
+            else:
+                pax_info[i] = np.asarray([intra_pax_list[intra_pax_list[state] == i].shape[0]])
+        
         sim_time = datetime.datetime(self.dtuple[0], self.dtuple[1], self.dtuple[2], 0,0,0) + \
                    datetime.timedelta(seconds=self.replay_time)
         # TODO # add dictionary for additional geographic information: key -> list_of_coordinates
         dict_add_coord = {}
         # TODO # add dictionary for additional scalar information: key -> value
         dict_add_values = {}
+        
         info_dict = {"simulation_time": sim_time,
                      "veh_coord_status_df": list_pos_df,
                      "possible_status": self.poss_veh_states,
                      "additional_coordinates_dict": dict_add_coord,
                      "additional_values_dict": dict_add_values,
-                     "stop": False}
+                     "stop": False,
+                     "status_counts": counts,
+                     "pax_list": pax_list,
+                     "pax_info": pax_info,
+                     "total_parcels": total_parcels,
+                     "total_passengers": total_passengers,
+                     "end_time": int(self.sim_end_time/self._time_step),
+                     "avg_wait_time": avg_wait_time,
+                     "avg_ride_time": avg_ride_time,
+                     "avg_detour_time": avg_detour_time,
+                     "parcels": self.parcels,
+                     "passengers": self.passengers,
+                     "status_type": self.status_type,
+                     "plot_args": self.plot_args}
         # Share the updated information dictionary with the plot class
         self._shared_dict.update(info_dict)
         if self.live_plot is False:
