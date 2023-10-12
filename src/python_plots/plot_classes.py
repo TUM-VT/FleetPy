@@ -64,8 +64,12 @@ class PyPlot(Process):
 
     def draw_plots(self):
 
-        color_list = ['blue','orange','green','red','purple','beige']
-        stack_chart_color_list = ["white","red","blue","orange","green","beige"]
+        #color_list = ['blue','orange','green','red','purple','beige']
+        if self.shared_dict['color_list']:
+            color_list = stack_chart_color_list = self.shared_dict['color_list']
+        else:
+            stack_chart_color_list = ["white","red","blue","orange","green","beige"]
+            color_list = stack_chart_color_list
         reveresed_stack_chart_color_list = stack_chart_color_list[1:][::-1]
         stack_chart_color_list.reverse()
         reveresed_stack_chart_color_list.insert(0,"white")
@@ -124,11 +128,20 @@ class PyPlot(Process):
             axes[occupancy_idx].set_title("Occupancy")
             axes[occupancy_idx].plot(self.shared_dict["pax_list"])
             axes[occupancy_idx].set_ylim(0, 5)
-            axes[occupancy_idx].legend(loc="upper left")
+            #axes[occupancy_idx].legend(loc="upper left")
         if "occupancy_stack_chart" in plots:
             occupancy_stack_chart_idx = plot_slots.pop(0)
             axes[occupancy_stack_chart_idx ].set_title("occupancy stack chart")
-            axes[occupancy_stack_chart_idx ].stackplot(list(range(len(self.shared_dict["pax_info"][0]))), list(self.shared_dict["pax_info"][0]),
+            if (len(self.shared_dict["pax_info"][-1]) == 
+                len(self.shared_dict["pax_info"][0]) == 
+                len(self.shared_dict["pax_info"][1]) == 
+                len(self.shared_dict["pax_info"][2]) == 
+                len(self.shared_dict["pax_info"][3]) == 
+                len(self.shared_dict["pax_info"][4])):
+                pass
+            else:
+                print("Error in plotting occupancy stack chart")
+            axes[occupancy_stack_chart_idx ].stackplot(list(range(len(self.shared_dict["pax_info"][-1]))), list(self.shared_dict["pax_info"][0]),
                                               list(self.shared_dict["pax_info"][1]), list(self.shared_dict["pax_info"][2]),
                                               list(self.shared_dict["pax_info"][3]), list(self.shared_dict["pax_info"][4]),
                                                 list(self.shared_dict["pax_info"][-1]),

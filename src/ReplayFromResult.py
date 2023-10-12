@@ -114,7 +114,7 @@ def prep_output(gdf_row):
 
 class State:
     def __init__(self, vid_str, time, pos, end_time, end_pos, soc, pax,parcels,
-                 passengers, moving, status, trajectory_str = None):
+                 passengers,moving, status, trajectory_str = None):
         self.vid_str = vid_str
         self.time = time
         if type(pos) == str:
@@ -200,9 +200,9 @@ class UserState:
         self.parcels = self.passengers = False
         
         if parcels:
-            self.usr_df = self.usr_df[self.usr_df.request_id.str.contains("p")]
+            self.usr_df = self.usr_df[self.usr_df.request_id.astype(str).str.contains("p")]
         elif passengers:
-            self.usr_df = self.usr_df[~self.usr_df.request_id.str.contains("p")]
+            self.usr_df = self.usr_df[~self.usr_df.request_id.astype(str).str.contains("p")]
 
 
     def get_avg_waiting_time(self,time_step):
@@ -599,7 +599,7 @@ class Replay(VehicleMovementSimulation):
 
 class ReplayPyPlot(Replay):
     def __init__(self, live_plot: bool = True, create_images: bool = True,
-                 parcels = False,passengers = False,status_type = 1,plot_args="111000"):
+                 parcels = False,passengers = False,color_list=False,status_type = 1,plot_args="111000"):
         """ Class for python based visualization of the simulation results
 
         :param live_plot: If True, the plots are displayed in real time using a separate CPU process. If False,
@@ -623,6 +623,7 @@ class ReplayPyPlot(Replay):
         self.passengers = passengers
         self.status_type = status_type
         self.plot_args = plot_args
+        self.color_list = color_list 
 
     def load_scenario(self, output_dir, start_time_in_seconds = None, end_time_in_seconds = None, plot_extend=None):
         super().load_scenario(output_dir, start_time_in_seconds=start_time_in_seconds, 
@@ -752,16 +753,19 @@ class ReplayPyPlot(Replay):
         total_passengers = list(list_pos_df['passengers'])
         total_passengers = [int(x) for x in total_passengers]
         total_passengers = sum(total_passengers)
+
         if 0 in pax_info:
             pax_info[-1] = np.append(pax_info[-1], list_pos_df[list_pos_df['status'] == 'idle'].shape[0])
         else:
-            pax_info[-1] = list_pos_df[list_pos_df['status'] == 'idle'].shape[0]
+            pax_info[-1] = np.asarray([list_pos_df[list_pos_df['status'] == 'idle'].shape[0]])
+
         for i in range(0,5):
             if i in pax_info:
                 pax_info[i] = np.append(pax_info[i], intra_pax_list[intra_pax_list[state] == i].shape[0])  
             else:
                 pax_info[i] = np.asarray([intra_pax_list[intra_pax_list[state] == i].shape[0]])
-        
+
+
         sim_time = datetime.datetime(self.dtuple[0], self.dtuple[1], self.dtuple[2], 0,0,0) + \
                    datetime.timedelta(seconds=self.replay_time)
         # TODO # add dictionary for additional geographic information: key -> list_of_coordinates
@@ -787,7 +791,8 @@ class ReplayPyPlot(Replay):
                      "parcels": self.parcels,
                      "passengers": self.passengers,
                      "status_type": self.status_type,
-                     "plot_args": self.plot_args}
+                     "plot_args": self.plot_args,
+                     "color_list": self.color_list}
         # Share the updated information dictionary with the plot class
         self._shared_dict.update(info_dict)
         if self.live_plot is False:
