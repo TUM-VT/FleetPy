@@ -692,6 +692,11 @@ class ReplayPyPlot(Replay):
                 else:
                     counts[str(i)] = len(intra_pos_df[intra_pos_df["pax"] == i])
 
+        if "time_line" not in self._shared_dict:
+            time_line = []
+        else:
+            time_line = self._shared_dict["time_line"]
+        time_line.append(self.replay_time/3600.0)
         if "pax_list" not in self._shared_dict:
             pax_list = []
         else:
@@ -774,6 +779,7 @@ class ReplayPyPlot(Replay):
         dict_add_values = {}
         
         info_dict = {"simulation_time": sim_time,
+                     "time_line": time_line,
                      "veh_coord_status_df": list_pos_df,
                      "possible_status": self.poss_veh_states,
                      "additional_coordinates_dict": dict_add_coord,

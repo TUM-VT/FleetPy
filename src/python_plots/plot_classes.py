@@ -17,7 +17,7 @@ PLOT_LENGTH = 200
 # Delay between frames in milliseconds
 REALTIME_UPDATE_INTERVAL = 200
 VEHICLE_POINT_SIZE = 12
-CTX_PROVIDER = ctx.providers.Stamen.TonerLite
+CTX_PROVIDER = ctx.providers.CartoDB.Positron# ctx.providers.Stamen.TonerLite
 BOARDER_SIZE = 1000
 
 
@@ -68,7 +68,7 @@ class PyPlot(Process):
         if self.shared_dict['color_list']:
             color_list = stack_chart_color_list = self.shared_dict['color_list']
         else:
-            stack_chart_color_list = ["white","red","blue","orange","green","beige"]
+            stack_chart_color_list = ["lightgrey","red","blue","orange","green","dimgrey"]
             color_list = stack_chart_color_list
         reveresed_stack_chart_color_list = stack_chart_color_list[1:][::-1]
         stack_chart_color_list.reverse()
@@ -114,6 +114,7 @@ class PyPlot(Process):
         available_plots = ['status_count','occupancy','occupancy_stack_chart','avg_wait_time','avg_ride_time','avg_detour_time']
         plots = [p for i,p in enumerate(available_plots) if self.shared_dict['plot_args'][i] == 1]
         plot_slots = [0,1,2]
+        time_line = self.shared_dict["time_line"]
         if "status_count" in plots:
             status_count_idx = plot_slots.pop(0)
             axes[status_count_idx].set_title("status_count")
@@ -126,41 +127,72 @@ class PyPlot(Process):
         if "occupancy" in plots:
             occupancy_idx = plot_slots.pop(0)
             axes[occupancy_idx].set_title("Occupancy")
-            axes[occupancy_idx].plot(self.shared_dict["pax_list"])
+            axes[occupancy_idx].plot(time_line, self.shared_dict["pax_list"])
             axes[occupancy_idx].set_ylim(0, 5)
             #axes[occupancy_idx].legend(loc="upper left")
         if "occupancy_stack_chart" in plots:
             occupancy_stack_chart_idx = plot_slots.pop(0)
-            axes[occupancy_stack_chart_idx ].set_title("occupancy stack chart")
-            if (len(self.shared_dict["pax_info"][-1]) == 
-                len(self.shared_dict["pax_info"][0]) == 
-                len(self.shared_dict["pax_info"][1]) == 
-                len(self.shared_dict["pax_info"][2]) == 
-                len(self.shared_dict["pax_info"][3]) == 
-                len(self.shared_dict["pax_info"][4])):
+            axes[occupancy_stack_chart_idx ].set_title("Occupancy Stack Chart")
+            axes[occupancy_stack_chart_idx ].set_ylabel("Number Vehicles")
+            list_values = []
+            list_values = [
+                list(self.shared_dict["pax_info"][-1]),
+                list(self.shared_dict["pax_info"][0]),
+                list(self.shared_dict["pax_info"][1]),
+                list(self.shared_dict["pax_info"][2]),
+                list(self.shared_dict["pax_info"][3]),
+                list(self.shared_dict["pax_info"][4])
+            ]
+            same_length = True
+            le = None
+            for l in list_values:
+                if le is None:
+                    le = len(l)
+                elif le != len(l):
+                    same_length = False
+                    break
+            if same_length:
                 pass
             else:
                 print("Error in plotting occupancy stack chart")
-            axes[occupancy_stack_chart_idx ].stackplot(list(range(len(self.shared_dict["pax_info"][-1]))), list(self.shared_dict["pax_info"][0]),
-                                              list(self.shared_dict["pax_info"][1]), list(self.shared_dict["pax_info"][2]),
-                                              list(self.shared_dict["pax_info"][3]), list(self.shared_dict["pax_info"][4]),
-                                                list(self.shared_dict["pax_info"][-1]),
+                print([len(l) for l in list_values])
+                min_len = min([len(l) for l in list_values])
+                for i, l in enumerate(list_values):
+                    l = l[:min_len]
+                    list_values[i] = l
+            #print(len(time_line), le)
+            if len(time_line) < le:
+                for i, l in enumerate(list_values):
+                    l = l[:len(time_line)]
+                    list_values[i] = l
+            elif le < len(time_line):
+                time_line = time_line[:le]
+            axes[occupancy_stack_chart_idx ].stackplot(time_line, list_values[1],
+                                              list_values[2], list_values[3],
+                                              list_values[4], list_values[5],
+                                                list_values[0],
                                                 colors=stack_chart_color_list,
                                                 labels = ["0","1","2","3","4","idle"])
-            axes[occupancy_stack_chart_idx ].legend(loc="upper right")
+            axes[occupancy_stack_chart_idx ].legend(loc="upper left")
+            axes[occupancy_stack_chart_idx ].set_xlabel("Simulation Time [h]")
         if "avg_wait_time" in plots:
             avg_wait_time_idx = plot_slots.pop(0)
-            axes[avg_wait_time_idx].set_title("average waiting time")
+            axes[avg_wait_time_idx].set_title("Average Waiting Time")
+            axes[avg_wait_time_idx].set_ylabel("Waiting Time [s]")
+            axes[avg_wait_time_idx].set_xlabel("Simulation Time [h]")
             axes[avg_wait_time_idx].plot(self.shared_dict["avg_wait_time"])
         if "avg_ride_time" in plots:
             avg_ride_time_idx = plot_slots.pop(0)
-            axes[avg_ride_time_idx].set_title("average ride time")
+            axes[avg_ride_time_idx].set_title("Average Ride Time")
+            axes[avg_ride_time_idx].set_ylabel("Ride Time [s]")
+            axes[avg_ride_time_idx].set_xlabel("Simulation Time [h]")
             axes[avg_ride_time_idx].plot(self.shared_dict["avg_ride_time"])
         if "avg_detour_time" in plots:
             avg_detour_time_idx = plot_slots.pop(0)
-            axes[avg_detour_time_idx].set_title("average detour time")
+            axes[avg_detour_time_idx].set_title("Average Detour Time")
+            axes[avg_detour_time_idx].set_ylabel("Detour Time [s]")
+            axes[avg_detour_time_idx].set_xlabel("Simulation Time [h]")
             axes[avg_detour_time_idx].plot(self.shared_dict["avg_detour_time"])
-
         ###
         axes[3].axis(self.plot_extent_3857)
         axes[3].set_xlim(self.plot_extent_3857[:2])
