@@ -7,7 +7,7 @@ from src.ReplayFromResult import ReplayPyPlot
 
 def main(output_dir, sim_seconds_per_real_second, start_time_in_seconds = None, end_time_in_seconds = None,
           plot_extend = None, live_plot = True, create_images = True,parcels = False,passengers = False,
-          status_type = 1,color_list = False,plot_args=[1,1,1,0,0,0]):
+          map_plot = "vehicle_status", plot_1="status_count", plot_2="occupancy_stack_chart", plot_3="waiting_time_average",color_list = False,plot_args=[1,1,1,0,0,0]):
     """This function uses pyplot to visualize the fleet operation.
 
     :param output_dir: path to result directory
@@ -18,7 +18,10 @@ def main(output_dir, sim_seconds_per_real_second, start_time_in_seconds = None, 
                         the map (EPSG_WGS = 4326); if None -> extend of loaded network chosen
     :param live_plot: if True: plots directly shown; else: figures stored in ouputdir/plots    :param parcels: if True: plots parcel data
     :param passengers: if True: plots passenger data
-    :param status_type: if 1: occupancy, if 2: vehicle status
+    :param map_plot: options: "vehicle_status", "occupancy"
+    :param plot_1: top axis, options are (str): status_count, occupancy_average, occupancy_stack_chart, waiting_time_average, ride_time_average, detour_time_average
+    :param plot_2: mid axis: options are (str): status_count, occupancy_average, occupancy_stack_chart, waiting_time_average, ride_time_average, detour_time_average
+    :param plot_3: bottom axis: options are (str): status_count, occupancy_average, occupancy_stack_chart, waiting_time_average, ride_time_average, detour_time_average
     :param color_list: if True: color list is used for plotting
     :param plot_args: list of integers that determine which plots are created
     
@@ -29,7 +32,7 @@ def main(output_dir, sim_seconds_per_real_second, start_time_in_seconds = None, 
     sim_seconds_per_real_second = float(sim_seconds_per_real_second)
     replay = ReplayPyPlot(live_plot=live_plot, create_images = create_images,
                           parcels = parcels,passengers = passengers,
-                          status_type = status_type,plot_args = plot_args,
+                          map_plot=map_plot, plot_1=plot_1, plot_2=plot_2, plot_3=plot_3,plot_args = plot_args,
                           color_list = color_list)
     if start_time_in_seconds is not None and end_time_in_seconds is not None:
         replay.load_scenario(output_dir, start_time_in_seconds=int(start_time_in_seconds)
@@ -53,25 +56,13 @@ if __name__ == "__main__":
     parser.add_argument('--start_time_in_seconds', type=int, help='determines simulation time when replay is started')
     parser.add_argument('--end_time_in_seconds', type=int, help='determines simulation time when replay ends')
     parser.add_argument('--save_figs', action='store_true', help='if set, figures are stored in ouputdir/plots. Otherwise, plots are shown live')
-    parser.add_argument('--plot_1',type=str,default="status_count",help='determines the first plot: available options are: \n' + 
-                        "status_count, occupancy_average, occupancy_stack_chart, waiting_time_average, ride_time_average, detour_time_average")
-    parser.add_argument('--plot_2',type=str,default="occupancy_average",
+    parser.add_argument('--plot_1',type=str,default="occupancy_count",help='determines the first plot: available options are: \n' + 
+                        "status_count,occupancy_count, occupancy_average, occupancy_stack_chart, waiting_time_average, ride_time_average, detour_time_average,service_rate")
+    parser.add_argument('--plot_2',type=str,default="service_rate",
                         help='determines the second plot: available options are: \n' + 
-                        "status_count, occupancy_average, occupancy_stack_chart, waiting_time_average, ride_time_average, detour_time_average")
+                        "status_count,occupancy_count, occupancy_average, occupancy_stack_chart, waiting_time_average, ride_time_average, detour_time_average,service_rate")
     parser.add_argument('--plot_3',type=str,default="occupancy_stack_chart",help='determines the third plot: available options are: \n' + 
-                        "status_count, occupancy_average, occupancy_stack_chart, waiting_time_average, ride_time_average, detour_time_average")
-    """
-    parser.add_argument('--plots',type=str,
-                        help='determine the type of plots to be created. Add one for each plot you want to be created. \n'+
-                        '1- Status count plot \n'
-                        +'2- Occupancy average \n'
-                        +'3- Occupancy stack chart \n'
-                        +'4- average waiting time \n'
-                        +'5- average ride time \n'
-                        +'6- average detour time. \n'
-                        + 'input example: 101001 for 1,3,6', default="111000"
-                        )
-                        """
+                        "status_count,occupancy_count, occupancy_average, occupancy_stack_chart, waiting_time_average, ride_time_average, detour_time_average,service_rate")
     # add argument called status_type that takes two values passenger and parcel
     parser.add_argument('--map_plot', type=str, 
                         help='determines the type of status to plot Either "occupancy" or "vehicle_status"',default="occupancy")
@@ -83,26 +74,16 @@ if __name__ == "__main__":
     #plot_args = args.plots
     #plot_args.split()
     #plot_args = [int(i) for i in plot_args]
-    plot_args = [0,0,0,0,0,0]
-    possible_plots = ["status_count","occupancy_average","occupancy_stack_chart","waiting_time_average","ride_time_average","detour_time_average"]
-    chosen_plots = [args.plot_1,args.plot_2,args.plot_3]
-    plot_args[possible_plots.index(chosen_plots[0])] = 1
-    plot_args[possible_plots.index(chosen_plots[1])] = 1
-    plot_args[possible_plots.index(chosen_plots[2])] = 1
+    possible_plots = ["status_count","occupancy_average","occupancy_stack_chart","waiting_time_average","ride_time_average","detour_time_average","service_rate"]
+    
     #plot_args = [int(i) for i in plot_args]
     if args.map_plot != "occupancy" and args.map_plot != "vehicle_status":
         raise IOError("Incorrect map plot type!")
-    args.map_plot = "1" if args.map_plot == "occupancy" else "2"
 
-    if len(plot_args) != 6:
-        raise IOError("Incorrect number of plots!")
-    if sum(plot_args) == 0:
-        raise IOError("No plots selected!")
-    if sum(plot_args) != 3:
-        raise IOError("Incorrect number of plots! You should select 3 plots!")
     main(args.output_dir, args.sim_seconds_per_real_second, start_time_in_seconds = args.start_time_in_seconds,
          end_time_in_seconds = args.end_time_in_seconds, parcels = args.parcels, passengers = args.passengers,
-         status_type = int(args.map_plot),live_plot=not args.save_figs,color_list = False,plot_args=plot_args)
+         map_plot = args.map_plot, plot_1=args.plot_1, plot_2=args.plot_2, plot_3=args.plot_3,
+         live_plot=not args.save_figs,color_list = False)
     
 
 

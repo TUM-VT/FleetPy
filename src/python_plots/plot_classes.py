@@ -20,6 +20,12 @@ VEHICLE_POINT_SIZE = 12
 CTX_PROVIDER = ctx.providers.CartoDB.Positron# ctx.providers.Stamen.TonerLite
 BOARDER_SIZE = 1000
 
+import matplotlib.colors
+tab20 = plt.cm.get_cmap('Oranges', 20)
+cl = tab20(np.linspace(0, 1, 5))
+STATUS_COLOR_LIST= ["lightgrey","red","blue","orange","green","dimgrey"]
+OCCUPANCY_COLOR_LIST = ['dodgerblue'] + list(cl) + ['dimgrey']
+
 
 class PyPlot(Process):
 
@@ -48,7 +54,27 @@ class PyPlot(Process):
         # Download the map image using the extent
         _, bbox = ctx.bounds2raster(x[0], y[0], x[1], y[1], path=self.bg_map_path, source=CTX_PROVIDER)
         self.plot_extent_3857 = bbox
-        #exit()
+        
+        self._times = []
+        self._pax_counts = {}
+        self._state_counts = {}
+        self._avg_occ = []
+        self._avg_wait_time = []
+        self._avg_ride_time = []
+        self._avg_detour_time = []
+        self._accepted_requests = []
+        self._rejected_requests = []
+        
+        self._key_to_plot_func = {
+            'status_count': self._create_status_count_plot,
+            'occupancy_count': self._create_occ_count_plot,
+            'occupancy_average': self._create_avg_occ_plot,
+            'occupancy_stack_chart': self._create_occ_stack_plot,
+            'waiting_time_average': self._create_avg_wait_time_plot,
+            'ride_time_average': self._create_avg_ride_time_plot,
+            'detour_time_average': self._create_avg_detour_time_plot ,
+            'service_rate': self._create_service_rate_stack_plot
+        }
 
     def convert_lat_lon(self, lats: list, lons: list, to_epsg: str = "epsg:3857"):
         proj_transformer = Transformer.from_proj('epsg:4326', to_epsg)
@@ -63,46 +89,89 @@ class PyPlot(Process):
         return fig, gs, axes
 
     def draw_plots(self):
-
+        #print("draw")
         #color_list = ['blue','orange','green','red','purple','beige']
-        if self.shared_dict['color_list']:
-            color_list = stack_chart_color_list = self.shared_dict['color_list']
-        else:
-            stack_chart_color_list = ["lightgrey","red","blue","orange","green","dimgrey"]
-            color_list = stack_chart_color_list
-        reveresed_stack_chart_color_list = stack_chart_color_list[1:][::-1]
-        stack_chart_color_list.reverse()
-        reveresed_stack_chart_color_list.insert(0,"white")
-        if self.shared_dict['status_type'] == 2 and self.shared_dict['parcels']:
-            possible_status = ['idle','0','1','2','3','4']
+            
+        self._times.append(self.shared_dict["sim_time_float"])
+        for k, v in self.shared_dict["status_counts"].items():
+            if self._state_counts.get(k) is None:
+                self._state_counts[k] = []
+            self._state_counts[k].append(v)
+        for k, v in self.shared_dict["pax_info"].items():
+            if self._pax_counts.get(k) is None:
+                self._pax_counts[k] = []
+            self._pax_counts[k].append(v)
+        self._avg_occ.append(self.shared_dict["avg_pax"])
+        self._avg_wait_time.append(self.shared_dict["avg_wait_time"])
+        self._avg_ride_time.append(self.shared_dict["avg_ride_time"])
+        self._avg_detour_time.append(self.shared_dict["avg_detour_time"])
+        self._accepted_requests.append(self.shared_dict["accepted_users"])
+        self._rejected_requests.append(self.shared_dict["rejected_users"])
+        #print("here")
+        if self.shared_dict.get("plot_1") is not None:
+            self._key_to_plot_func[self.shared_dict["plot_1"]](0)
+        if self.shared_dict.get("plot_2") is not None:
+            self._key_to_plot_func[self.shared_dict["plot_2"]](1)
+        if self.shared_dict.get("plot_3") is not None:
+            self._key_to_plot_func[self.shared_dict["plot_3"]](2)
+            
+        if self.shared_dict['map_plot'] == "occupancy" and self.shared_dict['parcels']:
+            possible_status = ['0 (reposition)', '0 (route)','1','2','3','4','idle']
             masks = []
-            masks.append(self.shared_dict["veh_coord_status_df"]["status"] == "idle")
-            color_list = reveresed_stack_chart_color_list
-            for i in range(5):
+            color_list = OCCUPANCY_COLOR_LIST
+            # repo
+            condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "reposition"
+            condition_2 = self.shared_dict["veh_coord_status_df"]["parcels"] == 0
+            masks.append([a and b for a, b in zip(condition_1, condition_2)])
+            # route
+            condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "route"
+            condition_2 = self.shared_dict["veh_coord_status_df"]["parcels"] == 0
+            masks.append([a and b for a, b in zip(condition_1, condition_2)])
+            
+            for i in range(1, 5):
                 condition_1 = self.shared_dict["veh_coord_status_df"]["status"] != "idle"
                 condition_2 = self.shared_dict["veh_coord_status_df"]["parcels"] == i
                 masks.append([a and b for a, b in zip(condition_1, condition_2)])
-        elif self.shared_dict['status_type'] == 2 and self.shared_dict['passengers']:
-            possible_status = ['idle','0','1','2','3','4']
-            masks = []
             masks.append(self.shared_dict["veh_coord_status_df"]["status"] == "idle")
-            color_list = reveresed_stack_chart_color_list
-            for i in range(5):
+        elif self.shared_dict['map_plot'] == "occupancy" and self.shared_dict['passengers']:
+            possible_status = ['0 (reposition)', '0 (route)','1','2','3','4','idle']
+            masks = []
+            color_list = OCCUPANCY_COLOR_LIST
+            # repo
+            condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "reposition"
+            condition_2 = self.shared_dict["veh_coord_status_df"]["passengers"] == 0
+            masks.append([a and b for a, b in zip(condition_1, condition_2)])
+            # route
+            condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "route"
+            condition_2 = self.shared_dict["veh_coord_status_df"]["passengers"] == 0
+            masks.append([a and b for a, b in zip(condition_1, condition_2)])
+            
+            for i in range(1, 5):
                 condition_1 = self.shared_dict["veh_coord_status_df"]["status"] != "idle"
                 condition_2 = self.shared_dict["veh_coord_status_df"]["passengers"] == i
                 masks.append([a and b for a, b in zip(condition_1, condition_2)])
-        elif (self.shared_dict['status_type'] == 2 
+            masks.append(self.shared_dict["veh_coord_status_df"]["status"] == "idle")
+        elif (self.shared_dict['map_plot'] == "occupancy" 
               and not self.shared_dict['parcels'] 
               and not self.shared_dict['passengers']):
-            possible_status = ['idle','0','1','2','3','4']
+            possible_status = ['0 (reposition)', '0 (route)','1','2','3','4','idle']
             masks = []
-            masks.append(self.shared_dict["veh_coord_status_df"]["status"] == "idle")
-            color_list = reveresed_stack_chart_color_list
-            for i in range(5):
+            color_list = OCCUPANCY_COLOR_LIST
+            # repo
+            condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "reposition"
+            condition_2 = self.shared_dict["veh_coord_status_df"]["pax"] == 0
+            masks.append([a and b for a, b in zip(condition_1, condition_2)])
+            # route
+            condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "route"
+            condition_2 = self.shared_dict["veh_coord_status_df"]["pax"] == 0
+            masks.append([a and b for a, b in zip(condition_1, condition_2)])
+            
+            for i in range(1, 5):
                 condition_1 = self.shared_dict["veh_coord_status_df"]["status"] != "idle"
                 condition_2 = self.shared_dict["veh_coord_status_df"]["pax"] == i
                 masks.append([a and b for a, b in zip(condition_1, condition_2)])
-        elif self.shared_dict['status_type'] == 1:
+            masks.append(self.shared_dict["veh_coord_status_df"]["status"] == "idle")
+        elif self.shared_dict['map_plot'] == "vehicle_status":
             possible_status = self.shared_dict["possible_status"]
             masks = []
             for status in possible_status:
@@ -111,88 +180,6 @@ class PyPlot(Process):
         axes = self.axes
         # Plot the data on the map
         ### Plot the vehicle status statistics
-        available_plots = ['status_count','occupancy','occupancy_stack_chart','avg_wait_time','avg_ride_time','avg_detour_time']
-        plots = [p for i,p in enumerate(available_plots) if self.shared_dict['plot_args'][i] == 1]
-        plot_slots = [0,1,2]
-        time_line = self.shared_dict["time_line"]
-        if "status_count" in plots:
-            status_count_idx = plot_slots.pop(0)
-            axes[status_count_idx].set_title("status_count")
-            axes[status_count_idx].bar(self.shared_dict["status_counts"].keys(), 
-                                        self.shared_dict["status_counts"].values(),
-                                        color = color_list)
-            axes[status_count_idx].set_ylim(0,len(self.shared_dict["veh_coord_status_df"]))
-            axes[status_count_idx].set_xticks(list(self.shared_dict["status_counts"].keys()))
-            axes[status_count_idx].set_xticklabels(self.shared_dict["status_counts"].keys(), rotation=45)
-        if "occupancy" in plots:
-            occupancy_idx = plot_slots.pop(0)
-            axes[occupancy_idx].set_title("Occupancy")
-            axes[occupancy_idx].plot(time_line, self.shared_dict["pax_list"])
-            axes[occupancy_idx].set_ylim(0, 5)
-            #axes[occupancy_idx].legend(loc="upper left")
-        if "occupancy_stack_chart" in plots:
-            occupancy_stack_chart_idx = plot_slots.pop(0)
-            axes[occupancy_stack_chart_idx ].set_title("Occupancy Stack Chart")
-            axes[occupancy_stack_chart_idx ].set_ylabel("Number Vehicles")
-            list_values = []
-            list_values = [
-                list(self.shared_dict["pax_info"][-1]),
-                list(self.shared_dict["pax_info"][0]),
-                list(self.shared_dict["pax_info"][1]),
-                list(self.shared_dict["pax_info"][2]),
-                list(self.shared_dict["pax_info"][3]),
-                list(self.shared_dict["pax_info"][4])
-            ]
-            same_length = True
-            le = None
-            for l in list_values:
-                if le is None:
-                    le = len(l)
-                elif le != len(l):
-                    same_length = False
-                    break
-            if same_length:
-                pass
-            else:
-                print("Error in plotting occupancy stack chart")
-                print([len(l) for l in list_values])
-                min_len = min([len(l) for l in list_values])
-                for i, l in enumerate(list_values):
-                    l = l[:min_len]
-                    list_values[i] = l
-            #print(len(time_line), le)
-            if len(time_line) < le:
-                for i, l in enumerate(list_values):
-                    l = l[:len(time_line)]
-                    list_values[i] = l
-            elif le < len(time_line):
-                time_line = time_line[:le]
-            axes[occupancy_stack_chart_idx ].stackplot(time_line, list_values[1],
-                                              list_values[2], list_values[3],
-                                              list_values[4], list_values[5],
-                                                list_values[0],
-                                                colors=stack_chart_color_list,
-                                                labels = ["0","1","2","3","4","idle"])
-            axes[occupancy_stack_chart_idx ].legend(loc="upper left")
-            axes[occupancy_stack_chart_idx ].set_xlabel("Simulation Time [h]")
-        if "avg_wait_time" in plots:
-            avg_wait_time_idx = plot_slots.pop(0)
-            axes[avg_wait_time_idx].set_title("Average Waiting Time")
-            axes[avg_wait_time_idx].set_ylabel("Waiting Time [s]")
-            axes[avg_wait_time_idx].set_xlabel("Simulation Time [h]")
-            axes[avg_wait_time_idx].plot(self.shared_dict["avg_wait_time"])
-        if "avg_ride_time" in plots:
-            avg_ride_time_idx = plot_slots.pop(0)
-            axes[avg_ride_time_idx].set_title("Average Ride Time")
-            axes[avg_ride_time_idx].set_ylabel("Ride Time [s]")
-            axes[avg_ride_time_idx].set_xlabel("Simulation Time [h]")
-            axes[avg_ride_time_idx].plot(self.shared_dict["avg_ride_time"])
-        if "avg_detour_time" in plots:
-            avg_detour_time_idx = plot_slots.pop(0)
-            axes[avg_detour_time_idx].set_title("Average Detour Time")
-            axes[avg_detour_time_idx].set_ylabel("Detour Time [s]")
-            axes[avg_detour_time_idx].set_xlabel("Simulation Time [h]")
-            axes[avg_detour_time_idx].plot(self.shared_dict["avg_detour_time"])
         ###
         axes[3].axis(self.plot_extent_3857)
         axes[3].set_xlim(self.plot_extent_3857[:2])
@@ -219,6 +206,7 @@ class PyPlot(Process):
         axes[3].legend(loc="upper left")
         axes[3].axis('off')
         axes[3].set_title(str(self.shared_dict["simulation_time"]))
+        
 
     def save_single_plot(self, datetime_stamp: tp.Union[str, datetime]):
         if self.fig is None:
@@ -255,3 +243,69 @@ class PyPlot(Process):
         self.fig, self.grid_spec, self.axes = self.generate_plot_axes()
         ani = animation.FuncAnimation(self.fig, self.__animate, interval=REALTIME_UPDATE_INTERVAL)
         plt.show()
+        
+    def _create_occ_stack_plot(self, axis_id):
+        self.axes[axis_id ].set_title("Occupancy Stack Chart")
+        self.axes[axis_id ].set_ylabel("Number Vehicles")
+        list_list_values = [self._pax_counts[k] for k in ['0 (reposition)', '0 (route)','1','2','3','4','idle']]
+        self.axes[axis_id ].stackplot(self._times, *list_list_values,
+                                            colors=OCCUPANCY_COLOR_LIST,
+                                            labels = [ '0 (reposition)', '0 (route)','1','2','3','4','idle' ])
+        self.axes[axis_id ].legend(loc="upper left")
+        self.axes[axis_id ].set_xlabel("Simulation Time [h]")
+        
+    def _create_status_count_plot(self, axis_id):
+        self.axes[axis_id ].set_title("Route Status Counts")
+        self.axes[axis_id ].bar(self.shared_dict["status_counts"].keys(), 
+                                    self.shared_dict["status_counts"].values(),
+                                    color = STATUS_COLOR_LIST)
+        self.axes[axis_id ].set_ylim(0,len(self.shared_dict["veh_coord_status_df"]))
+        self.axes[axis_id ].set_xticks(list(self.shared_dict["status_counts"].keys()))
+        self.axes[axis_id ].set_xticklabels(self.shared_dict["status_counts"].keys(), rotation=45)
+        
+    def _create_occ_count_plot(self, axis_id):
+        self.axes[axis_id ].set_title("Occupancy Counts")
+        ks = [ '0 (reposition)', '0 (route)','1','2','3','4','idle' ]
+        self.axes[axis_id ].bar(ks, 
+                                    [self.shared_dict["pax_info"][k] for k in ks],
+                                    color = OCCUPANCY_COLOR_LIST)
+        self.axes[axis_id ].set_ylim(0,len(self.shared_dict["veh_coord_status_df"]))
+        self.axes[axis_id ].set_xticks(ks)
+        self.axes[axis_id ].set_xticklabels(ks, rotation=45)
+        self.axes[axis_id ].set_xlabel("Occupancy")
+        self.axes[axis_id ].set_ylabel("Number Vehicles")
+        
+    def _create_avg_occ_plot(self, axis_id):
+        self.axes[axis_id].set_title("Average Occupancy")
+        self.axes[axis_id].plot(self._times, self._avg_occ)
+        self.axes[axis_id].set_xlabel("Simulation Time [h]")
+        self.axes[axis_id].set_ylabel("Average Occupancy")
+        #self.axes[axis_id].legend(loc="upper left")
+        
+    def _create_avg_wait_time_plot(self, axis_id):
+        self.axes[axis_id].set_title("Average Waiting Time")
+        self.axes[axis_id].set_ylabel("Waiting Time [s]")
+        self.axes[axis_id].set_xlabel("Simulation Time [h]")
+        self.axes[axis_id].plot(self._times, self._avg_wait_time)
+        
+    def _create_avg_ride_time_plot(self, axis_id):
+        print("ride times", self._avg_ride_time)
+        self.axes[axis_id].set_title("Average Ride Time")
+        self.axes[axis_id].set_ylabel("Ride Time [s]")
+        self.axes[axis_id].set_xlabel("Simulation Time [h]")
+        self.axes[axis_id].plot(self._times, self._avg_ride_time)
+        
+    def _create_avg_detour_time_plot(self, axis_id):
+        self.axes[axis_id].set_title("Average Detour Time")
+        self.axes[axis_id].set_ylabel("Detour Time [s]")
+        self.axes[axis_id].set_xlabel("Simulation Time [h]")
+        self.axes[axis_id].plot(self._times, self._avg_detour_time)
+        
+    def _create_service_rate_stack_plot(self, axis_id):
+        self.axes[axis_id].set_title("Requests States")
+        self.axes[axis_id].set_ylabel("Number of Requests")
+        self.axes[axis_id].stackplot(self._times, self._accepted_requests, self._rejected_requests,
+                                            colors=["green","red"],
+                                            labels = ["accepted","rejected"])
+        self.axes[axis_id].legend(loc="upper left")
+        self.axes[axis_id].set_xlabel("Simulation Time [h]")
