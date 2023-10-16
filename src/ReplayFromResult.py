@@ -663,14 +663,13 @@ class ReplayPyPlot(Replay):
             self._manager.shutdown()
             
         if self.create_images:
+            print("start creating the video!")
             import imageio
             import os
             from pathlib import Path
 
-            print(self.plots_dir)
             image_folder = self.plots_dir
             images_p = [img for img in image_folder.iterdir() if img.suffix == ".png"]
-            print(images_p)
             video_name = 'video.gif'
 
             # p = Path(image_folder)

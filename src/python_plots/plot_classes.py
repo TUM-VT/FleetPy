@@ -82,7 +82,7 @@ class PyPlot(Process):
         return list(x), list(y)
 
     def generate_plot_axes(self):
-        fig = plt.figure(1, figsize=FIG_SIZE)
+        fig = plt.figure(1, figsize=FIG_SIZE, tight_layout=True)
         gs = gridspec.GridSpec(3, 3, figure=fig)
         gs.update(wspace=0.025, hspace=0.5)
         axes = [plt.subplot(gs[0, 2]), plt.subplot(gs[1, 2]), plt.subplot(gs[2, 2]), plt.subplot(gs[:, 0:2])]

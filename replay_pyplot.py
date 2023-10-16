@@ -71,12 +71,7 @@ if __name__ == "__main__":
     group.add_argument('--passengers',action='store_true',help='if set, plots passenger data',default=False)
 
     args = parser.parse_args()
-    #plot_args = args.plots
-    #plot_args.split()
-    #plot_args = [int(i) for i in plot_args]
-    possible_plots = ["status_count","occupancy_average","occupancy_stack_chart","waiting_time_average","ride_time_average","detour_time_average","service_rate"]
-    
-    #plot_args = [int(i) for i in plot_args]
+
     if args.map_plot != "occupancy" and args.map_plot != "vehicle_status":
         raise IOError("Incorrect map plot type!")
 
