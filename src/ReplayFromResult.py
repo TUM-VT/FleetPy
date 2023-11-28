@@ -477,6 +477,14 @@ class Replay(VehicleMovementSimulation):
         usr_stats_df = pd.read_csv(usr_stats_f)
         #usr_stats_df = usr_stats_df[usr_stats_df["earliest_pickup_time"] >= self.sim_start_time]
         self.user_stats = UserState(usr_stats_df, self.sim_start_time, self.sim_end_time,parcels=parcels,passengers=passengers)
+        def get_node_from_pos(pos):
+            return int(pos.split(";")[0])
+        usr_stats_df["start_node"] = usr_stats_df["start"].apply(get_node_from_pos)
+        usr_stats_df["end_node"] = usr_stats_df["end"].apply(get_node_from_pos)
+        start_nodes = usr_stats_df["start_node"].unique()
+        end_nodes = usr_stats_df["end_node"].unique()
+        user_nodes = list(set(start_nodes).union(end_nodes))
+        self.active_nodes_gdf = self.node_gdf[self.node_gdf["node_index"].isin(user_nodes)]
 
         print(" ... initiation successful")
         self._sc_loaded = True
@@ -623,7 +631,7 @@ class ReplayPyPlot(Replay):
                               end_time_in_seconds=end_time_in_seconds,parcels=self.parcels,passengers=self.passengers)
         self.plots_dir = Path(output_dir).joinpath("plots")
         if plot_extend is None:
-            bounds = self.node_gdf.bounds
+            bounds = self.active_nodes_gdf.bounds
             self._map_extent = (bounds.minx.min(), bounds.maxx.max(), bounds.miny.min(), bounds.maxy.max())
         else:
             self._map_extent = plot_extend
