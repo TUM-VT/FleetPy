@@ -8,7 +8,7 @@ import typing as tp
 from pathlib import Path
 import contextily as ctx
 from pyproj import Transformer
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 FIG_SIZE = (15,10)
@@ -205,7 +205,8 @@ class PyPlot(Process):
             axes[3].scatter(x, y, s=VEHICLE_POINT_SIZE, label=possible_status[i],color = color_list[i])
         axes[3].legend(loc="upper left")
         axes[3].axis('off')
-        axes[3].set_title(str(self.shared_dict["simulation_time"]))
+        rounded_simulation_time = self.shared_dict["simulation_time"]- timedelta(microseconds=self.shared_dict["simulation_time"].microsecond)
+        axes[3].set_title(str(rounded_simulation_time))
         
 
     def save_single_plot(self, datetime_stamp: tp.Union[str, datetime]):
