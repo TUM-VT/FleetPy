@@ -53,7 +53,7 @@ class PyPlot(Process):
         self.plot_extent_3857 = x + y
         # Download the map image using the extent
         _, bbox = ctx.bounds2raster(x[0], y[0], x[1], y[1], path=self.bg_map_path, source=CTX_PROVIDER)
-        self.plot_extent_3857 = bbox
+        #self.plot_extent_3857 = bbox
         
         self._times = []
         self._pax_counts = {}
@@ -203,7 +203,7 @@ class PyPlot(Process):
                 lons, lats = list(zip(*coords))
                 x, y = self.convert_lat_lon(lats, lons)
             axes[3].scatter(x, y, s=VEHICLE_POINT_SIZE, label=possible_status[i],color = color_list[i])
-        axes[3].legend(loc="upper left")
+        axes[3].legend(loc="lower left")
         axes[3].axis('off')
         rounded_simulation_time = self.shared_dict["simulation_time"]- timedelta(microseconds=self.shared_dict["simulation_time"].microsecond)
         axes[3].set_title(str(rounded_simulation_time))
