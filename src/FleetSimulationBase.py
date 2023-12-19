@@ -42,7 +42,7 @@ PROGRESS_LOOP_VEHICLE_STATUS = [VRL_STATES.IDLE,VRL_STATES.CHARGING,VRL_STATES.R
 # check for computation on LRZ cluster
 if os.environ.get('SLURM_PROCID'):
     PROGRESS_LOOP = "off"
-    
+
 INPUT_PARAMETERS_FleetSimulationBase = {
     "doc" : "this is the base simulation class used for all simulations within FleetPy",
     "inherit" : None,
@@ -56,7 +56,7 @@ INPUT_PARAMETERS_FleetSimulationBase = {
     ],
     "mandatory_modules": [
         G_SIM_ENV, G_NETWORK_TYPE, G_RQ_TYP1, G_OP_MODULE
-    ], 
+    ],
     "optional_modules": []
 }
 
@@ -324,7 +324,7 @@ class FleetSimulationBase:
                     depot_f = os.path.join(self.dir_names[G_DIR_INFRA], depot_f_name)
                     op_charge = OperatorChargingAndDepotInfrastructure(op_id, depot_f, op_dict, self.scenario_parameters, self.dir_names, self.routing_engine)
                     self.charging_operator_dict["op"][op_id] = op_charge
-                
+
             # public charging
             if len(self.list_ch_op_dicts) > 0:
                 from src.infra.ChargingInfrastructure import PublicChargingInfrastructureOperator
@@ -352,7 +352,8 @@ class FleetSimulationBase:
             operator_attributes = self.list_op_dicts[op_id]
             operator_module_name = operator_attributes[G_OP_MODULE]
             self.op_output[op_id] = []  # shared list among vehicles
-            if not operator_module_name == "LinebasedFleetControl":
+            if not (operator_module_name == "LinebasedFleetControl"
+                    or operator_module_name == "SemiOnDemandBatchAssignmentFleetcontrol"):
                 fleet_composition_dict = operator_attributes[G_OP_FLEET]
                 list_vehicles = []
                 vid = 0
@@ -369,7 +370,27 @@ class FleetSimulationBase:
                 OpClass: FleetControlBase = load_fleet_control_module(operator_module_name)
                 self.operators.append(OpClass(op_id, operator_attributes, list_vehicles, self.routing_engine, self.zones,
                                             self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values())))
-            else:
+            elif operator_module_name == "SemiOnDemandBatchAssignmentFleetcontrol":  # SemiOnDemandBatchAssignmentFleetcontrol
+                from src.fleetctrl.SemiOnDemandBatchAssignmentFleetcontrol import SemiOnDemandBatchAssignmentFleetcontrol
+                list_vehicles = []
+                OpClass = SemiOnDemandBatchAssignmentFleetcontrol(op_id, operator_attributes, list_vehicles,
+                                                                  self.routing_engine, self.zones,
+                                                                  self.scenario_parameters, self.dir_names,
+                                                                  self.charging_operator_dict["op"].get(op_id, None),
+                                                                  list(self.charging_operator_dict["pub"].values()))
+                init_vids = OpClass.return_vehicles_to_initialize()
+
+                for vid, veh_type in init_vids.items():
+                    tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+                                                        self.routing_engine, self.demand.rq_db,
+                                                        self.op_output[op_id], route_output_flag,
+                                                        replay_flag)
+                    list_vehicles.append(tmp_veh_obj)
+                    veh_type_list.append([op_id, vid, veh_type])
+                    self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
+                OpClass.continue_init(list_vehicles, self.start_time)
+                self.operators.append(OpClass)
+            else: # for LinebasedFleetControl
                 from dev.fleetctrl.LinebasedFleetControl import LinebasedFleetControl
                 OpClass = LinebasedFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()))
                 init_vids = OpClass.return_vehicles_to_initialize()
@@ -561,7 +582,7 @@ class FleetSimulationBase:
         """This method records the stats at the end of the simulation."""
         self.demand.save_user_stats(force)
         for op_id in range(self.n_op):
-            current_buffer_size = len(self.op_output[op_id]) 
+            current_buffer_size = len(self.op_output[op_id])
             if (current_buffer_size and force) or current_buffer_size > BUFFER_SIZE:
                 op_output_f = os.path.join(self.dir_names[G_DIR_OUTPUT], f"2-{op_id}_op-stats.csv")
                 if os.path.isfile(op_output_f):
