@@ -405,6 +405,9 @@ class FleetControlBase(metaclass=ABCMeta):
         :return: TravellerOffer or None for the request
         :rtype: TravellerOffer or None
         """
+        if self.rq_dict.get(rid) is None:
+            LOG.warning(f"rid {rid} not in database when querrying an offer! -> this might result from an auto reject due to similar o-d pairs in a Batch Offer Framework -> send rejection!")
+            return Rejection(rid, self.op_id)
         return self.rq_dict[rid].get_current_offer()
 
     @abstractmethod
