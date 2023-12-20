@@ -90,7 +90,7 @@ class PyPlot(Process):
 
     def draw_plots(self):
         #print("draw")
-        #color_list = ['blue','orange','green','red','purple','beige']
+        # color_list = ['blue','orange','green','red','purple','beige']
             
         self._times.append(self.shared_dict["sim_time_float"])
         for k, v in self.shared_dict["status_counts"].items():
@@ -173,6 +173,7 @@ class PyPlot(Process):
             masks.append(self.shared_dict["veh_coord_status_df"]["status"] == "idle")
         elif self.shared_dict['map_plot'] == "vehicle_status":
             possible_status = self.shared_dict["possible_status"]
+            color_list = STATUS_COLOR_LIST
             masks = []
             for status in possible_status:
                 masks.append(self.shared_dict["veh_coord_status_df"]["status"] == status)

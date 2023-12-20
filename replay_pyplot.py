@@ -70,6 +70,7 @@ if __name__ == "__main__":
     group.add_argument('--parcels',action='store_true',help='if set, plots parcel data',default=False)
     group.add_argument('--passengers',action='store_true',help='if set, plots passenger data',default=False)
 
+
     args = parser.parse_args()
 
     if args.map_plot != "occupancy" and args.map_plot != "vehicle_status":

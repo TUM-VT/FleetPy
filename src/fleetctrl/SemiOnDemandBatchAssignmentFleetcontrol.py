@@ -229,14 +229,15 @@ class PtLine:
         line_km_run = self.return_km_run(point)
 
         # check if this is a loop route
-        if self.loop_route:
+        # if self.loop_route:
+        if True: # loop route not implemented, all routes set as single direction
             # if the distance is less than the fixed length, return True
-            if line_km_run < self.fixed_length:
+            if line_km_run > self.fixed_length:
                 return True
             else:
                 return False
         else:
-            if line_km_run < self.fixed_length or line_km_run > self.line_alignment.length - self.fixed_length:
+            if line_km_run > self.fixed_length and line_km_run < self.line_alignment.length - self.fixed_length:
                 return True
             else:
                 return False
@@ -635,6 +636,9 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
             self.schedule_to_initialize[line][pt_vehicle_id] = vehicle_line_schedule
             pt_vehicle_id += 1
 
+        # line specification output
+        pd.DataFrame(pt_line_specifications_list).to_csv(os.path.join(dir_names[G_DIR_OUTPUT], f"3-{self.op_id}_pt_vehicles.csv"), index=False)
+
         #
         self.rq_dict = {}
         self.routing_engine = routing_engine
@@ -647,11 +651,6 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         self.dyn_fleet_sizing = None
         self.repo = None
         LOG.info(f"SoD finish first init {len(self.PT_lines)}")
-
-        # TODO: to see if calling continue_init() here is right
-        # self.cont_init_before = False
-        # self.continue_init(self.sim_vehicles, self.sim_time)
-        # LOG.info(f"SoD finish all init {len(self.PT_lines)}")
 
     def return_vehicles_to_initialize(self) -> Dict[int, str]:
         """
@@ -666,10 +665,6 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         :param sim_vehicle_objs: ordered list of sim_vehicle_objs
         :param sim_start_time: simulation start time
         """
-        # if self.cont_init_before:
-        #     return
-        # self.cont_init_before = True
-
         self.sim_time = sim_start_time
         veh_obj_dict = {veh.vid: veh for veh in sim_vehicle_objs}
         for line, vid_to_schedule_dict in self.schedule_to_initialize.items():
@@ -771,16 +766,22 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         drop_off_pos = rq.get_destination_pos()
         # assign to the closest stop, compute the walking distance to the assigned stop
         to_check = {"origin": pick_up_pos, "destination": drop_off_pos}
+        flex_or_not = {"origin": False, "destination": False}
         walking_time = {"origin": 0.0, "destination": 0.0}
         for origin_dest, pos in to_check.items():
             # if in the fixed portion, update the pick-up / drop-off location to the assigned stop
-            if pt_line.check_request_flexible(rq, origin_dest):
+            flex_or_not[origin_dest] = pt_line.check_request_flexible(rq, origin_dest)
+            if not pt_line.check_request_flexible(rq, origin_dest):
                 # check the closest stop to the request location (pos)
                 closest_station_id, walking_dist = pt_line.find_closest_station(pos)
-                to_check[origin_dest] = [pt_line.routing_engine.return_node_position(
+                to_check[origin_dest] = pt_line.routing_engine.return_node_position(
                     self.station_dict[closest_station_id].street_network_node_id
-                ), None, None]
+                )
                 walking_time[origin_dest] = walking_dist / self.walking_speed
+
+        # update the pick-up / drop-off location to the assigned stop
+        pick_up_pos = to_check["origin"]
+        drop_off_pos = to_check["destination"]
 
         # if pt_line.check_request_flexible(rq, "origin"):
         #     pick_up_pos = [pt_line.routing_engine.return_node_position(
@@ -796,7 +797,6 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         if self.rq_dict.get(rq.get_rid_struct()):
             return
         t0 = time.perf_counter()
-        self.sim_time = sim_time
 
         self.sim_time = sim_time
         prq = PlanRequest(rq, self.routing_engine, min_wait_time=self.min_wait_time,
