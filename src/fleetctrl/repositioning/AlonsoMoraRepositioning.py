@@ -42,8 +42,14 @@ class AlonsoMoraRepositioning(RepositioningBase):
         self._rejected_customer_origins_since_last_step = []
         self.min_reservation_buffer = operator_attributes.get(G_OP_REPO_RES_PUF, 3600)  # TODO  # minimum time for service before a vehicle has a reserved trip
         
+    def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> None:
+        """ this method loads the forecast zone system needed for the corresponding repositioning strategy
+        this class does not need a zone system (always feasible to do that? maybe other modules need it)"""
+        return None
+        
     def register_rejected_customer(self, planrequest : PlanRequest, sim_time):
         LOG.debug(f"new rejected customer at {planrequest.get_o_stop_info()[0][0]} time {sim_time}")
+        super().register_rejected_customer(planrequest, sim_time)
         self._rejected_customer_origins_since_last_step.append(planrequest.get_o_stop_info()[0][0])
         
     def determine_and_create_repositioning_plans(self, sim_time, lock=None):
@@ -55,6 +61,8 @@ class AlonsoMoraRepositioning(RepositioningBase):
         :param lock: indicates if vehplans should be locked
         :return: list[vid] of vehicles with changed plans
         """
+        if self.zone_system is not None:
+            self.zone_system.time_trigger(sim_time)
         if len(self._rejected_customer_origins_since_last_step) == 0:
             return []
         self.sim_time = sim_time
@@ -64,6 +72,10 @@ class AlonsoMoraRepositioning(RepositioningBase):
         # possible repostionings (only idle vehicles)    
         vid_to_origin_to_tt = {}    # idle vehicle id -> possible origin of repo target -> travel time (to be minimized)
         origin_to_counts = Counter(self._rejected_customer_origins_since_last_step)   # origin -> number of occurances
+        if self.zone_system is not None:
+            for rej_o, number_rej in origin_to_counts.items():
+                zone_id = self.zone_system.get_zone_from_node(rej_o)
+                self.record_df.loc[(sim_time, zone_id, sim_time, sim_time + self.fleetctrl.repo_time_step), "tot_fc_supply"] = number_rej
         for veh in self.fleetctrl.sim_vehicles:
             if len(self.fleetctrl.veh_plans[veh.vid].list_plan_stops) == 0:
                 vid_to_origin_to_tt[veh.vid] = {}

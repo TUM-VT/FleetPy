@@ -206,6 +206,9 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
             self.RPBO_Module.add_new_request(rid_struct, prq, consider_for_global_optimisation=False)
         else:
             self.RPBO_Module.add_new_request(rid_struct, prq)
+            
+        if self.repo and not prq.get_reservation_flag():
+            self.repo.register_user_request(prq, sim_time)
 
         # record cpu time
         dt = round(time.perf_counter() - t0, 5)

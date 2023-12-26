@@ -52,7 +52,7 @@ INPUT_PARAMETERS_FleetSimulationBase = {
     ],
     "input_parameters_optional": [
         G_SIM_TIME_STEP, G_NR_CH_OPERATORS, G_SIM_REALTIME_PLOT_FLAG, "log_level", G_SIM_ROUTE_OUT_FLAG, G_SIM_REPLAY_FLAG, G_INIT_STATE_SCENARIO,
-        G_FC_TYPE, G_ZONE_SYSTEM_NAME, G_FC_TR, G_FC_FNAME, G_INFRA_NAME
+        G_ZONE_SYSTEM_NAME, G_INFRA_NAME
     ],
     "mandatory_modules": [
         G_SIM_ENV, G_NETWORK_TYPE, G_RQ_TYP1, G_OP_MODULE
@@ -126,7 +126,17 @@ class FleetSimulationBase:
         self.scenario_name = scenario_parameters[G_SCENARIO_NAME]
         print("-"*80 + f"\nSimulation of scenario {self.scenario_name}")
         LOG.info(f"General initialization of scenario {self.scenario_name}...")
-        self.dir_names = self.get_directory_dict(scenario_parameters)
+        
+        self.n_op = scenario_parameters[G_NR_OPERATORS]
+        self.n_ch_op = scenario_parameters.get(G_NR_CH_OPERATORS, 0)
+        
+        # build list of operator dictionaries  # TODO: this could be eliminated with a new YAML-based config system
+        self.list_op_dicts: tp.Dict[str,str] = build_operator_attribute_dicts(scenario_parameters, self.n_op,
+                                                                              prefix="op_")
+        self.list_ch_op_dicts: tp.Dict[str,str] = build_operator_attribute_dicts(scenario_parameters, self.n_ch_op,
+                                                                                 prefix="ch_op_")
+        
+        self.dir_names = self.get_directory_dict(scenario_parameters, self.list_op_dicts)
         self.scenario_parameters: dict = scenario_parameters
 
         # check whether simulation already has been conducted -> use final_state.csv to check
@@ -146,18 +156,10 @@ class FleetSimulationBase:
         self.end_time = self.scenario_parameters[G_SIM_END_TIME]
         self.time_step = self.scenario_parameters.get(G_SIM_TIME_STEP, 1)
         self.check_sim_env_spec_inputs(self.scenario_parameters)
-        self.n_op = self.scenario_parameters[G_NR_OPERATORS]
-        self.n_ch_op = self.scenario_parameters.get(G_NR_CH_OPERATORS, 0)
         self._manager: tp.Optional[Manager] = None
         self._shared_dict: dict = {}
         self._plot_class_instance: tp.Optional[PyPlot] = None
         self.realtime_plot_flag = self.scenario_parameters.get(G_SIM_REALTIME_PLOT_FLAG, 0)
-
-        # build list of operator dictionaries  # TODO: this could be eliminated with a new YAML-based config system
-        self.list_op_dicts: tp.Dict[str,str] = build_operator_attribute_dicts(scenario_parameters, self.n_op,
-                                                                              prefix="op_")
-        self.list_ch_op_dicts: tp.Dict[str,str] = build_operator_attribute_dicts(scenario_parameters, self.n_ch_op,
-                                                                                 prefix="ch_op_")
 
         # take care of random seeds at beginning of simulations
         random.seed(self.scenario_parameters[G_RANDOM_SEED])
@@ -215,12 +217,15 @@ class FleetSimulationBase:
         # TODO # after ISTTT: bring init of modules in extra function (-> parallel processing)
         self.zones = None
         if self.dir_names.get(G_DIR_ZONES, None) is not None:
-            if self.scenario_parameters.get(G_FC_TYPE) and self.scenario_parameters[G_FC_TYPE] == "perfect":
-                from src.infra.PerfectForecastZoning import PerfectForecastZoneSystem
-                self.zones = PerfectForecastZoneSystem(self.dir_names[G_DIR_ZONES], self.scenario_parameters, self.dir_names)
-            else:
-                from src.infra.Zoning import ZoneSystem
-                self.zones = ZoneSystem(self.dir_names[G_DIR_ZONES], self.scenario_parameters, self.dir_names)
+            from src.infra.NetworkZoning import NetworkZoneSystem
+            LOG.warning(f"ZONE SYSTEM {self.dir_names.get(G_DIR_ZONES, None)} IS LOADED: THIS IS NOT USED FOR REBALANCING ANYMORE!")
+            self.zones = NetworkZoneSystem(self.dir_names[G_DIR_ZONES], self.scenario_parameters, self.dir_names)
+            # if self.scenario_parameters.get(G_FC_TYPE) and self.scenario_parameters[G_FC_TYPE] == "perfect":
+            #     from src.infra.PerfectForecastZoning import PerfectForecastZoneSystem
+            #     self.zones = PerfectForecastZoneSystem(self.dir_names[G_DIR_ZONES], self.scenario_parameters, self.dir_names)
+            # else:
+            #     from src.infra.Zoning import ZoneSystem
+            #     self.zones = ZoneSystem(self.dir_names[G_DIR_ZONES], self.scenario_parameters, self.dir_names)
 
         # routing engine
         LOG.info("Initialization of network and routing engine...")
@@ -351,6 +356,9 @@ class FleetSimulationBase:
         for op_id in range(self.n_op):
             operator_attributes = self.list_op_dicts[op_id]
             operator_module_name = operator_attributes[G_OP_MODULE]
+            op_dir_names = self.dir_names.copy()
+            op_specific_dirs = self.dir_names.get(f"op_{op_id}", {})
+            op_dir_names.update(op_specific_dirs)
             self.op_output[op_id] = []  # shared list among vehicles
             if not operator_module_name == "LinebasedFleetControl":
                 fleet_composition_dict = operator_attributes[G_OP_FLEET]
@@ -368,10 +376,10 @@ class FleetSimulationBase:
                         vid += 1
                 OpClass: FleetControlBase = load_fleet_control_module(operator_module_name)
                 self.operators.append(OpClass(op_id, operator_attributes, list_vehicles, self.routing_engine, self.zones,
-                                            self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values())))
+                                            self.scenario_parameters, op_dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values())))
             else:
                 from dev.fleetctrl.LinebasedFleetControl import LinebasedFleetControl
-                OpClass = LinebasedFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()))
+                OpClass = LinebasedFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, op_dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()))
                 init_vids = OpClass.return_vehicles_to_initialize()
                 list_vehicles = []
                 for vid, veh_type in init_vids.items():
@@ -384,19 +392,22 @@ class FleetSimulationBase:
                     self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
                 OpClass.continue_init(list_vehicles, self.start_time)
                 self.operators.append(OpClass)
+            if self.operators[-1].repo is not None and self.operators[-1].repo.zone_system is not None:
+                self.operators[-1].repo.zone_system.register_demand_ref(self.demand)
         veh_type_f = os.path.join(self.dir_names[G_DIR_OUTPUT], "2_vehicle_types.csv")
         veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
         veh_type_df.to_csv(veh_type_f, index=False)
         self.vehicle_update_order: tp.Dict[tp.Tuple[int, int], int] = {vid : 1 for vid in self.sim_vehicles.keys()}
 
     @staticmethod
-    def get_directory_dict(scenario_parameters):
+    def get_directory_dict(scenario_parameters, list_operator_dicts):
         """
         This function provides the correct paths to certain data according to the specified data directory structure.
         :param scenario_parameters: simulation input (pandas series)
+        :param list_operator_dicts: simulation input for each operator (pandas series)
         :return: dictionary with paths to the respective data directories
         """
-        return get_directory_dict(scenario_parameters)
+        return get_directory_dict(scenario_parameters, list_operator_dicts)
 
     def save_scenario_inputs(self):
         config_f = os.path.join(self.dir_names[G_DIR_OUTPUT], G_SC_INP_F)

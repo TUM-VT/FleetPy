@@ -11,7 +11,7 @@ import numpy as np
 
 # src imports
 # -----------
-from src.infra.Zoning import ZoneSystem
+from src.fleetctrl.forecast.ForecastZoning import ForecastZoneSystem
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------
@@ -22,16 +22,16 @@ LOG_LEVEL = logging.WARNING
 LOG = logging.getLogger(__name__)
 
 
-class PerfectForecastZoneSystem(ZoneSystem):
+class PerfectForecastZoneSystem(ForecastZoneSystem):
     # this class can be used like the "basic" ZoneSystem class
     # but instead of getting values from a demand forecast dabase, this class has direct access to the demand file
     # and therefore makes perfect predictions for the corresponding forecast querries
-    def __init__(self, zone_network_dir, scenario_parameters, dir_names):
-        tmp_scenario_parameters = scenario_parameters.copy()
-        if scenario_parameters[G_FC_FNAME] is not None:
+    def __init__(self, zone_network_dir, scenario_parameters, dir_names, operator_attributes):
+        if operator_attributes.get(G_RA_FC_FNAME) is not None:
             LOG.warning("forecast file for perfact forecast given. will not be loaded!")
-            del tmp_scenario_parameters[G_FC_FNAME] 
-        super().__init__(zone_network_dir, tmp_scenario_parameters, dir_names)
+        super().__init__(zone_network_dir, scenario_parameters, dir_names, operator_attributes)
+        if self.fc_temp_resolution is None:
+            self.fc_temp_resolution = operator_attributes[G_RA_FC_TR] # TODO ?
 
     def _get_trip_forecasts(self, trip_type, t0, t1, aggregation_level):
         """This method returns the number of expected trip arrivals or departures inside a zone in the
@@ -95,8 +95,6 @@ class PerfectForecastZoneSystem(ZoneSystem):
         :return: {}: zone -> forecast of arrivals
         :rtype: dict
         """
-        if self.in_fc_type is None:
-            raise AssertionError("get_trip_arrival_forecasts() called even though no forecasts are available!")
         return self._get_trip_forecasts("in", t0, t1, aggregation_level)
 
     def get_trip_departure_forecasts(self, t0, t1, aggregation_level=None):
@@ -111,8 +109,6 @@ class PerfectForecastZoneSystem(ZoneSystem):
         :return: {}: zone -> forecast of departures
         :rtype: dict
         """
-        if self.out_fc_type is None:
-            raise AssertionError("get_trip_departure_forecasts() called even though no forecasts are available!")
         return self._get_trip_forecasts("out", t0, t1, aggregation_level)
 
     def draw_future_request_sample(self, t0, t1, request_attribute = None, attribute_value = None, scale = None): #request_type=PlanRequest # TODO # cant import PlanRequest because of circular dependency of files!
@@ -131,6 +127,8 @@ class PerfectForecastZoneSystem(ZoneSystem):
         :return: list of (time, origin_node, destination_node) of future requests
         :rtype: list of 3-tuples
         """ 
+        if scale is not None:
+            LOG.warning("scale is not used for perfect forecast and sampling!")
         future_list = []
         if request_attribute is None and attribute_value is None:
             for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
@@ -152,3 +150,84 @@ class PerfectForecastZoneSystem(ZoneSystem):
                             future_list.append( (t, rq.o_node, rq.d_node) )
         LOG.info("perfect forecast list: {}".format(future_list))
         return future_list
+    
+    def get_trip_od_forecasts(self, t0, t1, aggregation_level=None, scale=None):
+        """ this function returns the number of expected trips from one zone to another int the time interval [t0, t1]
+        
+        :param t0: start of forecast time horizon
+        :type t0: float
+        :param t1: end of forecast time horizon
+        :type t1: float
+        :param aggregation_level: spatial aggregation level, by default zone_id is used
+        :type aggregation_level: int
+        :param scale: scales forecast distributen by this value if given
+        :type scale: float
+        :return: {}: zone -> zone -> forecast of trips
+        :rtype: dict
+        """
+        if scale is None:
+            scale = 1.0
+        return_dict = {}
+        for t in range(t0, t1):
+            future_rqs = self.demand.future_requests.get(t, {})
+            for rq in future_rqs.values():
+                o_zone = self.get_zone_from_node(rq.o_node)
+                d_zone = self.get_zone_from_node(rq.d_node)
+                if o_zone >= 0 and d_zone >= 0:
+                    try:
+                        return_dict[o_zone][d_zone] += 1 * scale
+                    except KeyError:
+                        try:
+                            return_dict[o_zone][d_zone] = 1 * scale
+                        except KeyError:
+                            return_dict[o_zone] = {d_zone : 1 * scale}
+        return return_dict
+    
+#########################################################################################################
+
+class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
+    """ the only difference to PerfectForecastZoneSystem is that the sampling process does not return the exact future requests but a
+    sample from the forecast distribution
+    """
+    
+    def draw_future_request_sample(self, t0, t1, request_attribute = None, attribute_value = None, scale = None): #request_type=PlanRequest # TODO # cant import PlanRequest because of circular dependency of files!
+        """ this function returns exact future request attributes  [t0, t1]
+        currently origin is drawn from get_trip_departure_forecasts an destination is drawn form get_trip_arrival_forecast (independently! # TODO #)
+        :param t0: start of forecast time horizon
+        :type t0: float
+        :param t1: end of forecast time horizon
+        :type t1: float
+        :param request_attribute: name of the attribute of the request class. if given, only returns requests with this attribute
+        :type request_attribute: str
+        :param attribute_value: if and request_attribute given: only returns future requests with this attribute value
+        :type attribute_value: type(request_attribute)
+        :param scale: (not for this class) scales forecast distribution by this values
+        :type scale: float
+        :return: list of (time, origin_node, destination_node) of future requests
+        :rtype: list of 3-tuples
+        """ 
+        
+        if request_attribute is not None or attribute_value is not None:
+            raise NotImplementedError("request_attribute and attribute_value not implemented yet for PerfectForecastDistributionZoneSystem")
+        
+        future_poisson_rates = self.get_trip_od_forecasts(t0, t1, scale=scale)
+        
+        future_list = []
+        
+        for o_zone, d_zone_dict in future_poisson_rates.items():
+            for d_zone, poisson_rate in d_zone_dict.items():
+                number_rqs = np.random.poisson(poisson_rate)
+                ts = [np.random.randint(t0, high=t1) for _ in range(number_rqs)]
+                for t in ts:
+                    if self._zone_to_sampling_nodes is None:
+                        o_n = self.get_random_node(o_zone)
+                        d_n = self.get_random_node(d_zone)
+                    else:
+                        o_n = np.random.choice(self._zone_to_sampling_nodes[o_zone])
+                        d_n = np.random.choice(self._zone_to_sampling_nodes[d_zone])
+                    future_list.append( (t, o_n, d_n) )
+        future_list.sort(key=lambda x:x[0])
+
+        LOG.info("perfect forecast list: {}".format(future_list))
+        return future_list
+    

@@ -1,4 +1,19 @@
+from __future__ import annotations
+
 import importlib
+
+import typing as tp
+if tp.TYPE_CHECKING:
+    from src.FleetSimulationBase import FleetSimulationBase
+    from src.routing.NetworkBase import NetworkBase
+    from src.fleetctrl.FleetControlBase import FleetControlBase
+    from src.demand.TravelerModels import RequestBase
+    from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
+    from src.fleetctrl.charging.ChargingBase import ChargingBase
+    from src.fleetctrl.pricing.DynamicPricingBase import DynamicPrizingBase
+    from src.fleetctrl.fleetsizing.DynamicFleetSizingBase import DynamicFleetSizingBase
+    from src.fleetctrl.reservation.ReservationBase import ReservationBase
+    from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
 
 # possibly load additional content from development content
 try:
@@ -160,7 +175,7 @@ def get_src_ride_pooling_batch_optimizers():
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # functions for the different modules
-def load_simulation_environment(scenario_parameters):
+def load_simulation_environment(scenario_parameters) -> FleetSimulationBase:
     """This function returns the simulation environment module.
 
     :param scenario_parameters: scenario parameters with 'sim_env' attribute
@@ -174,7 +189,7 @@ def load_simulation_environment(scenario_parameters):
     return sim_env_class(scenario_parameters)
 
 
-def load_routing_engine(network_type, network_dir, network_dynamics_file_name=None):
+def load_routing_engine(network_type, network_dir, network_dynamics_file_name=None) -> NetworkBase:
     """ This function loads the specific network defined in the config file
     routing_engine.add_init() is not called here! (TODO!?)
     :param network_type: str network_type defined by G_NETWORK_TYPE in config
@@ -189,7 +204,7 @@ def load_routing_engine(network_type, network_dir, network_dynamics_file_name=No
     return re_class(network_dir, network_dynamics_file_name=network_dynamics_file_name)
 
 
-def load_request_module(rq_type_string):
+def load_request_module(rq_type_string) -> RequestBase:
     """This function initiates the required fleet control module and returns the Request class, which can be used
     to generate a fleet control instance.
 
@@ -202,7 +217,7 @@ def load_request_module(rq_type_string):
     return load_module(rm_dict, rq_type_string, "Request module")
 
 
-def load_fleet_control_module(op_fleet_control_class_string):
+def load_fleet_control_module(op_fleet_control_class_string) -> FleetControlBase:
     """This function initiates the required fleet control module and returns the FleetControl class, which can be used
     to generate a fleet control instance.
 
@@ -215,7 +230,7 @@ def load_fleet_control_module(op_fleet_control_class_string):
     return load_module(op_dict, op_fleet_control_class_string, "Fleet control module")
 
 
-def load_repositioning_strategy(op_repo_class_string):
+def load_repositioning_strategy(op_repo_class_string) -> RepositioningBase:
     """This function chooses the repositioning module that should be loaded.
 
     :param op_repo_class_string: string that determines which repositioning strategy will be used
@@ -227,7 +242,7 @@ def load_repositioning_strategy(op_repo_class_string):
     return load_module(repo_dict, op_repo_class_string, "Repositioning module")
 
 
-def load_charging_strategy(op_charging_class_string):
+def load_charging_strategy(op_charging_class_string) -> ChargingBase:
     """This function chooses the charging strategy module that should be loaded.
 
     :param op_charging_class_string: string that determines which charging strategy will be used
@@ -239,7 +254,7 @@ def load_charging_strategy(op_charging_class_string):
     return load_module(cs_dict, op_charging_class_string, "Charging strategy module")
 
 
-def load_dynamic_pricing_strategy(op_pricing_class_string):
+def load_dynamic_pricing_strategy(op_pricing_class_string) -> DynamicPrizingBase:
     """This function chooses the dynamic pricing strategy module that should be loaded.
 
     :param op_pricing_class_string:  string that determines which strategy will be used
@@ -251,7 +266,7 @@ def load_dynamic_pricing_strategy(op_pricing_class_string):
     return load_module(dp_dict, op_pricing_class_string, "Dynamic pricing module")
 
 
-def load_dynamic_fleet_sizing_strategy(op_fleetsizing_class_string):
+def load_dynamic_fleet_sizing_strategy(op_fleetsizing_class_string) -> DynamicFleetSizingBase:
     """This function chooses the dynamic fleetsizing strategy module that should be loaded.
 
     :param op_fleetsizing_class_string: string that determines which strategy will be used
@@ -263,7 +278,7 @@ def load_dynamic_fleet_sizing_strategy(op_fleetsizing_class_string):
     return load_module(dfs_dict, op_fleetsizing_class_string, "Dynamic fleet sizing module")
 
 
-def load_reservation_strategy(op_reservation_class_string):
+def load_reservation_strategy(op_reservation_class_string) -> ReservationBase:
     """This function chooses the strategy to treat reservation requests that should be loaded
     :param op_reservation_class_string: string that determines the reservation strategy
     :return: Reservation class
@@ -274,7 +289,7 @@ def load_reservation_strategy(op_reservation_class_string):
     return load_module(res_dict, op_reservation_class_string, "Reservation handling module")
 
 
-def load_ride_pooling_batch_optimizer(op_batch_optimizer_string):
+def load_ride_pooling_batch_optimizer(op_batch_optimizer_string) -> BatchAssignmentAlgorithmBase:
     """ this function loads the optimizer for solving the ride-pooling assignment problem
     :param op_batch_optimizer_string: string determining the optimizer
     :return: RidePoolingBatchOptimizationClass

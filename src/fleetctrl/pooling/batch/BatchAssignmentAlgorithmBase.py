@@ -19,16 +19,13 @@ when implementing a new ride-pooling assginment algorithm these functions have t
 
 class SimulationVehicleStruct():
     """ this class can be used to get basic vehicle information for optimisation """
-    def __init__(self, simulation_vehicle : SimulationVehicle, assigned_veh_plan : VehiclePlan, sim_time : int, routing_engine : NetworkBase):
+    def __init__(self, simulation_vehicle : SimulationVehicle, assigned_veh_plan : VehiclePlan, sim_time : int, routing_engine : NetworkBase, empty_init = False):
         self.op_id = simulation_vehicle.op_id
         self.vid = simulation_vehicle.vid
 
         self.status = simulation_vehicle.status
         self.pos = simulation_vehicle.pos
         self.soc = simulation_vehicle.soc
-        self.pax = simulation_vehicle.pax[:]    # rq_obj
-
-        self.cl_start_time = simulation_vehicle.cl_start_time
 
         self.veh_type = simulation_vehicle.veh_type
         self.max_pax = simulation_vehicle.max_pax
@@ -38,13 +35,25 @@ class SimulationVehicleStruct():
         self.battery_size = simulation_vehicle.battery_size
         self.range = simulation_vehicle.range
         self.soc_per_m = simulation_vehicle.soc_per_m
+        
+        if not empty_init:
+            self.pax = simulation_vehicle.pax[:]    # rq_obj
 
-        # assigned route = list of assigned vehicle legs (copy and remove stationary process (TODO?))
-        self.assigned_route = [VehicleRouteLeg(x.status, x.destination_pos, x.rq_dict, power=x.power, duration=x.duration, route=x.route, locked=x.locked, earliest_start_time=x.earliest_start_time)
-                               for x in simulation_vehicle.assigned_route]
+            self.cl_start_time = simulation_vehicle.cl_start_time
+            
+            # assigned route = list of assigned vehicle legs (copy and remove stationary process (TODO?))
+            self.assigned_route = [VehicleRouteLeg(x.status, x.destination_pos, x.rq_dict, power=x.power, duration=x.duration, route=x.route, locked=x.locked, earliest_start_time=x.earliest_start_time)
+                                for x in simulation_vehicle.assigned_route]
 
-        self.locked_planstops = VehiclePlan(self, sim_time, routing_engine, [])
-        self.set_locked_vehplan(assigned_veh_plan, sim_time, routing_engine)
+            self.locked_planstops = VehiclePlan(self, sim_time, routing_engine, [])
+            self.set_locked_vehplan(assigned_veh_plan, sim_time, routing_engine)
+            
+        else:
+            self.pax = []
+            self.cl_start_time = sim_time
+            
+            self.locked_planstops = VehiclePlan(self, sim_time, routing_engine, [])
+            self.assigned_route = []
 
     def __str__(self):
         return f"veh struct {self.vid} at pos {self.pos} leg status {self.status} ob {[rq.get_rid_struct() for rq in self.pax]}"

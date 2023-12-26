@@ -92,7 +92,15 @@ class FleetControlBase(metaclass=ABCMeta):
         self.log_gurobi : bool = scenario_parameters.get(G_LOG_GUROBI, False)
         self.op_id = op_id
         self.routing_engine: NetworkBase = routing_engine
-        self.zones: ZoneSystem = zone_system
+        if operator_attributes.get(G_RA_OP_NW_TYPE):
+            LOG.info(f"operator {self.fleetctrl.op_id} loads its own network!")
+            if not operator_attributes.get(G_RA_OP_NW_NAME):
+                raise IOError(f"parameter {G_RA_OP_NW_NAME} has to be given to load a network for operator {self.op_id}")
+            from src.misc.init_modules import load_routing_engine
+            self.routing_engine : NetworkBase = load_routing_engine(operator_attributes[G_RA_OP_NW_TYPE], os.path.join(dir_names[G_DIR_DATA], "networks", operator_attributes[G_RA_OP_NW_NAME]),
+                                                      network_dynamics_file_name=operator_attributes.get(G_RA_OP_NW_DYN_F))
+        # TODO: is a zonesystem needed for the fleetcontrol module? -> moved to repo module
+        #self.zones: ZoneSystem = zone_system
         self.dir_names = dir_names
         #
         self.sim_vehicles: List[SimulationVehicle] = list_vehicles
@@ -323,7 +331,9 @@ class FleetControlBase(metaclass=ABCMeta):
         :param simulation_time: current simulation time
         :type simulation_time: int
         """
-        pass
+        # this should be called:        
+        # if self.repo and not prq.get_reservation_flag():
+        #     self.repo.register_user_request(prq, sim_time)
 
     @abstractmethod
     def user_confirms_booking(self, rid : Any, simulation_time : int):
@@ -864,7 +874,7 @@ class FleetControlBase(metaclass=ABCMeta):
                 inactive = True
             else:
                 inactive = False
-            if pstop.is_locked_end():
+            if pstop.is_locked_end() and pstop.get_earliest_start_time() > 0:
                 reservation = True
             else:
                 reservation = False
