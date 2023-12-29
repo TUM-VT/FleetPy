@@ -23,7 +23,7 @@ BOARDER_SIZE = 1000
 import matplotlib.colors
 tab20 = plt.cm.get_cmap('Oranges', 20)
 cl = tab20(np.linspace(0, 1, 5))
-STATUS_COLOR_LIST= ["lightgrey","red","blue","orange","green","dimgrey"]
+STATUS_COLOR_LIST= ["lightgrey","red","blue","orange","green","dimgrey","purple","beige"]
 OCCUPANCY_COLOR_LIST = ['dodgerblue'] + list(cl) + ['dimgrey']
 
 
@@ -249,10 +249,14 @@ class PyPlot(Process):
     def _create_occ_stack_plot(self, axis_id):
         self.axes[axis_id ].set_title("Occupancy Stack Chart")
         self.axes[axis_id ].set_ylabel("Number Vehicles")
-        list_list_values = [self._pax_counts[k] for k in ['0 (reposition)', '0 (route)','1','2','3','4','idle']]
+        # list_list_values = [self._pax_counts[k] for k in ['0 (reposition)', '0 (route)','1','2','3','4','idle']]
+        # print(self._pax_counts)
+        list_list_values = [self._pax_counts[k] for k in list(self.shared_dict["pax_info"].keys())]
         self.axes[axis_id ].stackplot(self._times, *list_list_values,
                                             colors=OCCUPANCY_COLOR_LIST,
-                                            labels = [ '0 (reposition)', '0 (route)','1','2','3','4','idle' ])
+                                            # labels = [ '0 (reposition)', '0 (route)','1','2','3','4','idle' ]
+                                            labels = list(self.shared_dict["pax_info"].keys())
+                                      )
         self.axes[axis_id ].legend(loc="upper left")
         self.axes[axis_id ].set_xlabel("Simulation Time [h]")
         
@@ -267,7 +271,12 @@ class PyPlot(Process):
         
     def _create_occ_count_plot(self, axis_id):
         self.axes[axis_id ].set_title("Occupancy Counts")
-        ks = [ '0 (reposition)', '0 (route)','1','2','3','4','idle' ]
+        max_pax = len(self.shared_dict["pax_info"])
+        # print(self.shared_dict["pax_info"])
+        # ks = [ '0 (reposition)', '0 (route)','1','2','3','4','idle' ]
+        # ks = [ '0 (reposition)', '0 (route)'] + [str(i) for i in range(max_pax-2)]
+        ks = list(self.shared_dict["pax_info"].keys())
+
         self.axes[axis_id ].bar(ks, 
                                     [self.shared_dict["pax_info"][k] for k in ks],
                                     color = OCCUPANCY_COLOR_LIST)
@@ -275,7 +284,7 @@ class PyPlot(Process):
         self.axes[axis_id ].set_xticks(ks)
         self.axes[axis_id ].set_xticklabels(ks, rotation=45)
         self.axes[axis_id ].set_xlabel("Occupancy")
-        self.axes[axis_id ].set_ylabel("Number Vehicles")
+        self.axes[axis_id ].set_ylabel("Number of Vehicles")
         
     def _create_avg_occ_plot(self, axis_id):
         self.axes[axis_id].set_title("Average Occupancy")
