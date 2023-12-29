@@ -111,15 +111,12 @@ class PtLine:
         self.meter_project = pyproj.Transformer.from_crs(pyproj.CRS(self.network_crs), pyproj.CRS(self.dest_crs),
                                               always_xy=True).transform
         self.point_project = pyproj.Transformer.from_crs(pyproj.CRS(self.network_crs), pyproj.CRS(self.dest_crs),
-                                                         always_xy=False).transform
+                                                         always_xy=True).transform
 
         self.line_alignment_meter = shapely.ops.transform(self.meter_project, self.line_alignment)
         self.route_length = self.line_alignment_meter.length / 1000  # convert to km
 
         self.fixed_length: float = fixed_length
-
-
-
 
 
 
@@ -129,27 +126,71 @@ class PtLine:
             return_run: bool = False  # whether a stop in the flexible route portion has been found
             first_flex_dept_time = 0  # last fixed departure time
             first_return_fixed_dept_time = None  # first fixed departure time in the return route
+            last_veh_time = sim_start_time # last vehicle time
+            last_veh_trip = -1 # last vehicle trip
             for _, scheduled_stop in schedule_df.iterrows():
+                # skip stops before sim start time
+                if scheduled_stop["departure"] < sim_start_time:
+                    continue
+
                 station_id = scheduled_stop["station_id"]
                 node_index = self.pt_fleetcontrol_module.station_dict[station_id].street_network_node_id
+
+                # if trip_id is different from last trip_id, add a planned stop every min before this stop
+                if scheduled_stop["trip_id"] != last_veh_trip and scheduled_stop["station_id"] == 3580:
+                    return_run = False  # reset return_run
+                    first_return_fixed_dept_time = None # reset first_return_fixed_dept_time
+
+                    last_veh_trip = scheduled_stop["trip_id"]
+                    list_plan_stops.append(PlanStop(
+                                self.routing_engine.return_node_position(node_index),
+                                latest_start_time=last_veh_time + 60,
+                                earliest_end_time=scheduled_stop["departure"] - 1,
+                                # duration=(scheduled_stop["departure"] - 1) - (last_veh_time + 60) - 1,  # 1s, set the boarding/alighting duration to be nominal,
+                                locked = True,
+                                # will not be overwritten by the insertion
+                                planstop_state=G_PLANSTOP_STATES.INACTIVE,
+                            ))
+                    # t = last_veh_time + 60
+                    # while t < scheduled_stop["departure"]:
+                    #     list_plan_stops.append(PlanStop(
+                    #         self.routing_engine.return_node_position(node_index),
+                    #         earliest_end_time=t,
+                    #         latest_start_time=t-1,
+                    #         duration=1,  # 1s, set the boarding/alighting duration to be nominal,
+                    #         # locked = True,
+                    #         # will not be overwritten by the insertion
+                    #     ))
+                    #     t += 60
+                    LOG.debug(
+                        f"forced initial stop from {last_veh_time} until {scheduled_stop['departure']} | trip id {scheduled_stop['trip_id']}")
+
+
+
                 earliest_departure_dict = {}
                 if not np.isnan(scheduled_stop["departure"]):
-                    if not return_run:  # fixed route part
+                    if not return_run:  # fixed route outbound part
                         earliest_departure_dict[-1] = scheduled_stop["departure"]
                         first_flex_dept_time = scheduled_stop["departure"]
                     elif first_return_fixed_dept_time is None:  # first stop after flexible route
-                        earliest_departure_dict[-1] = (scheduled_stop[
-                                                           "departure"] - first_flex_dept_time) * self.flex_detour
+                        # earliest_departure_dict[-1] = first_flex_dept_time + (scheduled_stop[
+                        #                                    "departure"] - first_flex_dept_time) * self.flex_detour
+                        earliest_departure_dict[-1] = (scheduled_stop["departure"]
+                                                       + (scheduled_stop["departure"] - first_flex_dept_time) * self.flex_detour)
                         first_return_fixed_dept_time = earliest_departure_dict[-1]
-                    else:  # return route: adjust departure time for detour; flexible route will be discarded
+                    else:  # return inbound part: adjust departure time for detour; flexible route will be discarded
                         earliest_departure_dict[-1] = (scheduled_stop["departure"] - first_flex_dept_time
                                                        + first_return_fixed_dept_time)
+
                 ps = PlanStop(self.routing_engine.return_node_position(node_index),
-                              earliest_end_time=scheduled_stop["departure"],
-                              duration=1  # 1s, set the boarding/alighting duration to be nominal,
+                              earliest_end_time=earliest_departure_dict[-1]+1,
+                              latest_start_time=earliest_departure_dict[-1],
+                              # duration=1,  # 1s, set the boarding/alighting duration to be nominal,
+                              # locked=False,
                               # will not be overwritten by the insertion
                               )
                 self.station_id_km_run[station_id] = self.return_pos_km_run(ps.get_pos())
+                last_veh_time = earliest_departure_dict[-1]
 
                 # if the station is not in the fixed portion, skip it (except for the first stop)
                 if self.station_id_km_run[station_id] > self.fixed_length and first_stop_in_stim_time_found:
@@ -163,8 +204,24 @@ class PtLine:
                 if earliest_departure_dict.get(-1,
                                                -1) < sim_start_time and not first_stop_in_stim_time_found:  # remove schedules before start time
                     list_plan_stops = []
+                    if scheduled_stop["departure"] > 75000:
+                        LOG.debug(f"cleared list plan stops for vid {vid} with sim start time {sim_start_time}")
                 else:
                     first_stop_in_stim_time_found = True
+
+                init_state = {
+                    G_V_INIT_NODE: list_plan_stops[0].get_pos()[0],  # set the initial node to be the first stop
+                    G_V_INIT_SOC: 1,
+                    G_V_INIT_TIME: sim_start_time
+                }
+                self.sim_vehicles[vid].set_initial_state(self.pt_fleetcontrol_module, routing_engine, init_state,
+                                                         sim_start_time, veh_init_blocking=False)
+                interplan = VehiclePlan(self.sim_vehicles[vid], sim_start_time, routing_engine, list_plan_stops)
+                interplan.update_tt_and_check_plan(self.sim_vehicles[vid], sim_start_time, routing_engine,keep_feasible=True)
+                LOG.debug(f"interplan: {interplan}")
+                LOG.debug(f"interplan feas: {interplan.is_feasible()}")
+                if not interplan.is_feasible():
+                    exit()
             # init vehicle position at first stop
             init_state = {
                 G_V_INIT_NODE: list_plan_stops[0].get_pos()[0],  # set the initial node to be the first stop
@@ -262,6 +319,24 @@ class PtLine:
 
         return line.project(crs_point) / 1000  # convert to km
 
+    def project_point_to_point(self, point1: shapely.Point, point2: shapely.Point) -> float:
+        """
+        Use GIS to project the request point to the CRS and return the distance between the two points in km
+        :param point1: point 1
+        :type point: shapely.Point
+        :param point2: point 2
+        :type point: shapely.Point
+        :return: distance between the two points in km
+        :rtype: float
+        """
+        # convert crs of line and point
+        # crs_line = shapely.ops.transform(project, line)
+        crs_point1 = shapely.ops.transform(self.point_project, point1)
+        crs_point2 = shapely.ops.transform(self.point_project, point2)
+        # crs_point = point
+
+        return crs_point1.distance(crs_point2) / 1000  # convert to km
+
     def return_pos_km_run(self, pos) -> float:
         """ this method returns the km run of the position
         :param pos: position
@@ -320,7 +395,8 @@ class PtLine:
         )
         station_coord = self.routing_engine.return_position_coordinates(station_pos)
         station_point = shapely.Point(station_coord)
-        return station_point.distance(point)
+        # return station_point.distance(point)
+        return self.project_point_to_point(point, station_point)
 
     def find_closest_station(self, pos):
         """ this method returns the closest station to the given position
@@ -609,6 +685,8 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         # PT lines
         self.PT_lines: Dict[int, PtLine] = {}  # line -> PtLine obj
         self.pt_vehicle_to_line = {}  # pt_veh_id -> line
+        self.walking_dist_origin = {} # rid -> walking time to origin
+        self.walking_dist_destination = {} # rid -> walking time to destination
         # self.sim_time = -1
 
         # # check whether the stations are in flexible portion
@@ -767,6 +845,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         # assign to the closest stop, compute the walking distance to the assigned stop
         to_check = {"origin": pick_up_pos, "destination": drop_off_pos}
         flex_or_not = {"origin": False, "destination": False}
+        walking_dist_dict = {"origin": 0.0, "destination": 0.0}
         walking_time = {"origin": 0.0, "destination": 0.0}
         for origin_dest, pos in to_check.items():
             # if in the fixed portion, update the pick-up / drop-off location to the assigned stop
@@ -777,11 +856,20 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
                 to_check[origin_dest] = pt_line.routing_engine.return_node_position(
                     self.station_dict[closest_station_id].street_network_node_id
                 )
+                walking_dist_dict[origin_dest] = walking_dist
                 walking_time[origin_dest] = walking_dist / self.walking_speed
 
         # update the pick-up / drop-off location to the assigned stop
         pick_up_pos = to_check["origin"]
         drop_off_pos = to_check["destination"]
+
+        # check if walking time already exists, if not, add it
+        if self.walking_dist_origin.get(rq.rid):
+            LOG.debug(f"walking time origin overridden {rq.rid}")
+        self.walking_dist_origin[rq.rid] = walking_dist_dict["origin"]
+        if self.walking_dist_destination.get(rq.rid):
+            LOG.debug(f"walking time destination overridden {rq.rid}")
+        self.walking_dist_destination[rq.rid] = walking_dist_dict["destination"]
 
         # if pt_line.check_request_flexible(rq, "origin"):
         #     pick_up_pos = [pt_line.routing_engine.return_node_position(
@@ -959,6 +1047,10 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
                 new_earliest_pu, new_latest_pu = pu_offer_tuple
                 add_offer[G_OFFER_PU_INT_START] = new_earliest_pu
                 add_offer[G_OFFER_PU_INT_END] = new_latest_pu
+            # TODO: add additional info for output here, e.g., fixed/flexible, access time
+            add_offer[G_OFFER_WALKING_DISTANCE_ORIGIN] = self.walking_dist_origin[rq.get_rid_struct()]
+            add_offer[G_OFFER_WALKING_DISTANCE_DESTINATION] = self.walking_dist_destination[rq.get_rid_struct()]
+
             offer = TravellerOffer(rq.get_rid(), self.op_id, pu_time - rq.get_rq_time(), do_time - pu_time,
                                    int(rq.init_direct_td * self.dist_fare + self.base_fare),
                                    additional_parameters=add_offer)

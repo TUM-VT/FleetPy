@@ -496,6 +496,9 @@ G_OFFER_IS_VALID = "is_valid"   # indicates if offer is still valid at time of c
 G_OFFER_ADD_VMT = "add_fleet_vmt"   # for easyride broker
 G_OFFER_BROKER_FLAG = "chosen_by_broker"    # for easyride broker
 
+G_OFFER_WALKING_DISTANCE_ORIGIN = "walking_distance_origin"
+G_OFFER_WALKING_DISTANCE_DESTINATION = "walking_distance_destination"
+
 # additional parameters for intermodal solutions
 # ----------------------------------------------
 G_IM_OFFER_PT_START = "im_pt_t_start"
