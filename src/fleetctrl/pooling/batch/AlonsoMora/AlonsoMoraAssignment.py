@@ -205,6 +205,22 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         time_str = ",".join(["{};{}".format(a, b) for a, b in times.items()])
         LOG.info("OPT TIMES:{}".format(time_str))
         LOG.info("Opt stats at sim time {} : opt duration {} | res cfv {}".format(self.sim_time, t_opt - t_start, self.current_best_cfv))
+        i_to_N={}
+        i_to_number_plans = {}
+        for vid, tree in self.rtv_tree_N_v.items():
+            for N, rtv_keys in tree.items():
+                i_to_N[N] = i_to_N.get(N, 0) + len(rtv_keys)
+                for rtv_key in rtv_keys.keys():
+                    i_to_number_plans[N] = i_to_number_plans.get(N, 0) + len(self.rtv_obj[rtv_key].veh_plans)
+        LOG.info(f"Number of rtv_keys in trees:")
+        for i in sorted(i_to_N.keys()):
+            LOG.info("N {} : {} | plans_ {}".format(i, i_to_N.get(i,0), i_to_number_plans.get(i,0)))
+            
+
+        LOG.debug(f"opt results:")
+        for k, v in self.optimisation_solutions.items():
+            LOG.debug(f"vid {k} -> {v}")
+
 
     def add_new_request(self, rid : Any, prq : PlanRequest, consider_for_global_optimisation : bool = True, is_allready_assigned : bool = False):
         """ this function adds a new request to the modules database and set entries that
@@ -357,7 +373,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         else:
             rtv_key = getRTVkeyFromVehPlan(assigned_plan)
             self.current_assignments[vid] = rtv_key
-            LOG.debug(f"assign {vid} -> {rtv_key} | is external? {is_external_vehicle_plan}")
+            #LOG.debug(f"assign {vid} -> {rtv_key} | is external? {is_external_vehicle_plan}")
             if is_external_vehicle_plan and not _is_init_sol:
                 self.external_assignments[vid] = (rtv_key, None)
                 self.rebuild_rtv[vid] = 1
