@@ -64,7 +64,7 @@ class PTStation:
 
 class PtLine:
     def __init__(self, line_id, pt_fleetcontrol_module, routing_engine: NetworkBase, sim_vehicle_dict, vid_to_schedule,
-                 sim_start_time, fixed_length, loop_route=False):
+                 sim_start_time, fixed_length, flex_detour, loop_route=False):
         """
         :param line_id: Line ID
         :type line_id: int
@@ -97,8 +97,8 @@ class PtLine:
         self.node_index_to_station_id = {}  # node_index -> station id
         self.station_id_km_run = {}  # station id -> km run
 
-        # TODO: load from the parameter
-        self.flex_detour = 1.4  # 40% detour allowed for flexible portion
+        # self.flex_detour = 1.4  # 40% detour allowed for flexible portion
+        self.flex_detour = flex_detour
 
         # transit line alignment
         # alignment has to be single direction line
@@ -137,7 +137,7 @@ class PtLine:
                 node_index = self.pt_fleetcontrol_module.station_dict[station_id].street_network_node_id
 
                 # if trip_id is different from last trip_id, add a planned stop every min before this stop
-                if scheduled_stop["trip_id"] != last_veh_trip and scheduled_stop["station_id"] == 3580:
+                if scheduled_stop["trip_id"] != last_veh_trip and scheduled_stop["station_id"] == 3580: # TODO: put in terminus station_id
                     return_run = False  # reset return_run
                     first_return_fixed_dept_time = None # reset first_return_fixed_dept_time
 
@@ -149,19 +149,28 @@ class PtLine:
                                 # duration=(scheduled_stop["departure"] - 1) - (last_veh_time + 60) - 1,  # 1s, set the boarding/alighting duration to be nominal,
                                 locked = True,
                                 # will not be overwritten by the insertion
-                                planstop_state=G_PLANSTOP_STATES.INACTIVE,
+                                planstop_state=G_PLANSTOP_STATES.RESERVATION,
                             ))
                     # t = last_veh_time + 60
-                    # while t < scheduled_stop["departure"]:
+                    # while t+60 < scheduled_stop["departure"]:
                     #     list_plan_stops.append(PlanStop(
                     #         self.routing_engine.return_node_position(node_index),
                     #         earliest_end_time=t,
                     #         latest_start_time=t-1,
-                    #         duration=1,  # 1s, set the boarding/alighting duration to be nominal,
-                    #         # locked = True,
+                    #         # duration=1,  # 1s, set the boarding/alighting duration to be nominal,
+                    #         locked = True,
                     #         # will not be overwritten by the insertion
                     #     ))
-                    #     t += 60
+                    #     t += 58
+                    #     list_plan_stops.append(PlanStop(
+                    #         self.routing_engine.return_node_position(node_index),
+                    #         earliest_end_time=t,
+                    #         latest_start_time=t-1,
+                    #         # duration=1,  # 1s, set the boarding/alighting duration to be nominal,
+                    #         locked = False,
+                    #         # will not be overwritten by the insertion
+                    #     ))
+                    #     t += 2
                     LOG.debug(
                         f"forced initial stop from {last_veh_time} until {scheduled_stop['departure']} | trip id {scheduled_stop['trip_id']}")
 
@@ -172,6 +181,7 @@ class PtLine:
                     if not return_run:  # fixed route outbound part
                         earliest_departure_dict[-1] = scheduled_stop["departure"]
                         first_flex_dept_time = scheduled_stop["departure"]
+
                     elif first_return_fixed_dept_time is None:  # first stop after flexible route
                         # earliest_departure_dict[-1] = first_flex_dept_time + (scheduled_stop[
                         #                                    "departure"] - first_flex_dept_time) * self.flex_detour
@@ -183,8 +193,8 @@ class PtLine:
                                                        + first_return_fixed_dept_time)
 
                 ps = PlanStop(self.routing_engine.return_node_position(node_index),
-                              earliest_end_time=earliest_departure_dict[-1]+1,
                               latest_start_time=earliest_departure_dict[-1],
+                              earliest_end_time=earliest_departure_dict[-1]+1,
                               # duration=1,  # 1s, set the boarding/alighting duration to be nominal,
                               # locked=False,
                               # will not be overwritten by the insertion
@@ -214,6 +224,8 @@ class PtLine:
                     G_V_INIT_SOC: 1,
                     G_V_INIT_TIME: sim_start_time
                 }
+
+                # TODO: delete the following debug code
                 self.sim_vehicles[vid].set_initial_state(self.pt_fleetcontrol_module, routing_engine, init_state,
                                                          sim_start_time, veh_init_blocking=False)
                 interplan = VehiclePlan(self.sim_vehicles[vid], sim_start_time, routing_engine, list_plan_stops)
@@ -222,6 +234,7 @@ class PtLine:
                 LOG.debug(f"interplan feas: {interplan.is_feasible()}")
                 if not interplan.is_feasible():
                     exit()
+
             # init vehicle position at first stop
             init_state = {
                 G_V_INIT_NODE: list_plan_stops[0].get_pos()[0],  # set the initial node to be the first stop
@@ -270,7 +283,6 @@ class PtLine:
         # pos_to_check = [node, NONE, NONE]
         coord_to_check = self.routing_engine.return_position_coordinates(pos_to_check)
 
-        # TODO: check if coord_to_check is x,y
         point_to_check = shapely.Point(coord_to_check)
 
         return self.check_point_flexible(point_to_check)
@@ -502,6 +514,7 @@ class PtLine:
         return best_waiting, best_travel_time, best_arrival_time
 
     def assign_user(self, rid, simulation_time):
+        # not used
         """
         this function is called when a request is accepted and already assigned to this pt line -> update vehplans
         :param rid: request id
@@ -654,6 +667,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         # fixed route parameters
         self.pt_data_dir = os.path.join(dir_names[G_DIR_PT])
         self.fixed_length = scenario_parameters.get(G_PT_FIXED_LENGTH, None)
+        self.flex_detour = scenario_parameters.get(G_PT_FLEX_DETOUR, None)
 
         self.base_fare = scenario_parameters.get(G_PT_FARE_B, 0)
         self.walking_speed = scenario_parameters.get(G_WALKING_SPEED, 0)
@@ -750,7 +764,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
                 self.pt_vehicle_to_line[vid] = line
             schedule_vehicles = {vid: veh_obj_dict[vid] for vid in vid_to_schedule_dict.keys()}
             self.PT_lines[line] = PtLine(line, self, self.routing_engine, schedule_vehicles, vid_to_schedule_dict,
-                                         sim_start_time, self.fixed_length)
+                                         sim_start_time, self.fixed_length, self.flex_detour)
         LOG.info(f"SoD finish continue_init {len(self.PT_lines)}")
 
     def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, assigned_charging_task=None,
@@ -783,9 +797,9 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
 
         if self.PT_lines.get(self.pt_vehicle_to_line[veh_obj.vid]) is not None:
             self.PT_lines[self.pt_vehicle_to_line[veh_obj.vid]].veh_plans[veh_obj.vid] = vehicle_plan
-        else:
-            LOG.warning("couldnt find {} or {} | only feasible in init".format(veh_obj.vid, self.pt_vehicle_to_line.get(
-                veh_obj.vid)))
+        # else:
+        #     LOG.warning("couldnt find {} or {} | only feasible in init".format(veh_obj.vid, self.pt_vehicle_to_line.get(
+        #         veh_obj.vid)))
         # self.veh_plans[veh_obj.vid] = vehicle_plan
 
         # should be redundant with super()
@@ -991,6 +1005,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         :return: dictionary rid -> offer for each unassigned request, that will recieve an answer. (offer: dictionary with plan specific entries; empty if no offer can be made)
         :rtype: dict
         """
+        # TODO: remove super() and alter the veh list to only flexible route for flexible demand; only fixed vehicles for fixed demand
         super()._call_time_trigger_request_batch(simulation_time)
         # embed()
         rid_to_offers = {}
@@ -1047,7 +1062,8 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
                 new_earliest_pu, new_latest_pu = pu_offer_tuple
                 add_offer[G_OFFER_PU_INT_START] = new_earliest_pu
                 add_offer[G_OFFER_PU_INT_END] = new_latest_pu
-            # TODO: add additional info for output here, e.g., fixed/flexible, access time
+
+            # additional info for output here, e.g., fixed/flexible, access time
             add_offer[G_OFFER_WALKING_DISTANCE_ORIGIN] = self.walking_dist_origin[rq.get_rid_struct()]
             add_offer[G_OFFER_WALKING_DISTANCE_DESTINATION] = self.walking_dist_destination[rq.get_rid_struct()]
 
