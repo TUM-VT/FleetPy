@@ -64,7 +64,7 @@ class PTStation:
 
 class PtLine:
     def __init__(self, line_id, pt_fleetcontrol_module, routing_engine: NetworkBase, sim_vehicle_dict, vid_to_schedule,
-                 sim_start_time, fixed_length, flex_detour, loop_route=False):
+                 sim_start_time, fixed_length, flex_detour, alignment_file, loop_route=False):
         """
         :param line_id: Line ID
         :type line_id: int
@@ -80,6 +80,10 @@ class PtLine:
         :type sim_start_time: float
         :param fixed_length: length of routes that are fixed route (unit in km)
         :type fixed_length: float
+        :param flex_detour: detour allowed for flexible portion (factor)
+        :type flex_detour: float
+        :param alignment_file: alignment file name
+        :type alignment_file: str
         :param loop_route: indicates if the route is a loop route (i.e., end at the same station as the start)
         Caution: loop_route cannot lie along the same line (projection would be wrong)
         :type loop_route: bool
@@ -102,8 +106,9 @@ class PtLine:
 
         # transit line alignment
         # alignment has to be single direction line
+        # load alignment name from parameters G_PT_ALIGNMENT_F
         self.line_alignment: shapely.LineString = self.load_pt_line_alignment(
-            os.path.join(pt_fleetcontrol_module.dir_names[G_DIR_PT], f"{line_id}_line_alignment.geojson"))
+            os.path.join(pt_fleetcontrol_module.dir_names[G_DIR_PT], alignment_file.format(line_id=self.line_id)))
 
         # convert crs of line
         self.dest_crs = "EPSG:32632"  # WGS 84 / UTM zone 32N, for measurement in m
@@ -136,8 +141,10 @@ class PtLine:
                 station_id = scheduled_stop["station_id"]
                 node_index = self.pt_fleetcontrol_module.station_dict[station_id].street_network_node_id
 
+                terminus_id = 3580 # TODO: put in terminus station_id
+
                 # if trip_id is different from last trip_id, add a planned stop every min before this stop
-                if scheduled_stop["trip_id"] != last_veh_trip and scheduled_stop["station_id"] == 3580: # TODO: put in terminus station_id
+                if scheduled_stop["trip_id"] != last_veh_trip and station_id == terminus_id:
                     return_run = False  # reset return_run
                     first_return_fixed_dept_time = None # reset first_return_fixed_dept_time
 
@@ -202,10 +209,13 @@ class PtLine:
                 self.station_id_km_run[station_id] = self.return_pos_km_run(ps.get_pos())
                 last_veh_time = earliest_departure_dict[-1]
 
-                # if the station is not in the fixed portion, skip it (except for the first stop)
+                # if the station is not in the fixed portion, skip it (except for the first stop in the whole schedule)
                 if self.station_id_km_run[station_id] > self.fixed_length and first_stop_in_stim_time_found:
+                # if self.station_id_km_run[station_id] > self.fixed_length:
                     return_run = True
-                    continue
+                    # if this is not the terminus stop, skip it
+                    if station_id != terminus_id:
+                        continue
 
                 list_plan_stops.append(ps)
                 self.node_index_to_station_id[node_index] = station_id
@@ -668,6 +678,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         self.pt_data_dir = os.path.join(dir_names[G_DIR_PT])
         self.fixed_length = scenario_parameters.get(G_PT_FIXED_LENGTH, None)
         self.flex_detour = scenario_parameters.get(G_PT_FLEX_DETOUR, None)
+        self.alignment_file = scenario_parameters.get(G_PT_ALIGNMENT_F, 0)
 
         self.base_fare = scenario_parameters.get(G_PT_FARE_B, 0)
         self.walking_speed = scenario_parameters.get(G_WALKING_SPEED, 0)
@@ -764,7 +775,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
                 self.pt_vehicle_to_line[vid] = line
             schedule_vehicles = {vid: veh_obj_dict[vid] for vid in vid_to_schedule_dict.keys()}
             self.PT_lines[line] = PtLine(line, self, self.routing_engine, schedule_vehicles, vid_to_schedule_dict,
-                                         sim_start_time, self.fixed_length, self.flex_detour)
+                                         sim_start_time, self.fixed_length, self.flex_detour, self.alignment_file,)
         LOG.info(f"SoD finish continue_init {len(self.PT_lines)}")
 
     def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, assigned_charging_task=None,
@@ -823,10 +834,12 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         """
         self.sim_time = simulation_time
 
-        # TODO: check why this is called when none of the vehicles are assigned to this pt line
         if self.PT_lines:
             self.PT_lines[self.pt_vehicle_to_line[vid]].receive_status_update(vid, simulation_time, list_finished_VRL,
                                                                               force_update=force_update)
+        veh_obj = self.sim_vehicles[vid]
+        upd_utility_val = self.compute_VehiclePlan_utility(simulation_time, veh_obj, self.veh_plans[vid])
+        self.veh_plans[vid].set_utility(upd_utility_val)
 
     def return_ptline_of_user(self, rq):
         """ this method returns the PT line that the user belongs to

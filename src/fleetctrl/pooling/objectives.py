@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Dict, Any, Callable
 if TYPE_CHECKING:
     from src.fleetctrl.planning.VehiclePlan import VehiclePlan
@@ -10,7 +11,7 @@ if TYPE_CHECKING:
 from src.misc.globals import *
 
 LARGE_INT = 1000000
-
+LOG = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # main function
@@ -256,10 +257,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             :return: objective function value
             """
             assignment_reward = len(veh_plan.pax_info) * LARGE_INT
-            # assignment_reward = 0
-
             fixed_reward = 0
-
 
             # distance term
             sum_dist = 0
@@ -270,10 +268,14 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                     sum_dist += routing_engine.return_travel_costs_1to1(last_pos, pos)[2]
                     last_pos = pos
                 # add fixed reward for number of requests served in the fixed route portion
-                # (earliest_departure_dict[-1] exists)
-                if ps.direct_earliest_start_time is not None:
-                    fixed_reward += (fixed_reward_coeff * len(ps.get_list_boarding_rids())
-                                     + fixed_reward_coeff * len(ps.get_list_alighting_rids()))
+                if ps.direct_earliest_end_time is not None:
+                    this_fixed_reward = fixed_reward_coeff * (len(ps.get_list_boarding_rids())
+                                     +  len(ps.get_list_alighting_rids()))
+                    fixed_reward += this_fixed_reward
+                    # if this_fixed_reward>0:
+                    #     LOG.debug(f"veh_plan {veh_plan.vid} has fixed reward {this_fixed_reward} for ps {ps} with nos of boarding "
+                    #           f"{len(ps.get_list_boarding_rids())} and alighting {len(ps.get_list_alighting_rids())}"
+                    #           )
 
             # value of time term (treat waiting and in-vehicle time the same)
             sum_user_times = 0
@@ -284,7 +286,8 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             # vehicle costs are taken from simulation vehicle (cent per meter)
             # value of travel time is scenario input (cent per second)
 
-            return sum_dist * distance_cost + sum_user_times * traveler_vot - assignment_reward - fixed_reward
+            obj = sum_dist * distance_cost + sum_user_times * traveler_vot - assignment_reward - fixed_reward
+            return obj
 
 
     elif func_key == "distance_and_user_times_with_walk":

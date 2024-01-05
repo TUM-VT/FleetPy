@@ -85,6 +85,7 @@ G_PT_FARE_B = "pt_base_fare"
 G_PT_FIXED_LENGTH = "pt_fixed_length"
 G_PT_FLEX_DETOUR = "pt_flex_detour"
 G_PT_STATION_F = "station_file"
+G_PT_ALIGNMENT_F = "alignment_file"
 
 # traveler general attributes
 G_RQ_FILE = "rq_file"

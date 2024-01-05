@@ -474,7 +474,9 @@ class PlanStop(PlanStopBase):
 class BoardingPlanStop(PlanStop):
     """ this class can be used to generate a plan stop where only boarding processes take place """
     def __init__(self, position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={},
-                 earliest_pickup_time_dict={}, latest_pickup_time_dict={}, change_nr_pax=0, change_nr_parcels=0, duration=None, locked=False):
+                 earliest_pickup_time_dict={}, latest_pickup_time_dict={}, change_nr_pax=0, change_nr_parcels=0,
+                 duration=None, locked=False,
+                 earliest_start_time=None, latest_start_time=None, earliest_end_time=None):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param boarding_dict: dictionary with entries +1 -> list of request ids that board the vehicle there; -1 -> list of requests that alight the vehicle there
@@ -490,8 +492,8 @@ class BoardingPlanStop(PlanStop):
         super().__init__(position, boarding_dict=boarding_dict, max_trip_time_dict=max_trip_time_dict,
                          latest_arrival_time_dict=latest_arrival_time_dict, earliest_pickup_time_dict=earliest_pickup_time_dict,
                          latest_pickup_time_dict=latest_pickup_time_dict, change_nr_pax=change_nr_pax, change_nr_parcels=change_nr_parcels,
-                         earliest_start_time=None, latest_start_time=None,
-                         duration=duration, earliest_end_time=None, locked=locked,
+                         earliest_start_time=earliest_start_time, latest_start_time=latest_start_time,
+                         duration=duration, earliest_end_time=earliest_end_time, locked=locked,
                          charging_power=0, planstop_state=G_PLANSTOP_STATES.BOARDING)
         
 class RoutingTargetPlanStop(PlanStop):
