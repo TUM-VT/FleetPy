@@ -70,7 +70,7 @@ class RequestBase(metaclass=ABCMeta):
         self.d_node = int(rq_row[G_RQ_DESTINATION])
         self.d_pos = routing_engine.return_node_position(self.d_node)
         # store miscellaneous custom values from demand file
-        for param, value in rq_row.drop([G_RQ_TIME, G_RQ_ID, G_RQ_ORIGIN, G_RQ_DESTINATION]).iteritems():
+        for param, value in rq_row.drop([G_RQ_TIME, G_RQ_ID, G_RQ_ORIGIN, G_RQ_DESTINATION]).items():
             setattr(self, str(param), value)
         # offer: operator_id > offer class entity
         self.offer = {}
