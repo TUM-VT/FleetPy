@@ -26,6 +26,7 @@ from src.fleetctrl.planning.PlanRequest import PlanRequest
 # ----------------
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000
+# TOL = 0.1
 
 from src.routing.NetworkBase import NetworkBase
 
@@ -64,7 +65,7 @@ class PTStation:
 
 class PtLine:
     def __init__(self, line_id, pt_fleetcontrol_module, routing_engine: NetworkBase, sim_vehicle_dict, vid_to_schedule,
-                 sim_start_time, fixed_length, flex_detour, alignment_file, loop_route=False):
+                 sim_start_time, fixed_length, flex_detour, alignment_file, terminus_id, loop_route=False):
         """
         :param line_id: Line ID
         :type line_id: int
@@ -84,6 +85,8 @@ class PtLine:
         :type flex_detour: float
         :param alignment_file: alignment file name
         :type alignment_file: str
+        :param terminus_id: terminus station id
+        :type terminus_id: int
         :param loop_route: indicates if the route is a loop route (i.e., end at the same station as the start)
         Caution: loop_route cannot lie along the same line (projection would be wrong)
         :type loop_route: bool
@@ -124,6 +127,25 @@ class PtLine:
         self.fixed_length: float = fixed_length
 
 
+        # terminus_id = 3580
+        # read from G_PT_TERMINUS_ID
+        self.terminus_id = terminus_id
+
+        # calcaulate the km run of each station
+        for station_id in self.pt_fleetcontrol_module.station_dict.keys():
+            node_index = self.pt_fleetcontrol_module.station_dict[station_id].street_network_node_id
+            pos = self.routing_engine.return_node_position(node_index)
+            self.station_id_km_run[station_id] = self.return_pos_km_run(pos)
+            # if self.station_id_km_run[station_id] < min_len:
+            #     terminus_id = [station_id]
+            #     min_len = self.station_id_km_run[station_id]
+            # elif self.station_id_km_run[station_id] == min_len:
+            #     terminus_id.append(station_id)
+
+
+
+        LOG.debug(f"terminus id {self.terminus_id} with length {self.station_id_km_run[self.terminus_id]} | "
+                  f"fixed length {self.fixed_length} | route length {self.route_length}")
 
         for vid, schedule_df in vid_to_schedule.items():
             list_plan_stops = []
@@ -141,10 +163,10 @@ class PtLine:
                 station_id = scheduled_stop["station_id"]
                 node_index = self.pt_fleetcontrol_module.station_dict[station_id].street_network_node_id
 
-                terminus_id = 3580 # TODO: put in terminus station_id
+
 
                 # if trip_id is different from last trip_id, add a planned stop every min before this stop
-                if scheduled_stop["trip_id"] != last_veh_trip and station_id == terminus_id:
+                if scheduled_stop["trip_id"] != last_veh_trip and station_id == self.terminus_id:
                     return_run = False  # reset return_run
                     first_return_fixed_dept_time = None # reset first_return_fixed_dept_time
 
@@ -206,7 +228,7 @@ class PtLine:
                               # locked=False,
                               # will not be overwritten by the insertion
                               )
-                self.station_id_km_run[station_id] = self.return_pos_km_run(ps.get_pos())
+                # self.station_id_km_run[station_id] = self.return_pos_km_run(ps.get_pos())
                 last_veh_time = earliest_departure_dict[-1]
 
                 # if the station is not in the fixed portion, skip it (except for the first stop in the whole schedule)
@@ -214,7 +236,7 @@ class PtLine:
                 # if self.station_id_km_run[station_id] > self.fixed_length:
                     return_run = True
                     # if this is not the terminus stop, skip it
-                    if station_id != terminus_id:
+                    if station_id != self.terminus_id:
                         continue
 
                 list_plan_stops.append(ps)
@@ -235,7 +257,7 @@ class PtLine:
                     G_V_INIT_TIME: sim_start_time
                 }
 
-                # TODO: delete the following debug code
+                # Check infeasible schedule
                 self.sim_vehicles[vid].set_initial_state(self.pt_fleetcontrol_module, routing_engine, init_state,
                                                          sim_start_time, veh_init_blocking=False)
                 interplan = VehiclePlan(self.sim_vehicles[vid], sim_start_time, routing_engine, list_plan_stops)
@@ -243,6 +265,9 @@ class PtLine:
                 LOG.debug(f"interplan: {interplan}")
                 LOG.debug(f"interplan feas: {interplan.is_feasible()}")
                 if not interplan.is_feasible():
+                    LOG.error(f"vid {vid} with list plan stops: {[str(x) for x in list_plan_stops[:10]]}")
+                    LOG.error(f"interplan: {interplan}")
+                    LOG.error(f"interplan feas: {interplan.is_feasible()}")
                     exit()
 
             # init vehicle position at first stop
@@ -679,6 +704,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         self.fixed_length = scenario_parameters.get(G_PT_FIXED_LENGTH, None)
         self.flex_detour = scenario_parameters.get(G_PT_FLEX_DETOUR, None)
         self.alignment_file = scenario_parameters.get(G_PT_ALIGNMENT_F, 0)
+        self.terminus_id = scenario_parameters.get(G_PT_TERMINUS_ID, 0)
 
         self.base_fare = scenario_parameters.get(G_PT_FARE_B, 0)
         self.walking_speed = scenario_parameters.get(G_WALKING_SPEED, 0)
@@ -775,7 +801,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
                 self.pt_vehicle_to_line[vid] = line
             schedule_vehicles = {vid: veh_obj_dict[vid] for vid in vid_to_schedule_dict.keys()}
             self.PT_lines[line] = PtLine(line, self, self.routing_engine, schedule_vehicles, vid_to_schedule_dict,
-                                         sim_start_time, self.fixed_length, self.flex_detour, self.alignment_file,)
+                                         sim_start_time, self.fixed_length, self.flex_detour, self.alignment_file, self.terminus_id)
         LOG.info(f"SoD finish continue_init {len(self.PT_lines)}")
 
     def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, assigned_charging_task=None,
@@ -1077,8 +1103,8 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
                 add_offer[G_OFFER_PU_INT_END] = new_latest_pu
 
             # additional info for output here, e.g., fixed/flexible, access time
-            add_offer[G_OFFER_WALKING_DISTANCE_ORIGIN] = self.walking_dist_origin[rq.get_rid_struct()]
-            add_offer[G_OFFER_WALKING_DISTANCE_DESTINATION] = self.walking_dist_destination[rq.get_rid_struct()]
+            add_offer[G_OFFER_WALKING_DISTANCE_ORIGIN] = self.walking_dist_origin[rq.get_rid_struct()] * 1000 # in m
+            add_offer[G_OFFER_WALKING_DISTANCE_DESTINATION] = self.walking_dist_destination[rq.get_rid_struct()] * 1000 # in m
 
             offer = TravellerOffer(rq.get_rid(), self.op_id, pu_time - rq.get_rq_time(), do_time - pu_time,
                                    int(rq.init_direct_td * self.dist_fare + self.base_fare),
