@@ -65,7 +65,7 @@ class PTStation:
 
 class PtLine:
     def __init__(self, line_id, pt_fleetcontrol_module, routing_engine: NetworkBase, sim_vehicle_dict, vid_to_schedule,
-                 sim_start_time, fixed_length, flex_detour, alignment_file, terminus_id, loop_route=False):
+                 sim_start_time, sim_end_time, fixed_length, flex_detour, alignment_file, terminus_id, loop_route=False):
         """
         :param line_id: Line ID
         :type line_id: int
@@ -79,6 +79,8 @@ class PtLine:
         :type vid_to_schedule: dict
         :param sim_start_time: simulation start time
         :type sim_start_time: float
+        :param sim_end_time: simulation end time
+        :type sim_end_time: float
         :param fixed_length: length of routes that are fixed route (unit in km)
         :type fixed_length: float
         :param flex_detour: detour allowed for flexible portion (factor)
@@ -269,6 +271,17 @@ class PtLine:
                     LOG.error(f"interplan: {interplan}")
                     LOG.error(f"interplan feas: {interplan.is_feasible()}")
                     exit()
+
+            # lock the vehicle at the last location till end of period
+            list_plan_stops.append(PlanStop(
+                self.routing_engine.return_node_position(node_index),
+                latest_start_time=last_veh_time + 60,
+                earliest_end_time=sim_end_time - 1,
+                # duration=(scheduled_stop["departure"] - 1) - (last_veh_time + 60) - 1,  # 1s, set the boarding/alighting duration to be nominal,
+                locked=True,
+                # will not be overwritten by the insertion
+                planstop_state=G_PLANSTOP_STATES.RESERVATION,
+            ))
 
             # init vehicle position at first stop
             init_state = {
@@ -788,20 +801,21 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         """
         return self.vehicles_to_initialize
 
-    def continue_init(self, sim_vehicle_objs, sim_start_time):
+    def continue_init(self, sim_vehicle_objs, sim_start_time, sim_end_time):
         """
         this method continues initialization after simulation vehicles have been created in the fleetsimulation class
         :param sim_vehicle_objs: ordered list of sim_vehicle_objs
         :param sim_start_time: simulation start time
         """
         self.sim_time = sim_start_time
+        self.sim_end_time = sim_end_time
         veh_obj_dict = {veh.vid: veh for veh in sim_vehicle_objs}
         for line, vid_to_schedule_dict in self.schedule_to_initialize.items():
             for vid in vid_to_schedule_dict.keys():
                 self.pt_vehicle_to_line[vid] = line
             schedule_vehicles = {vid: veh_obj_dict[vid] for vid in vid_to_schedule_dict.keys()}
             self.PT_lines[line] = PtLine(line, self, self.routing_engine, schedule_vehicles, vid_to_schedule_dict,
-                                         sim_start_time, self.fixed_length, self.flex_detour, self.alignment_file, self.terminus_id)
+                                         sim_start_time, sim_end_time, self.fixed_length, self.flex_detour, self.alignment_file, self.terminus_id)
         LOG.info(f"SoD finish continue_init {len(self.PT_lines)}")
 
     def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, assigned_charging_task=None,

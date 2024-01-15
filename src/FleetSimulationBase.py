@@ -388,7 +388,7 @@ class FleetSimulationBase:
                     list_vehicles.append(tmp_veh_obj)
                     veh_type_list.append([op_id, vid, veh_type])
                     self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
-                OpClass.continue_init(list_vehicles, self.start_time)
+                OpClass.continue_init(list_vehicles, self.start_time, self.end_time)
                 self.operators.append(OpClass)
             else: # for LinebasedFleetControl
                 from dev.fleetctrl.LinebasedFleetControl import LinebasedFleetControl
@@ -403,7 +403,7 @@ class FleetSimulationBase:
                     list_vehicles.append(tmp_veh_obj)
                     veh_type_list.append([op_id, vid, veh_type])
                     self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
-                OpClass.continue_init(list_vehicles, self.start_time)
+                OpClass.continue_init(list_vehicles, self.start_time, self.end_time)
                 self.operators.append(OpClass)
         veh_type_f = os.path.join(self.dir_names[G_DIR_OUTPUT], "2_vehicle_types.csv")
         veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
