@@ -127,6 +127,10 @@ class FleetSimulationBase:
         print("-"*80 + f"\nSimulation of scenario {self.scenario_name}")
         LOG.info(f"General initialization of scenario {self.scenario_name}...")
         
+        if scenario_parameters.get("show_progress_bar", False) == False:
+            global PROGRESS_LOOP
+            PROGRESS_LOOP = "off"
+        
         self.n_op = scenario_parameters[G_NR_OPERATORS]
         self.n_ch_op = scenario_parameters.get(G_NR_CH_OPERATORS, 0)
         

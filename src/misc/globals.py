@@ -192,6 +192,7 @@ G_RA_RES_PRE_COMP_SOL_FILE = "op_precomp_off_sol_file"  # file storing a precomp
 # RV heuristics
 G_RA_MAX_VR = "op_max_VR_con"
 G_RA_MAX_RP = "op_max_request_plans"
+G_RA_MAX_TOUR = "op_max_tours_per_v2rb"
 G_RH_I_NWS = "op_rh_immediate_max_routes"
 G_RH_R_NWS = "op_rh_reservation_max_routes"
 G_RH_R_ZSM = "op_rh_reservation_zone_search"

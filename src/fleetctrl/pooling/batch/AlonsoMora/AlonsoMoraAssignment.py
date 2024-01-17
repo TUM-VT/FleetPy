@@ -69,6 +69,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         self.veh_tree_build_timeout : int = operator_attributes.get(G_RA_TB_TO_PER_VEH, None)
         self.optimisation_timeout : int = operator_attributes.get(G_RA_OPT_TO, None)
         self.max_rv_connections : int = operator_attributes.get(G_RA_MAX_VR, None)
+        self.max_tour_per_v2rb : int = operator_attributes.get(G_RA_MAX_TOUR, None)
         applied_heuristics = operator_attributes.get(G_RA_HEU, None)
         
         self.applied_heuristics = {}
@@ -962,7 +963,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     continue
 
                 # # LOG.debug(f"try building {build_key} | {rid} | ")
-                if max_tour_heuristic:
+                if self.max_tour_per_v2rb:
                     test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB_bestPlanHeuristic(vid, rid, build_key)
                 else:
                     test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB(vid, rid, build_key)
@@ -1827,27 +1828,16 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         new_rtv_key = createRTVKey(vid, rid_list)
         #new_prq_obj, new_rtv_key, routing_engine, rq_dict, sim_time, veh_obj, std_bt, add_bt
         best_v2rb = low_level_V2RB.addRequestAndCheckFeasibility(self.active_requests[rid], new_rtv_key, self.routing_engine, self.objective_function, self.active_requests, self.sim_time, self.veh_objs[vid], self.std_bt, self.add_bt)
-        # best_cfv = float("inf")
-        # if best_v2rb is not None:
-        #     best_cfv = best_v2rb.cost_function_value
-        # # build other way around
-        # for other_rid in prev_rid_list:
-        #     low_level_rids = rid_list[:]
-        #     low_level_rids.remove(other_rid)
-        #     low_level_V2RB = self.rtv_obj.get(createRTVKey(vid, low_level_rids))
-        #     if not low_level_V2RB:  # usual for grade 1 v2rbs (single rid v2rb is built after tree building, but shouldnt matter for the the permutation of 2 rids)
-        #         continue
-        #     new_v2rb = low_level_V2RB.addRequestAndCheckFeasibility(self.active_requests[other_rid], new_rtv_key, self.routing_engine, self.objective_function, self.active_requests, self.sim_time, self.veh_objs[vid], self.std_bt, self.add_bt)
-        #     if new_v2rb is not None and new_v2rb.cost_function_value < best_cfv:
-        #         best_v2rb = new_v2rb
-        #         best_cfv = new_v2rb.cost_function_value
-        # only keep best plan
+
+        # only keep best x plans
         if best_v2rb is None:
             return None
         else:
-            best_plan = best_v2rb.getBestPlan()
-            best_v2rb.veh_plans = [best_plan]
-            return best_v2rb
+            if len(best_v2rb.veh_plans) <= self.max_tour_per_v2rb:
+                return best_v2rb
+            else:
+                best_v2rb.veh_plans = best_v2rb.veh_plans[:self.max_tour_per_v2rb]
+                return best_v2rb
 
     ###=======================================================================================================###
     ### OTHER STUFF
