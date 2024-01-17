@@ -70,6 +70,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         self.optimisation_timeout : int = operator_attributes.get(G_RA_OPT_TO, None)
         self.max_rv_connections : int = operator_attributes.get(G_RA_MAX_VR, None)
         self.max_tour_per_v2rb : int = operator_attributes.get(G_RA_MAX_TOUR, None)
+        if self.max_tour_per_v2rb is not None and type(self.max_tour_per_v2rb) != int:
+            self.max_tour_per_v2rb = int(self.max_tour_per_v2rb)
         applied_heuristics = operator_attributes.get(G_RA_HEU, None)
         
         self.applied_heuristics = {}
@@ -963,7 +965,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     continue
 
                 # # LOG.debug(f"try building {build_key} | {rid} | ")
-                if self.max_tour_per_v2rb:
+                if self.max_tour_per_v2rb is not None:
                     test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB_bestPlanHeuristic(vid, rid, build_key)
                 else:
                     test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB(vid, rid, build_key)
