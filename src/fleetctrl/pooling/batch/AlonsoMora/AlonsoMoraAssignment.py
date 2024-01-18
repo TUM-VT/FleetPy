@@ -71,7 +71,10 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         self.max_rv_connections : int = operator_attributes.get(G_RA_MAX_VR, None)
         self.max_tour_per_v2rb : int = operator_attributes.get(G_RA_MAX_TOUR, None)
         if self.max_tour_per_v2rb is not None and type(self.max_tour_per_v2rb) != int:
-            self.max_tour_per_v2rb = int(self.max_tour_per_v2rb)
+            if np.isnan(self.max_tour_per_v2rb):
+                self.max_tour_per_v2rb = None
+            else:
+                self.max_tour_per_v2rb = int(self.max_tour_per_v2rb)
         applied_heuristics = operator_attributes.get(G_RA_HEU, None)
         
         self.applied_heuristics = {}
