@@ -5,6 +5,7 @@ class NetworkForPreprocessing(NetworkBasic):
     def __init__(self):
         self.nodes = []     #list of all nodes in network (index == node.node_index)
         self.current_dijkstra_number = 1    #used in dijkstra-class
+        self._current_tt_factor = 1
 
     def add_node(self, index, is_stop_only = False, x=0, y=0):
         node = Node(index, is_stop_only, x, y)
