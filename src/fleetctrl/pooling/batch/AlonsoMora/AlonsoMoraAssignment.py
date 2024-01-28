@@ -738,6 +738,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 currently_assigned_veh = self.current_assignments
                 heuristic_adopt_dict = {}
                 rv_vehicles = [self.veh_objs[vid] for vid in vid_dict.keys()]
+                LOG.debug(f"rv for rid {rid} : number vehicles {len(rv_vehicles)}")
                 # x) currently assigned vehicle
                 ca_flag = False
                 if self.fleetcontrol.rid_to_assigned_vid.get(rid) is not None:
@@ -766,7 +767,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 if number_directionality + number_least_load > 0:
                     rv_keep = {veh_obj.vid: 1 for veh_obj in selected_veh}
                 else:
-                    rv_keep = {veh_obj.vid: 1 for veh_obj in rv_vehicles}
+                    rv_keep = {}
                 # c) rr-connections
                 nr_add_rr = self.fleetcontrol.rv_heuristics.get(G_RVH_AM_RR, 0)
                 if nr_add_rr > 0:
@@ -774,6 +775,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     rv_keep, _ = \
                         self._before_opt_rv_nearest_with_rr_heuristic(rid, vid_dict, already_vid_to_keep=rv_keep,
                                                                     prev_plans={}, max_rv_connections=max_rv)
+                LOG.debug(f" -> number to keep after rr heu : {len(rv_keep)} | {nr_add_rr}")
                 # d) testing insertions
                 nr_add_ti = self.fleetcontrol.rv_heuristics.get(G_RVH_AM_TI, 0)
                 if nr_add_ti > 0:
@@ -781,8 +783,9 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     rv_keep, heuristic_adopt_dict = \
                         self._before_opt_rv_best_insertion_heuristic(rid, vid_dict, already_vid_to_keep=rv_keep,
                                                                     prev_plans={}, max_rv_connections=max_rv)
+                LOG.debug(f" -> number to keep after insertion heu : {len(rv_keep)} | {nr_add_ti}")
                 # if heuristics were applied successfully, the number of vehicles in rv_keep is larger than 0
-                if (ca_flag and len(rv_keep) == 1) or (not ca_flag and len(rv_keep) == 0):
+                if len(rv_keep) == 0:
                     to_keep_vids = {vid: 1 for vid in vid_dict.keys()}
                 else:
                     to_keep_vids = rv_keep
@@ -1686,6 +1689,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param prev_plans: dummy variable to keep consitency
         :return: dict vid -> for vehicles to consider for rv-connections (maximum set by self.max_rv_connections), empty dict
         """
+        LOG.debug(f"before_opt_rv_nearest_with_rr_heuristic for rid {rid}: {max_rv_connections} | {self.max_rv_connections} | {len(vid_to_travel_time.keys())} | {self.current_assignments} | {len(already_vid_to_keep)}")
         vids_to_keep = already_vid_to_keep.copy()
         if max_rv_connections is None:
             max_rv = self.max_rv_connections
@@ -1693,6 +1697,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             max_rv = max_rv_connections
         #return all
         if len(vid_to_travel_time.keys()) <= max_rv:
+            LOG.debug(f" -> return all")
             return {vid : 1 for vid in vid_to_travel_time.keys()}, prev_plans
         #check for vids and assigned rids sorted by travel time
         for vid, _ in sorted(vid_to_travel_time.items(), key = lambda x:x[1]):
@@ -1711,6 +1716,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     continue
             vids_to_keep[vid] = 1
             if len(vids_to_keep.keys()) >= max_rv:
+                LOG.debug(f" -> all rr found {len(vids_to_keep.keys())}")
                 return vids_to_keep, prev_plans
         # fill if to small just ob rid check
         if len(vids_to_keep.keys()) < max_rv:
@@ -1732,7 +1738,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     vids_to_keep[vid] = 1
                     if len(vids_to_keep.keys()) >= max_rv:
                         break
-
+        LOG.debug(f" -> remaining {len(vids_to_keep.keys())}")
         return vids_to_keep, prev_plans
 
     def _before_opt_rv_best_insertion_heuristic(self, rid, vid_to_travel_time, already_vid_to_keep = {}, prev_plans = {}, max_rv_connections = None):
