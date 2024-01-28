@@ -77,6 +77,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 self.max_tour_per_v2rb = int(self.max_tour_per_v2rb)
         applied_heuristics = operator_attributes.get(G_RA_HEU, None)
         
+        self._always_rebuild_from_scratch = operator_attributes.get(G_RA_AM_ALWAYS_REBUILD, False)
+        
         self.applied_heuristics = {}
         if applied_heuristics is not None:
             if type(applied_heuristics) == dict:
@@ -159,7 +161,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 self.veh_objs[veh_obj.vid] = veh_obj_struct
         else:
             self.veh_objs = veh_objs_to_build
-        if build_from_scratch or new_travel_times:
+        if build_from_scratch or new_travel_times or self._always_rebuild_from_scratch:
             self.requests_to_compute = {rid:1 for rid in self.rid_to_consider_for_global_optimisation.keys()}
             self._clearV2RBDataBase()
         # # LOG.debug("setCurrentInformation")
