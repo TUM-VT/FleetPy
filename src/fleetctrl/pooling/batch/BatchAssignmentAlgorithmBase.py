@@ -411,4 +411,13 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
     def delete_vehicle_database_entries(self, vid):
         """ triggered when all database entries of vehicle vid should be deleted"""
         pass
+    
+    def register_change_in_time_constraints(self, rid : Any, prq : PlanRequest, assigned_vid : int = None, exceeds_former_time_windows : bool = True):
+        """ if time constraints on an requests changed the corresponding plan stop constraints might have to be updated
+        :param rid: request id
+        :param prq: plan request obj
+        :param assigned_vid: vehicle id, which is currently assigned to serve customer (none if none assigned)
+        :param exceeds_former_time_windows: True: new time window is larger the old one, False otherwise
+        """
+        pass
 

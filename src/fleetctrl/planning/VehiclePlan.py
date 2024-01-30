@@ -940,7 +940,7 @@ class VehiclePlan:
         """
         for ps in self.list_plan_stops:
             if prq.get_rid_struct() in ps.get_list_boarding_rids():
-                ps.update_rid_boarding_time_constraints(new_latest_pickup_time=new_lpt, new_earliest_pickup_time=new_ept)
+                ps.update_rid_boarding_time_constraints(prq.get_rid_struct(), new_latest_pickup_time=new_lpt, new_earliest_pickup_time=new_ept)
         return self.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, keep_feasible=keep_feasible)
 
     def copy_and_remove_empty_planstops(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase):

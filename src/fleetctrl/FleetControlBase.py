@@ -113,6 +113,12 @@ class FleetControlBase(metaclass=ABCMeta):
         self.dyn_fltctrl_output_f = os.path.join(dir_names[G_DIR_OUTPUT], f"3-{self.op_id}_op-dyn_atts.csv")
         self.dyn_output_dict = {}
         self.dyn_par_keys = []
+        
+        # additional assignment records
+        self._record_additional_assignments_flag = operator_attributes.get(G_OP_REC_ADD_ASS, False)
+        self._additional_assignment_records_f = os.path.join(dir_names[G_DIR_OUTPUT], f"5-{self.op_id}_op-assignment_records.csv")
+        self._list_additional_assignment_records = []  # list of dictionaries that will be written to the assignment records csv
+        self.__keys_additional_assignment_records = []  # list of keys that will be written to the assignment records csv
 
         # Vehicle Plans, Request-Assignment and Availability
         # --------------------------------------------------
@@ -509,6 +515,7 @@ class FleetControlBase(metaclass=ABCMeta):
             pax_info = vehicle_plan.get_pax_info(rid)
             self.rq_dict[rid].set_assigned(pax_info[0], pax_info[1])
             self.rid_to_assigned_vid[rid] = veh_obj.vid
+        self._additional_assignment_records(veh_obj, vehicle_plan, sim_time)
 
     def time_trigger(self, simulation_time : int):
         """This method is used to perform time-triggered processes. These are split into the following:
@@ -832,6 +839,48 @@ class FleetControlBase(metaclass=ABCMeta):
         # additionally save repositioning output if repositioning module is available
         if self.repo:
             self.repo.record_repo_stats()
+        # additionally assignment records if created
+        if len(self._list_additional_assignment_records) > 0:
+            if force or len(self._list_additional_assignment_records) > BUFFER_SIZE:
+                record_df = pd.DataFrame(self._list_additional_assignment_records)
+                if os.path.isfile(self._additional_assignment_records_f):
+                    write_mode = "a"
+                    write_header = False
+                    record_df = record_df[self.__keys_additional_assignment_records]
+                else:
+                    write_mode = "w"
+                    write_header = True
+                    self.__keys_additional_assignment_records = list(record_df.columns)
+                record_df.to_csv(self._additional_assignment_records_f, index=False, mode=write_mode, header=write_header)
+                self._list_additional_assignment_records = []
+            
+            
+    def _additional_assignment_records(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, sim_time : int):
+        """This method can be used to record additional assignment information, e.g. for statistics.
+        it is triggered after the assignment of a new vehicle plan to a vehicle
+        it should add a dictionary to the list self._list_additional_assignment_records
+            each dictionary corresponds to a row with keys as column names and values as entries
+
+        :param veh_obj: vehicle object
+        :param vehicle_plan: vehicle plan
+        :param sim_time: current simulation time
+        :return: None
+        """
+        if self._record_additional_assignments_flag:
+            all_rids = get_assigned_rids_from_vehplan(vehicle_plan)
+            for rid in get_assigned_rids_from_vehplan(vehicle_plan):
+                pax_info = vehicle_plan.get_pax_info(rid)
+                epu, edo = pax_info[0], pax_info[1]
+                o_rids = [x for x in all_rids if x != rid]
+                o_rids_string = ";".join([str(x) for x in o_rids])
+                self._list_additional_assignment_records.append({
+                    "sim_time":sim_time, 
+                    "vid":veh_obj.vid, 
+                    "rid":rid,
+                    "o_rids":o_rids_string,
+                    "expected_pu_time":epu,
+                    "expected_do_time":edo
+                })            
             
     def _build_VRLs(self, vehicle_plan : VehiclePlan, veh_obj : SimulationVehicle, sim_time : int) -> List[VehicleRouteLeg]:
         """This method builds VRL for simulation vehicles from a given Plan. Since the vehicle could already have the

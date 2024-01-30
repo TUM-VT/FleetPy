@@ -17,7 +17,7 @@ INPUT_PARAMETERS_RidePoolingBatchAssignmentFleetcontrol = {
     "inherit" : "RidePoolingBatchOptimizationFleetControlBase",
     "input_parameters_mandatory": [],
     "input_parameters_optional": [
-        G_OP_MAX_WT_2, G_OP_OFF_TW
+        G_OP_MAX_WT_2, G_OP_OFF_TW, G_OP_LOCK_VID
         ],
     "mandatory_modules": [],
     "optional_modules": []
@@ -31,7 +31,7 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
         if "user_max_wait_time_2" is given:
             if the user couldnt be assigned in the first try, it will be considered again in the next opt-step with this new max_waiting_time constraint
         if "user_offer_time_window" is given:
-            after accepting an offer the pick-up time is constraint around the expected pick-up time with an interval of the size of this parameter
+            the lower bound is set to the currently expected pick-up time; the upper bound is set to the expected pick-up time + user_offer_time_window or the latest pick-up time, if the former is larger
 
         :param op_id: operator id
         :type op_id: int
@@ -55,9 +55,9 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
         self.max_wait_time_2 = operator_attributes.get(G_OP_MAX_WT_2, None)
         # if np.isnan(self.max_wait_time_2):
         #     self.max_wait_time_2 = None
-        self.offer_pickup_time_interval = operator_attributes.get(G_OP_OFF_TW, None)
-        # if np.isnan(self.offer_pickup_time_interval):
-        #     self.offer_pickup_time_interval = None
+        self._offer_pickup_time_interval = operator_attributes.get(G_OP_OFF_TW, None)
+        self._lock_to_vid = operator_attributes.get(G_OP_LOCK_VID, False)
+
         self.unassigned_requests_1 = {}
         self.unassigned_requests_2 = {}
 
@@ -103,6 +103,8 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
         if pu_offer_tuple is not None:
             new_earliest_pu, new_latest_pu = pu_offer_tuple
             self.change_prq_time_constraints(simulation_time, rid, new_latest_pu, new_ept=new_earliest_pu)
+        if self._lock_to_vid:
+            self._lock_vid_rid_pickup(simulation_time, self.rid_to_assigned_vid[rid], rid)
 
         super().user_confirms_booking(rid, simulation_time)
 
@@ -188,21 +190,25 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
         :param rid: request id
         :return: None, if G_OP_OFF_TW is not given, tuple (new_earlest_pickup_time, new_latest_pick_up_time) for new pickup time constraints
         """
-        if self.offer_pickup_time_interval is not None: # set new pickup time constraints based on expected pu-time and offer time interval
+        if self._offer_pickup_time_interval is not None: # set new pickup time constraints based on expected pu-time and offer time interval
             prq = self.rq_dict[rid]
             _, earliest_pu, latest_pu = prq.get_o_stop_info()
             vid = self.rid_to_assigned_vid[rid]
             assigned_plan = self.veh_plans[vid]
             pu_time, _ = assigned_plan.pax_info.get(rid)
-            if pu_time - self.offer_pickup_time_interval/2.0 < earliest_pu:
-                new_earliest_pu = earliest_pu
-                new_latest_pu = earliest_pu + self.offer_pickup_time_interval
-            elif pu_time + self.offer_pickup_time_interval/2.0 > latest_pu:
+            new_earliest_pu = pu_time 
+            new_latest_pu = pu_time + self._offer_pickup_time_interval
+            if new_latest_pu > latest_pu:
                 new_latest_pu = latest_pu
-                new_earliest_pu = latest_pu - self.offer_pickup_time_interval
-            else:
-                new_earliest_pu = pu_time - self.offer_pickup_time_interval/2.0
-                new_latest_pu = pu_time + self.offer_pickup_time_interval/2.0
+            # if pu_time - self._offer_pickup_time_interval/2.0 < earliest_pu:
+            #     new_earliest_pu = earliest_pu
+            #     new_latest_pu = earliest_pu + self._offer_pickup_time_interval
+            # elif pu_time + self._offer_pickup_time_interval/2.0 > latest_pu:
+            #     new_latest_pu = latest_pu
+            #     new_earliest_pu = latest_pu - self._offer_pickup_time_interval
+            # else:
+            #     new_earliest_pu = pu_time - self._offer_pickup_time_interval/2.0
+            #     new_latest_pu = pu_time + self._offer_pickup_time_interval/2.0
             return new_earliest_pu, new_latest_pu
         else:
             return None
