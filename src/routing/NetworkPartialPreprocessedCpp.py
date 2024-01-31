@@ -154,19 +154,17 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
                     s = (s[0] * self._current_tt_factor, s[1] * self._current_tt_factor, s[2])
             else:
                 s = self.travel_time_infos.get( (origin_node, destination_node) , None)
-        if s is not None:
-            return s
-        else:
+        if s is None:
             s = self.cpp_router.computeTravelCosts1To1(origin_node, destination_node)
             if self._current_tt_factor is not None:
                 s = (s[0] * self._current_tt_factor, s[1])
             if s[0] < -0.001:
                 print("no route found? {} -> {} {}".format(origin_node, destination_node, s))
                 s = (float("inf"), float("inf"))
-            res = (s[0] + origin_overhead[0] + destination_overhead[0], s[0] + origin_overhead[1] + destination_overhead[1], s[1] + origin_overhead[2] + destination_overhead[2])
+            s = (s[0], s[0], s[1])
             if customized_section_cost_function is None:
-                self._add_to_database(origin_node, destination_node, s[0], s[0], s[1])
-            return res
+                self._add_to_database(origin_node, destination_node, s[0], s[1], s[2])
+        return (s[0] + origin_overhead[0] + destination_overhead[0], s[0] + origin_overhead[1] + destination_overhead[1], s[2] + origin_overhead[2] + destination_overhead[2])
 
     def add_travel_infos_to_database(self, travel_info_dict):
         """ this function can be used to include externally computed (e.g. multiprocessing) route travel times

@@ -53,9 +53,11 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
                          dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra)
         self.max_wait_time_2 = operator_attributes.get(G_OP_MAX_WT_2, None)
-        # if np.isnan(self.max_wait_time_2):
-        #     self.max_wait_time_2 = None
+        if self.max_wait_time_2 != self.max_wait_time_2:
+            self.max_wait_time_2 = None
         self._offer_pickup_time_interval = operator_attributes.get(G_OP_OFF_TW, None)
+        if self._offer_pickup_time_interval != self._offer_pickup_time_interval:
+            self._offer_pickup_time_interval = None
         self._lock_to_vid = operator_attributes.get(G_OP_LOCK_VID, False)
 
         self.unassigned_requests_1 = {}
