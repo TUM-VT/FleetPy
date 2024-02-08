@@ -934,7 +934,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         #
         for i in range(max(number_locked_rids,1), MAX_LENGTH_OF_TREES):
             new_v2rb_found = False
-            # # LOG.debug(f"build rid {rid} size {i}")
+            #LOG.debug(f"build rid {rid} size {i}")
             for build_key in self.rtv_tree_N_v[vid].get(i, {}).keys():
                 # # LOG.debug(f"build key {build_key}")
                 lower_keys_available = True
@@ -944,7 +944,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     # # LOG.debug(f"dont build on yourself {build_key}")
                     continue
                 # check if lower key is available, otherwise match will not be possible
-                # # LOG.debug(f"build on {build_key}")
+                #LOG.debug(f"build on {build_key}")
                 list_of_keys_to_test = createListLowerLevelKeys(build_key, rid, do_not_remove_for_lower_keys)
                 
                 for test_existence_rtv_key in list_of_keys_to_test:
@@ -972,7 +972,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 if self.rtv_obj.get(new_rtv_key, None) is not None:
                     continue
 
-                # # LOG.debug(f"try building {build_key} | {rid} | ")
+                LOG.debug(f"try building {build_key} | {rid} | ")
                 if self.max_tour_per_v2rb is not None:
                     test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB_bestPlanHeuristic(vid, rid, build_key)
                 else:
@@ -1055,6 +1055,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 if not v2rb_obj.isFeasible():
                     to_del_keys[rtv_key] = 1
                 else:
+                    #LOG.debug(f"updated v2rb {rtv_key} | {v2rb_obj.getBestPlan()}")
                     self._updateV2RBcostInDataBase(rtv_key, v2rb_obj)
                     # # LOG.debug(" -> still feasible")
 
@@ -1254,6 +1255,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                         env.start()
 
                     m = gurobi.Model(model_name, env = env)
+                    #m.Params.seed = 1992
                     grb_available = True
 
                     m.setParam(gurobi.GRB.param.Threads, self.optimisation_cores)
@@ -1264,7 +1266,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     expr = gurobi.LinExpr()   # building optimization objective
                     key_to_varnames = {}
                     varnames_to_key = {}
-                    for i, rtv_key in enumerate(self.rtv_costs.keys()):
+                    for i, rtv_key in enumerate(sorted(self.rtv_costs.keys())):
+                        #LOG.debug(f"add variable {rtv_key} -> {i}")
                         rtv_cost = self.rtv_costs[rtv_key]
                         vid = getVidFromRTVKey(rtv_key)
                         rids = getRidsFromRTVKey(rtv_key)
@@ -1342,7 +1345,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                             LOG.warning("current assignment {} not found for setting initial solution".format(rtv_key))
                         else:
                             variables[rtv_key].start = 1
-                        
+                            
                     m.optimize() #optimization
                     LOG.info("=========")
                     LOG.info("OPT TIME {}:".format(self.sim_time))
