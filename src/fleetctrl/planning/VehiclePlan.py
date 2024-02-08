@@ -726,31 +726,46 @@ class VehiclePlan:
                                                       keep_feasible=keep_time_infeasible)
         return self.feasible
 
-    def return_intermediary_plan_state(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase, stop_index : int) -> dict:
+    def return_intermediary_plan_state(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase, stop_index : int,
+                                       init_plan_state:dict=None) -> dict:
         """ this function evalutes the future vehicle state after it would have performed the next stop_index plan stops of the vehicle plan
         and returns a dictionary specifing the vehicle state
         :param veh_obj: reference the vehicle object
         :param sim_time: simulation time
         :param routing_engine: routing engine reference
         :param stop_index: index of list plan stops of vehicle plan until the state is evaluated
+        :param init_plan_state: {} requires "stop_index" "c_index", "c_pos", "c_soc", "c_time", "c_pax" and "pax_info"
         :return: dictionary specifying the future vehicle state"""
-        c_pos = veh_obj.pos
-        c_soc = veh_obj.soc
-        c_time = sim_time
-        if self.list_plan_stops[0].is_locked():  # set time at start_time of boarding process
-            boarding_startet = self.list_plan_stops[0].get_started_at()
-            if boarding_startet is not None:
-                c_time = boarding_startet
-        key_translator = {sub_rid[0]: sub_rid for sub_rid in self.pax_info.keys() if type(sub_rid) == tuple}
-        c_pax = {key_translator.get(rq.get_rid_struct(), rq.get_rid_struct()): 1 for rq in veh_obj.pax}
-        nr_pax = veh_obj.get_nr_pax_without_currently_boarding()  # sum([rq.nr_pax for rq in veh_obj.pax])
-        nr_parcels = veh_obj.get_nr_parcels_without_currently_boarding()
-        self.pax_info = {}
-        for rq in veh_obj.pax:
-            rid = key_translator.get(rq.get_rid_struct(), rq.get_rid_struct())
-            self.pax_info[rid] = [rq.pu_time]
+        if init_plan_state is not None:
+            start_stop_index = init_plan_state["stop_index"] + 1
+            c_pos = init_plan_state["c_pos"]
+            c_soc = init_plan_state["c_soc"]
+            c_time = init_plan_state["c_time"]
+            c_pax = init_plan_state["c_pax"].copy()
+            nr_pax = init_plan_state["c_nr_pax"]
+            nr_parcels = init_plan_state["c_nr_parcels"]
+            self.pax_info = {}
+            for k, v in init_plan_state["pax_info"].items():
+                self.pax_info[k] = v.copy()
+        else:
+            start_stop_index = 0
+            c_pos = veh_obj.pos
+            c_soc = veh_obj.soc
+            c_time = sim_time
+            if self.list_plan_stops[0].is_locked():  # set time at start_time of boarding process
+                boarding_startet = self.list_plan_stops[0].get_started_at()
+                if boarding_startet is not None:
+                    c_time = boarding_startet
+            key_translator = {sub_rid[0]: sub_rid for sub_rid in self.pax_info.keys() if type(sub_rid) == tuple}
+            c_pax = {key_translator.get(rq.get_rid_struct(), rq.get_rid_struct()): 1 for rq in veh_obj.pax}
+            nr_pax = veh_obj.get_nr_pax_without_currently_boarding()  # sum([rq.nr_pax for rq in veh_obj.pax])
+            nr_parcels = veh_obj.get_nr_parcels_without_currently_boarding()
+            self.pax_info = {}
+            for rq in veh_obj.pax:
+                rid = key_translator.get(rq.get_rid_struct(), rq.get_rid_struct())
+                self.pax_info[rid] = [rq.pu_time]
         # for pstop in self.list_plan_stops[:stop_index + 1]:
-        for i, pstop in enumerate(self.list_plan_stops[:stop_index + 1]):
+        for i, pstop in enumerate(self.list_plan_stops[start_stop_index:stop_index + 1]):
             if c_pos != pstop.get_pos():
                 _, tt, tdist = routing_engine.return_travel_costs_1to1(c_pos, pstop.get_pos())
                 c_pos = pstop.get_pos()
