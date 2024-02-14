@@ -63,15 +63,14 @@ class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
                 continue
             
             rv_vehicles, rv_results_dict = veh_search_for_immediate_request(sim_time, self.active_requests[rid], self.fleetcontrol)
-            
-            r_list = insert_prq_in_selected_veh_list(rv_vehicles, non_repo_veh_plans, self.active_requests[rid], self.fleetcontrol.vr_ctrl_f,
+            r_list = insert_prq_in_selected_veh_list(rv_vehicles, {veh.vid : non_repo_veh_plans[veh.vid] for veh in rv_vehicles}, self.active_requests[rid], self.fleetcontrol.vr_ctrl_f,
                                                                     self.fleetcontrol.routing_engine, self.fleetcontrol.rq_dict, sim_time,
                                                                     self.fleetcontrol.const_bt, self.fleetcontrol.add_bt,
                                                                     insert_heuristic_dict=self.fleetcontrol.rv_heuristics)
-            
             if len(r_list) != 0:
                 best_vid, best_plan, _ = min(r_list, key = lambda x:x[2])
                 self.fleetcontrol.assign_vehicle_plan(self.fleetcontrol.sim_vehicles[best_vid], best_plan, sim_time)
+                non_repo_veh_plans[best_vid] = best_plan
         self.unassigned_requests = {} # only try once
             
     
