@@ -6,7 +6,8 @@ from typing import Callable, Dict, List, Any, Tuple, TYPE_CHECKING
 
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
 from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
-from src.fleetctrl.pooling.immediate.insertion import immediate_insertion_with_heuristics
+from src.fleetctrl.pooling.immediate.insertion import insert_prq_in_selected_veh_list
+from src.fleetctrl.pooling.immediate.searchVehicles import veh_search_for_immediate_request
 from src.misc.globals import *
 if TYPE_CHECKING:
     from src.simulation.Vehicles import SimulationVehicle
@@ -41,10 +42,25 @@ class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
         self.sim_time = sim_time
         if len(veh_objs_to_build) != 0:
             raise NotImplementedError
+        
+        non_repo_veh_plans = {}
+        for vid, veh_obj in self.veh_objs.items():
+            veh_p = self.fleetcontrol.veh_plans.get(vid, VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])).copy_and_remove_empty_planstops(veh_obj, sim_time, self.routing_engine)
+            obj = self.fleetcontrol.vr_ctrl_f(veh_obj, veh_p, self.fleetcontrol, sim_time)
+            veh_p.set_utility(obj)
+            non_repo_veh_plans[vid] = veh_p
+        
         for rid in list(self.unassigned_requests.keys()):
             if self.rid_to_consider_for_global_optimisation.get(rid) is None:
                 continue
-            r_list = immediate_insertion_with_heuristics(sim_time, self.active_requests[rid], self.fleetcontrol)
+            
+            rv_vehicles, rv_results_dict = veh_search_for_immediate_request(sim_time, self.active_requests[rid], self.fleetcontrol)
+            
+            r_list = insert_prq_in_selected_veh_list(rv_vehicles, non_repo_veh_plans, self.active_requests[rid], self.fleetcontrol.vr_ctrl_f,
+                                                                    self.fleetcontrol.routing_engine, self.fleetcontrol.rq_dict, sim_time,
+                                                                    self.fleetcontrol.const_bt, self.fleetcontrol.add_bt,
+                                                                    rv_results_dict=self.fleetcontrol.rv_heuristics)
+            
             if len(r_list) != 0:
                 best_vid, best_plan, _ = min(r_list, key = lambda x:x[2])
                 self.fleetcontrol.assign_vehicle_plan(self.fleetcontrol.sim_vehicles[best_vid], best_plan, sim_time)
