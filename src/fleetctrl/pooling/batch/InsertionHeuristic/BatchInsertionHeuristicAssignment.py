@@ -59,7 +59,7 @@ class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
             r_list = insert_prq_in_selected_veh_list(rv_vehicles, non_repo_veh_plans, self.active_requests[rid], self.fleetcontrol.vr_ctrl_f,
                                                                     self.fleetcontrol.routing_engine, self.fleetcontrol.rq_dict, sim_time,
                                                                     self.fleetcontrol.const_bt, self.fleetcontrol.add_bt,
-                                                                    rv_results_dict=self.fleetcontrol.rv_heuristics)
+                                                                    insert_heuristic_dict=self.fleetcontrol.rv_heuristics)
             
             if len(r_list) != 0:
                 best_vid, best_plan, _ = min(r_list, key = lambda x:x[2])
