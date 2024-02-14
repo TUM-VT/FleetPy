@@ -5,7 +5,7 @@ import time
 from typing import Callable, Dict, List, Any, Tuple, TYPE_CHECKING
 
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
-from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
+from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase, SimulationVehicleStruct
 from src.fleetctrl.pooling.immediate.insertion import insert_prq_in_selected_veh_list
 from src.fleetctrl.pooling.immediate.searchVehicles import veh_search_for_immediate_request
 from src.misc.globals import *
@@ -42,6 +42,14 @@ class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
         self.sim_time = sim_time
         if len(veh_objs_to_build) != 0:
             raise NotImplementedError
+        
+        self.veh_objs = {}
+        if len(veh_objs_to_build.keys()) == 0:
+            for veh_obj in self.fleetcontrol.sim_vehicles:
+                veh_obj_struct = SimulationVehicleStruct(veh_obj, self.fleetcontrol.veh_plans.get(veh_obj.vid, VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])), sim_time, self.routing_engine)
+                self.veh_objs[veh_obj.vid] = veh_obj_struct
+        else:
+            self.veh_objs = veh_objs_to_build
         
         non_repo_veh_plans = {}
         for vid, veh_obj in self.veh_objs.items():
