@@ -69,9 +69,14 @@ class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
                                                                     insert_heuristic_dict=self.fleetcontrol.rv_heuristics)
             if len(r_list) != 0:
                 best_vid, best_plan, _ = min(r_list, key = lambda x:x[2])
-                self.fleetcontrol.assign_vehicle_plan(self.fleetcontrol.sim_vehicles[best_vid], best_plan, sim_time)
+                self.fleetcontrol.assign_vehicle_plan(self.fleetcontrol.sim_vehicles[best_vid], best_plan, sim_time, add_arg="IH")
                 non_repo_veh_plans[best_vid] = best_plan
         self.unassigned_requests = {} # only try once
+        
+        sum_obj = 0
+        for vid, plan in non_repo_veh_plans.items():
+            sum_obj += self.fleetcontrol.compute_VehiclePlan_utility(sim_time, self.veh_objs[vid], plan)
+        LOG.info(f"Objective value at time {sim_time} for IH: {sum_obj}")
             
     
     def get_optimisation_solution(self, vid : int) -> VehiclePlan:

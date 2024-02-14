@@ -228,6 +228,11 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         LOG.debug(f"opt results:")
         for k, v in self.optimisation_solutions.items():
             LOG.debug(f"vid {k} -> {v}")
+            
+        sum_obj = 0
+        for k, v in self.optimisation_solutions.items():
+            sum_obj += self.rtv_costs[v]
+        LOG.info(f"Objective value at time {sim_time} for AM: {sum_obj}")
 
 
     def add_new_request(self, rid : Any, prq : PlanRequest, consider_for_global_optimisation : bool = True, is_allready_assigned : bool = False):
