@@ -46,7 +46,7 @@ class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
         non_repo_veh_plans = {}
         for vid, veh_obj in self.veh_objs.items():
             veh_p = self.fleetcontrol.veh_plans.get(vid, VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])).copy_and_remove_empty_planstops(veh_obj, sim_time, self.routing_engine)
-            obj = self.fleetcontrol.vr_ctrl_f(veh_obj, veh_p, self.fleetcontrol, sim_time)
+            obj = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, veh_p)
             veh_p.set_utility(obj)
             non_repo_veh_plans[vid] = veh_p
         
