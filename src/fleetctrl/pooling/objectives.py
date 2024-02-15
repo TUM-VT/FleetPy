@@ -1,4 +1,6 @@
 from __future__ import annotations
+import logging
+import numpy as np
 
 from typing import TYPE_CHECKING, Dict, Any, Callable
 if TYPE_CHECKING:
@@ -7,10 +9,14 @@ if TYPE_CHECKING:
     from src.simulation.Vehicles import SimulationVehicle
     from src.routing.NetworkBase import NetworkBase
 
+LOG = logging.getLogger(__name__)
+
 from src.misc.globals import *
 
 LARGE_INT = 1000000
-
+MAX_DISTANCE = 100 * 1000  # 100 km -> to define an assignment reward per request
+MAX_DELAY = 2 * 60 * 60  # 2 hours -> to define an assignment reward per request
+MAX_BASE_DISTANCE_COST = 100/1000  # 1 dollar per km
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # main function
@@ -34,6 +40,9 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     # control objective function definitions
     # --------------------------------------
     if func_key == "total_distance":
+        assignment_reward_per_rq = MAX_DISTANCE
+        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function evaluates the driven distance according to a vehicle plan.
 
@@ -44,7 +53,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             :param routing_engine: for routing queries
             :return: objective function value
             """
-            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            assignment_reward = len(veh_plan.pax_info) * assignment_reward_per_rq
             sum_dist = 0
             last_pos = veh_obj.pos
             for ps in veh_plan.list_plan_stops:
@@ -56,6 +65,9 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
 
     elif func_key == "total_system_time":
         ignore_repo_stop_wt = vr_control_func_dict.get("irswt", False)
+        assignment_reward_per_rq = MAX_DELAY
+        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         if not ignore_repo_stop_wt:
             def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
                 """This function evaluates the total spent time of a vehicle according to a vehicle plan.
@@ -67,7 +79,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                 :param routing_engine: for routing queries
                 :return: objective function value
                 """
-                assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+                assignment_reward = len(veh_plan.pax_info) * assignment_reward_per_rq
                 # end time (for request assignment purposes) defined by arrival at last stop
                 if veh_plan.list_plan_stops:
                     end_time = veh_plan.list_plan_stops[-1].get_planned_arrival_and_departure_time()[0]
@@ -88,7 +100,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                 :param routing_engine: for routing queries
                 :return: objective function value
                 """
-                assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+                assignment_reward = len(veh_plan.pax_info) * assignment_reward_per_rq
                 # end time (for request assignment purposes) defined by arrival at last stop
                 if veh_plan.list_plan_stops:
                     if veh_plan.list_plan_stops[-1].is_locked_end():
@@ -105,6 +117,10 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                 return end_time - simulation_time - assignment_reward
 
     elif func_key == "user_times":
+        assignment_reward_per_rq = MAX_DELAY
+        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
+        
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function evaluates the total spent time of a vehicle according to a vehicle plan.
 
@@ -115,7 +131,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             :param routing_engine: for routing queries
             :return: objective function value
             """
-            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            assignment_reward = len(veh_plan.pax_info) * assignment_reward_per_rq
             # value of time term (treat waiting and in-vehicle time the same)
             sum_user_times = 0
             for rid, boarding_info_list in veh_plan.pax_info.items():
@@ -126,6 +142,10 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             return sum_user_times - simulation_time - assignment_reward
         
     elif func_key == "total_travel_times":
+        assignment_reward_per_rq = MAX_DELAY
+        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
+        
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function evaluates the total travel time of the vehicle (no waiting/boarding, ...).
 
@@ -136,7 +156,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             :param routing_engine: for routing queries
             :return: objective function value
             """
-            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            assignment_reward = len(veh_plan.pax_info) * assignment_reward_per_rq
             sum_tt = 0
             last_pos = veh_obj.pos
             for ps in veh_plan.list_plan_stops:
@@ -148,6 +168,10 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
 
     elif func_key == "system_and_user_time":
         user_weight = vr_control_func_dict["uw"]
+        assignment_reward_per_rq = MAX_DELAY
+        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
+        
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function calculates the total system time (time the plan takes to be completed) and the total user times
             (time from request till drop off). user times are weighted by the factor given from "uw".
@@ -159,7 +183,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             :param routing_engine: for routing queries
             :return: objective function value
             """
-            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            assignment_reward = len(veh_plan.pax_info) * assignment_reward_per_rq
             # value of time term (treat waiting and in-vehicle time the same)
             sum_user_times = 0
             for rid, boarding_info_list in veh_plan.pax_info.items():
@@ -177,6 +201,9 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
 
     elif func_key == "distance_and_user_times":
         traveler_vot = vr_control_func_dict["vot"]
+        assignment_reward_per_rq = MAX_DISTANCE * MAX_BASE_DISTANCE_COST + MAX_DELAY * traveler_vot
+        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function combines the total driving costs and the value of customer time.
@@ -188,7 +215,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             :param routing_engine: for routing queries
             :return: objective function value
             """
-            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            assignment_reward = len(veh_plan.pax_info) * assignment_reward_per_rq
             # distance term
             sum_dist = 0
             last_pos = veh_obj.pos
@@ -210,6 +237,9 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     elif func_key == "distance_and_user_times_man":
         traveler_vot = vr_control_func_dict["vot"]
         distance_cost = vr_control_func_dict["dc"]
+        assignment_reward_per_rq = MAX_DISTANCE * distance_cost + MAX_DELAY * traveler_vot
+        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function combines the total driving costs and the value of customer time.
@@ -221,7 +251,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             :param routing_engine: for routing queries
             :return: objective function value
             """
-            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            assignment_reward = len(veh_plan.pax_info) * assignment_reward_per_rq
             # distance term
             sum_dist = 0
             last_pos = veh_obj.pos
@@ -238,10 +268,14 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                 sum_user_times += (drop_off_time - rq_time)
             # vehicle costs are taken from simulation vehicle (cent per meter)
             # value of travel time is scenario input (cent per second)
+            # LOG.debug(f" -> obj eval: sum_dist {sum_dist} * distance_cost {distance_cost} + sum_user_times {sum_user_times} * traveler_vot {traveler_vot} - assignment_reward {assignment_reward}")
             return sum_dist * distance_cost + sum_user_times * traveler_vot - assignment_reward
 
     elif func_key == "distance_and_user_times_with_walk":
         traveler_vot = vr_control_func_dict["vot"]
+        assignment_reward_per_rq = MAX_DISTANCE * MAX_BASE_DISTANCE_COST + MAX_DELAY * traveler_vot
+        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function combines the total driving costs and the value of customer time.
@@ -253,7 +287,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             :param routing_engine: for routing queries
             :return: objective function value
             """
-            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            assignment_reward = len(veh_plan.pax_info) * assignment_reward_per_rq
             # distance term
             sum_dist = 0
             last_pos = veh_obj.pos
@@ -275,6 +309,10 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
 
     elif func_key == "distance_and_user_vehicle_times":
         traveler_vot = vr_control_func_dict["vot"]
+        traveler_vot = vr_control_func_dict["vot"]
+        assignment_reward_per_rq = MAX_DISTANCE * MAX_BASE_DISTANCE_COST + MAX_DELAY * traveler_vot
+        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function combines the total driving costs, the value of customer time and vehicle waiting time.
@@ -286,7 +324,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             :param routing_engine: for routing queries
             :return: objective function value
             """
-            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            assignment_reward = len(veh_plan.pax_info) * assignment_reward_per_rq
             # distance term
             sum_dist = 0
             sum_veh_wait = 0
@@ -318,6 +356,9 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
 
     elif func_key == "sys_time_and_detour_time":
         detour_weight = vr_control_func_dict["dtw"]
+        assignment_reward_per_rq = MAX_DELAY
+        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function is used to minimize system time and detour time
@@ -331,7 +372,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             :param routing_engine: for routing queries
             :return: objective function value
             """
-            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            assignment_reward = len(veh_plan.pax_info) * assignment_reward_per_rq
             # end time (for request assignment purposes) defined by arrival at last stop
             if veh_plan.list_plan_stops:
                 end_time = veh_plan.list_plan_stops[-1].get_planned_arrival_and_departure_time()[0]
@@ -348,6 +389,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                 return sys_time - assignment_reward
     
     elif func_key == "IRS_study_standard":
+        LOG.warning(f"This objective might be deprecated. Please check the implementation.")
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function tries to minimize the waiting time of unlocked users.
 
@@ -385,6 +427,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             return sum_dist + sum_user_wait_times - assignment_reward
 
     elif func_key == "soft_time_windows":
+        LOG.warning(f"This objective might be deprecated. Please check the implementation.")
         soft_tw_rewards = {"locked": LARGE_INT * 1000, "in time window": LARGE_INT + 100}
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function tries to minimize the waiting time of unlocked users. It penalizes assignments that imply

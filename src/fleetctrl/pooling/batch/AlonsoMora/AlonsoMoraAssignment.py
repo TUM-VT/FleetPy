@@ -26,7 +26,7 @@ LOG = logging.getLogger(__name__)
 LARGE_INT = 100000
 MAX_LENGTH_OF_TREES = 1024 # TODO
 RETRY_TIME = 24*3600
-
+GUROBI_MIPGAP = 10**-8
 
 INPUT_PARAMETERS_AlonsoMoraAssignment = {
     "doc" :  """This algorithm is a variant of the publication
@@ -147,6 +147,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param build_from_scratch : bool; if True, the whole database will be cleared and recomputed from scratch
         """
         t_start = time.time()
+        self.sim_time = sim_time
         if self.fleetcontrol is not None:
             for vid, ext_tuple in self.external_assignments.items():
                 if ext_tuple[1] is None:
@@ -227,7 +228,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
 
         LOG.debug(f"opt results:")
         for k, v in self.optimisation_solutions.items():
-            LOG.debug(f"vid {k} -> {v}")
+            LOG.debug(f"vid {k} -> {v} -> {self.rtv_costs.get(v)}")
             
         sum_obj = 0
         for k, v in self.optimisation_solutions.items():
@@ -1264,6 +1265,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     grb_available = True
 
                     m.setParam(gurobi.GRB.param.Threads, self.optimisation_cores)
+                    m.setParam("MIPGap", GUROBI_MIPGAP)
                     if self.optimisation_timeout:
                         m.setParam('TimeLimit', self.optimisation_timeout)
                     variables = {}  # rtv_key -> gurobi variable
