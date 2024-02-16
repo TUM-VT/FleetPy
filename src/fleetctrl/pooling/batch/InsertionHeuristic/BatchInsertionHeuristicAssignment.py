@@ -53,7 +53,11 @@ class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
         
         non_repo_veh_plans = {}
         for vid, veh_obj in self.veh_objs.items():
-            veh_p = self.fleetcontrol.veh_plans.get(vid, VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])).copy_and_remove_empty_planstops(veh_obj, sim_time, self.routing_engine)
+            current_veh_p  : VehiclePlan = self.fleetcontrol.veh_plans.get(vid, VehiclePlan(veh_obj, self.sim_time, self.routing_engine, []))
+            current_veh_p.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
+            obj = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, current_veh_p)
+            current_veh_p.set_utility(obj)
+            veh_p = current_veh_p.copy_and_remove_empty_planstops(veh_obj, sim_time, self.routing_engine)
             obj = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, veh_p)
             veh_p.set_utility(obj)
             non_repo_veh_plans[vid] = veh_p
@@ -71,7 +75,7 @@ class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
                 best_vid, best_plan, best_cost = min(r_list, key = lambda x:x[2])
                 self.fleetcontrol.assign_vehicle_plan(self.fleetcontrol.sim_vehicles[best_vid], best_plan, sim_time, add_arg="IH")
                 non_repo_veh_plans[best_vid] = best_plan
-                #LOG.debug(f"request {rid} assigned to vehicle {best_vid} with insertion heuristic: {best_cost} | {best_plan}")
+                LOG.debug(f"request {rid} assigned to vehicle {best_vid} with insertion heuristic: {best_cost} | {best_plan}")
         self.unassigned_requests = {} # only try once
         
         sum_obj = 0

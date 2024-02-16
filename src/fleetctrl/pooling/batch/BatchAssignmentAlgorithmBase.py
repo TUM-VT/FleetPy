@@ -183,7 +183,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         # constraints for optimisation
         # 1) requests locked to single vehicle (i.e. on-board) | rid is always a base_rid!
         self.v2r_locked : Dict[int, Dict[Any, int]] = {}    #vid -> rid -> 1 | rids currently locked to vid
-        self.r2v_locked  : Dict[Any, Dict[int, int]]= {}    #rid -> vid -> 1 | rids currently locked to vid
+        self.r2v_locked  : Dict[Any, int]= {}    #rid -> vid | rids currently locked to vid
         for vid in self.veh_objs.keys():
             self.v2r_locked[vid] = {}
         # 2) assignment constraint (defines if requests have to be assigned) | rid is always a base_rid!

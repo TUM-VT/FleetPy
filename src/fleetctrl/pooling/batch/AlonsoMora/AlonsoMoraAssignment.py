@@ -9,7 +9,7 @@ from typing import Callable, Dict, List, Any, Tuple, TYPE_CHECKING
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
 from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase, SimulationVehicleStruct
 from src.fleetctrl.pooling.batch.AlonsoMora.misc import *
-from src.fleetctrl.pooling.GeneralPoolingFunctions import checkRRcomptibility
+from src.fleetctrl.pooling.GeneralPoolingFunctions import checkRRcomptibility, checkRRcomptibillityOnBoard
 from src.fleetctrl.pooling.batch.AlonsoMora.V2RB import V2RB
 from src.fleetctrl.pooling.immediate.insertion import simple_remove, single_insertion
 from src.fleetctrl.pooling.immediate.SelectRV import filter_directionality, filter_least_number_tasks
@@ -178,11 +178,11 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         t_setup = time.time()
         self._computeRR()
         t_rr = time.time()
-        ## LOG.debug(f"new RR cons {self.rr}")
+        LOG.debug(f"new RR cons {self.rr}")
         # LOG.info("computeRV")
         self._computeRV()
         t_rv = time.time()
-        ## LOG.debug(f"new RV cons {self.r2v}")
+        LOG.debug(f"new RV cons {self.r2v}")
         if self.veh_tree_build_timeout is not None:
             self._set_init_solution_insertion()
        # # LOG.debug(f"check for untracked boardings")
@@ -679,7 +679,22 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     if rid1 != rid2:
                         if not self._is_subrid(rid1) or not self._is_subrid(rid2) or self._get_associated_baserid(rid1) != self._get_associated_baserid(rid2):
                             rq2 = self.active_requests[rid2]
-                            rr_comp = checkRRcomptibility(rq1, rq2, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt) #TODO definitions of boarding times!
+                            if self.r2v_locked.get(rid1) is not None and \
+                                rid1 in [rq.get_rid_struct() for rq in self.veh_objs[self.r2v_locked[rid1]].pax]:
+                                    #LOG.debug(f"ob rr {rid1} {rid2} ({rid1} ob of {self.r2v_locked[rid1]}")
+                                    veh_pos = self.veh_objs[self.r2v_locked[rid1]].pos
+                                    #pu_time = rq1.pu_time # sometimes pickups can be delayed with new travel times -> influences drop off constraint (hard to be consistent with abs latest drop off time!)
+                                    rr_comp = checkRRcomptibillityOnBoard(rq1, rq2, veh_pos, self.sim_time, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt)
+                                    #LOG.debug(f" -> {rr_comp}")
+                            elif self.r2v_locked.get(rid2) is not None and \
+                                rid2 in [rq.get_rid_struct() for rq in self.veh_objs[self.r2v_locked[rid2]].pax]:
+                                    #LOG.debug(f"ob rr {rid2} {rid1} ({rid2} ob of {self.r2v_locked[rid2]}")
+                                    veh_pos = self.veh_objs[self.r2v_locked[rid2]].pos
+                                    # pu_time = rq2.pu_time # sometimes pickups can be delayed with new travel times -> influences drop off constraint (hard to be consistent with abs latest drop off time!)
+                                    rr_comp = checkRRcomptibillityOnBoard(rq2, rq1, veh_pos, self.sim_time, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt)
+                                    #LOG.debug(f" -> {rr_comp}")
+                            else:
+                                rr_comp = checkRRcomptibility(rq1, rq2, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt) #TODO definitions of boarding times!
                             if rr_comp:
                                 self.rr[getRRKey(rid1, rid2)] = 1
         else:
