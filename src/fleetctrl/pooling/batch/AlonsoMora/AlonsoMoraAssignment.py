@@ -69,6 +69,11 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         self.veh_tree_build_timeout : int = operator_attributes.get(G_RA_TB_TO_PER_VEH, None)
         self.optimisation_timeout : int = operator_attributes.get(G_RA_OPT_TO, None)
         self.max_rv_connections : int = operator_attributes.get(G_RA_MAX_VR, None)
+        if self.max_rv_connections is not None and type(self.max_rv_connections) != int:
+            if np.isnan(self.max_rv_connections):
+                self.max_rv_connections = None
+            else:
+                self.max_rv_connections = int(self.max_rv_connections)
         self.max_tour_per_v2rb : int = operator_attributes.get(G_RA_MAX_TOUR, None)
         if self.max_tour_per_v2rb is not None and type(self.max_tour_per_v2rb) != int:
             if np.isnan(self.max_tour_per_v2rb):
@@ -84,7 +89,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 if np.isnan(self._max_prqs_exhaustive_DARP):
                     self._max_prqs_exhaustive_DARP = 4
                 else:
-                    self._max_prqs_exhaustive_DARP = int(self.max_tour_per_v2rb)
+                    self._max_prqs_exhaustive_DARP = int(self._max_prqs_exhaustive_DARP)
                     
         applied_heuristics = operator_attributes.get(G_RA_HEU, None)
         
