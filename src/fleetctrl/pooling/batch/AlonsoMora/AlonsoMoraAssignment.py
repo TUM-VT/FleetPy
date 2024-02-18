@@ -36,7 +36,7 @@ INPUT_PARAMETERS_AlonsoMoraAssignment = {
     "inherit" : "BatchAssignmentAlgorithmBase",
     "input_parameters_mandatory": [G_RA_SOLVER],
     "input_parameters_optional": [
-        G_RA_TB_TO_PER_VEH, G_RA_MAX_VR, G_RA_OPT_TO, G_RA_HEU, G_RVH_B_DIR, G_RVH_DIR, G_RVH_B_LWL, G_RVH_LWL, G_RVH_AM_RR, G_RVH_AM_TI
+        G_RA_TB_TO_PER_VEH, G_RA_MAX_VR, G_RA_OPT_TO, G_RA_HEU, G_RVH_B_DIR, G_RVH_DIR, G_RVH_B_LWL, G_RVH_LWL, G_RVH_AM_RR, G_RVH_AM_TI, G_RA_MAX_TOUR, G_RA_MAX_EXH_DARP, G_RA_AM_ALWAYS_REBUILD
         ],
     "mandatory_modules": [],
     "optional_modules": []
@@ -75,6 +75,17 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 self.max_tour_per_v2rb = None
             else:
                 self.max_tour_per_v2rb = int(self.max_tour_per_v2rb)
+                
+        self._max_prqs_exhaustive_DARP = self.operator_attributes.get(G_RA_MAX_EXH_DARP)
+        if self._max_prqs_exhaustive_DARP is None or type(self._max_prqs_exhaustive_DARP) != int:
+            if self._max_prqs_exhaustive_DARP is None:
+                self._max_prqs_exhaustive_DARP = 4
+            else:
+                if np.isnan(self._max_prqs_exhaustive_DARP):
+                    self._max_prqs_exhaustive_DARP = 4
+                else:
+                    self._max_prqs_exhaustive_DARP = int(self.max_tour_per_v2rb)
+                    
         applied_heuristics = operator_attributes.get(G_RA_HEU, None)
         
         self._always_rebuild_from_scratch = operator_attributes.get(G_RA_AM_ALWAYS_REBUILD, False)
@@ -892,7 +903,27 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 rids_to_build_with_hierarchy.append((rid, h))
         np.random.shuffle(rids_to_build_with_hierarchy)
         rids_to_build_with_hierarchy = sorted(rids_to_build_with_hierarchy, key = lambda x:x[1], reverse = True)
+        # assigned tree
+        assigned_rtv_tree_N = {}
+        if assigned_key is not None:
+            necessary_ob_rids = []
+            for ass_rid in getRidsFromRTVKey(assigned_key):
+                if self.v2r_locked.get(vid, {}).get( self._get_associated_baserid(ass_rid) ):
+                    necessary_ob_rids.append(ass_rid)
+            for key in getNecessaryKeys(assigned_key, necessary_ob_rids):
+                n = len(getRidsFromRTVKey(assigned_key))
+                try:
+                    assigned_rtv_tree_N[n][key] = 1
+                except KeyError:
+                    try:
+                        assigned_rtv_tree_N[n] = {key : 1}
+                    except KeyError:
+                        assigned_rtv_tree_N = {n : {key : 1}}
+        #
         t_all_vid = time.time()
+        # first build on assigned tree
+        for rid, h in rids_to_build_with_hierarchy:
+            self._buildOnCurrentAssignedTree(vid, rid, assigned_rtv_tree_N)
         #LOG.debug("build tree for vid {} with rids {} | locked {}".format(vid, rids_to_build_with_hierarchy, self.r2v_locked))
         for rid, h in rids_to_build_with_hierarchy:
             t_c = time.time() - t_all_vid
@@ -994,7 +1025,117 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     continue
 
                 LOG.debug(f"try building {build_key} | {rid} | ")
-                if self.max_tour_per_v2rb is not None:
+                if i > self._max_prqs_exhaustive_DARP and self.max_tour_per_v2rb is not None:
+                    test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB_bestPlanHeuristic(vid, rid, build_key)
+                else:
+                    test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB(vid, rid, build_key)
+
+                if test_new_V2RB:
+                    self._addRtvKey(new_rtv_key, test_new_V2RB)
+                    new_v2rb_found = True
+            if not new_v2rb_found:
+                break
+
+        if number_locked_rids == 0:
+            rtv_key = createRTVKey(vid, [rid])
+            if self.rtv_obj.get(rtv_key, None) is not None:
+                return
+            V2RB_obj = V2RB(self.routing_engine, self.active_requests, self.sim_time, rtv_key, self.veh_objs[vid], self.std_bt, self.add_bt, self.objective_function, new_prq_obj=self.active_requests[rid])
+            if V2RB_obj.isFeasible():
+                self._addRtvKey(rtv_key, V2RB_obj)
+                
+    def _buildOnCurrentAssignedTree(self, vid : int, rid : Any, assigned_rtv_tree_N):
+        """This method adds rid to all currently available rtv_keys which include only assigned requests for vehicle
+        IF the rid is matching with all on-board requests.
+        
+        To minimize the number of feasibility checks the tree is built from small bundles to large bundles with following considerations:
+        1) self.rv_ob[vid] determines the lowest level of requests
+        2) self.rr[vid] is considered for the lowest level
+        3) the existence of lower level keys (including all requests) is necessary for the existence of higher level keys
+        
+        This method creates V2RB objects but does not return anything.
+
+        :param vid: vehicle_id
+        :param rid: plan_request_id
+        :param assigned_rtv_tree_N: dict of rtv_keys with number of requests only for currently assigned rtv-obj
+        """
+
+        # LOG.verbose(f"build on current tree {rid} -> {vid}")
+        associated_locked_rids = []
+        for ob_rid in self.v2r_locked.get(vid, {}).keys():
+            other_sub_rids = self._get_all_other_subrids_associated_to_this_subrid(ob_rid)
+            associated_locked_rids.extend(list(other_sub_rids))
+            feasible_found = False
+            for sub_ob_rid in other_sub_rids:
+                if self.rr.get(getRRKey(rid, sub_ob_rid)):
+                    feasible_found = True
+                    break
+            if not feasible_found:
+                return
+        # check for assigned request not activated for global optimisation
+        assigned_key = self.current_assignments.get(vid)
+        if assigned_key is not None:
+            o_rids = getRidsFromRTVKey(assigned_key)
+            for o_rid in o_rids:
+                if self.rid_to_consider_for_global_optimisation.get(o_rid) is None:
+                    # LOG.verbose("additional rr check of not global opt {} <-> {}".format(rid, o_rid))
+                    rr_comp = checkRRcomptibility(self.active_requests[o_rid], self.active_requests[rid], self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt) 
+                    if rr_comp:
+                        # LOG.verbose(" -> 1")
+                        self.rr[getRRKey(rid, o_rid)] = 1
+        # check existing elements from lower to higher rid-number
+        number_locked_rids = len(self.v2r_locked.get(vid, {}).keys())
+        do_not_remove_for_lower_keys = [rid]
+        do_not_remove_for_lower_keys.extend(associated_locked_rids)
+        lower_keys_available = True
+        do_not_build_on_rv_key = createRTVKey(vid, [rid])
+        # check of activated heuristic
+        max_tour_heuristic = False
+        if self.applied_heuristics.get("single_plan_per_v2rb"):
+            max_tour_heuristic = True
+        # #
+        for i in range(max(number_locked_rids,1), MAX_LENGTH_OF_TREES):
+            new_v2rb_found = False
+            #LOG.debug(f"build rid {rid} size {i}")
+            for build_key in assigned_rtv_tree_N.get(i, {}).keys():
+                # # LOG.debug(f"build key {build_key}")
+                lower_keys_available = True
+                if build_key == do_not_build_on_rv_key:
+                    continue
+                if self.rtv_r.get(rid, {}).get(build_key) is not None:
+                    # # LOG.debug(f"dont build on yourself {build_key}")
+                    continue
+                # check if lower key is available, otherwise match will not be possible
+                #LOG.debug(f"build on {build_key}")
+                list_of_keys_to_test = createListLowerLevelKeys(build_key, rid, do_not_remove_for_lower_keys)
+                
+                for test_existence_rtv_key in list_of_keys_to_test:
+                    if not self.rtv_obj.get(test_existence_rtv_key):
+                        lower_keys_available = False
+                        break
+                if not lower_keys_available:
+                    continue
+                # test for feasibility by building on current V2RB object
+                unsorted_rid_list = list(getRidsFromRTVKey(build_key))
+                #check RR-compatibility! (?)
+                rr_test = True
+                for o_rid in unsorted_rid_list:
+                    rr_test = self.rr.get(getRRKey(o_rid, rid))
+                    # # LOG.debug(f"check rr {o_rid} {rid} -> {rr_test}")
+                    if rr_test != 1:
+                        rr_test = False
+                        break
+                if not rr_test:
+                    continue
+                
+                unsorted_rid_list.append(rid)
+                new_rtv_key = createRTVKey(vid, unsorted_rid_list)
+
+                if self.rtv_obj.get(new_rtv_key, None) is not None:
+                    continue
+
+                LOG.debug(f"try building {build_key} | {rid} | ")
+                if i > self._max_prqs_exhaustive_DARP and  self.max_tour_per_v2rb is not None:
                     test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB_bestPlanHeuristic(vid, rid, build_key)
                 else:
                     test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB(vid, rid, build_key)
