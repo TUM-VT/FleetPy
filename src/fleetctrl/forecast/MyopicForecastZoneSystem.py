@@ -179,13 +179,12 @@ class MyopicForecastZoneSystem(ForecastZoneSystem):
                 n_rqs = np.random.poisson(lam=val)
                 ts = [np.random.randint(t0, high=t1) for _ in range(n_rqs)]
                 for t in ts:
-                    if self._zone_to_sampling_nodes is None:
-                        o_n = self.get_random_node(o_z)
-                        d_n = self.get_random_node(d_z)
+                    o_n = self.get_random_node(o_z, only_boarding_nodes=True)
+                    d_n = self.get_random_node(d_z, only_boarding_nodes=True)
+                    if o_n >= 0 and d_n >= 0:
+                        future_list.append( (t, o_n, d_n) )
                     else:
-                        o_n = np.random.choice(self._zone_to_sampling_nodes[o_z])
-                        d_n = np.random.choice(self._zone_to_sampling_nodes[d_z])
-                    future_list.append( (t, o_n, d_n) )
+                        LOG.warning(f"no valid nodes found for zone pair {o_z} -> {d_z}! {o_n} -> {d_n}")
         future_list.sort(key=lambda x:x[0])
         LOG.info("forecast list: {}".format(future_list))
         return future_list

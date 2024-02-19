@@ -57,6 +57,14 @@ class ZoneSystem:
                     self.zone_centroids[zone_id].append(node_id)
                 except KeyError:
                     self.zone_centroids[zone_id] = [node_id]
+        self.zone_boarding = None
+        if G_ZONE_BOARD in self.node_zone_df.columns:
+            self.zone_boarding = {}
+            for node_id, zone_id in self.node_zone_df[self.node_zone_df[G_ZONE_BOARD] == 1][G_ZONE_ZID].items():
+                try:
+                    self.zone_boarding[zone_id].append(node_id)
+                except KeyError:
+                    self.zone_boarding[zone_id] = [node_id]
                     
     def get_zone_system_name(self):
         return self.zone_system_name
@@ -91,19 +99,28 @@ class ZoneSystem:
         tmp_df = self.node_zone_df[self.node_zone_df[G_ZONE_ZID] == zone_id]
         return tmp_df.index.values.tolist()
 
-    def get_random_node(self, zone_id):
+    def get_random_node(self, zone_id, only_boarding_nodes=False):
         """This method returns a random node_id for a given zone_id.
 
         :param zone_id: id of the zone in question
         :type zone_id: int
+        :param only_boarding_nodes: if True, only nodes with boarding attribute are considered (if G_ZONE_BOARD provide in node_zone_info.csv, else all nodes are considered)
+        :type only_boarding_nodes: bool
         :return: node_id of a node within the zone in question; return -1 if invalid zone_id is given
         :rtype: int
         """
-        tmp_df = self.node_zone_df[self.node_zone_df[G_ZONE_ZID] == zone_id]
-        if len(tmp_df) > 0:
-            return np.random.choice(tmp_df.index.values.tolist())
+        if only_boarding_nodes and self.zone_boarding is not None:
+            boarding_nodes = self.zone_boarding.get(zone_id, [])
+            if len(boarding_nodes) > 0:
+                return np.random.choice(boarding_nodes)
+            else:
+                return -1
         else:
-            return -1
+            tmp_df = self.node_zone_df[self.node_zone_df[G_ZONE_ZID] == zone_id]
+            if len(tmp_df) > 0:
+                return np.random.choice(tmp_df.index.values.tolist())
+            else:
+                return -1
 
     def get_random_centroid_node(self, zone_id):
         if self.zone_centroids is not None:

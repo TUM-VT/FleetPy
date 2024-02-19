@@ -253,13 +253,11 @@ class AggForecastZoneSystem(ForecastZoneSystem):
                 break
             o_zone = np.random.choice(dep_zones, p=dep_prob)
             d_zone = np.random.choice(arr_zones, p=arr_prob)
-            if self._zone_to_sampling_nodes is None:
-                o_n = self.get_random_node(o_zone)
-                d_n = self.get_random_node(d_zone)
+            o_n = self.get_random_node(o_zone, only_boarding_nodes=True)
+            d_n = self.get_random_node(d_zone, only_boarding_nodes=True)
+            if o_n != -1 and d_n != -1:
+                future_list.append( (int(tc), o_n, d_n) )
             else:
-                o_n = np.random.choice(self._zone_to_sampling_nodes[o_zone])
-                d_n = np.random.choice(self._zone_to_sampling_nodes[d_zone])
-            future_list.append( (int(tc), o_n, d_n) )
-        #LOG.warning(f"future set: {len(future_list)} | {future_list}")
+                LOG.warning(f"draw future: couldnt find nodes for {o_zone} and {d_zone}")
 
         return future_list
