@@ -365,6 +365,7 @@ class IndividualConstraintRequest(RequestBase):
         elif scenario_parameters.get(G_AR_MAX_WT):
             self.latest_start_time = self.earliest_start_time + scenario_parameters.get(G_AR_MAX_WT)
         self.set_direct_route_travel_infos(routing_engine)
+        # TODO: Santi -> similar to request the actual PUDO duration
         if rq_row.get(G_RQ_MRD):
             rel_dt_f = rq_row[G_RQ_MRD]
         elif not pd.isnull(scenario_parameters.get(G_AR_MAX_DTF)):

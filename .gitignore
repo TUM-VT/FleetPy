@@ -171,3 +171,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+data/networks/example_network/downloaded_map.tif

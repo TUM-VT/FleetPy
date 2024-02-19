@@ -848,7 +848,9 @@ class FleetControlBase(metaclass=ABCMeta):
             stationary_process = None
             if len(pstop.get_list_boarding_rids()) > 0 or len(pstop.get_list_alighting_rids()) > 0:
                 boarding = True
+                # TODO: Santi check
                 for rid in pstop.get_list_boarding_rids():
+                    # SANTI: boarding_dict is where I have access to the request info
                     boarding_dict[1].append(self.rq_dict[rid])
                 for rid in pstop.get_list_alighting_rids():
                     boarding_dict[-1].append(self.rq_dict[rid])
@@ -926,6 +928,7 @@ class FleetControlBase(metaclass=ABCMeta):
                 else:
                     stop_duration = 0
                 _, c_time = pstop.get_planned_arrival_and_departure_time()
+                # TODO: Santi
                 list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), boarding_dict, pstop.get_charging_power(),
                                                 duration=stop_duration, earliest_start_time=earliest_start_time, earliest_end_time=departure_time,
                                                 locked=pstop.is_locked(), stationary_process=stationary_process))
