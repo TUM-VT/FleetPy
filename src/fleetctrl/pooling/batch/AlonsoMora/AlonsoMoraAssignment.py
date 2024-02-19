@@ -199,8 +199,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         self._computeRV()
         t_rv = time.time()
         LOG.debug(f"new RV cons {self.r2v}")
-        if self.veh_tree_build_timeout is not None:
-            self._set_init_solution_insertion()
+        # if self.veh_tree_build_timeout is not None:
+        #     self._set_init_solution_insertion()
        # # LOG.debug(f"check for untracked boardings")
         for vid in self.untracked_boarding_detected.keys():
             ## LOG.debug(f"untracked boarding for vid {vid}")
@@ -897,7 +897,6 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             rids_to_build = [rid for rid in self.requests_to_compute.keys() if self.rid_to_consider_for_global_optimisation.get(rid)]
         else:
             rids_to_build = [rid for rid in self.active_requests.keys() if self.rid_to_consider_for_global_optimisation.get(rid)]
-        LOG.debug(f" ... build tree for vid {vid} with assigned key {assigned_key} for rids {rids_to_build}")
         rids_to_build_with_hierarchy = []
         for rid in rids_to_build:
             if self.r2v_locked.get(self._get_associated_baserid(rid), vid) == vid and self.v2r.get(vid, {}).get(rid):
@@ -908,6 +907,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 rids_to_build_with_hierarchy.append((rid, h))
         np.random.shuffle(rids_to_build_with_hierarchy)
         rids_to_build_with_hierarchy = sorted(rids_to_build_with_hierarchy, key = lambda x:x[1], reverse = True)
+        LOG.debug(f" ... build tree for vid {vid} with assigned key {assigned_key} and locked {self.v2r_locked.get(vid, {})} for rids {rids_to_build_with_hierarchy}")
         # assigned tree
         assigned_rtv_tree_N = {}
         if assigned_key is not None:
@@ -915,15 +915,18 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             for ass_rid in getRidsFromRTVKey(assigned_key):
                 if self.v2r_locked.get(vid, {}).get( self._get_associated_baserid(ass_rid) ):
                     necessary_ob_rids.append(ass_rid)
-            for key in getNecessaryKeys(assigned_key, necessary_ob_rids):
-                n = len(getRidsFromRTVKey(assigned_key))
-                try:
-                    assigned_rtv_tree_N[n][key] = 1
-                except KeyError:
-                    try:
-                        assigned_rtv_tree_N[n] = {key : 1}
-                    except KeyError:
-                        assigned_rtv_tree_N = {n : {key : 1}}
+            assigned_rtv_tree_N = get_full_assigned_tree(assigned_key, necessary_ob_rids)
+            # LOG.debug(f"necessary keys: {list(getNecessaryKeys(assigned_key, necessary_ob_rids))}")
+            # for key in getNecessaryKeys(assigned_key, necessary_ob_rids):
+            #     n = len(getRidsFromRTVKey(key))
+            #     try:
+            #         assigned_rtv_tree_N[n][key] = 1
+            #     except KeyError:
+            #         try:
+            #             assigned_rtv_tree_N[n] = {key : 1}
+            #         except KeyError:
+            #             assigned_rtv_tree_N = {n : {key : 1}}
+            # assigned_rtv_tree_N[len(getRidsFromRTVKey(assigned_key))] = {assigned_key : 1}
         #
         t_all_vid = time.time()
         # first build on assigned tree
@@ -936,11 +939,11 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             if self.veh_tree_build_timeout and h != 1 and t_c > self.veh_tree_build_timeout:
                 # LOG.debug(f"break tree building for vid {vid} after {t_c} s")
                 break
-            self._buildOnCurrentTree(vid, rid)
+            self._buildOnCurrentTree(vid, rid, assigned_rtv_tree_N)
 
         self._checkForNecessaryV2RBsAndComputeMissing(vid)
         
-    def _buildOnCurrentTree(self, vid : int, rid : Any):
+    def _buildOnCurrentTree(self, vid : int, rid : Any, assigned_rtv_tree_N):
         """This method adds rid to all currently available rtv_keys for vehicle
         IF the rid is matching with all on-board requests.
         
@@ -953,6 +956,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
 
         :param vid: vehicle_id
         :param rid: plan_request_id
+        :param assigned_rtv_tree_N: dict of rtv_keys with number of requests only for currently assigned rtv-obj
         """
 
         # LOG.verbose(f"build on current tree {rid} -> {vid}")
@@ -993,7 +997,10 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             new_v2rb_found = False
             #LOG.debug(f"build rid {rid} size {i}")
             for build_key in self.rtv_tree_N_v[vid].get(i, {}).keys():
-                # # LOG.debug(f"build key {build_key}")
+                LOG.debug(f"build key {build_key}")
+                if assigned_rtv_tree_N.get(i, {}).get(build_key) is not None:
+                    LOG.debug(f" -> already built on assigned tree {build_key}")
+                    continue
                 lower_keys_available = True
                 if build_key == do_not_build_on_rv_key:
                     continue
@@ -1065,7 +1072,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param assigned_rtv_tree_N: dict of rtv_keys with number of requests only for currently assigned rtv-obj
         """
 
-        # LOG.verbose(f"build on current tree {rid} -> {vid}")
+        LOG.debug(f"build on assigned tree {rid} -> {vid}")
+        LOG.debug(f"assigned tree {assigned_rtv_tree_N}")
         associated_locked_rids = []
         for ob_rid in self.v2r_locked.get(vid, {}).keys():
             other_sub_rids = self._get_all_other_subrids_associated_to_this_subrid(ob_rid)
@@ -1103,7 +1111,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             new_v2rb_found = False
             #LOG.debug(f"build rid {rid} size {i}")
             for build_key in assigned_rtv_tree_N.get(i, {}).keys():
-                # # LOG.debug(f"build key {build_key}")
+                LOG.debug(f"build key assigned {build_key}")
                 lower_keys_available = True
                 if build_key == do_not_build_on_rv_key:
                     continue

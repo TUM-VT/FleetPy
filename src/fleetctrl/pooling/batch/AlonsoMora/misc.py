@@ -92,6 +92,39 @@ def createRTVKey(vid : int, rid_list : List[Any]) -> tuple:
     sorted_rid_list = tuple(sorted(rid_list, key = cmp_to_key(comp_key_entries)))
     return (vid, ) + sorted_rid_list
 
+def get_full_assigned_tree(rtv_key : tuple, r_ob ):
+    """ this functions computes all lower rtv_keys that must be existent for rtv_key to exist
+    assumes that r_ob are part of the key!
+    :param rtv_key: rtv_key of v2rb_obj
+    :param r_ob: list of request_ids currently on board of the corresponding vehicle
+    :return: dict number of requests -> rtv_key -> 1 of all necessary key of rtv_key with r_ob on board """
+    #print(rtv_key, r_ob)
+    if not rtv_key:
+        return
+    vid = getVidFromRTVKey(rtv_key)
+    ass_rids = getRidsFromRTVKey(rtv_key)
+    if len(r_ob) != 0:
+        key_tree = {len(r_ob) : {createRTVKey(vid, r_ob) : 1}}
+    else:
+        key_tree = {}
+    for rid in ass_rids:
+        if rid not in r_ob:
+            for i in range(len(r_ob), len(ass_rids)):
+                for key in key_tree.get(i, {}).keys():
+                    rids = getRidsFromRTVKey(key)
+                    if rid not in rids:
+                        new_key = createRTVKey(vid, list(rids) + [rid])
+                        try:
+                            key_tree[i+1][new_key] = 1
+                        except KeyError:
+                            key_tree[i+1] = {new_key : 1}
+        if len(r_ob) == 0:
+            new_key = createRTVKey(vid, [rid])
+            try:
+                key_tree[1][new_key] = 1
+            except KeyError:
+                key_tree[1] = {new_key : 1}
+    return key_tree
 
 def createListLowerLevelKeys(build_key : tuple, new_rid : Any, do_not_remove_for_lower_keys : List[tuple]) -> List[tuple]:
     """This function creates keys from build_key that are one level lower than build_key
