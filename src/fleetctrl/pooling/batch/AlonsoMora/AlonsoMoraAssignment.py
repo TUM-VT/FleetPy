@@ -1118,6 +1118,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 if self.rtv_r.get(rid, {}).get(build_key) is not None:
                     # # LOG.debug(f"dont build on yourself {build_key}")
                     continue
+                if self.rtv_obj.get(build_key) is None:
+                    continue
                 # check if lower key is available, otherwise match will not be possible
                 #LOG.debug(f"build on {build_key}")
                 list_of_keys_to_test = createListLowerLevelKeys(build_key, rid, do_not_remove_for_lower_keys)
