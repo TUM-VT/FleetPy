@@ -87,6 +87,7 @@ G_PT_FLEX_DETOUR = "pt_flex_detour"
 G_PT_STATION_F = "station_file"
 G_PT_ALIGNMENT_F = "alignment_file"
 G_PT_TERMINUS_ID = "terminus_id"
+G_PT_DEMAND_DIST = "demand_dist_file"
 
 # traveler general attributes
 G_RQ_FILE = "rq_file"
