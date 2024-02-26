@@ -1,0 +1,16 @@
+Every file has the format:
+
+A) For deterministic demand
+detDemand_{duration of PUDO}_{demand size}.csv
+
+duration of PUDO: in seconds
+demand size: number of trips
+
+
+B) For stochastic duration:
+stoDemand_{distribution type in PascalCase}_{parameter 1 distribution}_{parameter 2 distribution}_{demand size}.csv
+
+distribution type in PascalCase: either LogLog (log logarithmic distribution) or LogNorm (log normal distribution)
+parameter 1 distribution: alpha (scale parameter of LogLog) or mu (mean parameter of LogNorm) [in seconds]
+parameter 2 distribution: beta (shape parameter of LogLog) or sigma (st. dev. of LogNorm) [in seconds]
+demand size: number of trips

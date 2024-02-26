@@ -2,9 +2,12 @@
 run_private*.py
 
 # data directories except for example
-data/demand/*
 !data/demand/example_demand
 !data/demand/example_parcel_demand
+data/demand/stochastic_PUDO_duration/*
+!data/demand/stochastic_PUDO_duration/specificationFormat.txt
+!data/demand/stochastic_PUDO_duration/Stochastic_Data_generation.ipynb
+
 data/fleetctrl/initial_vehicle_distribution/*
 data/fleetctrl/elastic_pricing/*
 data/fleetctrl/elastic_fleet_size/*
