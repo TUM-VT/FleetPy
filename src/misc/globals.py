@@ -156,7 +156,7 @@ G_OP_PA_LPT = "op_parcel_latest_pickup_time"
 G_OP_PA_EDT = "op_parcel_earliest_dropoff_time"
 G_OP_PA_LDT = "op_parcel_latest_dropoff_time"
 G_OP_PA_CONST_BT = "op_parcel_const_boarding_time"
-G_OP_PA_ADD_BT = "op_parcel_add_boarding_time"
+G_OP_PA_ADD_BT = "op_parcel_add_boarding_time" 
 
 # operator specific attributes
 G_RA_SOLVER = "op_solver"   # currently "Gurobi" or "CPLEX"
@@ -410,6 +410,8 @@ G_RQ_LPT = "latest_pickup_time"
 G_RQ_LDT = "latest_decision_time"
 G_RQ_MRD = "max_rel_detour"
 G_RQ_MAX_FARE = "max_fare"
+G_RQ_PUDO_DUR = "pudo_duration" # PUDO Duration for the specific request TODO: consider both boarding and alighting times
+
 # parcel
 G_RQ_PA_SIZE = "parcel_size"
 G_RQ_PA_EPT = "parcel_earliest_pickup_time"
@@ -524,7 +526,7 @@ G_V_INIT_SOC = "final_soc"
 class VRL_STATES(Enum):
     BLOCKED_INIT = (-1, "blocked_init_status")
     IDLE = (0, "idle")
-    BOARDING = (1, "boarding")
+    BOARDING = (1, "boarding") # Santi: relevant state for stop
     CHARGING = (2, "charging")
     BOARDING_WITH_CHARGING = (3, "boarding_with_charging")
     WAITING = (4, "waiting")

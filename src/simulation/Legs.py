@@ -20,7 +20,7 @@ class VehicleRouteLeg:
         :param status: numbers reflecting the state of the leg (see misc/globals.py for specification)
         :param destination_pos: end of driving leg
         :param rq_dict: +/-1 -> [rq] ('+' for boarding, '-' for alighting)
-        :param duration: required for non-driving legs
+        :param duration: required for non-driving legs # Santi: relevant
         :param route: list of nodes
         :param locked: locked tasks cannot be changed anymore
         :param earliest_start_time: for e.g. boarding processes
@@ -66,4 +66,3 @@ class VehicleRouteLeg:
 
     def update_lock_status(self, lock=True):
         self.locked = lock
-

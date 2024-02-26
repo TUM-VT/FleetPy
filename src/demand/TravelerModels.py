@@ -64,6 +64,8 @@ class RequestBase(metaclass=ABCMeta):
         self.latest_start_time = None
         self.max_trip_time = None
         self.nr_pax = rq_row.get(G_RQ_PAX, 1)   # TODO RPP: neue attribute für größe/menge/gewicht
+        self.duration_pudo_boarding = None # santi
+        self.duration_pudo_alighting = None
         #
         self.o_node = int(rq_row[G_RQ_ORIGIN])
         self.o_pos = routing_engine.return_node_position(self.o_node)
@@ -365,7 +367,6 @@ class IndividualConstraintRequest(RequestBase):
         elif scenario_parameters.get(G_AR_MAX_WT):
             self.latest_start_time = self.earliest_start_time + scenario_parameters.get(G_AR_MAX_WT)
         self.set_direct_route_travel_infos(routing_engine)
-        # TODO: Santi -> similar to request the actual PUDO duration
         if rq_row.get(G_RQ_MRD):
             rel_dt_f = rq_row[G_RQ_MRD]
         elif not pd.isnull(scenario_parameters.get(G_AR_MAX_DTF)):
@@ -681,6 +682,61 @@ class SlaveRequest(RequestBase):
         #LOG.info(f"user boards vehicle: {self.rid} | {self.sub_rid_struct} | {self.offer}")
         self.fare = self.offer[op_id].get(G_OFFER_FARE, 0)
         return super().user_boards_vehicle(simulation_time, op_id, vid, pu_pos, t_access)
+# -------------------------------------------------------------------------------------------------------------------- #
+
+class RequestWithPUDODuration(RequestBase): # Santi
+    """This request considers the duration of the PUDO process for each request. It inherits from RequestBase.
+    - If the PUDO duration is specified in the input demand data (variable name G_RQ_PUDO_DUR), it is used 
+    - If no PUDO duration is spceified, the PUDO duration is assummed constant the the value in G_OP_CONST_BT (in globals) 
+    """
+    type = "RequestWithPUDODuration"
+
+    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
+
+        if rq_row.get(G_RQ_PUDO_DUR):
+            self.duration_pudo_boarding = rq_row.get(G_RQ_PUDO_DUR)
+            self.duration_pudo_alighting = rq_row.get(G_RQ_PUDO_DUR) # TODO: Santi. Consider different alighting duration
+        else:
+            self.duration_pudo_boarding = self.duration_pudo_alighting = scenario_parameters.get(G_OP_CONST_BT, 0) # Santi: test
+
+    def choose_offer(self, sc_parameters, simulation_time): # Santi: using the same as in class BasicRequest(RequestBase)
+        test_all_decline = super().choose_offer(sc_parameters, simulation_time)
+        if test_all_decline is not None and test_all_decline < 0:
+            return -1
+        if len(self.offer) == 0:
+            return None
+        opts = [offer_id for offer_id, operator_offer in self.offer.items() if
+                operator_offer is not None and not operator_offer.service_declined()]
+        LOG.debug(f"Basic request choose offer: {self.rid} : {offer_str(self.offer)} | {opts}")
+        if len(opts) == 0:
+            return None
+        elif len(opts) == 1:
+            self.fare = self.offer[opts[0]].get(G_OFFER_FARE, 0)
+            return opts[0]
+        else:
+            LOG.error(f"not implemented {offer_str(self.offer)}")
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Parcel Requests #

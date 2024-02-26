@@ -137,7 +137,7 @@ class FleetControlBase(metaclass=ABCMeta):
         self.add_cdt = operator_attributes.get(G_OP_ADD_CDT, None)
         self.max_cdt = operator_attributes.get(G_OP_MAX_CDT, None)
         self.min_dtw = operator_attributes.get(G_OP_MIN_DTW, None)
-        self.const_bt = operator_attributes.get(G_OP_CONST_BT, 0)
+        self.const_bt = operator_attributes.get(G_OP_CONST_BT, 0) 
         self.add_bt = operator_attributes.get(G_OP_ADD_BT, 0)
         # early locking/constraining of request pickup
         # --------------------------------------------
@@ -846,14 +846,21 @@ class FleetControlBase(metaclass=ABCMeta):
             #     continue
             boarding_dict = {1: [], -1: []}
             stationary_process = None
+            real_boarding_duration = []
+            real_alighting_duration = []
+
             if len(pstop.get_list_boarding_rids()) > 0 or len(pstop.get_list_alighting_rids()) > 0:
                 boarding = True
                 # TODO: Santi check
                 for rid in pstop.get_list_boarding_rids():
                     # SANTI: boarding_dict is where I have access to the request info
                     boarding_dict[1].append(self.rq_dict[rid])
+                    real_boarding_duration.append(self.rq_dict[rid].get_real_boarding_duration())
+                    
                 for rid in pstop.get_list_alighting_rids():
                     boarding_dict[-1].append(self.rq_dict[rid])
+                    real_alighting_duration.append(self.rq_dict[rid].get_real_alighting_duration())
+                max_stop_duration = max(real_boarding_duration + real_alighting_duration)
             else:
                 boarding = False
             if pstop.get_charging_power() > 0:
@@ -914,7 +921,7 @@ class FleetControlBase(metaclass=ABCMeta):
             else:
                 # TODO # after ISTTT: add other states if necessary; for now assume vehicle idles
                 status = VRL_STATES.IDLE
-            if status != VRL_STATES.IDLE:
+            if status != VRL_STATES.IDLE: #Santi check here
                 dur, edep = pstop.get_duration_and_earliest_departure()
                 earliest_start_time = pstop.get_earliest_start_time()
                 #LOG.debug("vrl earliest departure: {} {}".format(dur, edep))
@@ -930,6 +937,6 @@ class FleetControlBase(metaclass=ABCMeta):
                 _, c_time = pstop.get_planned_arrival_and_departure_time()
                 # TODO: Santi
                 list_vrl.append(VehicleRouteLeg(status, pstop.get_pos(), boarding_dict, pstop.get_charging_power(),
-                                                duration=stop_duration, earliest_start_time=earliest_start_time, earliest_end_time=departure_time,
+                                                duration=max_stop_duration, earliest_start_time=earliest_start_time, earliest_end_time=departure_time,
                                                 locked=pstop.is_locked(), stationary_process=stationary_process))
         return list_vrl

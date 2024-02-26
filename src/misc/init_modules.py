@@ -61,6 +61,8 @@ def get_src_request_modules():
     rm_dict["PriceSensitiveIndividualConstraintRequest"] = ("src.demand.TravelerModels", "PriceSensitiveIndividualConstraintRequest")
     rm_dict["MasterRandomChoiceRequest"] = ("src.demand.TravelerModels", "MasterRandomChoiceRequest")
     rm_dict["SlaveRequest"] = ("src.demand.TravelerModels", "SlaveRequest")
+    rm_dict["RequestWithPUDODuration"] = ("src.demand.TravelerModels", "RequestWithPUDODuration")
+
     rm_dict["BasicParcelRequest"] = ("src.demand.TravelerModels", "BasicParcelRequest")
     rm_dict["SlaveParcelRequest"] = ("src.demand.TravelerModels", "SlaveParcelRequest")
     rm_dict["WaitingTimeSensitiveLinearDeclineRequest"] = ("src.demand.TravelerModels", "WaitingTimeSensitiveLinearDeclineRequest")

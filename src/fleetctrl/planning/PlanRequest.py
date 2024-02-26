@@ -33,7 +33,7 @@ class PlanRequest:
         :param max_constant_detour_time: defines absolute increase of maximum allowed travel time relative to direct route travel time
         :param add_constant_detour_time: this detour time is added upon the detour after evaluating the max_detour_time_factor
         :param min_detour_time_window: this detour time describes the minimum allowed detour
-        :param boarding_time: time needed for customer to board the vehicle
+        :param boarding_time: time needed for customer to board the vehicle # Santi -> this refers to the value used for the operator
         :param pickup_pos: network position tuple of pick up (used if pickup differs from request origin)
         :param dropoff_pos: network position tuple of drop off (used if dropoff differs from request destination)
         :param walking_time_start: walking time from origin to pickup
@@ -107,11 +107,20 @@ class PlanRequest:
         self.status = G_PRQS_NO_OFFER
         self.expected_pickup_time = None
         self.expected_dropoff_time = None
-
+        self.real_duration_boarding = rq.duration_pudo_boarding # Santi
+        self.real_duration_alighting = rq.duration_pudo_alighting
     def __str__(self):
         return f"new PlanRequest: rid {self.rid}|{self.sub_rid_struct} at {self.rq_time} start {self.o_pos} dest" \
                f"{self.d_pos} epa {self.t_pu_earliest} lpa {self.t_pu_latest} dtt {self.init_direct_tt} mtt" \
-               f"{self.max_trip_time}"
+               f"{self.max_trip_time} real_boarding_duration {self.real_duration_boarding} real_alighting_duration {self.real_duration_alighting}"
+
+    def get_real_boarding_duration(self):
+        """ returns the real boarding duration of the plan request (contained in the demand file)"""
+        return self.real_duration_boarding
+    
+    def get_real_alighting_duration(self):
+        """ returns the real alighting duration of the plan request  (contained in the demand file)"""
+        return self.real_duration_alighting
 
     def set_reservation_flag(self, value : bool):
         """ this method sets a flag in case it is treated as reservation requests
