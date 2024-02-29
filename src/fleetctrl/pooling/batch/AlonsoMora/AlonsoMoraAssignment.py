@@ -806,16 +806,31 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 for rid2 in self.rid_to_consider_for_global_optimisation.keys():
                     if rid1 != rid2:
                         if not self._is_subrid(rid1) or not self._is_subrid(rid2) or self._get_associated_baserid(rid1) != self._get_associated_baserid(rid2):
-                            rq2 = self.active_requests[rid2]
-                            rr_comp = checkRRcomptibility(rq1, rq2, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt) #TODO definitions of boarding times!
-                            if rr_comp:
-                                self.rr[getRRKey(rid1, rid2)] = 1
+                            self._getRR(rid1, rid2)
         else:
             self.alonso_mora_parallelization_manager.computeRR(self.fo_id, self.requests_to_compute.keys())
             new_rr_entries = self.alonso_mora_parallelization_manager.fetch_computeRR()
             self.rr.update(new_rr_entries)
             self.alonso_mora_parallelization_manager.setRR(self.fo_id, new_rr_entries)
             # LOG.verbose(f"new rr entries: {new_rr_entries}")
+            
+    def _getRR(self, rid1, rid2):
+        """ this function returns the rr-connection between rid1 and rid2 (and stores them in the database)
+        """
+        rr_key = getRRKey(rid1, rid2)
+        comp = self.rr.get(rr_key)
+        if comp == 1:
+            return 1
+        elif comp == -1:
+            return None
+        else:
+            rr_comp = checkRRcomptibility(self.active_requests[rid1], self.active_requests[rid2], self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt)
+            if rr_comp:
+                self.rr[rr_key] = 1
+                return 1
+            else:
+                self.rr[rr_key] = -1
+                return None
 
     def _computeRV(self):
         """ this function computes all rv-connections from self.requests_to_compute with all active vehicles
@@ -1036,9 +1051,12 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             associated_locked_rids.extend(list(other_sub_rids))
             feasible_found = False
             for sub_ob_rid in other_sub_rids:
-                if self.rr.get(getRRKey(rid, sub_ob_rid)):
+                if self._getRR(rid, sub_ob_rid):
                     feasible_found = True
                     break
+                # if self.rr.get(getRRKey(rid, sub_ob_rid)):
+                #     feasible_found = True
+                #     break
             if not feasible_found:
                 return
         # check for assigned request not activated for global optimisation
@@ -1048,10 +1066,11 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             for o_rid in o_rids:
                 if self.rid_to_consider_for_global_optimisation.get(o_rid) is None:
                     # LOG.verbose("additional rr check of not global opt {} <-> {}".format(rid, o_rid))
-                    rr_comp = checkRRcomptibility(self.active_requests[o_rid], self.active_requests[rid], self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt) 
-                    if rr_comp:
-                        # LOG.verbose(" -> 1")
-                        self.rr[getRRKey(rid, o_rid)] = 1
+                    rr_comb = self._getRR(rid, o_rid)
+                    # rr_comp = checkRRcomptibility(self.active_requests[o_rid], self.active_requests[rid], self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt) 
+                    # if rr_comp:
+                    #     # LOG.verbose(" -> 1")
+                    #     self.rr[getRRKey(rid, o_rid)] = 1
         # check existing elements from lower to higher rid-number
         number_locked_rids = len(self.v2r_locked.get(vid, {}).keys())
         do_not_remove_for_lower_keys = [rid]
@@ -1089,7 +1108,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 #check RR-compatibility! (?)
                 rr_test = True
                 for o_rid in unsorted_rid_list:
-                    rr_test = self.rr.get(getRRKey(o_rid, rid))
+                    rr_test = self._getRR(o_rid, rid)
                     # # LOG.debug(f"check rr {o_rid} {rid} -> {rr_test}")
                     if rr_test != 1:
                         rr_test = False
@@ -1839,8 +1858,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 assigned_rids = getRidsFromRTVKey(assigned)
                 rr_not_found = False
                 for other_rid in assigned_rids:
-                    rr_key = getRRKey(rid, other_rid)
-                    if not self.rr.get(rr_key):
+                    if not self._getRR(rid, other_rid):
                         rr_not_found = True
                         break
                 if rr_not_found:
@@ -1856,8 +1874,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     for other_base_rid in self.v2r_locked.get(vid, {}):
                         feasible_base_rid = False
                         for other_rid in self._get_all_rids_representing_this_base_rid(other_base_rid):
-                            rr_key = getRRKey(rid, other_rid)
-                            if self.rr.get(rr_key):
+                            if self._getRR(rid, other_rid):
                                 feasible_base_rid = True
                                 break
                         if not feasible_base_rid:
