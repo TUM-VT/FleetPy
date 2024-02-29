@@ -58,7 +58,334 @@ INPUT_PARAMETERS_RidePoolingBatchAssignmentFleetcontrol = {
     "optional_modules": []
 }
 
+class PtLineZonal(PtLine):
+    def __init__(self, line_id, pt_fleetcontrol_module, schedule_vehicles, vid_to_schedule_dict, sim_start_time, sim_end_time):
+        """
+        :param line_id: Line ID
+        :type line_id: int
+        :param pt_fleetcontrol_module: reference to the fleet control module
+        :type pt_fleetcontrol_module: SemiOnDemandBatchAssignmentFleetcontrol
+        :param sim_start_time: simulation start time
+        :type sim_start_time: float
+        :param sim_end_time: simulation end time
+        :type sim_end_time: float
+        :param loop_route: indicates if the route is a loop route (i.e., end at the same station as the start)
+        Caution: loop_route cannot lie along the same line (projection would be wrong)
+        :type loop_route: bool
+        """
 
+        # call super().__init__() to load original SoD vehicles
+        # vehicles are all locked at the last scheduled location
+        super().__init__(line_id, pt_fleetcontrol_module, schedule_vehicles, vid_to_schedule_dict, sim_start_time, sim_end_time)
+
+        self.run_schedule = self.pt_fleetcontrol_module.run_schedule
+        self.sim_end_time = self.pt_fleetcontrol_module.sim_end_time
+
+        # zonal setting parameters
+        self.n_zones = self.pt_fleetcontrol_module.n_zones
+        self.n_reg_veh = self.pt_fleetcontrol_module.n_reg_veh
+        self.pt_zone_min_detour_time = self.pt_fleetcontrol_module.pt_zone_min_detour_time
+
+        zone_len = (self.route_length - self.fixed_length) / self.n_zones
+        self.zone_x_min = [self.fixed_length + zone_len * i for i in range(self.n_zones)]
+        self.zone_x_max = [self.fixed_length + zone_len * (i + 1) for i in range(self.n_zones)]
+
+        self.veh_zone_assignment = {}  # dict vid -> zone assignment; -1 for regular vehicles
+        if self.n_zones > 1:
+            for vid in self.sim_vehicles.keys():
+                if vid < self.n_reg_veh:
+                    self.veh_zone_assignment[vid] = -1
+                else:
+                    self.veh_zone_assignment[vid] = vid % self.n_zones
+
+    def return_x_zone(self, x) -> int:
+        """
+        Return the zone of the x
+        :param x: x-coord
+        :type x: float
+        :return: zone
+        :rtype: int
+        """
+        if x < self.fixed_length:
+            return -1
+        for i in range(self.n_zones):
+            if self.zone_x_min[i] <= x < self.zone_x_max[i]:
+                return i
+        return i
+
+    def return_pos_zone(self, pos) -> int:
+        """
+        Return the zone of the position
+        :param pos: position
+        :type pos: float
+        :return: zone
+        :rtype: int
+        """
+        x_pos = self.return_pos_km_run(pos)
+        return self.return_x_zone(x_pos)
+
+    def find_closest_station_to_x(self, x, higher_than_x):
+        """
+        Find the closest station to x
+        :param x: position
+        :type x: float
+        :param higher_than_x: indicates if the station should be higher than x
+        :type higher_than_x: bool
+        :return: closest station_id to x
+        :rtype: int
+        """
+        last_station_id = None
+        for station in self.run_schedule["station_id"]:
+            station_km_run = self.station_id_km_run[station]
+            if station_km_run > x:
+                if higher_than_x:
+                    return station
+                else:
+                    return last_station_id
+                break
+            last_station_id = station
+        # for station_id, station_km_run in self.station_id_km_run.items():
+        #     if station_km_run > x:
+        #         if higher_than_x:
+        #             return station_id
+        #         else:
+        #             return last_station_id
+        #         break
+        #     last_station_id = station_id
+        if not higher_than_x:
+            return last_station_id
+        else:
+            return None
+
+    def get_time_between_x(self, x1, x2):
+        """
+        Get the scheduled time to travel back and fro between x1 and x2
+        (by referencing the schedule for the closest stops in the bound)
+        :param x1: lower bound of x
+        :type x1: float
+        :param x2: upper bound of x
+        :type x2: float
+        :return: time between x1 and x2
+        :rtype: float
+        """
+        x1_station = self.find_closest_station_to_x(x1, True)
+        x2_station = self.find_closest_station_to_x(x2, False)
+        x1_time = self.run_schedule.loc[self.run_schedule["station_id"] == x1_station, "departure"].values[0]
+        x2_time = self.run_schedule.loc[self.run_schedule["station_id"] == x2_station, "departure"].values[0]
+        return x2_time - x1_time
+
+    def get_time_from_terminus_to_x(self, x):
+        """
+        Get the scheduled time to travel from terminus to x
+        :param x: position
+        :type x: float
+        :return: time from terminus to x
+        :rtype: float
+        """
+        x_station = self.find_closest_station_to_x(x, True)
+        x_time = self.run_schedule.loc[self.run_schedule["station_id"] == x_station, "departure"].values[0]
+        return x_time
+
+    def get_travel_time_between_nodes(self, n1, n2):
+        """
+        Get the travel time between two nodes
+        :param n1: node 1
+        :type n1: int
+        :param n2: node 2
+        :type n2: int
+        :return: travel time
+        :rtype: float
+        """
+        if n1==n2:
+            return 0
+        return self.routing_engine.return_travel_costs_1to1((n1,None,None), (n2,None,None))[1] # travel time
+
+    def set_zonal_veh_plan_schedule(self, vid, sim_time, start_time, x_max, x_min):
+        """
+        Set the schedule for the zonal vehicle plan in the next cycle from start_time.
+        :param vid: vehicle id
+        :type vid: int
+        :param sim_time: simulation time
+        :type sim_time: float
+        :param start_time: start time of the next cycle
+        :type start_time: float
+        :param x_max: max km run for the vehicle
+        :type x_max: float
+        :param x_min: min km run for the vehicle
+        :type x_min: float
+        """
+
+        assert x_min >= self.fixed_length  # check if x_min is in the flexible route
+        assert x_max > x_min  # check if x_max is greater than x_min
+
+        # TODO: currently assume all zonal routes serve fixed route first
+        # 1. remove previous schedule block
+        if len(self.pt_fleetcontrol_module.veh_plans[vid].list_plan_stops) != 1:  # check if the plan has only one stop
+            LOG.error(f"More stops than 1: {sim_time}: vid {vid} with list plan : {self.pt_fleetcontrol_module.veh_plans[vid]}")
+        if len(self.pt_fleetcontrol_module.veh_plans[vid].list_plan_stops) > 0:
+            last_planstop = self.pt_fleetcontrol_module.veh_plans[vid].list_plan_stops[-1]
+        # last_veh_time = last_planstop._latest_start_time
+        #     if not last_planstop.locked:  # check if the last plan stop is locked
+            if last_planstop.direct_earliest_end_time != self.sim_end_time:
+                LOG.error(f"{sim_time}: vid {vid} with list plan not ending with lock: {self.pt_fleetcontrol_module.veh_plans[vid]}")
+            else:
+                self.pt_fleetcontrol_module.veh_plans[vid].delete_plan_stop(last_planstop, self.sim_vehicles[vid], sim_time, self.routing_engine)
+
+        # 2. calculate scheduled time from stops (between x_min and x_max)
+        fixed_route_stop = self.find_closest_station_to_x(self.fixed_length, False)
+        fixed_route_time = self.run_schedule.loc[self.run_schedule["station_id"] == fixed_route_stop, "departure"].values[0]
+        fixed_route_node = self.pt_fleetcontrol_module.station_dict[fixed_route_stop].street_network_node_id
+        fixed_route_return_time = self.run_schedule["departure"].max() - fixed_route_time
+
+        # find non-stop network travel time from fixed_route_stop to x_min
+        # TODO: future extension that the x_min_stop is not necessarily an existing stop
+        x_min_stop = self.find_closest_station_to_x(x_min, False)
+        x_min_node = self.pt_fleetcontrol_module.station_dict[x_min_stop].street_network_node_id
+        fixed_route_to_x_min_time = self.get_travel_time_between_nodes(fixed_route_node, x_min_node)
+
+        x_max_stop = self.find_closest_station_to_x(x_max, False)
+        x_max_node = self.pt_fleetcontrol_module.station_dict[x_max_stop].street_network_node_id
+        x_min_to_x_max_time = self.get_travel_time_between_nodes(x_min_node, x_max_node)
+
+        # 3. set the schedule
+        new_schedule = self.run_schedule.copy()
+
+        # copy the schedule in the fixed route
+        new_schedule = new_schedule.loc[new_schedule["departure"] < fixed_route_time]
+        # add x_min_stop with departure time = fixed_route_time + fixed_route_to_x_min_time
+        # new_schedule = new_schedule.append(
+        #     {"station_id": x_min_stop, "departure": fixed_route_time + fixed_route_to_x_min_time}
+        #     , ignore_index=True
+        # )
+        new_flex_route_start_time = fixed_route_time + fixed_route_to_x_min_time
+        new_flex_route_end_time = (new_flex_route_start_time +
+                                   max(x_min_to_x_max_time * 2 * self.flex_detour, self.pt_zone_min_detour_time))
+        new_fixed_route_return_time = new_flex_route_end_time + fixed_route_to_x_min_time
+        # add x_min_stop with departure time = fixed_route_time + fixed_route_to_x_min_time + x_min_to_x_max_time * detour_factor
+        # new_schedule = new_schedule.append(
+        #     {
+        #         "station_id": x_min_stop
+        #         , "departure": new_fixed_route_return_time
+        #      }
+        #     , ignore_index=True
+        # )
+        # add the schedule in the fixed route (return) with adjusted departure time
+        return_schedule = self.run_schedule.copy()
+        return_schedule = return_schedule.loc[return_schedule["departure"] > fixed_route_return_time]
+
+        return_schedule["departure"] += new_fixed_route_return_time - fixed_route_return_time
+        new_schedule = new_schedule.append(return_schedule, ignore_index=True)
+
+        new_schedule["departure"] += start_time
+
+        # 4. apply to vehicle plan
+        list_plan_stops = []
+        # list_plan_stops = self.pt_fleetcontrol_module.veh_plans[vid].list_plan_stops
+
+
+        # add a schedule block before the new cycle
+        station_id = self.terminus_id
+        node_index = self.pt_fleetcontrol_module.station_dict[station_id].street_network_node_id
+        if sim_time + 60 < start_time:
+            list_plan_stops.append(PlanStop(
+                self.routing_engine.return_node_position(node_index),
+                latest_start_time=sim_time,
+                earliest_end_time=start_time - 1,
+                # duration=(scheduled_stop["departure"] - 1) - (last_veh_time + 60) - 1,  # 1s, set the boarding/alighting duration to be nominal,
+                locked=True,
+                # will not be overwritten by the insertion
+                planstop_state=G_PLANSTOP_STATES.RESERVATION,
+            ))
+
+        # add each stop
+        for _, scheduled_stop in new_schedule.iterrows():
+            station_id = scheduled_stop["station_id"]
+            node_index = self.pt_fleetcontrol_module.station_dict[station_id].street_network_node_id
+
+            ps = PlanStop(self.routing_engine.return_node_position(node_index),
+                          latest_start_time=scheduled_stop["departure"],
+                          earliest_end_time=scheduled_stop["departure"] + 1,
+                          # duration=1,  # 1s, set the boarding/alighting duration to be nominal,
+                          # locked=False,
+                          # will not be overwritten by the insertion
+                          )
+            list_plan_stops.append(ps)
+
+        # 5. add the schedule block to the schedule after this cycle
+        last_veh_time = new_schedule["departure"].max() + 60
+        station_id = self.terminus_id
+        node_index = self.pt_fleetcontrol_module.station_dict[station_id].street_network_node_id
+        list_plan_stops.append(PlanStop(
+            self.routing_engine.return_node_position(node_index),
+            latest_start_time=last_veh_time,
+            earliest_end_time=self.sim_end_time,
+            # duration=(scheduled_stop["departure"] - 1) - (last_veh_time + 60) - 1,  # 1s, set the boarding/alighting duration to be nominal,
+            locked=True,
+            # locked_end=True,
+            # will not be overwritten by the insertion
+            planstop_state=G_PLANSTOP_STATES.RESERVATION,
+        ))
+
+        interplan = VehiclePlan(self.sim_vehicles[vid], sim_time, self.routing_engine, list_plan_stops)
+        interplan.update_tt_and_check_plan(self.sim_vehicles[vid], sim_time, self.routing_engine, keep_feasible=True)
+        LOG.debug(f"interplan: {interplan}")
+        LOG.debug(f"interplan feas: {interplan.is_feasible()}")
+        if not interplan.is_feasible():
+            LOG.error(f"vid {vid} with list plan stops: {[str(x) for x in list_plan_stops[:10]]}")
+            LOG.error(f"interplan: {interplan}")
+            LOG.error(f"interplan feas: {interplan.is_feasible()}")
+            exit()
+
+        self.pt_fleetcontrol_module.veh_plans[vid] = VehiclePlan(self.sim_vehicles[vid], sim_time, self.routing_engine, list_plan_stops)
+        self.pt_fleetcontrol_module.veh_plans[vid].update_plan(self.sim_vehicles[vid], sim_time, self.routing_engine,
+                                        keep_time_infeasible=True)
+        self.pt_fleetcontrol_module.assign_vehicle_plan(
+            self.sim_vehicles[vid], self.pt_fleetcontrol_module.veh_plans[vid], sim_time, force_assign=True)
+
+        self.veh_flex_time[vid].append([start_time + new_flex_route_start_time, start_time + new_flex_route_end_time])
+
+    def hold_veh_in_terminus(self, vid, start_time, sim_time):
+        """ Hold the vehicle in the terminus for a certain period of time
+        :param vid: vehicle id
+        :type vid: int
+        :param start_time: start time
+        :type start_time: float
+        :param end_time: end time
+        :type end_time: float
+        :param sim_time: simulation time
+        :type sim_time: float
+        """
+        raise NotImplementedError
+
+        # 1. remove previous schedule block
+        # if len(self.pt_fleetcontrol_module.veh_plans[vid].list_plan_stops) != 1:  # check if the plan has only one stop
+        #     LOG.error(f"{sim_time}: vid {vid} with list plan stops: {self.pt_fleetcontrol_module.veh_plans[vid].list_plan_stops}")
+        # if len(self.pt_fleetcontrol_module.veh_plans[vid].list_plan_stops) > 0:
+        #     last_planstop = self.pt_fleetcontrol_module.veh_plans[vid].list_plan_stops[-1]
+        # # last_veh_time = last_planstop._latest_start_time
+        #     assert last_planstop.locked  # check if the last plan stop is locked
+        #
+        #     self.pt_fleetcontrol_module.veh_plans[vid].delete_plan_stop(last_planstop, self.sim_vehicles[vid], sim_time, self.routing_engine)
+        #
+        # list_plan_stops = []
+        # station_id = self.terminus_id
+        # node_index = self.pt_fleetcontrol_module.station_dict[station_id].street_network_node_id
+        # list_plan_stops.append(PlanStop(
+        #     self.routing_engine.return_node_position(node_index),
+        #     latest_start_time=start_time,
+        #     earliest_end_time=self.sim_end_time-1,
+        #     # duration=(scheduled_stop["departure"] - 1) - (last_veh_time + 60) - 1,  # 1s, set the boarding/alighting duration to be nominal,
+        #     locked=True,
+        #     # locked_end=True,
+        #     # will not be overwritten by the insertion
+        #     planstop_state=G_PLANSTOP_STATES.RESERVATION,
+        # ))
+        # self.pt_fleetcontrol_module.veh_plans[vid] = VehiclePlan(self.sim_vehicles[vid], sim_time, self.routing_engine,
+        #                                                          list_plan_stops)
+        # self.pt_fleetcontrol_module.veh_plans[vid].update_plan(self.sim_vehicles[vid], sim_time, self.routing_engine,
+        #                                                        keep_time_infeasible=True)
+        # self.pt_fleetcontrol_module.assign_vehicle_plan(self.sim_vehicles[vid],
+        #                                                 self.pt_fleetcontrol_module.veh_plans[vid], sim_time)
 
 
 class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontrol):
@@ -93,15 +420,50 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
                          dir_names, op_charge_depot_infra, list_pub_charging_infra)
 
-        self.list_veh_in_terminus = [] # list of vehicles in terminus, for zonal control,
+        # load schedule for zonal vehicles
+        schedules = pd.read_csv(os.path.join(self.pt_data_dir, scenario_parameters[G_PT_SCHEDULE_F]))
+        self.run_schedule = schedules.loc[schedules["trip_id"] == 0]
+        # check if the starting departure is 0, otherwise raise error
+        if self.run_schedule["departure"].iloc[0] != 0:
+            raise ValueError("Starting departure time of the schedule should be 0")
+
+        self.list_veh_in_terminus = {} # list of vehicles in terminus, for zonal control, =1 if in terminus; =-1 if processed
+
         # to update in receive_status_update, to check in time trigger
 
         # load demand distribution
         demand_dist_f = os.path.join(self.pt_data_dir, scenario_parameters.get(G_PT_DEMAND_DIST, 0))
         self.demand_dist_df = pd.read_csv(demand_dist_f)
 
+        # Zonal control parameters
+        self.n_zones = scenario_parameters.get(G_PT_N_ZONES, 1)
+        self.zone_x = [] # to set in continue_init()
+        self.n_reg_veh = scenario_parameters.get(G_PT_REG_VEH, 0)
+        self.pt_zone_min_detour_time = scenario_parameters.get(G_PT_ZONE_MIN_DETOUR_TIME,0)
+
         # zonal control state dataset
         self.zonal_control_state = {}
+        self.last_zonal_dept = {}
+
+
+    def continue_init(self, sim_vehicle_objs, sim_start_time, sim_end_time):
+        """
+        this method continues initialization after simulation vehicles have been created in the fleetsimulation class
+        :param sim_vehicle_objs: ordered list of sim_vehicle_objs
+        :param sim_start_time: simulation start time
+        """
+        self.sim_time = sim_start_time
+        self.sim_end_time = sim_end_time
+        veh_obj_dict = {veh.vid: veh for veh in sim_vehicle_objs}
+        for line, vid_to_schedule_dict in self.schedule_to_initialize.items():
+            for vid in vid_to_schedule_dict.keys():
+                self.pt_vehicle_to_line[vid] = line
+            schedule_vehicles = {vid: veh_obj_dict[vid] for vid in vid_to_schedule_dict.keys()}
+            self.PT_lines[line] = PtLineZonal(
+                line, self, schedule_vehicles, vid_to_schedule_dict, sim_start_time, sim_end_time
+            )
+        LOG.info(f"SoD finish continue_init {len(self.PT_lines)}")
+
 
 
     def receive_status_update(self, vid, simulation_time, list_finished_VRL, force_update=True):
@@ -123,11 +485,18 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
         line_id = next(iter(self.PT_lines))
         terminus_id = self.PT_lines[line_id].terminus_id
         terminus_node = self.station_dict[terminus_id].street_network_node_id
-        for vrl in list_finished_VRL:
-            if vrl.destination_pos == terminus_node:
-                self.list_veh_in_terminus.append(vid)
 
-                # TODO: check whether this matches the schedule; if not, raise an error
+
+
+        if self.sim_vehicles[vid].pos[0] == terminus_node:
+            # check if the vehicle is not listed in the terminus and contains no pax
+            if self.list_veh_in_terminus.get(vid) is None and not self.sim_vehicles[vid].pax:
+                self.list_veh_in_terminus[vid] = 1
+        else:
+            if self.list_veh_in_terminus.get(vid) is not None:
+                del self.list_veh_in_terminus[vid]
+
+        # TODO: check whether this matches the schedule; if not, raise an error
 
     def _call_time_trigger_request_batch(self, simulation_time):
         """ this function first triggers the upper level batch optimisation
@@ -145,7 +514,7 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
         :rtype: dict
         """
         # TODO: remove super() and alter the veh list to only flexible route for flexible demand; only fixed vehicles for fixed demand
-        RidePoolingBatchOptimizationFleetControlBase._call_time_trigger_request_batch(simulation_time)
+        RidePoolingBatchOptimizationFleetControlBase._call_time_trigger_request_batch(self, simulation_time)
 
         # embed()
         # Zonal: make use of max_wait_time_2 to put decision on hold (in case new zonal vehicle plans assigned)
@@ -159,7 +528,7 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
                 if assigned_vid is None:
                     if self.max_wait_time_2 is not None and self.max_wait_time_2 > 0:  # retry with new waiting time constraint (no offer returned)
                         new_unassigned_requests_2[rid] = 1
-                        self.RPBO_Module.delRequest(rid)
+                        self.RPBO_Module.delete_request(rid)
                         _, earliest_pu, _ = prq.get_o_stop_info()
                         new_latest_pu = earliest_pu + self.max_wait_time_2
                         self.change_prq_time_constraints(simulation_time, rid, new_latest_pu)
@@ -171,6 +540,9 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
                     self._create_user_offer(prq, simulation_time, assigned_vehicle_plan=assigned_plan)
             for rid in self.unassigned_requests_2.keys():  # check second try rids
                 assigned_vid = self.rid_to_assigned_vid.get(rid, None)
+                if rid not in self.rq_dict:
+                    LOG.debug(f"rid {rid} no longer in rq_dict")
+                    continue
                 if assigned_vid is None:  # decline
                     prq = self.rq_dict[rid]
                     _, earliest_pu, _ = prq.get_o_stop_info()
@@ -196,6 +568,41 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
         self.zonal_control_state["unassigned_requests_no"] = len(self.unassigned_requests_2)
         self.zonal_control_state["demand_forecast"] = self.get_closest_demand_forecast_time(simulation_time)
 
+        # Assume here pass state to DL model, get output and update the zonal control state
+
+        # Store Zonal control action
+        # --------------------------
+        # randomly send out vehicles first
+        regular_headway = 10 * 60  # s
+        zone_headway = 6 * 60  # s
+
+        PT_line = self.return_ptline()
+
+        # send out regular vehicles
+        z = -1
+        if simulation_time >= self.last_zonal_dept.get(z, 0) + regular_headway:
+            for vid in self.list_veh_in_terminus.keys():
+                if PT_line.veh_zone_assignment[vid] == z and self.list_veh_in_terminus[vid] == 1:
+                    PT_line.set_zonal_veh_plan_schedule(vid, simulation_time, simulation_time + 300, PT_line.route_length, PT_line.fixed_length)
+                    self.last_zonal_dept[z] = simulation_time
+                    self.list_veh_in_terminus[vid] = -1
+                    break
+
+
+        for z in range(PT_line.n_zones):
+            if simulation_time >= self.last_zonal_dept.get(z, 0) + zone_headway:
+                zone_veh_done = False
+                for vid in self.list_veh_in_terminus.keys():
+                    if PT_line.veh_zone_assignment[vid] == z and self.list_veh_in_terminus[vid] == 1: # in terminus and not processed
+                        if zone_veh_done:
+                            # PT_line.hold_veh_in_terminus(vid, simulation_time, simulation_time)
+                            pass
+                        else:
+                            PT_line.set_zonal_veh_plan_schedule(vid, simulation_time, simulation_time + 300, PT_line.zone_x_max[z], PT_line.zone_x_min[z])
+                            self.last_zonal_dept[z] = simulation_time
+                            self.list_veh_in_terminus[vid] = -1  # processed
+                            zone_veh_done = True
+
 
     def get_closest_demand_forecast_time(self, simulation_time) -> float:
         """
@@ -208,3 +615,12 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
 
         # self.demand_dist_df is a dataframe with columns "seconds" and "count", every 900s
         return self.demand_dist_df["count"].iloc[np.argmin(np.abs(self.demand_dist_df["seconds"] - simulation_time))]
+
+    def return_ptline(self) -> PtLineZonal:
+        """
+        Dummy method to return the first PT line (to change when there are multiple lines)
+        :return: PT line
+        :rtype: PtLine
+        """
+        first_index = next(iter(self.PT_lines))
+        return self.PT_lines[first_index]

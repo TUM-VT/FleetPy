@@ -153,6 +153,9 @@ def get_src_ride_pooling_batch_optimizers():
     rbo_dict = {}  # str -> (module path, class name)
     rbo_dict["AlonsoMora"] = ("src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignment", "AlonsoMoraAssignment")
     rbo_dict["InsertionHeuristic"] = ("src.fleetctrl.pooling.batch.InsertionHeuristic.BatchInsertionHeuristicAssignment", "BatchInsertionHeuristicAssignment")
+    rbo_dict["ZonalInsertionHeuristic"] = (
+    "src.fleetctrl.pooling.batch.InsertionHeuristic.BatchZonalInsertionHeuristicAssignment",
+    "BatchZonalInsertionHeuristicAssignment")
     # add development content
     if dev_content is not None:
         dev_rbo_dict = dev_content.add_ride_pooling_batch_optimizer_modules()

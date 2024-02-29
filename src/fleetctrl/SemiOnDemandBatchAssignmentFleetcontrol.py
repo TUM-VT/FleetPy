@@ -64,56 +64,39 @@ class PTStation:
 
 
 class PtLine:
-    def __init__(self, line_id, pt_fleetcontrol_module, routing_engine: NetworkBase, sim_vehicle_dict, vid_to_schedule,
-                 sim_start_time, sim_end_time, fixed_length, flex_detour, alignment_file, terminus_id, loop_route=False):
+    def __init__(self, line_id, pt_fleetcontrol_module, schedule_vehicles, vid_to_schedule_dict, sim_start_time, sim_end_time):
         """
         :param line_id: Line ID
         :type line_id: int
         :param pt_fleetcontrol_module: reference to the fleet control module
         :type pt_fleetcontrol_module: SemiOnDemandBatchAssignmentFleetcontrol
-        :param routing_engine: routing engine
-        :type routing_engine: NetworkBase
-        :param sim_vehicle_dict: dict veh_id -> simulaiton vehicle obj (for this line)
-        :type sim_vehicle_dict: dict
-        :param vid_to_schedule: dict veh_id -> schedule_df
-        :type vid_to_schedule: dict
         :param sim_start_time: simulation start time
         :type sim_start_time: float
         :param sim_end_time: simulation end time
         :type sim_end_time: float
-        :param fixed_length: length of routes that are fixed route (unit in km)
-        :type fixed_length: float
-        :param flex_detour: detour allowed for flexible portion (factor)
-        :type flex_detour: float
-        :param alignment_file: alignment file name
-        :type alignment_file: str
-        :param terminus_id: terminus station id
-        :type terminus_id: int
-        :param loop_route: indicates if the route is a loop route (i.e., end at the same station as the start)
-        Caution: loop_route cannot lie along the same line (projection would be wrong)
-        :type loop_route: bool
         """
         # TODO: future extension to allow definition of multiple fixed route portions
         self.line_id = line_id
         self.pt_fleetcontrol_module: SemiOnDemandBatchAssignmentFleetcontrol = pt_fleetcontrol_module
-        self.routing_engine = routing_engine
-        self.fixed_length = fixed_length
-        self.loop_route = loop_route
+        self.routing_engine = self.pt_fleetcontrol_module.routing_engine
+        self.fixed_length = self.pt_fleetcontrol_module.fixed_length
+        # self.loop_route = self.pt_fleetcontrol_module.loop_route
+        self.vid_to_schedule = vid_to_schedule_dict
 
-        self.sim_vehicles: Dict[int, SimulationVehicle] = sim_vehicle_dict  # line_vehicle_id -> SimulationVehicle
+        self.sim_vehicles: Dict[int, SimulationVehicle] = schedule_vehicles  # line_vehicle_id -> SimulationVehicle
         self.veh_plans: Dict[int, VehiclePlan] = {}  # line_vehicle_id -> vehicle plan
 
         self.node_index_to_station_id = {}  # node_index -> station id
         self.station_id_km_run = {}  # station id -> km run
 
         # self.flex_detour = 1.4  # 40% detour allowed for flexible portion
-        self.flex_detour = flex_detour
+        self.flex_detour = self.pt_fleetcontrol_module.flex_detour
 
         # transit line alignment
         # alignment has to be single direction line
         # load alignment name from parameters G_PT_ALIGNMENT_F
         self.line_alignment: shapely.LineString = self.load_pt_line_alignment(
-            os.path.join(pt_fleetcontrol_module.dir_names[G_DIR_PT], alignment_file.format(line_id=self.line_id)))
+            os.path.join(pt_fleetcontrol_module.dir_names[G_DIR_PT], self.pt_fleetcontrol_module.alignment_file.format(line_id=self.line_id)))
 
         # convert crs of line
         self.dest_crs = "EPSG:32632"  # WGS 84 / UTM zone 32N, for measurement in m
@@ -126,12 +109,17 @@ class PtLine:
         self.line_alignment_meter = shapely.ops.transform(self.meter_project, self.line_alignment)
         self.route_length = self.line_alignment_meter.length / 1000  # convert to km
 
-        self.fixed_length: float = fixed_length
+        self.fixed_length: float = self.pt_fleetcontrol_module.fixed_length
+
+        # vehicle flexible portion time
+        self.veh_flex_time: Dict[int, List] = {} # a dict of lists, each list contains the flexible portion time for a vehicle as [start,end]
+        for vid in self.sim_vehicles.keys():
+            self.veh_flex_time[vid] = []
 
 
         # terminus_id = 3580
         # read from G_PT_TERMINUS_ID
-        self.terminus_id = terminus_id
+        self.terminus_id = self.pt_fleetcontrol_module.terminus_id
 
         # calcaulate the km run of each station
         for station_id in self.pt_fleetcontrol_module.station_dict.keys():
@@ -146,14 +134,15 @@ class PtLine:
 
 
 
-        LOG.debug(f"terminus id {self.terminus_id} with length {self.station_id_km_run[self.terminus_id]} | "
+        LOG.info(f"terminus id {self.terminus_id} with length {self.station_id_km_run[self.terminus_id]} | "
                   f"fixed length {self.fixed_length} | route length {self.route_length}")
 
-        for vid, schedule_df in vid_to_schedule.items():
+        for vid, schedule_df in self.vid_to_schedule.items():
             list_plan_stops = []
             first_stop_in_stim_time_found = False
             return_run: bool = False  # whether a stop in the flexible route portion has been found
             first_flex_dept_time = 0  # last fixed departure time
+            flex_dept_adj = None  # flexible route adjustment based on detour factor
             first_return_fixed_dept_time = None  # first fixed departure time in the return route
             last_veh_time = sim_start_time # last vehicle time
             last_veh_trip = -1 # last vehicle trip
@@ -166,11 +155,15 @@ class PtLine:
                 node_index = self.pt_fleetcontrol_module.station_dict[station_id].street_network_node_id
 
 
-
-                # if trip_id is different from last trip_id, add a planned stop every min before this stop
+                # if trip_id is different from last trip_id, add a schedule block before this stop
                 if scheduled_stop["trip_id"] != last_veh_trip and station_id == self.terminus_id:
+                    # record flexible time for this schedule
+                    if first_return_fixed_dept_time is not None:
+                        self.veh_flex_time[vid].append([first_flex_dept_time, first_return_fixed_dept_time])
+
                     return_run = False  # reset return_run
-                    first_return_fixed_dept_time = None # reset first_return_fixed_dept_time
+                    flex_dept_adj = None
+                    first_return_fixed_dept_time = None
 
                     last_veh_trip = scheduled_stop["trip_id"]
                     list_plan_stops.append(PlanStop(
@@ -182,29 +175,8 @@ class PtLine:
                                 # will not be overwritten by the insertion
                                 planstop_state=G_PLANSTOP_STATES.RESERVATION,
                             ))
-                    # t = last_veh_time + 60
-                    # while t+60 < scheduled_stop["departure"]:
-                    #     list_plan_stops.append(PlanStop(
-                    #         self.routing_engine.return_node_position(node_index),
-                    #         earliest_end_time=t,
-                    #         latest_start_time=t-1,
-                    #         # duration=1,  # 1s, set the boarding/alighting duration to be nominal,
-                    #         locked = True,
-                    #         # will not be overwritten by the insertion
-                    #     ))
-                    #     t += 58
-                    #     list_plan_stops.append(PlanStop(
-                    #         self.routing_engine.return_node_position(node_index),
-                    #         earliest_end_time=t,
-                    #         latest_start_time=t-1,
-                    #         # duration=1,  # 1s, set the boarding/alighting duration to be nominal,
-                    #         locked = False,
-                    #         # will not be overwritten by the insertion
-                    #     ))
-                    #     t += 2
                     LOG.debug(
                         f"forced initial stop from {last_veh_time} until {scheduled_stop['departure']} | trip id {scheduled_stop['trip_id']}")
-
 
 
                 earliest_departure_dict = {}
@@ -213,15 +185,15 @@ class PtLine:
                         earliest_departure_dict[-1] = scheduled_stop["departure"]
                         first_flex_dept_time = scheduled_stop["departure"]
 
-                    elif first_return_fixed_dept_time is None:  # first stop after flexible route
-                        # earliest_departure_dict[-1] = first_flex_dept_time + (scheduled_stop[
-                        #                                    "departure"] - first_flex_dept_time) * self.flex_detour
-                        earliest_departure_dict[-1] = (scheduled_stop["departure"]
-                                                       + (scheduled_stop["departure"] - first_flex_dept_time) * self.flex_detour)
-                        first_return_fixed_dept_time = earliest_departure_dict[-1]
-                    else:  # return inbound part: adjust departure time for detour; flexible route will be discarded
-                        earliest_departure_dict[-1] = (scheduled_stop["departure"] - first_flex_dept_time
-                                                       + first_return_fixed_dept_time)
+                    elif self.station_id_km_run[station_id] <= self.fixed_length:  # fixed route inbound
+                        if not flex_dept_adj:
+                            flex_dept_adj = (scheduled_stop["departure"] - first_flex_dept_time) * (self.flex_detour - 1)
+                            earliest_departure_dict[-1] = scheduled_stop["departure"] + flex_dept_adj
+                            first_return_fixed_dept_time = earliest_departure_dict[-1]
+                        else:  # return inbound part: adjust departure time for detour; flexible route will be discarded
+                            earliest_departure_dict[-1] = scheduled_stop["departure"] + flex_dept_adj
+                    else: # flexible route
+                        earliest_departure_dict[-1] = scheduled_stop["departure"]
 
                 ps = PlanStop(self.routing_engine.return_node_position(node_index),
                               latest_start_time=earliest_departure_dict[-1],
@@ -253,24 +225,27 @@ class PtLine:
                 else:
                     first_stop_in_stim_time_found = True
 
-                init_state = {
-                    G_V_INIT_NODE: list_plan_stops[0].get_pos()[0],  # set the initial node to be the first stop
-                    G_V_INIT_SOC: 1,
-                    G_V_INIT_TIME: sim_start_time
-                }
+            init_state = {
+                G_V_INIT_NODE: list_plan_stops[0].get_pos()[0],  # set the initial node to be the first stop
+                G_V_INIT_SOC: 1,
+                G_V_INIT_TIME: sim_start_time
+            }
 
-                # Check infeasible schedule
-                self.sim_vehicles[vid].set_initial_state(self.pt_fleetcontrol_module, routing_engine, init_state,
-                                                         sim_start_time, veh_init_blocking=False)
-                interplan = VehiclePlan(self.sim_vehicles[vid], sim_start_time, routing_engine, list_plan_stops)
-                interplan.update_tt_and_check_plan(self.sim_vehicles[vid], sim_start_time, routing_engine,keep_feasible=True)
-                LOG.debug(f"interplan: {interplan}")
-                LOG.debug(f"interplan feas: {interplan.is_feasible()}")
-                if not interplan.is_feasible():
-                    LOG.error(f"vid {vid} with list plan stops: {[str(x) for x in list_plan_stops[:10]]}")
-                    LOG.error(f"interplan: {interplan}")
-                    LOG.error(f"interplan feas: {interplan.is_feasible()}")
-                    exit()
+            # Check infeasible schedule
+            self.sim_vehicles[vid].set_initial_state(self.pt_fleetcontrol_module, self.routing_engine, init_state,
+                                                     sim_start_time, veh_init_blocking=False)
+            interplan = VehiclePlan(self.sim_vehicles[vid], sim_start_time, self.pt_fleetcontrol_module.routing_engine, list_plan_stops)
+            interplan.update_tt_and_check_plan(self.sim_vehicles[vid], sim_start_time, self.pt_fleetcontrol_module.routing_engine,keep_feasible=True)
+            LOG.debug(f"interplan: {interplan}")
+            LOG.debug(f"interplan feas: {interplan.is_feasible()}")
+            if not interplan.is_feasible():
+                LOG.error(f"vid {vid} with list plan stops: {[str(x) for x in list_plan_stops[:10]]}")
+                LOG.error(f"interplan: {interplan}")
+                LOG.error(f"interplan feas: {interplan.is_feasible()}")
+                exit()
+
+
+
 
             # lock the vehicle at the last location till end of period
             list_plan_stops.append(PlanStop(
@@ -290,10 +265,10 @@ class PtLine:
                 G_V_INIT_TIME: sim_start_time
             }
             LOG.debug(f"line vid {vid} with list plan stops: {[str(x) for x in list_plan_stops[:10]]}")
-            self.sim_vehicles[vid].set_initial_state(self.pt_fleetcontrol_module, routing_engine, init_state,
+            self.sim_vehicles[vid].set_initial_state(self.pt_fleetcontrol_module, self.routing_engine, init_state,
                                                      sim_start_time, veh_init_blocking=False)
-            self.veh_plans[vid] = VehiclePlan(self.sim_vehicles[vid], sim_start_time, routing_engine, list_plan_stops)
-            self.veh_plans[vid].update_plan(self.sim_vehicles[vid], sim_start_time, routing_engine,
+            self.veh_plans[vid] = VehiclePlan(self.sim_vehicles[vid], sim_start_time, self.routing_engine, list_plan_stops)
+            self.veh_plans[vid].update_plan(self.sim_vehicles[vid], sim_start_time, self.routing_engine,
                                             keep_time_infeasible=True)
             self.pt_fleetcontrol_module.assign_vehicle_plan(self.sim_vehicles[vid], self.veh_plans[vid], sim_start_time)
         # sort station_id_km_run by km run
@@ -322,9 +297,17 @@ class PtLine:
         :return: True if request is in flexible portion of line, False otherwise
         """
         if origin_dest == "origin":
-            pos_to_check = rq.get_origin_pos()
+            # if rq type is planrequest, get the origin position
+            if isinstance(rq, PlanRequest):
+                pos_to_check = rq.get_o_stop_info()[0]
+            else:
+                pos_to_check = rq.get_origin_pos()
         elif origin_dest == "destination":
-            pos_to_check = rq.get_destination_pos()
+            # if rq type is planrequest, get the destination position
+            if isinstance(rq, PlanRequest):
+                pos_to_check = rq.get_d_stop_info()[0]
+            else:
+                pos_to_check = rq.get_destination_pos()
         else:
             raise NotImplementedError("origin_dest must be either 'origin' or 'destination'")
 
@@ -570,103 +553,118 @@ class PtLine:
         :param simulation_time: current simulation time
         :type simulation_time: float
         """
-
-        rq = self.pt_fleetcontrol_module.rq_dict[rid]
-        nr_pax = rq.nr_pax
-        o_pos, earliest_start_time, _ = rq.get_o_stop_info()
-        d_pos, _, _ = rq.get_d_stop_info()
-        if self.node_index_to_station_id.get(o_pos[0]) is None or self.node_index_to_station_id.get(d_pos[0]) is None:
-            raise NotImplementedError("line {} cant served rid {} | {}".format(self.line_id, rid, rq))
-        best_arrival_time = float("inf")
-        best_travel_time = float("inf")
-        # best_waiting = float("inf")
-        best_vid = None
-        best_o_ps_index = None
-        best_d_ps_index = None
-
-        # Find the best vehicle to assign the request to
-        for vid, veh_plan in self.veh_plans.items():
-            first_stop_in_time_found = False
-            pu_time = None
-            do_time = None
-            o_ps_index = None
-            d_ps_index = None
-            cur_pax = self.sim_vehicles[vid].get_nr_pax_without_currently_boarding()
-            # Find the best origin stops to assign the request to
-            for i, ps in enumerate(veh_plan.list_plan_stops):
-                cur_pax += ps.get_change_nr_pax()
-                if ps.is_locked():
-                    continue
-                if not first_stop_in_time_found and ps.get_duration_and_earliest_departure()[1] >= earliest_start_time:
-                    first_stop_in_time_found = True
-                if first_stop_in_time_found:
-                    if ps.get_pos() == o_pos:
-                        if i < len(veh_plan.list_plan_stops) - 1:
-                            if veh_plan.list_plan_stops[i + 1].get_pos() == ps.get_pos():
-                                continue
-                        if cur_pax + nr_pax > self.sim_vehicles[vid].max_pax:
-                            continue
-                        pu_time = ps.get_duration_and_earliest_departure()[1]
-                        o_ps_index = i
-                        p_cur_pax = cur_pax + nr_pax
-                        # Find the best destination stop to assign the request to
-                        for j in range(i + 1, len(veh_plan.list_plan_stops)):
-                            ps = veh_plan.list_plan_stops[j]
-                            if ps.get_pos() == d_pos and pu_time is not None:
-                                do_time = ps.get_duration_and_earliest_departure()[1]
-                                d_ps_index = j
-                                break
-                            p_cur_pax += ps.get_change_nr_pax()
-                            if p_cur_pax > self.sim_vehicles[vid].max_pax:
-                                pu_time = None
-                                o_ps_index = None
-                                break
-                        if pu_time is not None and do_time is not None:
-                            break
-            if do_time is not None:
-                if do_time < best_arrival_time:
-                    best_arrival_time = do_time
-                    # best_waiting = pu_time - earliest_start_time
-                    best_travel_time = do_time - pu_time
-                    best_o_ps_index = o_ps_index
-                    best_d_ps_index = d_ps_index
-                    best_vid = vid
-                elif do_time == best_arrival_time and do_time - pu_time < best_travel_time:
-                    best_arrival_time = do_time
-                    # best_waiting = pu_time - earliest_start_time
-                    best_travel_time = do_time - pu_time
-                    best_o_ps_index = o_ps_index
-                    best_d_ps_index = d_ps_index
-                    best_vid = vid
-
-        # Assign the request to the best vehicle
-        list_plan_stops = self.veh_plans[best_vid].list_plan_stops
-
-        o_ps: PlanStop = list_plan_stops[best_o_ps_index]
-        boarding_list = o_ps.get_list_boarding_rids() + [rid]
-        new_boarding_dict = {1: boarding_list, -1: o_ps.get_list_alighting_rids()}
-        new_o_ps = PlanStop(o_ps.get_pos(), boarding_dict=new_boarding_dict,
-                            earliest_end_time=o_ps.get_duration_and_earliest_departure()[1],
-                            change_nr_pax=o_ps.get_change_nr_pax() + rq.nr_pax)
-        list_plan_stops[best_o_ps_index] = new_o_ps
-
-        d_ps: PlanStop = list_plan_stops[best_d_ps_index]
-        deboarding_list = d_ps.get_list_alighting_rids() + [rid]
-        new_boarding_dict = {1: d_ps.get_list_boarding_rids(), -1: deboarding_list}
-        new_d_ps = PlanStop(d_ps.get_pos(), boarding_dict=new_boarding_dict,
-                            earliest_end_time=d_ps.get_duration_and_earliest_departure()[1],
-                            change_nr_pax=d_ps.get_change_nr_pax() - rq.nr_pax)
-        list_plan_stops[best_d_ps_index] = new_d_ps
-
-        new_veh_plan = VehiclePlan(self.sim_vehicles[best_vid], simulation_time, self.routing_engine, list_plan_stops)
-        self.pt_fleetcontrol_module.assign_vehicle_plan(self.sim_vehicles[best_vid], new_veh_plan, simulation_time)
-        self.pt_fleetcontrol_module.rid_to_assigned_vid[rid] = best_vid
+        raise NotImplementedError
+        #
+        # rq = self.pt_fleetcontrol_module.rq_dict[rid]
+        # nr_pax = rq.nr_pax
+        # o_pos, earliest_start_time, _ = rq.get_o_stop_info()
+        # d_pos, _, _ = rq.get_d_stop_info()
+        # if self.node_index_to_station_id.get(o_pos[0]) is None or self.node_index_to_station_id.get(d_pos[0]) is None:
+        #     raise NotImplementedError("line {} cant served rid {} | {}".format(self.line_id, rid, rq))
+        # best_arrival_time = float("inf")
+        # best_travel_time = float("inf")
+        # # best_waiting = float("inf")
+        # best_vid = None
+        # best_o_ps_index = None
+        # best_d_ps_index = None
+        #
+        # # Find the best vehicle to assign the request to
+        # for vid, veh_plan in self.veh_plans.items():
+        #     first_stop_in_time_found = False
+        #     pu_time = None
+        #     do_time = None
+        #     o_ps_index = None
+        #     d_ps_index = None
+        #     cur_pax = self.sim_vehicles[vid].get_nr_pax_without_currently_boarding()
+        #     # Find the best origin stops to assign the request to
+        #     for i, ps in enumerate(veh_plan.list_plan_stops):
+        #         cur_pax += ps.get_change_nr_pax()
+        #         if ps.is_locked():
+        #             continue
+        #         if not first_stop_in_time_found and ps.get_duration_and_earliest_departure()[1] >= earliest_start_time:
+        #             first_stop_in_time_found = True
+        #         if first_stop_in_time_found:
+        #             if ps.get_pos() == o_pos:
+        #                 if i < len(veh_plan.list_plan_stops) - 1:
+        #                     if veh_plan.list_plan_stops[i + 1].get_pos() == ps.get_pos():
+        #                         continue
+        #                 if cur_pax + nr_pax > self.sim_vehicles[vid].max_pax:
+        #                     continue
+        #                 pu_time = ps.get_duration_and_earliest_departure()[1]
+        #                 o_ps_index = i
+        #                 p_cur_pax = cur_pax + nr_pax
+        #                 # Find the best destination stop to assign the request to
+        #                 for j in range(i + 1, len(veh_plan.list_plan_stops)):
+        #                     ps = veh_plan.list_plan_stops[j]
+        #                     if ps.get_pos() == d_pos and pu_time is not None:
+        #                         do_time = ps.get_duration_and_earliest_departure()[1]
+        #                         d_ps_index = j
+        #                         break
+        #                     p_cur_pax += ps.get_change_nr_pax()
+        #                     if p_cur_pax > self.sim_vehicles[vid].max_pax:
+        #                         pu_time = None
+        #                         o_ps_index = None
+        #                         break
+        #                 if pu_time is not None and do_time is not None:
+        #                     break
+        #     if do_time is not None:
+        #         if do_time < best_arrival_time:
+        #             best_arrival_time = do_time
+        #             # best_waiting = pu_time - earliest_start_time
+        #             best_travel_time = do_time - pu_time
+        #             best_o_ps_index = o_ps_index
+        #             best_d_ps_index = d_ps_index
+        #             best_vid = vid
+        #         elif do_time == best_arrival_time and do_time - pu_time < best_travel_time:
+        #             best_arrival_time = do_time
+        #             # best_waiting = pu_time - earliest_start_time
+        #             best_travel_time = do_time - pu_time
+        #             best_o_ps_index = o_ps_index
+        #             best_d_ps_index = d_ps_index
+        #             best_vid = vid
+        #
+        # # Assign the request to the best vehicle
+        # list_plan_stops = self.veh_plans[best_vid].list_plan_stops
+        #
+        # o_ps: PlanStop = list_plan_stops[best_o_ps_index]
+        # boarding_list = o_ps.get_list_boarding_rids() + [rid]
+        # new_boarding_dict = {1: boarding_list, -1: o_ps.get_list_alighting_rids()}
+        # new_o_ps = PlanStop(o_ps.get_pos(), boarding_dict=new_boarding_dict,
+        #                     earliest_end_time=o_ps.get_duration_and_earliest_departure()[1],
+        #                     change_nr_pax=o_ps.get_change_nr_pax() + rq.nr_pax)
+        # list_plan_stops[best_o_ps_index] = new_o_ps
+        #
+        # d_ps: PlanStop = list_plan_stops[best_d_ps_index]
+        # deboarding_list = d_ps.get_list_alighting_rids() + [rid]
+        # new_boarding_dict = {1: d_ps.get_list_boarding_rids(), -1: deboarding_list}
+        # new_d_ps = PlanStop(d_ps.get_pos(), boarding_dict=new_boarding_dict,
+        #                     earliest_end_time=d_ps.get_duration_and_earliest_departure()[1],
+        #                     change_nr_pax=d_ps.get_change_nr_pax() - rq.nr_pax)
+        # list_plan_stops[best_d_ps_index] = new_d_ps
+        #
+        # new_veh_plan = VehiclePlan(self.sim_vehicles[best_vid], simulation_time, self.routing_engine, list_plan_stops)
+        # self.pt_fleetcontrol_module.assign_vehicle_plan(self.sim_vehicles[best_vid], new_veh_plan, simulation_time)
+        # self.pt_fleetcontrol_module.rid_to_assigned_vid[rid] = best_vid
 
     def remove_rid_from_line(self, rid, assigned_vid, simulation_time):
         """ this function is called when a request is canceled and allready assigned to pt line -> remove rid from vehplans
         """
         raise NotImplementedError
 
+    def is_time_fixed_portion(self, vid, t) -> bool:
+        """ return whether at the time t, the vehicle is in the fixed portion of the line
+        :param vid: vehicle id
+        :type vid: int
+        :param t: time in seconds
+        :type t: float
+        """
+        # check self.veh_flex_time[vid] which contains [start, end] of the flexible portion time intervals
+        # if the time t is in one of the intervals, return False
+        # else return True
+        for interval in self.veh_flex_time[vid]:
+            if interval[0] <= t <= interval[1]:
+                return False
+        return True
 
 class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetControlBase):
     def __init__(self, op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
@@ -699,7 +697,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
 
         # TODO: now always assume a loop route; to generalize
 
-        operator_attributes[G_RA_RP_BATCH_OPT] = "InsertionHeuristic"  # hard code over-ride Alonso-Mora
+        # operator_attributes[G_RA_RP_BATCH_OPT] = "InsertionHeuristic"  # hard code over-ride Alonso-Mora
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
                          dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra,
                          list_pub_charging_infra=list_pub_charging_infra)
@@ -747,7 +745,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         #     os.path.join(dir_names[G_DIR_OUTPUT], f"3-{self.op_id}_pt_vehicles.csv"), index=False)
 
         # PT lines
-        self.PT_lines: Dict[int, PtLine] = {}  # line -> PtLine obj
+        self.PT_lines: Dict = {}  # line -> PtLine obj
         self.pt_vehicle_to_line = {}  # pt_veh_id -> line
         self.walking_dist_origin = {} # rid -> walking time to origin
         self.walking_dist_destination = {} # rid -> walking time to destination
@@ -781,7 +779,6 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         # line specification output
         pd.DataFrame(pt_line_specifications_list).to_csv(os.path.join(dir_names[G_DIR_OUTPUT], f"3-{self.op_id}_pt_vehicles.csv"), index=False)
 
-        #
         self.rq_dict = {}
         self.routing_engine = routing_engine
         self.zones = zone_system
@@ -814,8 +811,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
             for vid in vid_to_schedule_dict.keys():
                 self.pt_vehicle_to_line[vid] = line
             schedule_vehicles = {vid: veh_obj_dict[vid] for vid in vid_to_schedule_dict.keys()}
-            self.PT_lines[line] = PtLine(line, self, self.routing_engine, schedule_vehicles, vid_to_schedule_dict,
-                                         sim_start_time, sim_end_time, self.fixed_length, self.flex_detour, self.alignment_file, self.terminus_id)
+            self.PT_lines[line] = PtLine(line, self, schedule_vehicles, vid_to_schedule_dict, sim_start_time, sim_end_time)
         LOG.info(f"SoD finish continue_init {len(self.PT_lines)}")
 
     def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, assigned_charging_task=None,

@@ -630,6 +630,29 @@ class VehiclePlan:
             new_veh_plan.list_plan_stops.insert(position, plan_stop)
         new_veh_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, keep_feasible=True)
 
+        if return_copy:
+            return new_veh_plan
+
+    def delete_plan_stop(self, plan_stop : PlanStopBase, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase, return_copy : bool=False):
+        """This method removes a plan stop from an existing vehicle plan. After that, it updates the plan.
+
+        :param plan_stop: plan stop to remove
+        :param veh_obj: simulation vehicle instance
+        :param sim_time: current simulation time
+        :param routing_engine: routing engine
+        :param return_copy: controls whether the current plan is changed or a changed copy will be returned
+        :return: None (return_copy=False) or VehiclePlan instance (return_copy=True)
+        """
+        if return_copy:
+            new_veh_plan = self.copy()
+        else:
+            new_veh_plan = self
+        new_veh_plan.list_plan_stops.remove(plan_stop)
+        new_veh_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, keep_feasible=True)
+
+        if return_copy:
+            return new_veh_plan
+
     def update_plan(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase, list_passed_VRLs : List[VehicleRouteLeg]=None, keep_time_infeasible : bool=True) -> bool:
         """This method checks whether the simulation vehicle passed some of the planned stops and removes them from the
         plan after passing. It returns the feasibility of the plan.

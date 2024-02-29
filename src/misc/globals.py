@@ -88,6 +88,9 @@ G_PT_STATION_F = "station_file"
 G_PT_ALIGNMENT_F = "alignment_file"
 G_PT_TERMINUS_ID = "terminus_id"
 G_PT_DEMAND_DIST = "demand_dist_file"
+G_PT_REG_VEH = "pt_regular_veh"
+G_PT_N_ZONES = "pt_n_zones"
+G_PT_ZONE_MIN_DETOUR_TIME = "pt_zone_min_detour_time"
 
 # traveler general attributes
 G_RQ_FILE = "rq_file"

@@ -353,7 +353,9 @@ class FleetSimulationBase:
             operator_module_name = operator_attributes[G_OP_MODULE]
             self.op_output[op_id] = []  # shared list among vehicles
             if not (operator_module_name == "LinebasedFleetControl"
-                    or operator_module_name == "SemiOnDemandBatchAssignmentFleetcontrol"):
+                    or operator_module_name == "SemiOnDemandBatchAssignmentFleetcontrol"
+                    or operator_module_name == "SoDZonalBatchAssignmentFleetcontrol"
+            ):
                 fleet_composition_dict = operator_attributes[G_OP_FLEET]
                 list_vehicles = []
                 vid = 0
@@ -374,6 +376,26 @@ class FleetSimulationBase:
                 from src.fleetctrl.SemiOnDemandBatchAssignmentFleetcontrol import SemiOnDemandBatchAssignmentFleetcontrol
                 list_vehicles = []
                 OpClass = SemiOnDemandBatchAssignmentFleetcontrol(op_id, operator_attributes, list_vehicles,
+                                                                  self.routing_engine, self.zones,
+                                                                  self.scenario_parameters, self.dir_names,
+                                                                  self.charging_operator_dict["op"].get(op_id, None),
+                                                                  list(self.charging_operator_dict["pub"].values()))
+                init_vids = OpClass.return_vehicles_to_initialize()
+
+                for vid, veh_type in init_vids.items():
+                    tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+                                                        self.routing_engine, self.demand.rq_db,
+                                                        self.op_output[op_id], route_output_flag,
+                                                        replay_flag)
+                    list_vehicles.append(tmp_veh_obj)
+                    veh_type_list.append([op_id, vid, veh_type])
+                    self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
+                OpClass.continue_init(list_vehicles, self.start_time, self.end_time)
+                self.operators.append(OpClass)
+            elif operator_module_name == "SoDZonalBatchAssignmentFleetcontrol":
+                from src.fleetctrl.SoDZonalBatchAssignmentFleetcontrol import SoDZonalBatchAssignmentFleetcontrol
+                list_vehicles = []
+                OpClass = SoDZonalBatchAssignmentFleetcontrol(op_id, operator_attributes, list_vehicles,
                                                                   self.routing_engine, self.zones,
                                                                   self.scenario_parameters, self.dir_names,
                                                                   self.charging_operator_dict["op"].get(op_id, None),
