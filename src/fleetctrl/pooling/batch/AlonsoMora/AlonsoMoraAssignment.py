@@ -162,6 +162,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param new_travel_times : bool; if True, the database will be recomputed from scratch
         :param build_from_scratch : bool; if True, the whole database will be cleared and recomputed from scratch
         """
+        
         t_start = time.time()
         self.sim_time = sim_time
         if self.fleetcontrol is not None:
@@ -192,13 +193,16 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         #     # LOG.debug("rid: {}".format(prq))
         # LOG.info("computeRR")
         t_setup = time.time()
-        self._computeRR()
-        t_rr = time.time()
-        LOG.debug(f"new RR cons {self.rr}")
+        
         # LOG.info("computeRV")
         self._computeRV()
         t_rv = time.time()
         LOG.debug(f"new RV cons {self.r2v}")
+        #self._computeRR()
+        
+        t_rr = time.time()
+        LOG.debug(f"new RR cons {self.rr}")
+        
         # if self.veh_tree_build_timeout is not None:
         #     self._set_init_solution_insertion()
        # # LOG.debug(f"check for untracked boardings")
@@ -226,7 +230,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             self._after_opt_rv_best_v2rb_heuristic()
         t_opt = time.time()
         # LOG.debug(f"after optimisation {self.optimisation_solutions}")
-        times = {"sim_time" : self.sim_time, "setup" : t_setup - t_start, "rr" : t_rr - t_setup, "rv" : t_rv - t_rr, "build" : t_build - t_rv, "opt" : t_opt - t_build, "all" : t_opt - t_start}
+        times = {"sim_time" : self.sim_time, "setup" : t_setup - t_start, "rr" : t_rr - t_rv, "rv" : t_rv - t_setup, "build" : t_build - t_rv, "opt" : t_opt - t_build, "all" : t_opt - t_start}
         time_str = ",".join(["{};{}".format(a, b) for a, b in times.items()])
         LOG.info("OPT TIMES:{}".format(time_str))
         LOG.info("Opt stats at sim time {} : opt duration {} | res cfv {}".format(self.sim_time, t_opt - t_start, self.current_best_cfv))
@@ -689,6 +693,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         """ this function computes all rr-connections from self.requests_to_compute with all active_requests
         """
         if not self.alonso_mora_parallelization_manager:
+            LOG.info(f"compute RR for {len(self.requests_to_compute)} and {len(self.rid_to_consider_for_global_optimisation.keys())} requests")
             for rid1 in self.requests_to_compute.keys():
                 rq1 = self.active_requests[rid1]
                 for rid2 in self.rid_to_consider_for_global_optimisation.keys():
@@ -718,14 +723,20 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     #LOG.debug(f"ob rr {rid1} {rid2} ({rid1} ob of {self.r2v_locked[rid1]}")
                     veh_pos = self.veh_objs[self.r2v_locked[rid1]].pos
                     #pu_time = rq1.pu_time # sometimes pickups can be delayed with new travel times -> influences drop off constraint (hard to be consistent with abs latest drop off time!)
-                    rr_comp = checkRRcomptibillityOnBoard(rq1, rq2, veh_pos, self.sim_time, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt)
+                    if self.r2v.get(rid2, {}).get(self.r2v_locked[rid1]) is not None:
+                        rr_comp = checkRRcomptibillityOnBoard(rq1, rq2, veh_pos, self.sim_time, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt)
+                    else:
+                        rr_comp = -1
                     #LOG.debug(f" -> {rr_comp}")
             elif self.r2v_locked.get(rid2) is not None and \
                 rid2 in [rq.get_rid_struct() for rq in self.veh_objs[self.r2v_locked[rid2]].pax]:
                     #LOG.debug(f"ob rr {rid2} {rid1} ({rid2} ob of {self.r2v_locked[rid2]}")
                     veh_pos = self.veh_objs[self.r2v_locked[rid2]].pos
                     # pu_time = rq2.pu_time # sometimes pickups can be delayed with new travel times -> influences drop off constraint (hard to be consistent with abs latest drop off time!)
-                    rr_comp = checkRRcomptibillityOnBoard(rq2, rq1, veh_pos, self.sim_time, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt)
+                    if self.r2v.get(rid1, {}).get(self.r2v_locked[rid2]) is not None:
+                        rr_comp = checkRRcomptibillityOnBoard(rq2, rq1, veh_pos, self.sim_time, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt)
+                    else:
+                        rr_comp = -1
                     #LOG.debug(f" -> {rr_comp}")
             else:
                 rr_comp = checkRRcomptibility(rq1, rq2, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt) #TODO definitions of boarding times!
@@ -769,9 +780,12 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 o_pos, _, latest_pu = prq.get_o_stop_info()
                 routing_results = self.routing_engine.return_travel_costs_Xto1(veh_locations_to_vid.keys(), o_pos,
                                                                                max_cost_value=latest_pu - current_time)
-                for veh_loc, tt, _, _ in routing_results:
+                travel_infos = {}
+                for veh_loc, tt, _, dis in routing_results:
+                    travel_infos[(veh_loc, o_pos)] = (tt, tt, dis)
                     for vid in veh_locations_to_vid[veh_loc]:
                         vid_dict[vid] = tt
+                self.routing_engine.add_travel_infos_to_database(travel_infos)
             else:
                 # get prepared routing results in multi processing
                 for vid in new_rv.get(rid, []):
@@ -1101,7 +1115,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             associated_locked_rids.extend(list(other_sub_rids))
             feasible_found = False
             for sub_ob_rid in other_sub_rids:
-                if self.rr.get(getRRKey(rid, sub_ob_rid)):
+                if self._getRR(rid, sub_ob_rid):
                     feasible_found = True
                     break
             if not feasible_found:
@@ -1113,10 +1127,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             for o_rid in o_rids:
                 if self.rid_to_consider_for_global_optimisation.get(o_rid) is None:
                     # LOG.verbose("additional rr check of not global opt {} <-> {}".format(rid, o_rid))
-                    rr_comp = checkRRcomptibility(self.active_requests[o_rid], self.active_requests[rid], self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt) 
-                    if rr_comp:
-                        # LOG.verbose(" -> 1")
-                        self.rr[getRRKey(rid, o_rid)] = 1
+                    rr_comp = self._getRR(rid, o_rid)
         # check existing elements from lower to higher rid-number
         number_locked_rids = len(self.v2r_locked.get(vid, {}).keys())
         do_not_remove_for_lower_keys = [rid]
@@ -1156,7 +1167,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 #check RR-compatibility! (?)
                 rr_test = True
                 for o_rid in unsorted_rid_list:
-                    rr_test = self.rr.get(getRRKey(o_rid, rid))
+                    rr_test = self._getRR(o_rid, rid)
                     # # LOG.debug(f"check rr {o_rid} {rid} -> {rr_test}")
                     if rr_test != 1:
                         rr_test = False

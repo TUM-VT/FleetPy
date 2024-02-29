@@ -55,13 +55,7 @@ def checkRRcomptibilityInOrder(plan_rq_1:PlanRequest, plan_rq_2:PlanRequest, rou
     o_pos_2, earliest_pu_2, latest_pu_2 = plan_rq_2.get_o_stop_info()
     d_pos_2, latest_do_2, max_trip_time_2 = plan_rq_2.get_d_stop_info()
     #start with plan_rq_1
-    #schedule
-    if d_pos_1 != o_pos_2:
-        if earliest_pu_1 + constant_boarding_time + routing_engine.return_travel_costs_1to1(o_pos_1, d_pos_1)[1] + constant_boarding_time + routing_engine.return_travel_costs_1to1(d_pos_1, o_pos_2)[1] < latest_pu_2:
-            return True
-    else:
-        if earliest_pu_1 + constant_boarding_time + routing_engine.return_travel_costs_1to1(o_pos_1, d_pos_1)[1] < latest_pu_2:
-            return True
+
     #o_pos_1 -> o_pos_2
     t_next = -1
     if o_pos_1 == o_pos_2:
@@ -99,6 +93,16 @@ def checkRRcomptibilityInOrder(plan_rq_1:PlanRequest, plan_rq_2:PlanRequest, rou
                 return True
             elif t_next_2 + constant_boarding_time + routing_engine.return_travel_costs_1to1(d_pos_2, d_pos_1)[1] < latest_do_1:
                 return True
+    else:
+        return False
+            
+    #schedule
+    if d_pos_1 != o_pos_2:
+        if earliest_pu_1 + constant_boarding_time + routing_engine.return_travel_costs_1to1(o_pos_1, d_pos_1)[1] + constant_boarding_time + routing_engine.return_travel_costs_1to1(d_pos_1, o_pos_2)[1] < latest_pu_2:
+            return True
+    else:
+        if earliest_pu_1 + constant_boarding_time + routing_engine.return_travel_costs_1to1(o_pos_1, d_pos_1)[1] < latest_pu_2:
+            return True
 
     return False
 
@@ -141,14 +145,7 @@ def checkRRcomptibillityOnBoard(plan_rq_1:PlanRequest, plan_rq_2:PlanRequest, ve
     o_pos_2, earliest_pu_2, latest_pu_2 = plan_rq_2.get_o_stop_info()
     d_pos_2, latest_do_2, max_trip_time_2 = plan_rq_2.get_d_stop_info()
     #start with plan_rq_1
-    #schedule
-    if d_pos_1 != o_pos_2:
-        if current_time + routing_engine.return_travel_costs_1to1(veh_pos, d_pos_1)[1] \
-            + constant_boarding_time + routing_engine.return_travel_costs_1to1(d_pos_1, o_pos_2)[1] < latest_pu_2:
-            return True
-    else:
-        if current_time + routing_engine.return_travel_costs_1to1(veh_pos, d_pos_1)[1] < latest_pu_2:
-            return True
+
     #veh_pos -> o_pos_2
     t_next = current_time + routing_engine.return_travel_costs_1to1(veh_pos, o_pos_2)[1]
     t_next = max(t_next, earliest_pu_2)
@@ -179,5 +176,17 @@ def checkRRcomptibillityOnBoard(plan_rq_1:PlanRequest, plan_rq_2:PlanRequest, ve
                 return True
             elif t_next_2 + constant_boarding_time + routing_engine.return_travel_costs_1to1(d_pos_2, d_pos_1)[1] < latest_do_1:
                 return True
+            
+    else:
+        return False
+            
+    #schedule
+    if d_pos_1 != o_pos_2:
+        if current_time + routing_engine.return_travel_costs_1to1(veh_pos, d_pos_1)[1] \
+            + constant_boarding_time + routing_engine.return_travel_costs_1to1(d_pos_1, o_pos_2)[1] < latest_pu_2:
+            return True
+    else:
+        if current_time + routing_engine.return_travel_costs_1to1(veh_pos, d_pos_1)[1] < latest_pu_2:
+            return True
 
     return False
