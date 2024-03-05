@@ -788,4 +788,4 @@ class ReplayPyPlot(Replay):
                 self._plot_class_instance.save_single_plot(sim_time)
             if not os.path.isdir(self.plots_dir):
                 os.mkdir(self.plots_dir)
-            list_pos_df.to_csv(os.path.join(self.plots_dir, "data_points_{}.csv".format(self.replay_time)))
+            #list_pos_df.to_csv(os.path.join(self.plots_dir, "data_points_{}.csv".format(self.replay_time)))
