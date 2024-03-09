@@ -21,7 +21,7 @@ import geopandas as gpd
 from src.simulation.Offers import TravellerOffer
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan, PlanStop
 from src.fleetctrl.planning.PlanRequest import PlanRequest
-
+from src.fleetctrl.SoDZonalControlRL import SoDZonalControlRL
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -83,6 +83,9 @@ class PtLineZonal(PtLine):
 
         # zonal setting parameters
         self.n_zones = self.pt_fleetcontrol_module.n_zones
+        if self.fixed_length >= self.route_length:
+            self.n_zones = 1
+
         self.n_reg_veh = self.pt_fleetcontrol_module.n_reg_veh
         self.pt_zone_min_detour_time = self.pt_fleetcontrol_module.pt_zone_min_detour_time
 
@@ -91,12 +94,12 @@ class PtLineZonal(PtLine):
         self.zone_x_max = [self.fixed_length + zone_len * (i + 1) for i in range(self.n_zones)]
 
         self.veh_zone_assignment = {}  # dict vid -> zone assignment; -1 for regular vehicles
-        if self.n_zones > 1:
-            for vid in self.sim_vehicles.keys():
-                if vid < self.n_reg_veh:
-                    self.veh_zone_assignment[vid] = -1
-                else:
-                    self.veh_zone_assignment[vid] = vid % self.n_zones
+        # if self.n_zones > 1:
+        for vid in self.sim_vehicles.keys():
+            if vid < self.n_reg_veh:
+                self.veh_zone_assignment[vid] = -1
+            else:
+                self.veh_zone_assignment[vid] = vid % self.n_zones
 
     def return_x_zone(self, x) -> int:
         """
@@ -106,6 +109,11 @@ class PtLineZonal(PtLine):
         :return: zone
         :rtype: int
         """
+        # fully flexible route case: check if x is around the terminus
+        if (self.fixed_length < min(self.station_id_km_run.items(), key=lambda x: x[1])[1]
+                and x < min(self.station_id_km_run.items(), key=lambda x: x[1])[1] + G_PT_X_TOL):
+            return -1
+
         if x < self.fixed_length:
             return -1
         for i in range(self.n_zones):
@@ -134,7 +142,8 @@ class PtLineZonal(PtLine):
         :return: closest station_id to x
         :rtype: int
         """
-        last_station_id = None
+        last_station_id = self.run_schedule["station_id"].iloc[0]
+        last_km = -1
         for station in self.run_schedule["station_id"]:
             station_km_run = self.station_id_km_run[station]
             if station_km_run > x:
@@ -143,6 +152,9 @@ class PtLineZonal(PtLine):
                 else:
                     return last_station_id
                 break
+            if last_km > station_km_run: # return part, break
+                break
+            last_km = station_km_run
             last_station_id = station
         # for station_id, station_km_run in self.station_id_km_run.items():
         #     if station_km_run > x:
@@ -216,7 +228,7 @@ class PtLineZonal(PtLine):
         """
 
         assert x_min >= self.fixed_length  # check if x_min is in the flexible route
-        assert x_max > x_min  # check if x_max is greater than x_min
+        assert x_max >= x_min  # check if x_max is greater than x_min
 
         # TODO: currently assume all zonal routes serve fixed route first
         # 1. remove previous schedule block
@@ -251,7 +263,7 @@ class PtLineZonal(PtLine):
         new_schedule = self.run_schedule.copy()
 
         # copy the schedule in the fixed route
-        new_schedule = new_schedule.loc[new_schedule["departure"] < fixed_route_time]
+        new_schedule = new_schedule.loc[new_schedule["departure"] <= fixed_route_time]
         # add x_min_stop with departure time = fixed_route_time + fixed_route_to_x_min_time
         # new_schedule = new_schedule.append(
         #     {"station_id": x_min_stop, "departure": fixed_route_time + fixed_route_to_x_min_time}
@@ -271,7 +283,7 @@ class PtLineZonal(PtLine):
         # )
         # add the schedule in the fixed route (return) with adjusted departure time
         return_schedule = self.run_schedule.copy()
-        return_schedule = return_schedule.loc[return_schedule["departure"] > fixed_route_return_time]
+        return_schedule = return_schedule.loc[return_schedule["departure"] >= fixed_route_return_time]
 
         return_schedule["departure"] += new_fixed_route_return_time - fixed_route_return_time
         new_schedule = new_schedule.append(return_schedule, ignore_index=True)
@@ -336,6 +348,7 @@ class PtLineZonal(PtLine):
             LOG.error(f"interplan feas: {interplan.is_feasible()}")
             exit()
 
+        LOG.debug(f"Time {sim_time}: Assign new bus schedule vid {vid} with list plan stops: {[str(x) for x in list_plan_stops[:10]]}")
         self.pt_fleetcontrol_module.veh_plans[vid] = VehiclePlan(self.sim_vehicles[vid], sim_time, self.routing_engine, list_plan_stops)
         self.pt_fleetcontrol_module.veh_plans[vid].update_plan(self.sim_vehicles[vid], sim_time, self.routing_engine,
                                         keep_time_infeasible=True)
@@ -441,10 +454,34 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
         self.n_reg_veh = scenario_parameters.get(G_PT_REG_VEH, 0)
         self.pt_zone_min_detour_time = scenario_parameters.get(G_PT_ZONE_MIN_DETOUR_TIME,0)
 
+        self.regular_headway = scenario_parameters.get(G_PT_REG_HEADWAY, 0)
+        self.zone_headway = scenario_parameters.get(G_PT_ZONAL_HEADWAY, 0)
+
         # zonal control state dataset
         self.zonal_control_state = {}
         self.last_zonal_dept = {}
 
+        # zonal control reward
+        self.rejected_rid_times = {} # dict of dict for rejected rid time for each vehicle
+        self.recent_rid_times = {} # dict of dict for recent rid for each vehicle, storing alighting times, waiting & riding times
+        self.recent_cum_veh_dist = {}
+        self.last_cum_veh_dist = 0.0
+        self.reward_time_window = scenario_parameters.get(G_PT_RL_REWARD_TIME_WINDOW, 0)
+        self.reward_rej_prop = scenario_parameters.get(G_PT_RL_REWARD_REJ_PROP, 0)
+        self.reward_wait_time = scenario_parameters.get(G_PT_RL_REWARD_WAIT_TIME, 0)
+        self.reward_ride_time = scenario_parameters.get(G_PT_RL_REWARD_RIDE_TIME, 0)
+        self.reward_veh_dist = scenario_parameters.get(G_PT_RL_REWARD_VEH_DIST, 0)
+
+        # zonal control RL model
+        zone_state = 2
+        model_state = 1
+        self.state_dim = self.n_zones * zone_state + model_state
+
+        zone_action = 3 # prob to assign a vehicle, left boundary, right boundary
+        model_action = 1 # prob to not assign a vehicle
+        self.action_dim = self.n_zones * zone_action + model_action
+
+        self.RL_model = SoDZonalControlRL(self.state_dim, self.action_dim)
 
     def continue_init(self, sim_vehicle_objs, sim_start_time, sim_end_time):
         """
@@ -487,16 +524,46 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
         terminus_node = self.station_dict[terminus_id].street_network_node_id
 
 
-
-        if self.sim_vehicles[vid].pos[0] == terminus_node:
-            # check if the vehicle is not listed in the terminus and contains no pax
-            if self.list_veh_in_terminus.get(vid) is None and not self.sim_vehicles[vid].pax:
+        # check if the vehicle is at the terminus and has no passengers
+        if self.sim_vehicles[vid].pos[0] == terminus_node and not self.sim_vehicles[vid].pax:
+            # check if the vehicle is not listed in the terminus or if it has already ended the last schedule
+            if (self.list_veh_in_terminus.get(vid) is None
+                    or not self.sim_vehicles[vid].assigned_route
+                    or self.sim_vehicles[vid].assigned_route[0].earliest_end_time == self.sim_end_time):
                 self.list_veh_in_terminus[vid] = 1
         else:
             if self.list_veh_in_terminus.get(vid) is not None:
                 del self.list_veh_in_terminus[vid]
 
         # TODO: check whether this matches the schedule; if not, raise an error
+
+    def _create_user_offer(self, rq: PlanRequest, simulation_time: int,
+                           assigned_vehicle_plan: VehiclePlan=None, offer_dict_without_plan: Dict={}):
+        # follow implementation here and do not follow LinebasedFleetControl
+        if assigned_vehicle_plan is not None:
+            pu_time, do_time = assigned_vehicle_plan.pax_info.get(rq.get_rid_struct())
+            add_offer = {}
+            pu_offer_tuple = self._get_offered_time_interval(rq.get_rid_struct())
+            if pu_offer_tuple is not None:
+                new_earliest_pu, new_latest_pu = pu_offer_tuple
+                add_offer[G_OFFER_PU_INT_START] = new_earliest_pu
+                add_offer[G_OFFER_PU_INT_END] = new_latest_pu
+
+            # additional info for output here, e.g., fixed/flexible, access time
+            add_offer[G_OFFER_WALKING_DISTANCE_ORIGIN] = self.walking_dist_origin[rq.get_rid_struct()] * 1000 # in m
+            add_offer[G_OFFER_WALKING_DISTANCE_DESTINATION] = self.walking_dist_destination[rq.get_rid_struct()] * 1000 # in m
+
+            PT_lines = self.return_ptline()
+            add_offer[G_OFFER_ZONAL_ORIGIN_ZONE] = PT_lines.return_pos_zone(rq.o_pos)
+            add_offer[G_OFFER_ZONAL_DESTINATION_ZONE] = PT_lines.return_pos_zone(rq.d_pos)
+
+            offer = TravellerOffer(rq.get_rid(), self.op_id, pu_time - rq.get_rq_time(), do_time - pu_time,
+                                   int(rq.init_direct_td * self.dist_fare + self.base_fare),
+                                   additional_parameters=add_offer)
+            rq.set_service_offered(offer)
+        else:
+            offer = self._create_rejection(rq, simulation_time)
+        return offer
 
     def _call_time_trigger_request_batch(self, simulation_time):
         """ this function first triggers the upper level batch optimisation
@@ -535,6 +602,7 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
                         self.RPBO_Module.add_new_request(rid, prq)
                     else:  # no retry, rid declined
                         self._create_user_offer(prq, simulation_time)
+                        self.rejected_rid_times[rid] = simulation_time
                 else:
                     assigned_plan = self.veh_plans[assigned_vid]
                     self._create_user_offer(prq, simulation_time, assigned_vehicle_plan=assigned_plan)
@@ -550,8 +618,10 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
 
                     if self.sim_time > new_latest_pu: # if max_wait_time_2 is exceeded, decline
                         self._create_user_offer(self.rq_dict[rid], simulation_time)
+                        self.rejected_rid_times[rid] = simulation_time
                     else: # otherwise, add it back to the list (to check in next iteration)
                         new_unassigned_requests_2[rid] = 1
+                        self.RPBO_Module.add_new_request(rid, prq)
                 else:
                     prq = self.rq_dict[rid]
                     assigned_plan = self.veh_plans[assigned_vid]
@@ -564,17 +634,66 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
 
         # Prepare dataset for zonal control
         # ---------------------------------
-        self.zonal_control_state["simulation_time"] = simulation_time
-        self.zonal_control_state["unassigned_requests_no"] = len(self.unassigned_requests_2)
+        # TODO: prepare for each zone, unsatisfied demand & nos of vehicles assigned
+        # self.zonal_control_state["simulation_time"] = simulation_time
+        # self.zonal_control_state["unassigned_requests_no"] = len(self.unassigned_requests_2)
         self.zonal_control_state["demand_forecast"] = self.get_closest_demand_forecast_time(simulation_time)
 
-        # Assume here pass state to DL model, get output and update the zonal control state
+        # Prepare reward for zonal control
+        # --------------------------------
+        # check self.rejected_rid_times for number of rejected rids, and remove old rids
+        rejected_rid_number = len(self.rejected_rid_times)
+        for rid in self.rejected_rid_times.keys():
+            if simulation_time - self.rejected_rid_times[rid] > self.reward_time_window:
+                del self.rejected_rid_times[rid]
 
-        # Store Zonal control action
+        # check self.recent_rid_times for recent rid times
+        rider_number = len(self.recent_rid_times)
+        total_wait_time = 0
+        total_ride_time = 0
+        if rider_number > 0:
+            for rid in self.recent_rid_times.keys():
+                total_wait_time += self.recent_rid_times[rid][G_PT_ZC_RID_WAIT_TIME]
+                total_ride_time += self.recent_rid_times[rid][G_PT_ZC_RID_RIDE_TIME]
+
+                # remove old rid from recent_rid_times if exceeded time window
+                if simulation_time - self.recent_rid_times[rid][G_PT_ZC_RID_SIM_TIME] > self.reward_time_window:
+                    del self.recent_rid_times[rid]
+
+        rej_prop = rejected_rid_number / (rider_number + rejected_rid_number + 1)  # +1 to avoid division by 0
+        avg_wait_time = total_wait_time / rider_number
+        avg_ride_time = total_ride_time / rider_number
+
+        # collect vehicle distances
+        total_cum_veh_dist = 0.0
+        for v in self.sim_vehicles:
+            total_cum_veh_dist += v.cumulative_distance
+
+        self.recent_cum_veh_dist[simulation_time] = total_cum_veh_dist - self.last_cum_veh_dist
+        self.last_cum_veh_dist = total_cum_veh_dist
+
+        veh_dist_inc = np.average(list(self.recent_cum_veh_dist.values()))
+        # remove old veh_dist_inc from recent_cum_veh_dist if exceeded time window
+        for t in self.recent_cum_veh_dist.keys():
+            if simulation_time - t > self.reward_time_window:
+                del self.recent_cum_veh_dist[t]
+
+        # combine values to reward
+        reward = rej_prop * self.reward_rej_prop + \
+                    avg_wait_time * self.reward_wait_time + \
+                    avg_ride_time * self.reward_ride_time + \
+                    veh_dist_inc * self.reward_veh_dist
+
+
+        # TODO: Pass state & reward to DL model, get action
+
+
+        # TODO: Implement Zonal control action
         # --------------------------
+
         # randomly send out vehicles first
-        regular_headway = 10 * 60  # s
-        zone_headway = 6 * 60  # s
+        regular_headway = self.regular_headway
+        zone_headway = self.zone_headway
 
         PT_line = self.return_ptline()
 
@@ -591,6 +710,7 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
 
         for z in range(PT_line.n_zones):
             if simulation_time >= self.last_zonal_dept.get(z, 0) + zone_headway:
+                LOG.debug(f"Time {simulation_time}: Zonal control: choosing vehicles for zone {z} from {self.list_veh_in_terminus}")
                 zone_veh_done = False
                 for vid in self.list_veh_in_terminus.keys():
                     if PT_line.veh_zone_assignment[vid] == z and self.list_veh_in_terminus[vid] == 1: # in terminus and not processed
@@ -624,3 +744,29 @@ class SoDZonalBatchAssignmentFleetcontrol(SemiOnDemandBatchAssignmentFleetcontro
         """
         first_index = next(iter(self.PT_lines))
         return self.PT_lines[first_index]
+
+    def acknowledge_alighting(self, rid : int, vid : int, simulation_time : int):
+        """This method can trigger some database processes whenever a passenger is finishing to alight a vehicle.
+
+        :param rid: request id
+        :type rid: int
+        :param vid: vehicle id
+        :type vid: int
+        :param simulation_time: current simulation time
+        :type simulation_time: float
+        """
+        self.sim_time = simulation_time
+        LOG.debug(f"acknowledge alighting {rid} from {vid} at {simulation_time}")
+        self.RPBO_Module.set_database_in_case_of_alighting(rid, vid)
+
+        # update rid times for zonal control reward
+        self.recent_rid_times[rid] = {}
+        self.recent_rid_times[rid][G_PT_ZC_RID_SIM_TIME] = simulation_time
+        self.recent_rid_times[rid][G_PT_ZC_RID_WAIT_TIME] = self.rq_dict[rid].pu_time - self.rq_dict[rid].get_rq_time()
+        self.recent_rid_times[rid][G_PT_ZC_RID_RIDE_TIME] = simulation_time - self.rq_dict[rid].pu_time
+
+        del self.rq_dict[rid]
+        try:
+            del self.rid_to_assigned_vid[rid]
+        except KeyError:
+            pass
