@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from src.simulation.Vehicles import SimulationVehicle
     from src.simulation.Legs import VehicleRouteLeg
     from src.fleetctrl.planning.PlanRequest import PlanRequest
-    from src.fleetctrl.SemiOnDemandBatchAssignmentFleetcontrol import PtLine
+    from src.fleetctrl.SoDZonalBatchAssignmentFleetcontrol import PtLineZonal
 
 LOG = logging.getLogger(__name__)
 
@@ -48,14 +48,14 @@ class BatchZonalInsertionHeuristicAssignment(BatchInsertionHeuristicAssignment):
 
             vid_to_exclude = {}
             # check flexible portion time to add vehicles to excluded_vid
-            PT_line: PtLine = self.fleetcontrol.return_ptline()
+            PT_line: PtLineZonal = self.fleetcontrol.return_ptline()
             # rq_origin_fixed = not PT_line.check_request_flexible(self.fleetcontrol.rq_dict[rid], "origin")
             # rq_t_pu_earliest = self.fleetcontrol.rq_dict[rid].t_pu_earliest
             # assert rq_t_pu_earliest > 0
             # rq_t_pu_latest = self.fleetcontrol.rq_dict[rid].t_pu_latest
             # assert rq_t_pu_latest > 0
-            if rid == 9992:
-                print("rid 9344")
+            # if rid == 9992:
+            #     print("rid 9344")
             #
             # for vid in self.fleetcontrol.veh_plans.keys():
             #     if rq_origin_fixed:
@@ -67,21 +67,24 @@ class BatchZonalInsertionHeuristicAssignment(BatchInsertionHeuristicAssignment):
             if self.fleetcontrol.n_zones > 1:
                 pu_zone = PT_line.return_pos_zone(self.fleetcontrol.rq_dict[rid].o_pos)
                 do_zone = PT_line.return_pos_zone(self.fleetcontrol.rq_dict[rid].d_pos)
-                LOG.debug(f"rid {rid} pu_zone {pu_zone} do_zone {do_zone} pu_pos {self.fleetcontrol.rq_dict[rid].o_pos} do_pos {self.fleetcontrol.rq_dict[rid].d_pos}")
+
                 # if request pick-up & drop-off in fixed route, then consider all vehicles
-                if pu_zone == -1 and do_zone == -1:
+                rq_zone = PT_line.return_rid_zone(rid)
+                LOG.debug(f"rid {rid} pu_zone {pu_zone} do_zone {do_zone} rq_zone {rq_zone}"
+                          f"pu_pos {self.fleetcontrol.rq_dict[rid].o_pos} do_pos {self.fleetcontrol.rq_dict[rid].d_pos}")
+
+                if rq_zone is None:
                     pass
                 # if pick-up & drop-off in different zones of flex routes, then ignore zonal vehicles
-                elif pu_zone != do_zone and pu_zone != -1 and do_zone != -1:
+                elif rq_zone == -1:
                     for vid in self.fleetcontrol.veh_plans.keys():
-                        veh_zone = PT_line.veh_zone_assignment[vid]
-                        if veh_zone != -1:
+                        if PT_line.veh_zone_assignment[vid] != -1:
                             vid_to_exclude[vid] = 1
                 # otherwise, ignore all zonal vehicles but one zone
                 else:
                     for vid in self.fleetcontrol.veh_plans.keys():
                         veh_zone = PT_line.veh_zone_assignment[vid]
-                        if veh_zone != max(pu_zone, do_zone) and veh_zone != -1: # include specific zonal & regular vehicles
+                        if veh_zone != rq_zone and veh_zone != -1: # include specific zonal & regular vehicles
                         # if veh_zone != max(pu_zone, do_zone): # ignore regular vehicles too
                             vid_to_exclude[vid] = 1
 

@@ -367,6 +367,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         :return: utility of vehicle plan
         :rtype: float
         """
+        # utility set in the method calling this method
         return self.vr_ctrl_f(simulation_time, veh_obj, vehicle_plan, self.rq_dict, self.routing_engine)
 
     def assign_vehicle_plan(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, sim_time : int, force_assign : bool=False

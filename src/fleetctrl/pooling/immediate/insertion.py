@@ -378,7 +378,9 @@ def insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : Fle
         return immediate_insertion_with_heuristics(sim_time, prq, fleetctrl, force_feasible_assignment)
 
 
-def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase, force_feasible_assignment : bool=True) -> List[Tuple[Any, VehiclePlan, float]]:
+def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase,
+                                        force_feasible_assignment : bool=True, excluded_vid = []
+                                        ) -> List[Tuple[Any, VehiclePlan, float]]:
     """This function has access to all FleetControl attributes and therefore can trigger different heuristics and
     is easily extendable if new ideas for heuristics are developed.
 
@@ -412,7 +414,7 @@ def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleet
     # -> separation into multiple parts or if-clause for Parallelization_Manager in between?
 
     # 1) pre vehicle-search processes
-    excluded_vid = []
+    # excluded_vid = []
 
     # 2) vehicle-search process
     rv_vehicles, rv_results_dict = veh_search_for_immediate_request(sim_time, prq, fleetctrl, excluded_vid)

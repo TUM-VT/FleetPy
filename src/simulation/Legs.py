@@ -53,7 +53,9 @@ class VehicleRouteLeg:
         """
         if self.status == other.status and set(self.rq_dict.get(1,[])) == set(other.rq_dict.get(1,[]))\
                 and set(self.rq_dict.get(-1,[])) == set(other.rq_dict.get(-1,[]))\
-                and self.destination_pos == other.destination_pos and self.locked == other.locked:
+                and self.destination_pos == other.destination_pos and self.locked == other.locked\
+                and self.duration == other.duration and self.earliest_start_time == other.earliest_start_time\
+                and self.earliest_end_time == other.earliest_end_time:
             return True
         else:
             return False

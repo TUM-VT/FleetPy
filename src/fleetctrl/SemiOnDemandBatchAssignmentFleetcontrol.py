@@ -79,7 +79,6 @@ class PtLine:
         self.line_id = line_id
         self.pt_fleetcontrol_module: SemiOnDemandBatchAssignmentFleetcontrol = pt_fleetcontrol_module
         self.routing_engine = self.pt_fleetcontrol_module.routing_engine
-        self.fixed_length = self.pt_fleetcontrol_module.fixed_length
         # self.loop_route = self.pt_fleetcontrol_module.loop_route
         self.vid_to_schedule = vid_to_schedule_dict
 
@@ -110,6 +109,9 @@ class PtLine:
         self.route_length = self.line_alignment_meter.length / 1000  # convert to km
 
         self.fixed_length: float = self.pt_fleetcontrol_module.fixed_length
+        if self.fixed_length >= self.route_length:
+            self.fixed_length = self.route_length
+
 
         # vehicle flexible portion time
         self.veh_flex_time: Dict[int, List] = {} # a dict of lists, each list contains the flexible portion time for a vehicle as [start,end]
@@ -231,6 +233,17 @@ class PtLine:
                 G_V_INIT_TIME: sim_start_time
             }
 
+            # lock the vehicle at the last location till end of period
+            list_plan_stops.append(PlanStop(
+                self.routing_engine.return_node_position(node_index),
+                latest_start_time=last_veh_time + 60,
+                earliest_end_time=sim_end_time,
+                # duration=(scheduled_stop["departure"] - 1) - (last_veh_time + 60) - 1,  # 1s, set the boarding/alighting duration to be nominal,
+                locked=True,
+                # will not be overwritten by the insertion
+                planstop_state=G_PLANSTOP_STATES.RESERVATION,
+            ))
+
             # Check infeasible schedule
             self.sim_vehicles[vid].set_initial_state(self.pt_fleetcontrol_module, self.routing_engine, init_state,
                                                      sim_start_time, veh_init_blocking=False)
@@ -244,19 +257,6 @@ class PtLine:
                 LOG.error(f"interplan feas: {interplan.is_feasible()}")
                 exit()
 
-
-
-
-            # lock the vehicle at the last location till end of period
-            list_plan_stops.append(PlanStop(
-                self.routing_engine.return_node_position(node_index),
-                latest_start_time=last_veh_time + 60,
-                earliest_end_time=sim_end_time - 1,
-                # duration=(scheduled_stop["departure"] - 1) - (last_veh_time + 60) - 1,  # 1s, set the boarding/alighting duration to be nominal,
-                locked=True,
-                # will not be overwritten by the insertion
-                planstop_state=G_PLANSTOP_STATES.RESERVATION,
-            ))
 
             # init vehicle position at first stop
             init_state = {
@@ -651,20 +651,34 @@ class PtLine:
         """
         raise NotImplementedError
 
-    def is_time_fixed_portion(self, vid, t) -> bool:
-        """ return whether at the time t, the vehicle is in the fixed portion of the line
-        :param vid: vehicle id
-        :type vid: int
-        :param t: time in seconds
-        :type t: float
-        """
-        # check self.veh_flex_time[vid] which contains [start, end] of the flexible portion time intervals
-        # if the time t is in one of the intervals, return False
-        # else return True
-        for interval in self.veh_flex_time[vid]:
-            if interval[0] <= t <= interval[1]:
-                return False
-        return True
+    # def is_time_fixed_portion(self, vid, t) -> bool:
+    #     """ return whether at the time t, the vehicle is in the fixed portion of the line
+    #     :param vid: vehicle id
+    #     :type vid: int
+    #     :param t: time in seconds
+    #     :type t: float
+    #     """
+    #     # check self.veh_flex_time[vid] which contains [start, end] of the flexible portion time intervals
+    #     # if the time t is in one of the intervals, return False
+    #     # else return True
+    #     for interval in self.veh_flex_time[vid]:
+    #         if interval[0] <= t <= interval[1]:
+    #             return False
+    #     return True
+    #
+    # def is_time_range_fixed_portion(self, vid, t_min, t_max) -> bool:
+    #     """ return whether at any point of the time range (t_min, t_max), the vehicle is in the fixed portion of the line
+    #     :param vid: vehicle id
+    #     :type vid: int
+    #     :param t_min: start time in seconds
+    #     :type t_min: float
+    #     :param t_max: end time in seconds
+    #     :type t_max: float
+    #     """
+    #     for interval in self.veh_flex_time[vid]:
+    #         if t_min <= interval[1] and t_max >= interval[0]:
+    #             return False
+    #     return True
 
 class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetControlBase):
     def __init__(self, op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
