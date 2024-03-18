@@ -24,8 +24,8 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
     :param sim_time: current simulation time
     :param veh_obj: simulation vehicle
     :param orig_veh_plan: original vehicle plan
-    :param new_prq_obj: new request
-    :param std_bt: standard boarding time
+    :param new_prq_obj: new request # Santi -> I think I can extract here the duration info -> new_prq_obj.get_real_boarding_duration()
+    :param std_bt: standard boarding time # Santi
     :param add_bt: additional boarding time for an extra request
     :param skip_first_position_insertion: if true, an insertion at the first position of the list_plan_stops is not tried
     :return: generator with feasible new routes
@@ -35,6 +35,11 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
     # do not consider inactive vehicles
     if veh_obj.status == VRL_STATES.OUT_OF_SERVICE:
         return
+
+    # Trial Santi
+    std_bt = new_prq_obj.get_real_boarding_duration()
+
+    
 
     number_stops = len(orig_veh_plan.list_plan_stops)
     # add o_stop
@@ -330,6 +335,7 @@ def single_insertion(veh_obj_list : List[SimulationVehicle], current_vid_to_vehp
             if len(veh_plan_to_insert.list_plan_stops) == 0:
                 skip_first_position_insertion_here = False
             old_obj_value = obj_function(sim_time, veh_obj, veh_plan_to_insert, rq_dict, routing_engine) # TODO # dont need to recompute always!
+            # Santi: check std_bt here
             for new_veh_plan in simple_insert(routing_engine, sim_time, veh_obj, veh_plan_to_insert, prq_to_insert, std_bt, add_bt, skip_first_position_insertion=skip_first_position_insertion_here):
                 new_obj_value = obj_function(sim_time, veh_obj, new_veh_plan, rq_dict, routing_engine)
                 delta_obj = new_obj_value - old_obj_value
