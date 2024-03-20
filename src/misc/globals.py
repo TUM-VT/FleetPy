@@ -55,6 +55,8 @@ G_INIT_STATE_F = "init_state_file"
 G_UNPROCESSED_NETWORK_NAME = "unprocessed_network"  # network path with original exported data and source_ids
 G_MAX_IM_OF_PROC = "max_im_offer_process"
 
+# output behavior
+G_SKIP_OUTPUT = "skip_file_writing"
 
 # network general attributes
 G_NETWORK_TYPE = "network_type"

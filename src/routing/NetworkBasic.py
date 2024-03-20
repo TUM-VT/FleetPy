@@ -175,12 +175,12 @@ class NetworkBasic(NetworkBase):
 
     def loadNetwork(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
         nodes_f = os.path.join(network_name_dir, "base", "nodes.csv")
-        print(f"Loading nodes from {nodes_f} ...")
+        LOG.info(f"Loading nodes from {nodes_f} ...")
         nodes_df = pd.read_csv(nodes_f)
         self.nodes = nodes_df.apply(read_node_line, axis=1)
         #
         edges_f = os.path.join(network_name_dir, "base", "edges.csv")
-        print(f"Loading edges from {edges_f} ...")
+        LOG.info(f"Loading edges from {edges_f} ...")
         edges_df = pd.read_csv(edges_f)
         for _, row in edges_df.iterrows():
             o_node = self.nodes[row[G_EDGE_FROM]]
@@ -188,7 +188,7 @@ class NetworkBasic(NetworkBase):
             tmp_edge = Edge((o_node, d_node), row[G_EDGE_DIST], row[G_EDGE_TT])
             o_node.add_next_edge_to(d_node, tmp_edge)
             d_node.add_prev_edge_from(o_node, tmp_edge)
-        print("... {} nodes loaded!".format(len(self.nodes)))
+        LOG.info("... {} nodes loaded!".format(len(self.nodes)))
         if scenario_time is not None:
             latest_tt = None
             if len(self.travel_time_file_folders.keys()) > 0:

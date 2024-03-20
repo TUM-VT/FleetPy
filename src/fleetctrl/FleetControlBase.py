@@ -267,8 +267,10 @@ class FleetControlBase(metaclass=ABCMeta):
             prt_strategy_str += f"\t Dynamic Fleet Sizing: None\n"
 
         # log and print summary of additional strategies
+        self.skip_output = True if scenario_parameters.get(G_SKIP_OUTPUT, 0) > 0 else False
         LOG.info(prt_strategy_str)
-        print(prt_strategy_str)
+        if not self.skip_output:
+            print(prt_strategy_str)
 
     def add_init(self, operator_attributes, scenario_parameters):
         """ additional init for stuff that has to be loaded (i.e. in modules) that requires full init of fleetcontrol

@@ -724,6 +724,8 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         self.unassigned_requests_1 = {}
         self.unassigned_requests_2 = {}
 
+        self.skip_output = True if scenario_parameters.get(G_SKIP_OUTPUT, 0) > 0 else False
+
         # fixed route parameters
         self.pt_data_dir = os.path.join(dir_names[G_DIR_PT])
         self.fixed_length = scenario_parameters.get(G_PT_FIXED_LENGTH, None)
@@ -791,7 +793,8 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
             pt_vehicle_id += 1
 
         # line specification output
-        pd.DataFrame(pt_line_specifications_list).to_csv(os.path.join(dir_names[G_DIR_OUTPUT], f"3-{self.op_id}_pt_vehicles.csv"), index=False)
+        if not self.skip_output:
+            pd.DataFrame(pt_line_specifications_list).to_csv(os.path.join(dir_names[G_DIR_OUTPUT], f"3-{self.op_id}_pt_vehicles.csv"), index=False)
 
         self.rq_dict = {}
         self.routing_engine = routing_engine
