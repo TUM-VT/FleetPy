@@ -26,6 +26,7 @@ def get_src_simulation_environments():
     # FleetPy simulation environments
     sim_env_dict = {}  # str -> (module path, class name)
     sim_env_dict["BatchOfferSimulation"] = ("src.BatchOfferSimulation", "BatchOfferSimulation")
+    sim_env_dict["RLBatchOfferSimulation"] = ("src.RLBatchOfferSimulation", "RLBatchOfferSimulation")
     sim_env_dict["ImmediateDecisionsSimulation"] = ("src.ImmediateDecisionsSimulation", "ImmediateDecisionsSimulation")
     sim_env_dict["BrokerDecision"] = ("src.BrokerSimulation", "BrokerDecisionSimulation")
     sim_env_dict["UserDecisionSimulation"] = ("src.BrokerSimulation", "UserDecisionSimulation")

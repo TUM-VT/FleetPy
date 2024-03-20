@@ -4,7 +4,7 @@
 import logging
 from src.fleetctrl.RidePoolingBatchOptimizationFleetControlBase import RidePoolingBatchOptimizationFleetControlBase
 from src.misc.globals import *
-from typing import Dict, List, TYPE_CHECKING
+from typing import Dict, List, TYPE_CHECKING, Any
 
 # additional module imports (> requirements)
 # ------------------------------------------
@@ -796,7 +796,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         if not self.skip_output:
             pd.DataFrame(pt_line_specifications_list).to_csv(os.path.join(dir_names[G_DIR_OUTPUT], f"3-{self.op_id}_pt_vehicles.csv"), index=False)
 
-        self.rq_dict = {}
+        self.rq_dict : Dict[Any, PlanRequest] = {}
         self.routing_engine = routing_engine
         self.zones = zone_system
         self.dyn_output_dict = {}
