@@ -90,7 +90,7 @@ class RLBatchOfferSimulation(BatchOfferSimulation):
             if RL_action is None:
                 op_obj.time_trigger(sim_time)
             else:
-                return op_obj.time_trigger(sim_time, RL_action=RL_action)
+                RL_var = op_obj.time_trigger(sim_time, RL_action=RL_action)
 
         # 6)
         for rid, rq_obj in self.demand.get_undecided_travelers(sim_time):
@@ -107,6 +107,9 @@ class RLBatchOfferSimulation(BatchOfferSimulation):
                 ch_op.time_trigger(sim_time)
 
         self.record_stats()
+
+        if RL_action is not None:
+            return RL_var
 
     def run(self, tqdm_position=0, RL_init=False):
         self._start_realtime_plot()
