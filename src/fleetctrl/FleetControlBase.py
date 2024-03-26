@@ -851,16 +851,14 @@ class FleetControlBase(metaclass=ABCMeta):
 
             if len(pstop.get_list_boarding_rids()) > 0 or len(pstop.get_list_alighting_rids()) > 0:
                 boarding = True
-                # TODO: Santi check
                 for rid in pstop.get_list_boarding_rids():
-                    # SANTI: boarding_dict is where I have access to the request info
                     boarding_dict[1].append(self.rq_dict[rid])
-                    real_boarding_duration.append(self.rq_dict[rid].get_real_boarding_duration())
+                    real_boarding_duration.append(self.rq_dict[rid].get_real_boarding_duration()) # This way, different boarding and alighting times for the same request are considered.
                     
                 for rid in pstop.get_list_alighting_rids():
                     boarding_dict[-1].append(self.rq_dict[rid])
-                    real_alighting_duration.append(self.rq_dict[rid].get_real_alighting_duration())
-                max_stop_duration = max(real_boarding_duration + real_alighting_duration)
+                    real_alighting_duration.append(self.rq_dict[rid].get_real_alighting_duration()) # This way, different boarding and alighting times for the same request are considered.
+                max_stop_duration = max(real_boarding_duration + real_alighting_duration) # We consider the maximum boarding or alighting time of all request in that stop.
             else:
                 boarding = False
             if pstop.get_charging_power() > 0:

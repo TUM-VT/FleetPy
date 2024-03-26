@@ -107,8 +107,11 @@ class PlanRequest:
         self.status = G_PRQS_NO_OFFER
         self.expected_pickup_time = None
         self.expected_dropoff_time = None
-        self.real_duration_boarding = rq.duration_pudo_boarding # Santi
+        self.real_duration_boarding = rq.duration_pudo_boarding
         self.real_duration_alighting = rq.duration_pudo_alighting
+        self.insertion_with_heterogenous_PUDO_duration = rq.insertion_with_heterogenous_PUDO_duration # Not needed here, but in the insertion.py file
+        self.accuracy_black_box_PUDO_duration = rq.accuracy_black_box_PUDO_duration # Not needed here, but in the insertion.py file
+
     def __str__(self):
         return f"new PlanRequest: rid {self.rid}|{self.sub_rid_struct} at {self.rq_time} start {self.o_pos} dest" \
                f"{self.d_pos} epa {self.t_pu_earliest} lpa {self.t_pu_latest} dtt {self.init_direct_tt} mtt" \
