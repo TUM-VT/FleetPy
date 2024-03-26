@@ -37,12 +37,22 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
         return
 
     # Trial Santi
-    std_bt = new_prq_obj.get_real_boarding_duration()
+    # std_bt = new_prq_obj.get_real_boarding_duration()
 
-    
+    # Playground Santiago
+    if new_prq_obj.insertion_with_heterogenous_PUDO_duration == True: # Only when specified in the scenario definition, the  
+        boarding_time = new_prq_obj.get_real_boarding_duration()
+        alighting_time = new_prq_obj.get_real_alighting_duration()
+        # HERE IMPLEMENT BLACK BOX
+
+    else: # If not specified, the standard boarding time is used
+        boarding_time = std_bt
+        alighting_time = std_bt
+    # End Playground Santiago
 
     number_stops = len(orig_veh_plan.list_plan_stops)
-    # add o_stop
+
+    # add o_stop (Origin stop of a new request)
     o_prq_feasible = True   # once max wait time of new_prq_obj is reached, no insertion at later index will be feasible
     tmp_plans : Dict[int, VehiclePlan] = {}  # insertion-index of o_stop -> tmp_VehiclePlan
     prq_o_stop_pos, prq_t_pu_earliest, prq_t_pu_latest = new_prq_obj.get_o_stop_info()
@@ -58,9 +68,11 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
         if orig_veh_plan.list_plan_stops[i].is_locked() or orig_veh_plan.list_plan_stops[i].is_infeasible_locked():
             continue
         next_o_plan = orig_veh_plan.copy()
-        # only allow combination of boarding tasks if the existing one is not locked (has not started)
+        # only allow combination of boarding tasks if the existing one is not locked (has not started)       
+        # First if condition -> the boarding stop being considered (inserted) is already used for other request(s)
         if not next_o_plan.list_plan_stops[i].is_locked() and not next_o_plan.list_plan_stops[i].is_locked_end() and prq_o_stop_pos == next_o_plan.list_plan_stops[i].get_pos():
             old_pstop = next_o_plan.list_plan_stops[i]
+            old_boarding_list = old_pstop.boarding_dict
             new_boarding_list = old_pstop.get_list_boarding_rids() + [new_rid_struct]
             new_boarding_dict = {-1:old_pstop.get_list_alighting_rids(), 1:new_boarding_list}
             ept_dict, lpt_dict, mtt_dict, lat_dict = old_pstop.get_boarding_time_constraint_dicts()
@@ -68,11 +80,17 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
             new_earliest_pickup_time_dict[new_rid_struct] = prq_t_pu_earliest
             new_latest_pickup_time_dict = lpt_dict.copy()
             new_latest_pickup_time_dict[new_rid_struct] = prq_t_pu_latest
-            stop_duration, _ = old_pstop.get_duration_and_earliest_departure()
-            if stop_duration is None:
-                stop_duration = std_bt
-            else:
-                stop_duration += add_bt
+            
+            if new_prq_obj.insertion_with_heterogenous_PUDO_duration != True: # In the default approach. Each additional boarding in this stop will increase the boarding time by add_bt
+                stop_duration, _ = old_pstop.get_duration_and_earliest_departure()
+                if stop_duration is None:
+                    stop_duration = std_bt
+                else:
+                    stop_duration += add_bt
+            else: # In this approach, the maximum boarding time of all requests in that stop is taken
+                stop_duration_old_pstop , _ = old_pstop.get_duration_and_earliest_departure()
+                stop_duration = max(stop_duration_old_pstop, boarding_time)
+                
             change_nr_pax = old_pstop.get_change_nr_pax()
             change_nr_pax += new_prq_obj.nr_pax
             
@@ -85,13 +103,14 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                 tmp_plans[i] = next_o_plan
                 skip_next = i+1
         else:
+        # In this if condition, the current boarding stop is "new" (i.e., there is no previous request (boarding/alighting) already assigned to this stop
             # add it before this stop else > planned departure after boarding time
             if i == skip_next:
                 continue
             #new_earliest_departure = max(prq_t_pu_earliest+std_bt, sim_time + std_bt)
             new_plan_stop = BoardingPlanStop(prq_o_stop_pos, boarding_dict={1:[new_rid_struct]}, earliest_pickup_time_dict={new_rid_struct : prq_t_pu_earliest},
                                              latest_pickup_time_dict={new_rid_struct : prq_t_pu_latest}, change_nr_pax=new_prq_obj.nr_pax,
-                                             duration=std_bt)
+                                             duration=boarding_time) # Santi: i have changed std_bt to boarding_time
             next_o_plan.list_plan_stops[i:i] = [new_plan_stop]
             #LOG.debug(f"test else boarding: {next_o_plan}")
             is_feasible = next_o_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
@@ -106,12 +125,13 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                         o_prq_feasible = False
                         continue
     # add stop after last stop (waiting at this stop is also possible!)
+    # In this last if condition, the boarding stop is inserted after the last already-defined stop for this vehicle
     if o_prq_feasible and skip_next != number_stops and (number_stops == 0 or not orig_veh_plan.list_plan_stops[-1].is_locked_end()):
         i = number_stops
         #new_earliest_departure = max(prq_t_pu_earliest + std_bt, sim_time + std_bt)
         new_plan_stop = BoardingPlanStop(prq_o_stop_pos, boarding_dict={1:[new_rid_struct]}, earliest_pickup_time_dict={new_rid_struct : prq_t_pu_earliest},
                                             latest_pickup_time_dict={new_rid_struct : prq_t_pu_latest}, change_nr_pax=new_prq_obj.nr_pax,
-                                            duration=std_bt)
+                                            duration=boarding_time) # Santi: i have changed std_bt to boarding_time
         next_o_plan = orig_veh_plan.copy()
         next_o_plan.list_plan_stops[i:i] = [new_plan_stop]
         #LOG.debug(f"test at end: {next_o_plan}")
@@ -119,7 +139,8 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
         if is_feasible:
             tmp_plans[i] = next_o_plan
 
-    # add d_stop for all tmp_plans
+
+    # add d_stop for all tmp_plans  (Destination stop of a new request)
     d_stop_pos, prq_t_do_latest, prq_max_trip_time = new_prq_obj.get_d_stop_info()  # TODO # the checks with t_do_latest and max_trip_time can be confusing!
     skip_next = -1
     for o_index, tmp_next_plan in tmp_plans.items():
@@ -134,6 +155,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                 break
             # reload the plan without d-insertion
             next_d_plan = tmp_next_plan.copy()
+            # First if condition -> the alighting stop being considered (inserted) is already used for other request(s)
             if d_stop_pos == next_d_plan.list_plan_stops[j].get_pos() and not next_d_plan.list_plan_stops[j].is_locked_end():
                 old_pstop = next_d_plan.list_plan_stops[j]
                 # combine with last stop if it is at the same location (combine constraints)
@@ -142,14 +164,19 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                 ept_dict, lpt_dict, mtt_dict, lat_dict = old_pstop.get_boarding_time_constraint_dicts()
                 new_max_trip_time_dict = mtt_dict.copy()
                 new_max_trip_time_dict[new_rid_struct] = prq_max_trip_time
-                stop_duration, _ = old_pstop.get_duration_and_earliest_departure()
-                if stop_duration is None:
-                    stop_duration = std_bt
-                else:
-                    stop_duration += add_bt
+
+                if new_prq_obj.insertion_with_heterogenous_PUDO_duration != True: # In the default approach. Each additional boarding in this stop increases the boarding time by add_bt
+                    stop_duration, _ = old_pstop.get_duration_and_earliest_departure()
+                    if stop_duration is None:
+                        stop_duration = std_bt
+                    else:
+                        stop_duration += add_bt
+                else: # In this approach, the maximum boarding time of all requests in that stop is taken
+                    stop_duration_old_pstop , _ = old_pstop.get_duration_and_earliest_departure()
+                    stop_duration = max(stop_duration_old_pstop, alighting_time)
+
                 change_nr_pax = old_pstop.get_change_nr_pax()
                 change_nr_pax -= new_prq_obj.nr_pax
-                
                 next_d_plan.list_plan_stops[j] = BoardingPlanStop(d_stop_pos, boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
                                                                   latest_arrival_time_dict=lat_dict.copy(), earliest_pickup_time_dict=ept_dict.copy(),
                                                                   latest_pickup_time_dict=lpt_dict.copy(), change_nr_pax=change_nr_pax, change_nr_parcels=old_pstop.get_change_nr_parcels(),
@@ -165,11 +192,12 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                     if len(planned_pu_do) > 1 and planned_pu_do[1] > prq_t_do_latest:
                         d_feasible = False
             else:
+                # In this if condition, the current alighting stop is "new" (i.e., there is no previous request (boarding/alighting) already assigned to this stop
                 if j == skip_next:
                     continue
                 # add it after this stop else
                 new_plan_stop = BoardingPlanStop(d_stop_pos, boarding_dict={-1: [new_rid_struct]}, max_trip_time_dict={new_rid_struct : prq_max_trip_time},
-                                                 change_nr_pax=-new_prq_obj.nr_pax, duration=std_bt)
+                                                 change_nr_pax=-new_prq_obj.nr_pax, duration=alighting_time) # Santi: changed from std_bt to alighting_time
                 next_d_plan.list_plan_stops[j:j] = [new_plan_stop]
                 # check constraints > yield plan if feasible
                 #LOG.debug(f"test with deboarding: {next_d_plan}")
@@ -182,11 +210,12 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                     if len(planned_pu_do) > 1 and planned_pu_do[1] > prq_t_do_latest:
                         d_feasible = False
 
+        # In this last if condition, the alighting stop is inserted after the last already-defined stop for this vehicle
         if skip_next != number_stops and not tmp_next_plan.list_plan_stops[-1].is_locked_end():
             next_d_plan = tmp_next_plan.copy()
             j = number_stops
             new_plan_stop = BoardingPlanStop(d_stop_pos, boarding_dict={-1: [new_rid_struct]}, max_trip_time_dict={new_rid_struct : prq_max_trip_time},
-                                                change_nr_pax=-new_prq_obj.nr_pax, duration=std_bt)
+                                                change_nr_pax=-new_prq_obj.nr_pax, duration=alighting_time) # Santi: changed from std_bt to alighting_time
             next_d_plan.list_plan_stops[j:j] = [new_plan_stop]
             # check constraints > yield plan if feasible
             #LOG.debug(f"test with deboarding: {next_d_plan}")
@@ -346,8 +375,8 @@ def single_insertion(veh_obj_list : List[SimulationVehicle], current_vid_to_vehp
         else:
             rid = prq_to_insert.get_rid_struct()
             pu_stop = BoardingPlanStop(prq_o_stop_pos, boarding_dict={1 : [rid]}, earliest_pickup_time_dict={rid: prq_t_pu_earliest},
-                                       latest_pickup_time_dict={rid : prq_t_pu_latest}, duration=std_bt)
-            do_stop = BoardingPlanStop(d_stop_pos, boarding_dict={-1 : [rid]}, max_trip_time_dict={rid : prq_max_trip_time}, duration=std_bt)
+                                       latest_pickup_time_dict={rid : prq_t_pu_latest}, duration=std_bt) # Santi: check here boarding operation; take into account multiple request simulaneously!
+            do_stop = BoardingPlanStop(d_stop_pos, boarding_dict={-1 : [rid]}, max_trip_time_dict={rid : prq_max_trip_time}, duration=std_bt)  # Santi: check here alighting operation
             new_veh_plan = VehiclePlan(veh_obj, sim_time, routing_engine, [pu_stop, do_stop])
             if not new_veh_plan.is_feasible():
                 continue
