@@ -694,12 +694,29 @@ class RequestWithPUDODuration(RequestBase): # Santi
     def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
         super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
 
-        if rq_row.get(G_RQ_PUDO_DUR):
-            self.duration_pudo_boarding = rq_row.get(G_RQ_PUDO_DUR)
-            self.duration_pudo_alighting = rq_row.get(G_RQ_PUDO_DUR) # TODO: Santi. Consider different alighting duration
-        else:
-            self.duration_pudo_boarding = self.duration_pudo_alighting = scenario_parameters.get(G_OP_CONST_BT, 0) # Santi: test
+        column_boarding_name = scenario_parameters.get("column_PUDO_duration_boarding")
+        column_alighting_name = scenario_parameters.get("column_PUDO_duration_alighting")
+        self.insertion_with_heterogenous_PUDO_duration = scenario_parameters.get("insertion_with_heterogenous_PUDO_duration", False) # Not used in this file, but necessary to access this variable in insertion.py 
+        self.accuracy_black_box_PUDO_duration = scenario_parameters.get("accuracy_black_box_PUDO_duration", False) # Not used in this file, but necessary to access this variable in insertion.py 
 
+        if column_boarding_name is not None:
+            self.duration_pudo_boarding = rq_row.get(column_boarding_name)
+            
+            if self.duration_pudo_boarding is None:
+                raise NameError(f'ERROR: {column_boarding_name} column is not specified in the input demand data!')
+
+        else:
+            self.duration_pudo_boarding = scenario_parameters.get(G_OP_CONST_BT, 0)
+
+        if column_alighting_name is not None:
+            self.duration_pudo_alighting = rq_row.get(column_alighting_name)
+
+            if self.duration_pudo_alighting is None:
+                raise NameError(f'ERROR: {column_alighting_name} column is not specified in the input demand data!')
+            
+        else:
+            self.duration_pudo_alighting = scenario_parameters.get(G_OP_CONST_BT, 0)
+       
     def choose_offer(self, sc_parameters, simulation_time): # Santi: using the same as in class BasicRequest(RequestBase)
         test_all_decline = super().choose_offer(sc_parameters, simulation_time)
         if test_all_decline is not None and test_all_decline < 0:
