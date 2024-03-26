@@ -92,13 +92,15 @@ class FleetControlBase(metaclass=ABCMeta):
         self.log_gurobi : bool = scenario_parameters.get(G_LOG_GUROBI, False)
         self.op_id = op_id
         self.routing_engine: NetworkBase = routing_engine
+        self._use_own_routing_engine = False
         if operator_attributes.get(G_RA_OP_NW_TYPE):
-            LOG.info(f"operator {self.fleetctrl.op_id} loads its own network!")
+            LOG.info(f"operator {self.op_id} loads its own network!")
             if not operator_attributes.get(G_RA_OP_NW_NAME):
                 raise IOError(f"parameter {G_RA_OP_NW_NAME} has to be given to load a network for operator {self.op_id}")
             from src.misc.init_modules import load_routing_engine
             self.routing_engine : NetworkBase = load_routing_engine(operator_attributes[G_RA_OP_NW_TYPE], os.path.join(dir_names[G_DIR_DATA], "networks", operator_attributes[G_RA_OP_NW_NAME]),
                                                       network_dynamics_file_name=operator_attributes.get(G_RA_OP_NW_DYN_F))
+            self._use_own_routing_engine = True
         # TODO: is a zonesystem needed for the fleetcontrol module? -> moved to repo module
         #self.zones: ZoneSystem = zone_system
         self.dir_names = dir_names
@@ -525,6 +527,9 @@ class FleetControlBase(metaclass=ABCMeta):
         :param simulation_time: current simulation time
         :type simulation_time: float
         """
+        # update network if own network is used
+        if self._use_own_routing_engine:
+            self.routing_engine.update_network(simulation_time)
         # check whether reservation requests should be considered as immediate requests
         rids_to_reveal = self.reservation_module.reveal_requests_for_online_optimization(simulation_time)
         for rid in rids_to_reveal:

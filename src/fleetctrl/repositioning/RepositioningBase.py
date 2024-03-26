@@ -250,7 +250,14 @@ class RepositioningBase(ABC):
             if destination_node < 0:
                 destination_node = self.zone_system.get_random_node(destination_zone_id)
         ps = RoutingTargetPlanStop((destination_node, None, None), locked=lock, planstop_state=G_PLANSTOP_STATES.REPO_TARGET)
-        veh_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
+        if len(veh_plan.list_plan_stops) == 0 or not veh_plan.list_plan_stops[-1].is_locked_end():
+            veh_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
+        else:
+            new_list_plan_stops = veh_plan.list_plan_stops[:-1] + [ps] + veh_plan.list_plan_stops[-1:]
+            veh_plan.list_plan_stops = new_list_plan_stops
+            veh_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
+            if not veh_plan.is_feasible():
+                LOG.warning("veh plan not feasible after assigning repo with reservation! {}".format(veh_plan))
         self.fleetctrl.assign_vehicle_plan(veh_obj, veh_plan, sim_time)
         if lock:
             self.fleetctrl.lock_current_vehicle_plan(veh_obj.vid)
