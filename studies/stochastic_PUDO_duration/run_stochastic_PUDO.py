@@ -20,6 +20,8 @@ if __name__ == "__main__":
    
     show_progress_bar = False
    
+    compare_eval_results_in_excel = True
+
     #f_out = open(os.path.join( os.path.dirname(os.path.abspath(__file__)), "sys_out.txt"), "w")
     #sys.stdout = f_out
     #print("sys.stdout is redirected to", sys.stdout, sys.stdout.name)
@@ -45,8 +47,25 @@ if __name__ == "__main__":
             # cc = os.path.join(SC_PATH, r"const_cfg_all.yaml")
             # sc = os.path.join(SC_PATH, r"scaling.csv")
             # run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=20, show_progress_bar=show_progress_bar)
-       
- 
+
+            if compare_eval_results_in_excel:
+                # Compare the results of the scenarios -> saved in the results file (and, by default, opens the excel file automatically)
+                df_scenario_comparison = pd.DataFrame()
+                for scenario in pd.read_csv(sc)["scenario_name"]:
+                    standard_eval_path = os.path.join(os.path.dirname(__file__), "results",scenario, "standard_eval.csv")
+                    standard_eval_scenario = pd.read_csv(standard_eval_path)
+                    
+                    new_row = pd.DataFrame([[scenario, ""]], columns=standard_eval_scenario.columns)
+                    # Concatenate the new row with the original DataFrame
+                    standard_eval_scenario = pd.concat([new_row, standard_eval_scenario]).reset_index(drop=True)
+                    df_scenario_comparison = pd.concat([df_scenario_comparison, standard_eval_scenario], axis=1)
+                comparison_file_path = os.path.join(os.path.dirname(__file__), "results",'comparison_last_run_scenarios.csv')
+                tmp_csv_file = df_scenario_comparison.to_csv(comparison_file_path, index=False)
+                
+                vbs_file = r"C:\Users\ge75mum\Downloads\test_vbs.vbs"
+                os.system("start cmd /c cscript //B {}".format(vbs_file))
+
+
     except:
         traceback.print_exc()
     # finally:
