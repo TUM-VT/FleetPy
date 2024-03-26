@@ -291,6 +291,40 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
             op_frac_served_online_users = 100.0
             op_frac_served_online_pax = 100.0
 
+   
+        df_deviation_PUDO_time = pd.DataFrame(columns=['rq_id', 'dev_pickup_time', 'dev_dropoff_time'])
+
+        for rq_id, rq_offer  in op_id_to_offer_dict.get(op_id, {}).items():
+            t_wait_request = rq_offer.get("t_wait",0) 
+            t_drive_request = rq_offer.get("t_drive",0)
+
+            # Extract the value in rq_time of the request with request_id = rq_id
+            try:
+                request_time = float(op_users.loc[op_users.request_id == rq_id]["rq_time"])
+                offer_pick_up_time = request_time + t_wait_request
+                offer_drop_off_time = offer_pick_up_time + t_drive_request
+
+                real_pick_up_time = float(op_users.loc[op_users.request_id == rq_id]["pickup_time"])
+                real_drop_off_time = float(op_users.loc[op_users.request_id == rq_id]["dropoff_time"])
+
+                dev_pickup_time = real_pick_up_time - offer_pick_up_time
+                dev_dropoff_time = real_drop_off_time - offer_drop_off_time
+                df_deviation_PUDO_time = df_deviation_PUDO_time.append({'rq_id': rq_id, 'dev_pickup_time': dev_pickup_time, 'dev_dropoff_time': dev_dropoff_time}, ignore_index=True)
+            except:
+                pass # The trip was no served and therefore did not receive an offer
+
+            
+        dev_pickup_time = df_deviation_PUDO_time.dev_pickup_time.mean()
+        dev_dropoff_time = df_deviation_PUDO_time.dev_dropoff_time.mean()
+
+        # Calculate absolute deviation
+        abs_dev_pickup_time = df_deviation_PUDO_time.dev_pickup_time.abs().mean()
+        abs_dev_dropoff_time = df_deviation_PUDO_time.dev_dropoff_time.abs().mean()
+
+        share_delayed_pickup = (df_deviation_PUDO_time[df_deviation_PUDO_time.dev_pickup_time > 0].shape[0] / df_deviation_PUDO_time.shape[0]) * 100
+        share_delayed_dropoff = (df_deviation_PUDO_time[df_deviation_PUDO_time.dev_dropoff_time > 0].shape[0] / df_deviation_PUDO_time.shape[0]) * 100
+
+
         result_dict = {"operator_id": op_id, 
                        "number users": op_number_users,
                        "number travelers": op_number_pax,
@@ -305,7 +339,14 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
                        "served online users [%]": op_frac_served_online_users,
                        "served online pax [%]": op_frac_served_online_pax,
                        r'% created offers': op_rel_created_offers,
-                       "utility" : op_avg_utility}
+                       "utility" : op_avg_utility,
+                       "ave. pickup time deviation ": dev_pickup_time,
+                       "ave. dropoff time deviation ": dev_dropoff_time,
+                       "abs deviation pickup time": abs_dev_pickup_time,
+                       "abs deviation dropoff time": abs_dev_dropoff_time,
+                       r'[%] delayed pickup': share_delayed_pickup,
+                       r'[%] delayed dropoff': share_delayed_dropoff
+                       }
 
         # base user_values
         op_user_sum_travel_time = np.nan
