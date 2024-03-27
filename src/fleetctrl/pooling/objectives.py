@@ -270,6 +270,50 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             # value of travel time is scenario input (cent per second)
             # LOG.debug(f" -> obj eval: sum_dist {sum_dist} * distance_cost {distance_cost} + sum_user_times {sum_user_times} * traveler_vot {traveler_vot} - assignment_reward {assignment_reward}")
             return sum_dist * distance_cost + sum_user_times * traveler_vot - assignment_reward
+        
+    elif func_key == "distance_and_user_times_man_with_reservation":
+        traveler_vot = vr_control_func_dict["vot"]
+        distance_cost = vr_control_func_dict["dc"]
+        reservation_rq_weight = vr_control_func_dict.get("rrw", 10) # reward factor for assigning not assigned reservation requests
+        assignment_reward_per_rq = MAX_DISTANCE * distance_cost + MAX_DELAY * traveler_vot
+        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
+
+        def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
+            """This function combines the total driving costs and the value of customer time.
+
+            :param simulation_time: current simulation time
+            :param veh_obj: simulation vehicle object
+            :param veh_plan: vehicle plan in question
+            :param rq_dict: rq -> Plan request dictionary
+            :param routing_engine: for routing queries
+            :return: objective function value
+            """
+            assignment_reward = 0
+            for rid in veh_plan.pax_info.keys():
+                if rq_dict[rid].get_reservation_flag():
+                    assignment_reward += reservation_rq_weight * assignment_reward_per_rq
+                else:
+                    assignment_reward += assignment_reward_per_rq
+                    
+            # distance term
+            sum_dist = 0
+            last_pos = veh_obj.pos
+            for ps in veh_plan.list_plan_stops:
+                pos = ps.get_pos()
+                if pos != last_pos:
+                    sum_dist += routing_engine.return_travel_costs_1to1(last_pos, pos)[2]
+                    last_pos = pos
+            # value of time term (treat waiting and in-vehicle time the same)
+            sum_user_times = 0
+            for rid, boarding_info_list in veh_plan.pax_info.items():
+                rq_time = rq_dict[rid].rq_time
+                drop_off_time = boarding_info_list[1]
+                sum_user_times += (drop_off_time - rq_time)
+            # vehicle costs are taken from simulation vehicle (cent per meter)
+            # value of travel time is scenario input (cent per second)
+            # LOG.debug(f" -> obj eval: sum_dist {sum_dist} * distance_cost {distance_cost} + sum_user_times {sum_user_times} * traveler_vot {traveler_vot} - assignment_reward {assignment_reward}")
+            return sum_dist * distance_cost + sum_user_times * traveler_vot - assignment_reward
 
     elif func_key == "distance_and_user_times_with_walk":
         traveler_vot = vr_control_func_dict["vot"]

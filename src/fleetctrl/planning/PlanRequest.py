@@ -212,6 +212,36 @@ class PlanRequest:
         :param new_max_trip_time: new maximum trip time"""
         self.max_trip_time = new_max_trip_time
         self.t_do_latest = self.t_pu_latest + self.max_trip_time
+        
+    def compute_new_max_trip_time(self, routing_engine: NetworkBase, boarding_time: int=0, max_detour_time_factor: float=None, 
+                                  add_constant_detour_time: int=None, min_detour_time_window: int=None, max_constant_detour_time: int=None):
+        """ this method resets the maximum trip time constraint based on the direct travel time and the new maximum trip time
+        i.e. in case travel times changed
+        :param routing_engine: network object
+        :param boarding_time: time needed for boarding
+        :param max_detour_time_factor: defines relative increase of maximum allowed travel time relative to direct route travel time in %
+        :param add_constant_detour_time: this detour time is added upon the detour after evaluating the max_detour_time_factor
+        :param min_detour_time_window: this detour time describes the minimum allowed detour
+        :param max_constant_detour_time: defines absolute increase of maximum allowed travel time relative to direct route travel time
+        """
+        _, self.init_direct_tt, self.init_direct_td = routing_engine.return_travel_costs_1to1(self.o_pos, self.d_pos)
+        max_trip_time = self.init_direct_tt + boarding_time
+        if not pd.isnull(max_detour_time_factor):
+            max_trip_time = (100 + max_detour_time_factor) * max_trip_time / 100
+            # LOG.debug(f"max trip time {max_trip_time} -> max detour factor {max_detour_time_factor}")
+        if not pd.isnull(add_constant_detour_time):
+            max_trip_time += add_constant_detour_time
+            # LOG.debug(f"max trip time {max_trip_time} -> add_constant_detour_time {add_constant_detour_time}")
+        if not pd.isnull(min_detour_time_window):
+            max_trip_time = max(self.init_direct_tt + boarding_time + min_detour_time_window, max_trip_time)
+            # LOG.debug(f"max trip time {max_trip_time} -> min_detour_time_window {min_detour_time_window}")
+        if not pd.isnull(max_constant_detour_time):
+            max_trip_time = min(self.init_direct_tt + boarding_time + max_constant_detour_time, max_trip_time)
+            # LOG.debug(f"max trip time {max_trip_time} -> max_constant_detour_time {max_constant_detour_time}")
+        self.max_trip_time = max_trip_time
+        if self.max_trip_time == self.init_direct_tt + boarding_time:
+            self.max_trip_time = LARGE_INT
+        self.t_do_latest = self.t_pu_latest + self.max_trip_time
 
     def set_new_pickup_and_dropoff_positions(self, pickup_position : tuple, dropoff_position : tuple):
         """ this function is used to change pickup and drop off locations of the plan request
