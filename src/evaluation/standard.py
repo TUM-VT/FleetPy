@@ -294,82 +294,6 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         # TODO: consider individual_based max. waiting time or latest arrive time
         max_wait_time = scenario_parameters.get(G_OP_MAX_WT, 100000000) # 100000000 is a "Large Integer (same approach as in FleetControlBase)"
 
-        df_deviation_PUDO_time = pd.DataFrame(columns=['rq_id', 'dev_pickup_time', 'dev_dropoff_time','picked_up_too_early','dropped_off_too_late'])
-
-        for rq_id, rq_offer  in op_id_to_offer_dict.get(op_id, {}).items():
-            t_wait_request = rq_offer.get("t_wait",0) 
-            t_drive_request = rq_offer.get("t_drive",0)
-
-            # Extract the value in rq_time of the request with request_id = rq_id
-            try:
-                request_time = float(op_users.loc[op_users.request_id == rq_id]["rq_time"])
-                offer_pick_up_time = request_time + t_wait_request
-                offer_drop_off_time = offer_pick_up_time + t_drive_request
-
-                real_pick_up_time = float(op_users.loc[op_users.request_id == rq_id]["pickup_time"])
-                real_drop_off_time = float(op_users.loc[op_users.request_id == rq_id]["dropoff_time"])
-
-                earliest_pick_up_time = float(op_users.loc[op_users.request_id == rq_id]["earliest_pickup_time"]) # TODO: this says whether it is too early, but not HOW early
-                # IMPORTANT: double check how the next line is calculated
-                # latest_drop_off_time = real_pick_up_time + float(op_users.loc[op_users.request_id == rq_id]["direct_route_travel_time"]) * scenario_parameters.get(G_OP_MAX_DTF, 1.0)/100 # TODO Santi: make robust in case the other detour variable is used
-
-                latest_pick_up_time = earliest_pick_up_time + max_wait_time
-                latest_drop_off_time = latest_pick_up_time + float(op_users.loc[op_users.request_id == rq_id]["direct_route_travel_time"]) * scenario_parameters.get(G_OP_MAX_DTF, 1.0)/100 # TODO Santi: make robust in case the other detour variable is used
-                # latest_drop_off_time = latest_pick_up_time + float(op_users.loc[op_users.request_id == rq_id]["direct_route_travel_time"] + ACTUALBOARDING) * scenario_parameters.get(G_OP_MAX_DTF, 1.0)/100 # TODO Santi: make robust in case the other detour variable is used
-
-
-                picked_up_too_early = real_pick_up_time < earliest_pick_up_time
-                dropped_off_too_late = real_drop_off_time > latest_drop_off_time
-
-                dev_pickup_time = real_pick_up_time - offer_pick_up_time
-                dev_dropoff_time = real_drop_off_time - offer_drop_off_time
-                df_deviation_PUDO_time = df_deviation_PUDO_time.append({'rq_id': rq_id,
-                                                                        'dev_pickup_time': dev_pickup_time,
-                                                                        'dev_dropoff_time': dev_dropoff_time,
-                                                                        'picked_up_too_early': picked_up_too_early,
-                                                                        'dropped_off_too_late': dropped_off_too_late}, ignore_index=True)
-            except:
-                pass # The trip was no served and therefore did not receive an offer
-
-            
-        dev_pickup_time = df_deviation_PUDO_time.dev_pickup_time.mean()
-        dev_dropoff_time = df_deviation_PUDO_time.dev_dropoff_time.mean()
-
-        # Calculate absolute deviation
-        abs_dev_pickup_time = df_deviation_PUDO_time.dev_pickup_time.abs().mean()
-        abs_dev_dropoff_time = df_deviation_PUDO_time.dev_dropoff_time.abs().mean()
-
-        share_delayed_pickup = (df_deviation_PUDO_time[df_deviation_PUDO_time.dev_pickup_time > 0].shape[0] / df_deviation_PUDO_time.shape[0]) * 100
-        share_delayed_dropoff = (df_deviation_PUDO_time[df_deviation_PUDO_time.dev_dropoff_time > 0].shape[0] / df_deviation_PUDO_time.shape[0]) * 100
-        
-        share_too_early_pu = (sum(df_deviation_PUDO_time.picked_up_too_early)/ df_deviation_PUDO_time.shape[0]) * 100
-        share_exceeded_detour = (sum(df_deviation_PUDO_time.dropped_off_too_late)/ df_deviation_PUDO_time.shape[0]) * 100
-
-        result_dict = {"operator_id": op_id, 
-                       "number users": op_number_users,
-                       "number travelers": op_number_pax,
-                       "modal split": op_modal_split,
-                       "modal split rq": op_modal_split_rq,
-                       "reservation users": op_number_reservation_users,
-                       "reservation pax" : op_number_reservation_pax,
-                       "served reservation users [%]": op_frac_served_reservation_users,
-                       "served reservation pax [%]": op_frac_served_reservation_pax,
-                       "online users" : op_number_online_users,
-                       "online pax" : op_number_online_pax,
-                       "served online users [%]": op_frac_served_online_users,
-                       "served online pax [%]": op_frac_served_online_pax,
-                       r'% created offers': op_rel_created_offers,
-                       "utility" : op_avg_utility,
-                       "ave. pickup time deviation ": dev_pickup_time,
-                       "ave. dropoff time deviation ": dev_dropoff_time,
-                       "abs deviation pickup time": abs_dev_pickup_time,
-                       "abs deviation dropoff time": abs_dev_dropoff_time,
-                       r'[%] delayed pickup': share_delayed_pickup,
-                       r'[%] delayed dropoff': share_delayed_dropoff,
-                       r'[%] too early pickup': share_too_early_pu,  
-                       r'[%] rq exceeded detour': share_exceeded_detour                       
-                       }
-
         # base user_values
         op_user_sum_travel_time = np.nan
         op_revenue = np.nan
@@ -409,7 +333,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         if op_id >= 0:  #AMoD
             op_name = "MoD_{}".format(int(op_id))
             operator_attributes = list_operator_attributes[int(op_id)]
-            boarding_time = operator_attributes["op_const_boarding_time"] # TODO santi: check
+
             if print_comments:
                 print("Loading AMoD vehicle data ...")
             try:
@@ -442,6 +366,93 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
             # avg waiting time from earliest pickup time
             if G_RQ_PU in op_users.columns and G_RQ_EPT in op_users.columns:
                 op_avg_wait_from_ept = (op_users[G_RQ_PU].sum() - op_users[G_RQ_EPT].sum()) / op_number_users
+
+
+            # TODO Santi: move all this code downwards
+            df_deviation_PUDO_time = pd.DataFrame(columns=['rq_id', 'dev_pickup_time', 'dev_dropoff_time','picked_up_too_early','dropped_off_too_late'])
+
+            for rq_id, rq_offer  in op_id_to_offer_dict.get(op_id, {}).items():
+                t_wait_request = rq_offer.get("t_wait",0) 
+                t_drive_request = rq_offer.get("t_drive",0)
+
+                # Extract the value in rq_time of the request with request_id = rq_id
+                try:
+                    request_time = float(op_users.loc[op_users.request_id == rq_id]["rq_time"])
+                    offer_pick_up_time = request_time + t_wait_request
+                    offer_drop_off_time = offer_pick_up_time + t_drive_request
+
+                    real_pick_up_time = float(op_users.loc[op_users.request_id == rq_id]["pickup_time"])
+                    real_drop_off_time = float(op_users.loc[op_users.request_id == rq_id]["dropoff_time"])
+
+                    earliest_pick_up_time = float(op_users.loc[op_users.request_id == rq_id]["earliest_pickup_time"]) # TODO: this says whether it is too early, but not HOW early
+                    # IMPORTANT: double check how the next line is calculated
+                    # latest_drop_off_time = real_pick_up_time + float(op_users.loc[op_users.request_id == rq_id]["direct_route_travel_time"]) * scenario_parameters.get(G_OP_MAX_DTF, 1.0)/100 # TODO Santi: make robust in case the other detour variable is used
+
+                    latest_pick_up_time = earliest_pick_up_time + max_wait_time
+                    # latest_drop_off_time = latest_pick_up_time + float(op_users.loc[op_users.request_id == rq_id]["direct_route_travel_time"]) * scenario_parameters.get(G_OP_MAX_DTF, 1.0)/100 # TODO Santi: make robust in case the other detour variable is used
+
+                    # Calculate real boarding duration (not necessary for that user, but for all request boarding and alighting when the request boarded the vehicle)
+                    # tmp_df = op_vehicle_df[op_vehicle_df.status == "boarding"][op_vehicle_df.rq_boarding.notna()].copy() # Subset of boarding processes 
+                    tmp_df = op_vehicle_df[(op_vehicle_df.status == "boarding") & (op_vehicle_df.rq_boarding.notna())].copy()
+                    tmp_mask = tmp_df['rq_boarding'].str.split(';').apply(lambda x: str(rq_id) in x) 
+                    boarding_duration = float(tmp_df[tmp_mask].end_time - tmp_df[tmp_mask].start_time) # TODO: in some cases it's very slightly higher than the integer value
+                    
+                    latest_drop_off_time = latest_pick_up_time + float(op_users.loc[op_users.request_id == rq_id]["direct_route_travel_time"] + boarding_duration) * (1 + scenario_parameters.get(G_OP_MAX_DTF, 0)/100) # TODO Santi: make robust in case the other detour variable is used
+
+                    picked_up_too_early = real_pick_up_time < earliest_pick_up_time
+                    dropped_off_too_late = real_drop_off_time > latest_drop_off_time
+
+                    dev_pickup_time = real_pick_up_time - offer_pick_up_time
+                    dev_dropoff_time = real_drop_off_time - offer_drop_off_time
+                    df_deviation_PUDO_time = df_deviation_PUDO_time.append({'rq_id': rq_id,
+                                                                            'dev_pickup_time': dev_pickup_time,
+                                                                            'dev_dropoff_time': dev_dropoff_time,
+                                                                            'picked_up_too_early': picked_up_too_early,
+                                                                            'dropped_off_too_late': dropped_off_too_late}, ignore_index=True)
+                except:
+                    pass # The trip was no served and therefore did not receive an offer
+            
+            dev_pickup_time = df_deviation_PUDO_time.dev_pickup_time.mean()
+            dev_dropoff_time = df_deviation_PUDO_time.dev_dropoff_time.mean()
+
+            # Calculate absolute deviation
+            abs_dev_pickup_time = df_deviation_PUDO_time.dev_pickup_time.abs().mean()
+            abs_dev_dropoff_time = df_deviation_PUDO_time.dev_dropoff_time.abs().mean()
+
+            share_delayed_pickup = (df_deviation_PUDO_time[df_deviation_PUDO_time.dev_pickup_time > 0].shape[0] / df_deviation_PUDO_time.shape[0]) * 100
+            share_delayed_dropoff = (df_deviation_PUDO_time[df_deviation_PUDO_time.dev_dropoff_time > 0].shape[0] / df_deviation_PUDO_time.shape[0]) * 100
+            
+            share_too_early_pu = (sum(df_deviation_PUDO_time.picked_up_too_early)/ df_deviation_PUDO_time.shape[0]) * 100
+            share_exceeded_detour = (sum(df_deviation_PUDO_time.dropped_off_too_late)/ df_deviation_PUDO_time.shape[0]) * 100
+
+            result_dict = {"operator_id": op_id, 
+                        "number users": op_number_users,
+                        "number travelers": op_number_pax,
+                        "modal split": op_modal_split,
+                        "modal split rq": op_modal_split_rq,
+                        "reservation users": op_number_reservation_users,
+                        "reservation pax" : op_number_reservation_pax,
+                        "served reservation users [%]": op_frac_served_reservation_users,
+                        "served reservation pax [%]": op_frac_served_reservation_pax,
+                        "online users" : op_number_online_users,
+                        "online pax" : op_number_online_pax,
+                        "served online users [%]": op_frac_served_online_users,
+                        "served online pax [%]": op_frac_served_online_pax,
+                        r'% created offers': op_rel_created_offers,
+                        "utility" : op_avg_utility,
+                        "ave. pickup time deviation ": dev_pickup_time,
+                        "ave. dropoff time deviation ": dev_dropoff_time,
+                        "abs deviation pickup time": abs_dev_pickup_time,
+                        "abs deviation dropoff time": abs_dev_dropoff_time,
+                        r'[%] delayed pickup': share_delayed_pickup,
+                        r'[%] delayed dropoff': share_delayed_dropoff,
+                        r'[%] too early pickup': share_too_early_pu,  
+                        r'[%] rq exceeded detour': share_exceeded_detour                       
+                        }
+
+            # TODO: move inside the for loop
+            boarding_time = operator_attributes["op_const_boarding_time"] # TODO santi: check
+
             # avg abs detour time
             if not np.isnan(op_user_sum_travel_time) and G_RQ_DRT in op_users.columns:
                 op_avg_detour_time = (op_user_sum_travel_time - op_users[G_RQ_DRT].sum())/op_number_users - \
@@ -451,6 +462,12 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
                 rel_det_series = (op_users[G_RQ_DO] - op_users[G_RQ_PU] - boarding_time -
                                   op_users[G_RQ_DRT])/op_users[G_RQ_DRT]
                 op_avg_rel_detour = rel_det_series.sum()/op_number_users * 100.0
+            
+            
+            
+            
+            
+            
             # direct travel time and distance
             if G_RQ_DRD in op_users.columns:
                 op_sum_direct_travel_distance = op_users[G_RQ_DRD].sum() / 1000.0
@@ -676,6 +693,6 @@ if __name__ == "__main__":
     import sys
     # sc = sys.argv[1]
     
-    sc = r'C:\Users\ge75mum\Documents\Research\Fleetpy\tum-vt-fleet-simulation\FleetPy\studies\stochastic_PUDO_duration\results\deterministic_duration_400_trips'
+    sc = r'C:\Users\ge75mum\Documents\Research\Fleetpy\tum-vt-fleet-simulation\FleetPy\studies\stochastic_PUDO_duration\results\stochastic_accuracy_50'
     #evaluate_folder(sc, print_comments=True)
     standard_evaluation(sc, print_comments=True)
