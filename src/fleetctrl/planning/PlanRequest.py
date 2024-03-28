@@ -3,6 +3,7 @@
 # -----------------------------
 import logging
 import pandas as pd
+import random
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -98,7 +99,7 @@ class PlanRequest:
             self.max_trip_time = max_trip_time
             if self.max_trip_time == self.init_direct_tt + boarding_time:
                 self.max_trip_time = LARGE_INT
-        self.t_do_latest = self.t_pu_latest + self.max_trip_time
+        self.t_do_latest = self.t_pu_latest + self.max_trip_time # TODO: this value could be taken from the PT schedule in case this is an first-mile service with connection to PT
         self.locked = False
         # LOG.debug(f"new PlanRequest: rid {self.rid}|{self.sub_rid_struct} start {self.o_pos} dest {self.d_pos} epa
         # {self.t_pu_earliest} lpa {self.t_pu_latest} dtt {self.init_direct_tt} mtt {self.max_trip_time}")
@@ -111,6 +112,9 @@ class PlanRequest:
         self.real_duration_alighting = rq.duration_pudo_alighting
         self.insertion_with_heterogenous_PUDO_duration = rq.insertion_with_heterogenous_PUDO_duration # Not needed here, but in the insertion.py file
         self.accuracy_black_box_PUDO_duration = rq.accuracy_black_box_PUDO_duration # Not needed here, but in the insertion.py file
+        self.predicted_duration_boarding = self.__durationPUDOprediction_model(self.real_duration_boarding, self.accuracy_black_box_PUDO_duration) # Initialized in this step to make sure that the same value is used in every iteration within insertion.py
+        self.predicted_duration_alighting = self.__durationPUDOprediction_model(self.real_duration_alighting, self.accuracy_black_box_PUDO_duration)
+
 
     def __str__(self):
         return f"new PlanRequest: rid {self.rid}|{self.sub_rid_struct} at {self.rq_time} start {self.o_pos} dest" \
@@ -124,6 +128,14 @@ class PlanRequest:
     def get_real_alighting_duration(self):
         """ returns the real alighting duration of the plan request  (contained in the demand file)"""
         return self.real_duration_alighting
+
+    def get_predicted_boarding_duration(self):
+        """ returns the real boarding duration of the plan request (contained in the demand file)"""
+        return self.predicted_duration_boarding
+    
+    def get_predicted_alighting_duration(self):
+        """ returns the real alighting duration of the plan request  (contained in the demand file)"""
+        return self.predicted_duration_alighting
 
     def set_reservation_flag(self, value : bool):
         """ this method sets a flag in case it is treated as reservation requests
@@ -245,7 +257,21 @@ class PlanRequest:
     
     def is_parcel(self) -> bool:
         return False
+    
+    def __durationPUDOprediction_model(self, real_duration : int, accuracy_black_box_PUDO_duration) -> int:
+        """ This function is used to predict the duration of the PUDO process based on a "black box model.
+            The black box model is a simple model that builds an interval around the real duration of the PUDO process with +/- accuracy_black_box_PUDO_duration*real_duration.
+            Then, a random number is drawn from that interval.
+            The value is rounded to represent the duration in seconds (to keep consistency with the temporal granularity of the simulation)." 
+        :param real_duration: the real duration of the PUDO process [s]
+        :param accuracy_black_box_PUDO_duration: the accuracy of the black box model [percentage]
+        :return: the predicted duration of the PUDO process [s]"""
+        
+        # Sample a value from the interval: real_duration +/- [1-accuracy_black_box_PUDO_duration/100]*accuracy_black_box_PUDO_duration 
+        lower_bound = real_duration - ((1-accuracy_black_box_PUDO_duration/100) * real_duration)
+        upper_bound = real_duration + ((1-accuracy_black_box_PUDO_duration/100) * real_duration)
 
+        return round(random.uniform(lower_bound, upper_bound))
 
 class SoftConstraintPlanRequest(PlanRequest):
     """This class of PlanRequests has to be utilized for FleetControl classes with soft time windows, i.e.

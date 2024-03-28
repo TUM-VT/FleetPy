@@ -44,7 +44,7 @@ INPUT_PARAMETERS_RequestBase = {
     "mandatory_modules": [], 
     "optional_modules": []
 }
-
+    
 class RequestBase(metaclass=ABCMeta):
     """Base class for customer requests."""
     type = "RequestBase"
@@ -703,7 +703,7 @@ class RequestWithPUDODuration(RequestBase): # Santi
             self.duration_pudo_boarding = rq_row.get(column_boarding_name)
             
             if self.duration_pudo_boarding is None:
-                raise NameError(f'ERROR: {column_boarding_name} column is not specified in the input demand data!')
+                raise IOError(f'ERROR: {column_boarding_name} column is not specified in the input demand data!')
 
         else:
             self.duration_pudo_boarding = scenario_parameters.get(G_OP_CONST_BT, 0)
@@ -712,10 +712,24 @@ class RequestWithPUDODuration(RequestBase): # Santi
             self.duration_pudo_alighting = rq_row.get(column_alighting_name)
 
             if self.duration_pudo_alighting is None:
-                raise NameError(f'ERROR: {column_alighting_name} column is not specified in the input demand data!')
+                raise IOError(f'ERROR: {column_alighting_name} column is not specified in the input demand data!')
             
         else:
             self.duration_pudo_alighting = scenario_parameters.get(G_OP_CONST_BT, 0)
+
+        if self.insertion_with_heterogenous_PUDO_duration:
+            if self.accuracy_black_box_PUDO_duration is False:
+                # error missing value
+                raise IOError(f'ERROR: accuracy_black_box_PUDO_duration column is not specified in the input demand data (neither in constant_config nor in scenario_config!')
+            else:
+                try:
+                    self.accuracy_black_box_PUDO_duration = float(self.accuracy_black_box_PUDO_duration)
+
+                    if self.accuracy_black_box_PUDO_duration>100 or self.accuracy_black_box_PUDO_duration<0:
+                        raise ValueError(f'ERROR: accuracy_black_box_PUDO_duration is {self.accuracy_black_box_PUDO_duration}, but it has to be a value between 0 and 100!')
+                except:
+                    raise TypeError(f'ERROR: accuracy_black_box_PUDO_duration is {type(self.accuracy_black_box_PUDO_duration)} type, but it has to be a float or integer value!')
+                
        
     def choose_offer(self, sc_parameters, simulation_time): # Santi: using the same as in class BasicRequest(RequestBase)
         test_all_decline = super().choose_offer(sc_parameters, simulation_time)

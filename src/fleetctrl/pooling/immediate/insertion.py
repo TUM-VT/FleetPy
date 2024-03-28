@@ -41,9 +41,12 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
 
     # Playground Santiago
     if new_prq_obj.insertion_with_heterogenous_PUDO_duration == True: # Only when specified in the scenario definition, the  
-        boarding_time = new_prq_obj.get_real_boarding_duration()
-        alighting_time = new_prq_obj.get_real_alighting_duration()
-        # HERE IMPLEMENT BLACK BOX
+        # boarding_time = new_prq_obj.get_real_boarding_duration() # Version before implementing black box
+        # alighting_time = new_prq_obj.get_real_alighting_duration()
+        # HERE IMPLEMENT BLACK BOX -> the best way to make sure we use always the same value, is to implement the black box in the PlanRequest class
+
+        boarding_time = new_prq_obj.get_predicted_boarding_duration()
+        alighting_time = new_prq_obj.get_predicted_alighting_duration()
 
     else: # If not specified, the standard boarding time is used
         boarding_time = std_bt
