@@ -65,7 +65,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
 
     elif func_key == "total_system_time":
         ignore_repo_stop_wt = vr_control_func_dict.get("irswt", False)
-        assignment_reward_per_rq = MAX_DELAY
+        assignment_reward_per_rq = MAX_DELAY * 10
         assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         if not ignore_repo_stop_wt:
@@ -142,7 +142,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             return sum_user_times - simulation_time - assignment_reward
         
     elif func_key == "total_travel_times":
-        assignment_reward_per_rq = MAX_DELAY
+        assignment_reward_per_rq = MAX_DELAY * 10
         assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         
@@ -168,7 +168,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
 
     elif func_key == "system_and_user_time":
         user_weight = vr_control_func_dict["uw"]
-        assignment_reward_per_rq = MAX_DELAY
+        assignment_reward_per_rq = MAX_DELAY * 10
         assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         
@@ -400,7 +400,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
 
     elif func_key == "sys_time_and_detour_time":
         detour_weight = vr_control_func_dict["dtw"]
-        assignment_reward_per_rq = MAX_DELAY
+        assignment_reward_per_rq = MAX_DELAY * 10
         assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
 
