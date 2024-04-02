@@ -1286,8 +1286,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         necessary_keys = getNecessaryKeys(assigned_key, necessary_ob_rids)
         assigned_v2rb = self.rtv_obj.get(assigned_key)
         if assigned_v2rb is None:
-            LOG.warning("assigned rtv-key not created after build! {} for vid {}".format(assigned_key, vid))
-            LOG.warning("external assignments: {}".format({x: (str(y[0]), str(y[1])) for x, y in self.external_assignments.items()}))
+            #LOG.warning("assigned rtv-key not created after build! {} for vid {}".format(assigned_key, vid))
+            #LOG.warning("external assignments: {}".format({x: (str(y[0]), str(y[1])) for x, y in self.external_assignments.items()}))
             assigned_plan = self.external_assignments[vid][1]
             # try:
             #     feasible = assigned_plan.update_plan(self.veh_objs[vid], self.sim_time, self.routing_engine, keep_time_infeasible = True)
@@ -1329,7 +1329,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 LOG.debug("create ob v2rb: {} from {} | {} | {}".format(rtv_key, assigned_key, necessary_ob_rids, locked_rids))
                 assigned_v2rb = self.rtv_obj.get(assigned_key)
                 if assigned_v2rb is None:
-                    LOG.warning("assigned rtv-key not here to create OBV2RB! {}".format(assigned_key))
+                    #LOG.warning("assigned rtv-key not here to create OBV2RB! {}".format(assigned_key))
                     assigned_plan = self.external_assignments[vid][1]
                     # try:
                     #     feasible = assigned_plan.update_plan(self.veh_objs[vid], self.sim_time, self.routing_engine, keep_time_infeasible = True)
