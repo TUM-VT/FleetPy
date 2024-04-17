@@ -723,7 +723,9 @@ def get_directory_dict(scenario_parameters, list_operator_dicts, abs_fleetpy_dir
             if fc_type is not None and fc_t_res is not None:
                 dirs[op_key][G_DIR_FC] = os.path.join(dirs[G_DIR_DATA], "demand", demand_name, "aggregated", op_zone_name, str(fc_t_res))
         if op_dict.get(G_RA_RES_PRE_COMP_FOLDER):
+            rq_f = scenario_parameters[G_RQ_FILE]
+            rq_f_basename = rq_f.split(".")[0]
             if dirs.get(op_key) is None:
                 dirs[op_key] = {}
-            dirs[op_key][G_RA_RES_PRE_COMP_FOLDER] = os.path.join(dirs[G_DIR_FCTRL], "offline_reservation_solution", demand_name, op_dict.get(G_RA_RES_PRE_COMP_FOLDER))
+            dirs[op_key][G_RA_RES_PRE_COMP_FOLDER] = os.path.join(dirs[G_DIR_FCTRL], "offline_reservation_solution", op_dict.get(G_RA_RES_PRE_COMP_FOLDER), rq_f_basename)
     return dirs
