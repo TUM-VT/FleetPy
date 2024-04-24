@@ -1,5 +1,7 @@
 # FleetPy
-Simulation framework to model and control the tasks of vehicle fleets (routing, user-assignment, charging, ...)
+**FleetPy** is a simulation framework to model and control the tasks of vehicle fleets (routing, user-assignment, charging, ...)
+
+This README file just serves as a short description. Please check a more detailed explanation at our [Wiki](https://github.com/TUM-VT/FleetPy/wiki).
 
 ## Features
 
