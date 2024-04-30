@@ -111,9 +111,11 @@ class PlanRequest:
         self.real_duration_boarding = rq.duration_pudo_boarding
         self.real_duration_alighting = rq.duration_pudo_alighting
         self.insertion_with_heterogenous_PUDO_duration = rq.insertion_with_heterogenous_PUDO_duration # Not needed here, but in the insertion.py file
-        self.accuracy_black_box_PUDO_duration = rq.accuracy_black_box_PUDO_duration # Not needed here, but in the insertion.py file
-        self.predicted_duration_boarding = self.__durationPUDOprediction_model(self.real_duration_boarding, self.accuracy_black_box_PUDO_duration) # Initialized in this step to make sure that the same value is used in every iteration within insertion.py
-        self.predicted_duration_alighting = self.__durationPUDOprediction_model(self.real_duration_alighting, self.accuracy_black_box_PUDO_duration)
+        if self.insertion_with_heterogenous_PUDO_duration:
+            self.max_rel_error_black_box_PUDO_duration = rq.max_rel_error_black_box_PUDO_duration # Not needed here, but in the insertion.py file
+            self.predicted_duration_boarding = self.__durationPUDOprediction_model(self.real_duration_boarding, self.max_rel_error_black_box_PUDO_duration) # Initialized in this step to make sure that the same value is used in every iteration within insertion.py
+            self.predicted_duration_alighting = self.__durationPUDOprediction_model(self.real_duration_alighting, self.max_rel_error_black_box_PUDO_duration)
+            LOG.info("") # Santiago: how to save info in the log file
 
 
     def __str__(self):
@@ -258,20 +260,20 @@ class PlanRequest:
     def is_parcel(self) -> bool:
         return False
     
-    def __durationPUDOprediction_model(self, real_duration : int, accuracy_black_box_PUDO_duration) -> int:
+    def __durationPUDOprediction_model(self, real_duration : int, max_rel_error_black_box_PUDO_duration) -> int:
         """ This function is used to predict the duration of the PUDO process based on a "black box model.
-            The black box model is a simple model that builds an interval around the real duration of the PUDO process with +/- accuracy_black_box_PUDO_duration*real_duration.
+            The black box model is a simple model that builds an interval around the real duration of the PUDO process with +/- max_rel_error_black_box_PUDO_duration*real_duration.
             Then, a random number is drawn from that interval.
             The value is rounded to represent the duration in seconds (to keep consistency with the temporal granularity of the simulation)." 
         :param real_duration: the real duration of the PUDO process [s]
-        :param accuracy_black_box_PUDO_duration: the accuracy of the black box model [percentage]
+        :param max_rel_error_black_box_PUDO_duration: the max_rel_error of the black box model [percentage]
         :return: the predicted duration of the PUDO process [s]"""
         
-        # Sample a value from the interval: real_duration +/- [1-accuracy_black_box_PUDO_duration/100]*accuracy_black_box_PUDO_duration 
-        lower_bound = real_duration - ((1-accuracy_black_box_PUDO_duration/100) * real_duration)
-        upper_bound = real_duration + ((1-accuracy_black_box_PUDO_duration/100) * real_duration)
+        # Sample a value from the interval: real_duration +/- [1-max_rel_error_black_box_PUDO_duration/100]*max_rel_error_black_box_PUDO_duration 
+        lower_bound = real_duration - ((1-max_rel_error_black_box_PUDO_duration/100) * real_duration)
+        upper_bound = real_duration + ((1-max_rel_error_black_box_PUDO_duration/100) * real_duration)
 
-        return round(random.uniform(lower_bound, upper_bound))
+        return random.uniform(lower_bound, upper_bound)
 
 class SoftConstraintPlanRequest(PlanRequest):
     """This class of PlanRequests has to be utilized for FleetControl classes with soft time windows, i.e.

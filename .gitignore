@@ -4,7 +4,7 @@ run_private*.py
 # data directories except for example
 !data/demand/example_demand
 !data/demand/example_parcel_demand
-data/demand/stochastic_PUDO_duration/*
+data/demand/stochastic_PUDO_duration/matched/*
 !data/demand/stochastic_PUDO_duration/specificationFormat.txt
 !data/demand/stochastic_PUDO_duration/Stochastic_Data_generation.ipynb
 !data/demand/stochastic_PUDO_duration/Deriving new parameters for the log normal distributions.R
@@ -179,3 +179,4 @@ dmypy.json
 .pyre/
 data/networks/example_network/downloaded_map.tif
 studies/stochastic_PUDO_duration/Concept of the study.pdf
+data/demand/validateMajid_easyridesc1/*
