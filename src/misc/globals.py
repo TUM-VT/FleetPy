@@ -90,11 +90,12 @@ G_PT_STATION_F = "station_file"
 G_PT_ALIGNMENT_F = "alignment_file"
 G_PT_TERMINUS_ID = "terminus_id"
 G_PT_DEMAND_DIST = "demand_dist_file"
-G_PT_REG_VEH = "pt_regular_veh"
+# G_PT_REG_VEH = "pt_regular_veh"
 G_PT_N_ZONES = "pt_n_zones"
 G_PT_ZONE_MIN_DETOUR_TIME = "pt_zone_min_detour_time"
+G_PT_ZONE_MAX_DETOUR_TIME = "pt_zone_max_detour_time"
 G_PT_REG_HEADWAY = "pt_regular_headway"
-G_PT_ZONAL_HEADWAY = "pt_zonal_headway"
+# G_PT_ZONAL_HEADWAY = "pt_zonal_headway"
 G_PT_RL_REWARD_TIME_WINDOW = "pt_rl_reward_time_window"
 G_PT_RL_REWARD_SAT_DEMAND = "pt_rl_reward_satisfied_demand"
 G_PT_RL_REWARD_WAIT_TIME = "pt_rl_reward_wait_time"
@@ -139,6 +140,7 @@ G_MC_C_D_PV = "private_vehicle_full_costs_per_m"
 
 # traveler specific attributes
 G_WALKING_SPEED = "walking_speed"
+G_MAX_WALKING_DIST = "max_walking_dist"
 
 # -> inter-modal travellers
 G_IM_MIN_MOD_DISTANCE = "min_IM_MOD_distance"

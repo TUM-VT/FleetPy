@@ -8,26 +8,35 @@ import src.misc.config as config
 from src.misc.init_modules import load_simulation_environment
 from src.RLBatchOfferSimulation import RLBatchOfferSimulation
 
+from typing import List
+import logging
+
+LOG = logging.getLogger(__name__)
+
 class FleetPyEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self, RL_config):
         super(FleetPyEnv, self).__init__()
-        use_case = RL_config["use_case"]
+        use_case: str = RL_config["use_case"]
         action_no = RL_config["action_no"]
         start_config_i = RL_config["start_config_i"]
-        self.use_case = use_case
+        cc_file = RL_config["cc_file"]
+        sc_file = RL_config["sc_file"]
+        self.use_case: str = use_case
         self.action_no = action_no
         # Initialize your FleetPy simulation here using the config argument if necessary
         scs_path = os.path.join(os.path.dirname(__file__), "studies", "SoDZonal", "scenarios")
 
-        cc = os.path.join(scs_path, "constant_config_pool.csv")
-        if use_case == "train" or use_case == "baseline":
+        cc = os.path.join(scs_path, cc_file)
+        # sc = os.path.join(scs_path, "zonal_RL.csv")
+        sc = os.path.join(scs_path, sc_file)
+        if use_case == "train" or use_case == "baseline" or use_case=="zbaseline" or use_case.endswith("result"):
             log_level = "info"
-            sc = os.path.join(scs_path, "zonal_RL.csv")
-        elif use_case == "test" or use_case == "baseline_test":
+            # sc = os.path.join(scs_path, "zonal_RL.csv")
+        elif use_case == "test" or use_case == "baseline_test" or use_case=="zbaseline_test":
             log_level = "debug"
-            sc = os.path.join(scs_path, "example_test.csv")
+            # sc = os.path.join(scs_path, "example_test.csv")
 
 
         constant_cfg = config.ConstantConfig(cc)
@@ -41,7 +50,7 @@ class FleetPyEnv(gym.Env):
         constant_cfg["log_level"] = log_level
         constant_cfg["keep_old"] = False
 
-        if use_case == "train" or use_case == "baseline":
+        if use_case == "train" or use_case == "baseline" or use_case=="zbaseline":
             constant_cfg["skip_file_writing"] = 1
         else:
             constant_cfg["skip_file_writing"] = 0
@@ -62,7 +71,8 @@ class FleetPyEnv(gym.Env):
         # Define action and observation space
         # They must be gym.spaces objects
         # Example when assuming discrete actions:
-        self.n_action = 3  # number of actions
+        self.n_action = 2+1+1  # number of actions (2 zones, do nothing, regular)
+        # self.n_action = 2 + 1  # number of actions (2 zones, do nothing)
         # self.action_space = spaces.Discrete(self.n_action)  # Adjust N to your number of actions
         self.n_action_boundary = (2-1) * 2 + 1 # move a zone boundary left/right or do nothing
         if action_no == 2:
@@ -72,13 +82,23 @@ class FleetPyEnv(gym.Env):
         else:
             raise ValueError("Invalid action number")
         # Example for observation space that is an array:
-        self.n_state = 13
+        self.n_state = 19
+        # self.n_state = 22
         # state_val_low = np.zeros(self.n_state)
         # state_val_high = np.array([500,10000,500,5,500,10000,500,50,50,500,500])
         self.observation_space = spaces.Box(low=-10, high=10, shape=(self.n_state,), dtype=np.float32)  # Adjust shape and range
 
-        self.n_zone = 2
-        self.last_dept = [0] * self.n_zone
+        self.n_zone = self.SF.scenario_parameters[G_PT_N_ZONES]
+
+        self.last_dept = [0] * (self.n_zone + 3)
+        # if self.use_case.startswith("baseline"):
+        #     self.last_dept[-1] = self.SF.start_time - 5 * 60
+        if self.use_case.startswith("zbaseline"):
+            self.last_dept[0] = self.SF.start_time - 15 * 60
+            self.last_dept[1] = self.SF.start_time - 5 * 60
+
+        self.n_SAV_avail = 4
+        self.zonal_regular_headway_s = self.SF.scenario_parameters["pt_regular_headway"]
 
 
     def step(self, action):
@@ -95,28 +115,76 @@ class FleetPyEnv(gym.Env):
         # while zonal_veh_deployed is None and self.sim_time <= self.SF.end_time:
 
         if self.action_no == 1:
-            action = action, self.n_action_boundary-1
+            action_z = action
+        # if action_z > self.n_zone:
+        #     action_z = -1
 
-        if self.use_case == "baseline" or self.use_case == "baseline_test":
-            zonal_headway = 8
+        # regular_headway = 5
+        regular_headway_s = 5 * 60
+
+        # regular_penalty = 0
+        if self.use_case.startswith("baseline"):
+            # for z in range(self.n_zone + 1):
+            #     self.last_dept[z] += 1
+
+            action_z = self.n_zone
+            z = -1
+            if self.last_dept[z] + regular_headway_s <= self.sim_time:
+                action_z = z
+            # if action_z != self.n_zone:
+            #     self.last_dept[action_z] = self.sim_time
+
+        elif self.use_case.startswith("zbaseline"):
+            # regular_headway_s = 15 * 60
+            zonal_headway_s = 20 * 60
+
+            # for z in range(self.n_zone + 1):
+            #     self.last_dept[z] += 1
+
             action_z = self.n_zone
             for z in range(self.n_zone):
-                self.last_dept[z] += 1
-            for z in range(self.n_zone):
-                if self.last_dept[z] >= zonal_headway:
+                if self.last_dept[z] + zonal_headway_s <= self.sim_time:
                     action_z = z
-                    self.last_dept[z] = 0
                     break
-            action = action_z, self.n_action_boundary-1
+            z = -1
+            if self.last_dept[z] + self.zonal_regular_headway_s <= self.sim_time:
+                action_z = z
+            # if action_z != self.n_zone:
+            #     self.last_dept[action_z] = self.sim_time
 
-        observation, reward, done, truncated, info, zonal_veh_deployed = self.SF.step(self.sim_time, action)
+        else:
+            # if action_z > self.n_zone:
+            #     action_z = -1
+            z = -1
+            if self.last_dept[z] + self.zonal_regular_headway_s <= self.sim_time:
+                # if action_z != -1:
+                #     regular_penalty = 5
+                action_z = z
+
+        action = action_z, self.n_action_boundary-1
+        if action_z != self.n_zone:
+            # print(action_z)
+            z = action_z
+            # if z > self.n_zone:
+            #     z = -1
+            self.last_dept[z] = self.sim_time
+        # observation, reward, done, truncated, info, zonal_veh_deployed = self.SF.step(self.sim_time, action)
             # accumulated_reward = reward + accumulated_reward / self.gamma
 
-        # skip first 30 minute reward (initialization)
-        if self.sim_time <= self.SF.start_time + 60*30:
-            reward = 0
-
+        observation, reward, done, truncated, info, zonal_veh_deployed, n_SAV_avail = self.SF.step(self.sim_time, action)
+        # reward -= regular_penalty
+        self.n_SAV_avail = n_SAV_avail
         self.sim_time += self.SF.time_step
+        # fast forward till next dispatchment
+        # while self.sim_time % regular_headway_s != 0 and not done:
+        #     action = self.n_zone, self.n_action_boundary-1
+        #     if self.sim_time % regular_headway_s != 0 and not done:
+        #         observation, reward, done, truncated, info, zonal_veh_deployed = self.SF.step(self.sim_time, action)
+        #         self.sim_time += self.SF.time_step
+
+        # skip first 60 minute reward (initialization)
+        if self.sim_time <= self.SF.start_time + 60*60:
+            reward = 0
 
         return observation, reward, done, truncated, info
 
@@ -145,9 +213,15 @@ class FleetPyEnv(gym.Env):
         self.SF.run(RL_init=True)
         self.sim_time = self.SF.start_time
 
-        observation, reward, done, truncated, info, zonal_veh_deployed \
+        observation, reward, done, truncated, info, zonal_veh_deployed, _ \
             = self.SF.step(self.sim_time, (self.n_action-1, self.n_action_boundary-1)) # do nothing at first timestep
-        self.sim_time += self.SF.time_step
+        # self.sim_time += self.SF.time_step
+        self.n_SAV_avail = 4
+
+        self.last_dept = [0] * (self.n_zone + 3)
+        if self.use_case.startswith("zbaseline"):
+            self.last_dept[0] = self.SF.start_time - 15 * 60
+            self.last_dept[1] = self.SF.start_time - 5 * 60
 
         # TODO: look into truncated setting
 
@@ -161,3 +235,20 @@ class FleetPyEnv(gym.Env):
         # Perform any cleanup when the environment is closed
         # TODO: carry out metric evaluation
         pass
+
+    def action_masks(self) -> List[bool]:
+        # return action masks
+
+        # check regular time
+        z = -1
+        if self.last_dept[z] + self.zonal_regular_headway_s <= self.sim_time:
+            masks = [False] * (self.n_action - 1) + [True]  # represent sending regular vehicles
+        else:
+            masks = [True] * (self.n_action - 1) + [False]
+
+            no_SAV_avail = self.n_SAV_avail
+            if no_SAV_avail == 0:
+                for i in range(self.n_zone):
+                    masks[i] = False
+        LOG.debug(f"{self.sim_time} Action masks: {masks}")
+        return masks

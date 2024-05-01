@@ -76,7 +76,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                                                               latest_pickup_time_dict=new_latest_pickup_time_dict, change_nr_pax=change_nr_pax,duration=stop_duration,
                                                               change_nr_parcels=old_pstop.get_change_nr_parcels(),
                                                               earliest_start_time=old_pstop.direct_earliest_start_time, earliest_end_time=old_pstop.direct_earliest_end_time,
-                                                              latest_start_time=old_pstop.direct_latest_start_time)
+                                                              latest_start_time=old_pstop.direct_latest_start_time, fixed_stop=old_pstop.is_fixed_stop())
             #LOG.debug(f"test first if boarding: {next_o_plan}")
             is_feasible = next_o_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
             if is_feasible:
@@ -153,7 +153,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                                                                   latest_pickup_time_dict=lpt_dict.copy(), change_nr_pax=change_nr_pax, change_nr_parcels=old_pstop.get_change_nr_parcels(),
                                                                   duration=stop_duration,
                                                                   earliest_start_time=old_pstop.direct_earliest_start_time, earliest_end_time=old_pstop.direct_earliest_end_time,
-                                                                  latest_start_time=old_pstop.direct_latest_start_time)
+                                                                  latest_start_time=old_pstop.direct_latest_start_time, fixed_stop=old_pstop.is_fixed_stop())
 
                 is_feasible = next_d_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, init_plan_state)
                 if is_feasible:
@@ -246,14 +246,14 @@ def simple_remove(veh_obj : SimulationVehicle, veh_plan : VehiclePlan, remove_ri
             else:
                 rid_found_in_plan_flag = True
                 change_nr_pax += rq_dict[rid].nr_pax
-        if len(new_boarding_dict.keys()) > 0 or ps.is_locked() or ps.is_locked_end():
+        if len(new_boarding_dict.keys()) > 0 or ps.is_locked() or ps.is_locked_end() or ps.is_fixed_stop():
             dur, _ = ps.get_duration_and_earliest_departure()
             # new_ps = BoardingPlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
             #                           earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
             #                           change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked())
             new_ps = PlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
                                       earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
-                                      change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked(), locked_end=ps.is_locked_end())
+                                      change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked(), locked_end=ps.is_locked_end(), fixed_stop=ps.is_fixed_stop())
             new_plan_list.append(new_ps)
     #LOG.info("simple remove: {}".format([str(x) for x in new_plan_list]))
     external_pax_info = veh_plan.pax_info.copy()

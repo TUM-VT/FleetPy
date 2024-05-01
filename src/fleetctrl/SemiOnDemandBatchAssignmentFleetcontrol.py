@@ -808,6 +808,8 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         self.repo = None
         LOG.info(f"SoD finish first init {len(self.PT_lines)}")
 
+        self.max_walking_dist = scenario_parameters.get(G_MAX_WALKING_DIST, 0)
+
     def return_vehicles_to_initialize(self) -> Dict[int, str]:
         """
         return vehicles that have to be initialized in the fleetsimulation class
@@ -832,7 +834,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         LOG.info(f"SoD finish continue_init {len(self.PT_lines)}")
 
     def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, assigned_charging_task=None,
-                            add_arg=None):
+                            add_arg=None, force_ignore_lock_and_board=False):
         """ this method should be used to assign a new vehicle plan to a vehicle
 
         WHEN OVERWRITING THIS FUNCTION MAKE SURE TO CALL AT LEAST THE LINES BELOW (i.e. super())
@@ -849,7 +851,8 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         :type add_arg: not defined here
         """
         super().assign_vehicle_plan(veh_obj, vehicle_plan, sim_time, force_assign=force_assign,
-                                    assigned_charging_task=assigned_charging_task, add_arg=add_arg)
+                                    assigned_charging_task=assigned_charging_task, add_arg=add_arg,
+                                    force_ignore_lock_and_board=force_ignore_lock_and_board)
         # new_vrl = vehicle_plan.build_VRL(veh_obj, self.rq_dict, charging_management=self.charging_management)
         # LOG.debug("init plan")
         # for ps in vehicle_plan.list_plan_stops:
@@ -983,6 +986,21 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
             self._create_rejection(prq, sim_time)
             return
 
+        # decline request based on probability of walking distance
+        total_walking_dist = walking_dist_dict["origin"] + walking_dist_dict["destination"]
+        total_walking_dist *= 1000 # convert to meters
+
+        # decide probability based on walking distance
+        prob_accept = 1 - total_walking_dist / self.max_walking_dist
+
+        LOG.debug(f"Basic request: {rq.rid} ; walking distance: {total_walking_dist} | prob {prob_accept:2f}")
+        # decide if to accept the offer
+        if np.random.rand() > prob_accept:
+            LOG.debug(f"Basic request: {rq.rid} ; declined offer due to too long walking distance")
+            self._create_rejection(prq, sim_time)
+            return
+
+
         self.new_requests[rid_struct] = 1
         self.rq_dict[rid_struct] = prq
 
@@ -1044,16 +1062,24 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         :param simulation_time: current simulation time
         :type simulation_time: float
         """
+
         assigned_vid = self.rid_to_assigned_vid.get(rid, None)
+        # if rid==9355:
+        #     LOG.debug(f"9355: {assigned_vid}")
         if assigned_vid is not None:
             veh_obj = self.sim_vehicles[assigned_vid]
             assigned_plan = self.RPBO_Module.get_current_assignment(assigned_vid)
             new_best_plan = self.RPBO_Module.get_vehicle_plan_without_rid(veh_obj, assigned_plan, rid, simulation_time)
+            # force_ignore_lock_and_board - to avoid the lock and board check
             if new_best_plan is not None:
-                self.assign_vehicle_plan(veh_obj, new_best_plan, simulation_time, force_assign=True)
+                self.assign_vehicle_plan(veh_obj, new_best_plan, simulation_time, force_assign=True,
+                                         # force_ignore_lock_and_board=True
+                                         )
             else:
                 assigned_plan = VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])
-                self.assign_vehicle_plan(veh_obj, assigned_plan, simulation_time, force_assign=True)
+                self.assign_vehicle_plan(veh_obj, assigned_plan, simulation_time, force_assign=True,
+                                         # force_ignore_lock_and_board=True
+                                         )
         super().user_cancels_request(rid, simulation_time)
 
     def _call_time_trigger_request_batch(self, simulation_time):
@@ -1139,6 +1165,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
             rq.set_service_offered(offer)
         else:
             offer = self._create_rejection(rq, simulation_time)
+
         return offer
 
     def _get_offered_time_interval(self, rid):

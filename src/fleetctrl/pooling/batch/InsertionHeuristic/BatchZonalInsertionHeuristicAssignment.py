@@ -38,13 +38,11 @@ class BatchZonalInsertionHeuristicAssignment(BatchInsertionHeuristicAssignment):
 
 
         self.sim_time = sim_time
-        if len(veh_objs_to_build) != 0:
-            raise NotImplementedError
+        # if len(veh_objs_to_build) != 0:
+        #     raise NotImplementedError
         for rid in list(self.unassigned_requests.keys()):
             if self.rid_to_consider_for_global_optimisation.get(rid) is None:
                 continue
-            # if rid==10082:
-            #     print("rid 10082")
 
             vid_to_exclude = {}
             # check flexible portion time to add vehicles to excluded_vid
@@ -54,8 +52,8 @@ class BatchZonalInsertionHeuristicAssignment(BatchInsertionHeuristicAssignment):
             # assert rq_t_pu_earliest > 0
             # rq_t_pu_latest = self.fleetcontrol.rq_dict[rid].t_pu_latest
             # assert rq_t_pu_latest > 0
-            # if rid == 9992:
-            #     print("rid 9344")
+            # if rid == 10755:
+            #     print("rid 7571")
             #
             # for vid in self.fleetcontrol.veh_plans.keys():
             #     if rq_origin_fixed:
@@ -78,15 +76,20 @@ class BatchZonalInsertionHeuristicAssignment(BatchInsertionHeuristicAssignment):
                 # if pick-up & drop-off in different zones of flex routes, then ignore zonal vehicles
                 elif rq_zone == -1:
                     for vid in self.fleetcontrol.veh_plans.keys():
-                        if PT_line.veh_zone_assignment[vid] != -1:
+                        if vid not in PT_line.veh_zone_assignment.keys(): # ignore vehicles not assigned to a zone
+                            vid_to_exclude[vid] = 1
+                        elif PT_line.veh_zone_assignment[vid] != -1:
                             vid_to_exclude[vid] = 1
                 # otherwise, ignore all zonal vehicles but one zone
                 else:
                     for vid in self.fleetcontrol.veh_plans.keys():
-                        veh_zone = PT_line.veh_zone_assignment[vid]
-                        if veh_zone != rq_zone and veh_zone != -1: # include specific zonal & regular vehicles
-                        # if veh_zone != max(pu_zone, do_zone): # ignore regular vehicles too
+                        if vid not in PT_line.veh_zone_assignment.keys(): # ignore vehicles not assigned to a zone
                             vid_to_exclude[vid] = 1
+                        else:
+                            veh_zone = PT_line.veh_zone_assignment[vid]
+                            if veh_zone != rq_zone and veh_zone != -1: # include specific zonal & regular vehicles
+                            # if veh_zone != max(pu_zone, do_zone): # ignore regular vehicles too
+                                vid_to_exclude[vid] = 1
 
 
             selected_veh_list = [veh for veh in self.fleetcontrol.sim_vehicles if veh.vid not in vid_to_exclude]

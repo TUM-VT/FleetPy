@@ -172,3 +172,26 @@ class RLBatchOfferSimulation(BatchOfferSimulation):
         print(prt_str)
         LOG.info(prt_str)
         self._end_realtime_plot()
+
+
+    def record_stats(self, force=True):
+        """This method records the stats at the end of the simulation."""
+        super().record_stats(force=force)
+
+        if self.skip_output:
+            return
+
+        output_dir = self.dir_names[G_DIR_OUTPUT]
+        outputfile = os.path.join(output_dir, "3-0_RL_action_time.csv")
+        for op_id, op_obj in enumerate(self.operators):
+            op_obj.output_assigned_zone_time(outputfile)
+        outputfile = os.path.join(output_dir, "3-0_n_SAV_zone.csv")
+        for op_id, op_obj in enumerate(self.operators):
+            op_obj.output_no_SAV_zone_assigned_time(outputfile)
+        outputfile = os.path.join(output_dir, "3-0_RL_state_time.csv")
+        for op_id, op_obj in enumerate(self.operators):
+            op_obj.output_state_df(outputfile)
+
+        # outputfile = os.path.join(output_dir, "3-0_RL_action_time.csv")
+        # for op_id, op_obj in enumerate(self.operators):
+        #     op_obj.output_action_time(outputfile)
