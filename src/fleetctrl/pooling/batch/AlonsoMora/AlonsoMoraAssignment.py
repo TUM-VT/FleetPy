@@ -2,6 +2,7 @@ from __future__ import annotations
 import logging
 
 import time
+from tkinter import N
 import numpy as np
 from functools import cmp_to_key
 from typing import Callable, Dict, List, Any, Tuple, TYPE_CHECKING
@@ -146,6 +147,19 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         self.untracked_boarding_detected = {}
 
         self.current_best_cfv = 0 #stores the global cost function value from last optimisation
+        
+        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("RV_computation_time")
+        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("Update_V2RB_computation_time")
+        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("Compute_V2RB_computation_time")
+        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("Solve_assignment_computation_time")
+        
+        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_V2RBs_at_start")
+        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_V2RBs_after_update")
+        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_V2RBs_after_build")
+        
+        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_Rqs_unassigned")
+        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_Rqs_assigned")
+        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_Rqs_locked")
 
     def register_parallelization_manager(self, alonsomora_parallelization_manager : ParallelizationManager):
         LOG.info("AM register parallelization manager")
@@ -192,6 +206,13 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         # for rid, prq in self.active_requests.items():
         #     # LOG.debug("rid: {}".format(prq))
         # LOG.info("computeRR")
+        n_rqs_lock = len(self.r2v_locked.keys())
+        n_rqs_unassinged = len(self.unassigned_requests.keys())
+        n_rqs_assigned = len(self.active_requests.keys()) - n_rqs_lock - n_rqs_unassinged
+        self.fleetcontrol._add_to_dynamic_fleetcontrol_output(sim_time, {
+            "N_Rqs_unassigned" : n_rqs_unassinged, "N_Rqs_assigned" : n_rqs_assigned, "N_Rqs_locked" : n_rqs_lock
+            })
+        
         t_setup = time.time()
         
         # LOG.info("computeRV")
@@ -254,6 +275,12 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         for k, v in self.optimisation_solutions.items():
             sum_obj += self.rtv_costs[v]
         LOG.info(f"Objective value at time {sim_time} for AM: {sum_obj}")
+        
+        dyn_out_dict = {
+            "RV_computation_time" : times["rv"],
+            "Solve_assignment_computation_time" : times["opt"],
+        }
+        self.fleetcontrol._add_to_dynamic_fleetcontrol_output(sim_time, dyn_out_dict)
 
 
     def add_new_request(self, rid : Any, prq : PlanRequest, consider_for_global_optimisation : bool = True, is_allready_assigned : bool = False):
@@ -873,13 +900,30 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
 
     def _computeV2RBdatabase(self):
         """ this function computes the V2RB database for all vehicles """
-        #if self.fleetcontrol is not None:
-            # LOG.debug("alonso computeV2RBDataBase: at {}".format(self.sim_time))
-            # # LOG.debug("rv connections: {}".format(self.v2r))
+        
         if not self.alonso_mora_parallelization_manager:
+            t_update = 0
+            t_build = 0
+            N_v2rbs_before = 0
+            N_v2rbs_after_update = 0
+            N_v2rbs_after_build = 0
             for vid, veh_obj in self.veh_objs.items():
+                N_v2rbs_before += len(self.rtv_v.get(vid, {}))
+                t = time.time()
                 self._updateVehicleDataBase(vid)
+                t_update += time.time() - t
+                N_v2rbs_after_update += len(self.rtv_v.get(vid, {}))
+                t = time.time()
                 self._buildTreeForVid(vid)
+                t_build += time.time() - t
+                N_v2rbs_after_build += len(self.rtv_v.get(vid, {}))
+            self.fleetcontrol._add_to_dynamic_fleetcontrol_output(self.sim_time, {
+                "Update_V2RB_computation_time" : t_update,
+                "Compute_V2RB_computation_time" : t_build,
+                "N_V2RBs_at_start" : N_v2rbs_before,
+                "N_V2RBs_after_update" : N_v2rbs_after_update,
+                "N_V2RBs_after_build" : N_v2rbs_after_build
+            })
         else:
             new_v2rbs_all = []
             batch_size = max(float(np.floor(len(self.veh_objs)/self.alonso_mora_parallelization_manager.number_cores/5.0)), 1)
