@@ -237,9 +237,12 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     elif func_key == "distance_and_user_times_man":
         traveler_vot = vr_control_func_dict["vot"]
         distance_cost = vr_control_func_dict["dc"]
-        assignment_reward_per_rq = MAX_DISTANCE * distance_cost + MAX_DELAY * traveler_vot
-        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        assignment_reward_per_rq = vr_control_func_dict.get("arw", None)
+        if assignment_reward_per_rq is None:
+            assignment_reward_per_rq = MAX_DISTANCE * distance_cost + MAX_DELAY * traveler_vot
+            assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
+        reassignment_penalty = vr_control_func_dict.get("p_reassign", None)  # penalty for reassigning a request
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function combines the total driving costs and the value of customer time.
@@ -266,6 +269,14 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                 rq_time = rq_dict[rid].rq_time
                 drop_off_time = boarding_info_list[1]
                 sum_user_times += (drop_off_time - rq_time)
+                
+            # reassignment penalty
+            if reassignment_penalty is not None:
+                for rid in veh_plan.pax_info.keys():
+                    offer = rq_dict[rid].get_current_offer()
+                    if offer is not None and offer.get("vid") is not None and offer["vid"] != veh_obj.vid:
+                        LOG.debug(f" -> reassigning request {rid} from {offer['vid']} to {veh_obj.vid} with penalty {reassignment_penalty}")
+                        assignment_reward -= reassignment_penalty
             # vehicle costs are taken from simulation vehicle (cent per meter)
             # value of travel time is scenario input (cent per second)
             # LOG.debug(f" -> obj eval: sum_dist {sum_dist} * distance_cost {distance_cost} + sum_user_times {sum_user_times} * traveler_vot {traveler_vot} - assignment_reward {assignment_reward}")

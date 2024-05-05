@@ -546,8 +546,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param assigned_vid: vehicle id, which is currently assigned to serve customer (none if none assigned)
         :param exceeds_former_time_windows: True: new time window is larger the old one, False otherwise
         """
-        if not exceeds_former_time_windows:
-            LOG.info("exceeds former time window alternative not implemented yet! rebuild!")
+        if not exceeds_former_time_windows: # time constraints are in dictionaries of planstops taht would have to be updated
+            LOG.debug("exceeds former time window alternative not implemented yet! rebuild!")
             exceeds_former_time_windows = True
         if exceeds_former_time_windows:
             v2rbs_2_keep = {}

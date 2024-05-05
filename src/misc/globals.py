@@ -126,6 +126,7 @@ G_OP_MAX_WT = "op_max_wait_time"
 G_OP_MAX_WT_2 = "op_max_wait_time_2"  # for linear decline in acceptence probability (BMW RP study)
 G_OP_OFF_TW = "op_offer_time_window"  # for fixing time window after accepting the amod offer (BMW RP study)
 G_OP_LOCK_VID = "op_lock_vid_assignment" # no re-assignment to other vehicle if false
+G_OP_LOCK_VID_TIME = "op_lock_vid_assignment_time" # time in seconds. if expected pu-time falls below this value, a vehicle is locked to a request
 G_OP_MAX_DTF = "op_max_detour_time_factor"
 G_OP_ADD_CDT = "op_add_constant_detour_time"
 G_OP_MAX_CDT = "op_max_constant_detour_time"
