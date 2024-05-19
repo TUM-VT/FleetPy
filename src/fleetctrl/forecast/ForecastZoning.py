@@ -118,3 +118,29 @@ class ForecastZoneSystem(ZoneSystem):
         :return: {}: zone -> zone -> forecast of trips
         :rtype: dict
         """
+        
+    def _get_relevant_forcast_intervals(self, t0, t1):
+        """
+        this function returns the forecast intervals in the aggregation level of self.fc_temp_resolution that are relevant for the time interval [t0, t1]
+        :param t0: start of forecast time horizon
+        :type t0: float
+        :param t1: end of forecast time horizon
+        :type t1: float
+        :return: list of forecast intervals (start, end, fraction of forecast interval in [t0, t1])
+        :rtype: list of 3-tuples
+        """
+        lower_end = t0//self.fc_temp_resolution * self.fc_temp_resolution
+        upper_end = t1//self.fc_temp_resolution * self.fc_temp_resolution + self.fc_temp_resolution
+        relevant_intervals = []
+        for int_start in range(int(lower_end), int(upper_end), int(self.fc_temp_resolution)):
+            int_end = int_start + self.fc_temp_resolution
+            if int_end <= t0:
+                continue
+            if int_start >= t1:
+                break
+            if int_start < t0:
+                int_start = t0
+            if int_end > t1:
+                int_end = t1
+            relevant_intervals.append((int_start, int_end, (int_end-int_start)/(t1-t0)))
+        return relevant_intervals

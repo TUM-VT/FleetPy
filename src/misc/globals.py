@@ -180,6 +180,7 @@ G_RA_FC_TYPE = "op_fc_type"
 G_RA_FC_TR = "op_temporal_resolution"
 G_RA_FC_FNAME = "op_forecast_f"
 G_RA_OP_CORR_M_F = "op_zone_correlation_file"   # this file be read by the operator for rebalancing
+G_RA_OP_REPO_ZONE_SYSTEM = "op_repositioning_zone_system"  # the zone system used by the operator for repositioning (i.e. defines repo centroids / currently only feasible for samplingbased repositioning)
 
 # reservation
 G_RA_RES_MOD = "op_reservation_module"
@@ -723,6 +724,11 @@ def get_directory_dict(scenario_parameters, list_operator_dicts, abs_fleetpy_dir
             fc_t_res = scenario_parameters.get(G_RA_FC_TR, None)
             if fc_type is not None and fc_t_res is not None:
                 dirs[op_key][G_DIR_FC] = os.path.join(dirs[G_DIR_DATA], "demand", demand_name, "aggregated", op_zone_name, str(fc_t_res))
+        if op_dict.get(G_RA_OP_REPO_ZONE_SYSTEM):
+            if dirs.get(op_key) is None:
+                dirs[op_key] = {}
+            op_zone_name = op_dict[G_RA_OP_REPO_ZONE_SYSTEM]
+            dirs[op_key][G_RA_OP_REPO_ZONE_SYSTEM] = os.path.join(dirs[G_DIR_DATA], "zones", op_zone_name, op_nw_name)
         if op_dict.get(G_RA_RES_PRE_COMP_FOLDER):
             rq_f = scenario_parameters[G_RQ_FILE]
             rq_f_basename = rq_f.split(".")[0]
