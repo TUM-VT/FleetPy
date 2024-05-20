@@ -530,7 +530,9 @@ class FleetControlBase(metaclass=ABCMeta):
         """
         # update network if own network is used
         if self._use_own_routing_engine:
-            self.routing_engine.update_network(simulation_time)
+            new_tt = self.routing_engine.update_network(simulation_time)
+            if new_tt:
+                self.inform_network_travel_time_update(simulation_time)
         # check whether reservation requests should be considered as immediate requests
         rids_to_reveal = self.reservation_module.reveal_requests_for_online_optimization(simulation_time)
         for rid in rids_to_reveal:
