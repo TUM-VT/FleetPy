@@ -732,6 +732,8 @@ def get_directory_dict(scenario_parameters, list_operator_dicts, abs_fleetpy_dir
         if op_dict.get(G_RA_RES_PRE_COMP_FOLDER):
             rq_f = scenario_parameters[G_RQ_FILE]
             rq_f_basename = rq_f.split(".")[0]
+            if "resoff" in rq_f_basename:
+                rq_f_basename = rq_f_basename.split("_resoff")[0]
             if dirs.get(op_key) is None:
                 dirs[op_key] = {}
             dirs[op_key][G_RA_RES_PRE_COMP_FOLDER] = os.path.join(dirs[G_DIR_FCTRL], "offline_reservation_solution", op_dict.get(G_RA_RES_PRE_COMP_FOLDER), rq_f_basename)
