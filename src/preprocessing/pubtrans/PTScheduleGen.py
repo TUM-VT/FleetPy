@@ -42,9 +42,6 @@ class PTScheduleGen:
         # Identify the route ID for the route
         route_id = routes[routes['route_short_name'] == str(route_no)]['route_id'].iloc[0]
 
-        # Filter trips for the route
-        # filtered_trips = trips[trips['route_id'] == route_id]
-
         # Filter shapes
         filtered_shapes = shapes[shapes['shape_id'].isin(shape_ids)]
 
@@ -75,10 +72,7 @@ class PTScheduleGen:
         self.line_alignment_meter = shapely.ops.transform(self.meter_project, self.alignment)
         self.route_length = self.line_alignment_meter.length / 1000  # convert to km
 
-        # Find the route ID for Route 193
-        # route_id = routes[routes['route_short_name'] == str(route_no)]['route_id'].iloc[0]
-
-        # Filter trips for Route 193
+        # Filter trips for Route
         trips_for_route = trips[trips['route_id'] == route_id]
 
         # Get stop IDs from the trips
@@ -158,9 +152,8 @@ class PTScheduleGen:
                 route_stop_seq_df.at[i, "arrival_time"] = (int(route_stop_seq_df.at[i, "arrival_time"] / 30) + 1) * 30
         self.route_stop_seq_df = route_stop_seq_df
 
-        # route_with_coords = route_193_df.drop(columns={'origin_lat', 'origin_lon', 'dest_lat', 'dest_lon'})
         route_with_coords = route_df[['route_departure', 'origin_stop', 'destination_stop']].copy()
-        # add the index of route_193_df as well
+        # add the index of route_df as well
         route_with_coords["index"] = route_df.index
         print(route_with_coords.head(5))
 
@@ -188,7 +181,7 @@ class PTScheduleGen:
         return (abs(max_len) - abs(x)) / abs(max_len)
 
     def output_demand(self, terminus_stop: str, demand_file: str, max_distance_km=0.5, seed=0, time_range=None,
-                      export_fixed_route=False, demand_factor=1.0, save_complete=False
+                      export_fixed_route=False, demand_factor=1.0, save_complete=False, offset_time=1200,
                       ) -> None:
         """
         Generate passenger demand for the route
@@ -200,6 +193,7 @@ class PTScheduleGen:
         :param export_fixed_route: whether to export the fixed route as well
         :param demand_factor: the demand factor
         :param save_complete: whether to save the complete demand file
+        :param offset_time: the offset time for the demand
         :return: None
         """
         route_with_coords = self.route_with_coords.copy()
@@ -264,8 +258,6 @@ class PTScheduleGen:
 
         # Iterate over each stop coordinate
         for index, stop in route_with_coords.iterrows():
-            # if index % 100 == 0:
-            #     print(index)
             # Find the nearest point and distance
             # TODO: find rtree nearest node
             origin_point = shapely.Point(stop['final_origin_lon'], stop['final_origin_lat'])
@@ -280,55 +272,10 @@ class PTScheduleGen:
 
         route_with_coords_origin_gdf = route_with_coords
 
-        # origin points first
-        # route_with_coords_origin_gdf = gpd.GeoDataFrame(route_with_coords, geometry=gpd.points_from_xy(
-        #     route_with_coords['final_origin_lon'], route_with_coords['final_origin_lat']))
-        # route_with_coords_origin_gdf.crs = self.network_crs
-        # # Prepare columns for the nearest node and distance
-        # route_with_coords_origin_gdf['origin_node'] = None
-        # route_with_coords_origin_gdf['origin_distance'] = None
-        #
-        # # Iterate over each stop coordinate
-        # for index, stop in route_with_coords_origin_gdf.iterrows():
-        #     # if index % 100 == 0:
-        #     #     print(index)
-        #     # Find the nearest point and distance
-        #     # TODO: find rtree nearest node
-        #     nearest_node, distance = self.find_nearest_and_distance(stop.geometry, self.network_nodes_crs)
-        #
-        #     # Store the information in the stop_coordinates GeoDataFrame
-        #     route_with_coords_origin_gdf.at[index, 'origin_node'] = nearest_node['node_index']
-        #     # route_with_coords_origin_gdf.at[index, 'origin_distance'] = distance * 111139
-        #     route_with_coords_origin_gdf.at[index, 'origin_distance'] = distance
-        #
-        # # destination points
-        # route_with_coords_origin_gdf = gpd.GeoDataFrame(route_with_coords_origin_gdf, geometry=gpd.points_from_xy(
-        #     route_with_coords_origin_gdf['final_destination_lon'],
-        #     route_with_coords_origin_gdf['final_destination_lat']))
-        # route_with_coords_origin_gdf.crs = self.network_crs
-        # # Prepare columns for the nearest node and distance
-        # route_with_coords_origin_gdf['destination_node'] = None
-        # route_with_coords_origin_gdf['destination_distance'] = None
-        #
-        # # Iterate over each stop coordinate
-        # for index, stop in route_with_coords_origin_gdf.iterrows():
-        #     # if index % 100 == 0:
-        #         # print(index)
-        #     # Find the nearest point and distance
-        #     nearest_node, distance = self.find_nearest_and_distance(stop.geometry, self.network_nodes_crs)
-        #
-        #     # Store the information in the stop_coordinates GeoDataFrame
-        #     route_with_coords_origin_gdf.at[index, 'destination_node'] = nearest_node['node_index']
-        #     # route_with_coords_origin_gdf.at[index, 'destination_distance'] = distance * 111139
-        #     route_with_coords_origin_gdf.at[index, 'destination_distance'] = distance
-
-        # randomly offset route_departure by +-600
-        offset_time = 1200
-        route_with_coords_origin_gdf["route_departure"] = route_with_coords_origin_gdf[
-                                                              "route_departure"] + np.random.randint(-offset_time,
-                                                                                                     offset_time,
-                                                                                                     route_with_coords_origin_gdf.shape[
-                                                                                                         0])
+        # randomly offset route_departure time
+        route_with_coords_origin_gdf["route_departure"] = \
+            route_with_coords_origin_gdf["route_departure"] + \
+            np.random.randint(-offset_time, offset_time, route_with_coords_origin_gdf.shape[0])
         route_with_coords_origin_gdf.sort_values(by=["route_departure"], inplace=True)
 
         passenger_demand = route_with_coords_origin_gdf[
@@ -379,16 +326,6 @@ class PTScheduleGen:
         gdf.to_file(os.path.join(output_path, file_name), driver='GeoJSON')
         print("Alignment saved to {}".format(os.path.join(output_path, file_name)))
 
-    # Function to find the nearest point
-    # def find_nearest_and_distance(self, input_point: shapely.Point, gdf: gpd.GeoDataFrame):
-    #     # Find the nearest point
-    #     nearest_geom = nearest_points(input_point, gdf.unary_union)[1]
-    #     nearest_point = gdf[gdf.geometry == nearest_geom].iloc[0]
-    #
-    #     # Calculate distance
-    #     distance = input_point.distance(nearest_geom)
-    #
-    #     return nearest_point, distance
     def find_nearest_and_distance(self, input_point: shapely.Point, gdf, input_crs="EPSG:4326"):
         """
         Find the nearest node and distance
@@ -448,40 +385,8 @@ class PTScheduleGen:
         """
 
         route_stop_seq_df = self.route_stop_seq_df.copy()
-        # calculate the number of vehicles required
-        # journey_time = max(route_stop_seq_df["arrival_time"])
-        # n_veh_req = journey_time / headway / 3600
 
-        # turnaround_time = 10 / 60  # h
-        # flex_buffer = headway * 3600 * n_veh - journey_time - turnaround_time
-
-        # create schedules.csv
-
-        # TODO: only copy one run, instead of every runs
         schedules_df = pd.DataFrame()
-        # t_start = 0
-        # t_end = 3600 * 24  # 24 hours
-        # t = t_start
-        # trip_id = 0
-        # veh_id = 0
-        # while t < t_end:
-        #     # print(t)
-        #     # check if previous vehicle is still in use (i.e., schedules_df.loc[schedules_df["line_vehicle_id"] == veh_id, "departure"].max() > t)
-        #     if (len(schedules_df) > 0 and veh_id in schedules_df["line_vehicle_id"].unique()
-        #             and schedules_df.loc[schedules_df["line_vehicle_id"] == veh_id, "departure"].max() > t):
-        #         raise Exception("Vehicle {} is still in use at {}".format(veh_id, t))
-        #
-        #     new_rows = route_stop_seq_df[["arrival_time", "index"]].rename(
-        #         columns={"arrival_time": "departure", "index": "station_id"}).assign(
-        #         departure=route_stop_seq_df["arrival_time"] + t)
-        #     new_rows["trip_id"] = trip_id
-        #     new_rows["line_vehicle_id"] = veh_id
-        #     schedules_df = pd.concat([schedules_df, new_rows])
-        #     t += headway * 3600
-        #     trip_id += 1
-        #     veh_id += 1
-        #     if veh_id == n_veh:
-        #         veh_id = 0
 
         new_rows = route_stop_seq_df[["arrival_time", "index"]].rename(
             columns={"arrival_time": "departure", "index": "station_id"}).assign(
@@ -534,6 +439,7 @@ class PTScheduleGen:
         :param start_i: the starting index for the demand files
         :param export_fixed_route: whether to export the fixed route as well
         :param demand_factor: the factor to multiply the demand
+        :param save_complete: whether to save the complete demand file
         :return: None
         """
         for i in range(start_i, n):
