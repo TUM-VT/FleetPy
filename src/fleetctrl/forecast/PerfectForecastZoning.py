@@ -243,3 +243,27 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
         LOG.info("perfect forecast list: {}".format(future_list))
         return future_list
     
+    def _get_relevant_forcast_intervals(self, t0, t1):
+        """
+        this function returns the forecast intervals in the aggregation level of self.fc_temp_resolution that are relevant for the time interval [t0, t1]
+        :param t0: start of forecast time horizon
+        :type t0: float
+        :param t1: end of forecast time horizon
+        :type t1: float
+        :return: list of forecast intervals (start, end, fraction of forecast interval in [t0, t1])
+        :rtype: list of 3-tuples
+        """
+        if t1 <= t0:
+            return []
+        cur_t = t0
+        next_t = t0 + self.fc_temp_resolution
+        relevant_intervals = []
+        while True:
+            if next_t > t1:
+                frac = (t1 - cur_t) / self.fc_temp_resolution
+                relevant_intervals.append((cur_t, t1, frac))
+                break
+            relevant_intervals.append((cur_t, next_t, 1.0))
+            cur_t = next_t
+            next_t += self.fc_temp_resolution
+        return relevant_intervals
