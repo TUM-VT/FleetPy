@@ -192,8 +192,6 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
     
     def __init__(self, zone_network_dir, scenario_parameters, dir_names, operator_attributes):
         super().__init__(zone_network_dir, scenario_parameters, dir_names, operator_attributes)
-        print(scenario_parameters)
-        print(operator_attributes)
         self._forecast = {(s, s + self.fc_temp_resolution) : {} for s in 
                           range(0//self.fc_temp_resolution * self.fc_temp_resolution, 86400//self.fc_temp_resolution * self.fc_temp_resolution, self.fc_temp_resolution)} #TODO hard coded (but scenario parameters is epmpty!)
                             # (start_time, end_time) -> {o_zone -> {d_zone -> count}}
