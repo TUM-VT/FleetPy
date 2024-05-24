@@ -190,6 +190,38 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
     sample from the forecast distribution
     """
     
+    def __init__(self, zone_network_dir, scenario_parameters, dir_names, operator_attributes):
+        super().__init__(zone_network_dir, scenario_parameters, dir_names, operator_attributes)
+        print(scenario_parameters)
+        print(operator_attributes)
+        self._forecast = {(s, s + self.fc_temp_resolution) : {} for s in 
+                          range(0//self.fc_temp_resolution * self.fc_temp_resolution, 86400//self.fc_temp_resolution * self.fc_temp_resolution, self.fc_temp_resolution)} #TODO hard coded (but scenario parameters is epmpty!)
+                            # (start_time, end_time) -> {o_zone -> {d_zone -> count}}
+    
+    def time_trigger(self, sim_time):
+        """"
+        this method is triggered at the beginning of a repositioning time step
+        """
+        pass
+    
+    def register_demand_ref(self, demand_ref):
+        x = super().register_demand_ref(demand_ref)
+        for time_bin in self._forecast.keys():
+            for t in range(time_bin[0], time_bin[1]):
+                future_rqs = self.demand.future_requests.get(t, {})
+                for rq in future_rqs.values():
+                    o_zone = self.get_zone_from_node(rq.o_node)
+                    d_zone = self.get_zone_from_node(rq.d_node)
+                    if o_zone >= 0 and d_zone >= 0:
+                        try:
+                            self._forecast[time_bin][o_zone][d_zone] += 1
+                        except KeyError:
+                            try:
+                                self._forecast[time_bin][o_zone][d_zone] = 1
+                            except KeyError:
+                                self._forecast[time_bin][o_zone] = {d_zone : 1}
+        return x
+    
     def draw_future_request_sample(self, t0, t1, request_attribute = None, attribute_value = None, scale = None): #request_type=PlanRequest # TODO # cant import PlanRequest because of circular dependency of files!
         """ this function returns exact future request attributes  [t0, t1]
         currently origin is drawn from get_trip_departure_forecasts an destination is drawn form get_trip_arrival_forecast (independently! # TODO #)
@@ -224,12 +256,16 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
                 scale_int *= scale
             if scale_int == 0:
                 continue
-            if scale_int == 1:
-                scale_int = None
-            future_poisson_rates = self.get_trip_od_forecasts(start_int, end_int, scale=scale_int)
+            if scale is None:
+                scale = 1.0
+            try:
+                future_poisson_rates = self._forecast[(start_int, end_int)]
+            except KeyError:
+                LOG.error(f"no forecast found for interval {(start_int, end_int)} | {self._forecast.keys()}")
+                raise KeyError
             for o_zone, d_zone_dict in future_poisson_rates.items():
                 for d_zone, poisson_rate in d_zone_dict.items():
-                    number_rqs = np.random.poisson(poisson_rate)
+                    number_rqs = np.random.poisson(poisson_rate * scale_int * scale)
                     ts = [np.random.randint(start_int, high=end_int) for _ in range(number_rqs)]
                     for t in ts:
                         o_n = self.get_random_node(o_zone, only_boarding_nodes=True)
@@ -240,7 +276,7 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
                             LOG.warning(f"no node found for zone {o_zone} or {d_zone}")
         future_list.sort(key=lambda x:x[0])
 
-        LOG.info("perfect forecast list: {}".format(future_list))
+        LOG.debug("perfect forecast list: {}".format(future_list))
         return future_list
     
     def _get_relevant_forcast_intervals(self, t0, t1):
@@ -255,15 +291,24 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
         """
         if t1 <= t0:
             return []
-        cur_t = t0
-        next_t = t0 + self.fc_temp_resolution
+        cur_t = t0 // self.fc_temp_resolution * self.fc_temp_resolution
+        next_t = cur_t + self.fc_temp_resolution
         relevant_intervals = []
         while True:
-            if next_t > t1:
+            if cur_t >= t0 and next_t <= t1:
+                relevant_intervals.append((cur_t, next_t, 1.0))
+            elif cur_t < t0 < t1 < next_t:
+                frac = (t1 - t0) / self.fc_temp_resolution
+                relevant_intervals.append((cur_t, next_t, frac))
+            elif cur_t < t0 < next_t:
+                frac = (next_t - t0) / self.fc_temp_resolution
+                relevant_intervals.append((cur_t, next_t, frac))
+            elif cur_t < t1 < next_t:
                 frac = (t1 - cur_t) / self.fc_temp_resolution
-                relevant_intervals.append((cur_t, t1, frac))
+                relevant_intervals.append((cur_t, next_t, frac))
                 break
-            relevant_intervals.append((cur_t, next_t, 1.0))
+            else:
+                break
             cur_t = next_t
             next_t += self.fc_temp_resolution
         return relevant_intervals
