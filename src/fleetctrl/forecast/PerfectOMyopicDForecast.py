@@ -3,6 +3,7 @@ from __future__ import annotations
 # -------------------------------------------------------------------------------------------------------------------- #
 # standard distribution imports
 # -----------------------------
+from ast import Not
 import os
 import logging
 import typing as tp
@@ -18,6 +19,7 @@ from src.fleetctrl.forecast.ForecastZoning import ForecastZoneSystem
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------
+from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastDistributionZoneSystem
 from src.misc.globals import *
 #from src.fleetctrl.FleetControlBase import PlanRequest # TODO # circular dependency!
 # set log level to logging.DEBUG or logging.INFO for single simulations
@@ -29,7 +31,7 @@ LOG_LEVEL = logging.WARNING
 LOG = logging.getLogger(__name__)
 
 
-class PerfectOMyopicDForecast(ForecastZoneSystem):
+class PerfectOMyopicDForecast(PerfectForecastDistributionZoneSystem):
     """
     this class can be used like the "basic" ZoneSystem class
     but instead of getting values from a demand forecast dabase, this class has direct access to the demand file
@@ -50,6 +52,7 @@ class PerfectOMyopicDForecast(ForecastZoneSystem):
         this method is triggered at the beginning of a repositioning time step
         -> here: cleaning of past request od list
         """
+        super().time_trigger(sim_time)
         LOG.debug(f"trigger at {sim_time}: past rqs before {self._past_request_ods}")
         if len(self._past_request_ods) > 0 and self._past_request_ods[0][0] < sim_time - self.fc_temp_resolution:
             # remove old requests from list
@@ -95,7 +98,7 @@ class PerfectOMyopicDForecast(ForecastZoneSystem):
         :return: {}: zone -> forecast of arrivals
         :rtype: dict
         """
-
+        raise NotImplementedError("not implemented yet")
         if trip_type == "in":
             incoming = True
         elif trip_type == "out":
@@ -263,27 +266,74 @@ class PerfectOMyopicDForecast(ForecastZoneSystem):
                             return_dict[o_zone] = {d_zone : val * scale}
         return return_dict
         
-    def _get_relevant_forcast_intervals(self, t0, t1):
-        """
-        this function returns the forecast intervals in the aggregation level of self.fc_temp_resolution that are relevant for the time interval [t0, t1]
+    def draw_future_request_sample(self, t0, t1, request_attribute = None, attribute_value = None, scale = None): #request_type=PlanRequest # TODO # cant import PlanRequest because of circular dependency of files!
+        """ this function returns exact future request attributes  [t0, t1]
+        currently origin is drawn from get_trip_departure_forecasts an destination is drawn form get_trip_arrival_forecast (independently! # TODO #)
         :param t0: start of forecast time horizon
         :type t0: float
         :param t1: end of forecast time horizon
         :type t1: float
-        :return: list of forecast intervals (start, end, fraction of forecast interval in [t0, t1])
+        :param request_attribute: name of the attribute of the request class. if given, only returns requests with this attribute
+        :type request_attribute: str
+        :param attribute_value: if and request_attribute given: only returns future requests with this attribute value
+        :type attribute_value: type(request_attribute)
+        :param scale: (not for this class) scales forecast distribution by this values
+        :type scale: float
+        :return: list of (time, origin_node, destination_node) of future requests
         :rtype: list of 3-tuples
-        """
-        if t1 <= t0:
-            return []
-        cur_t = t0
-        next_t = t0 + self.fc_temp_resolution
-        relevant_intervals = []
-        while True:
-            if next_t > t1:
-                frac = (t1 - cur_t) / self.fc_temp_resolution
-                relevant_intervals.append((cur_t, t1, frac))
-                break
-            relevant_intervals.append((cur_t, next_t, 1.0))
-            cur_t = next_t
-            next_t += self.fc_temp_resolution
-        return relevant_intervals
+        """ 
+        
+        if request_attribute is not None or attribute_value is not None:
+            raise NotImplementedError("request_attribute and attribute_value not implemented yet for PerfectForecastDistributionZoneSystem")
+        
+        LOG.debug(f"call get od forecasts: {t0} {t1} {self.fc_temp_resolution}")
+        d_distributions = {}
+        for _, o_zone, d_zone in self._past_request_ods:
+            if o_zone >= 0 and d_zone >= 0:
+                try:
+                    d_distributions[o_zone][d_zone] += 1
+                except KeyError:
+                    try:
+                        d_distributions[o_zone][d_zone] = 1
+                    except KeyError:
+                        d_distributions[o_zone] = {d_zone : 1}
+        for o_zone, d_dict in d_distributions.items():
+            s = sum(d_dict.values())
+            for d_zone in d_dict.keys():
+                d_dict[d_zone] /= s
+        
+        relevant_intervals = self._get_relevant_forcast_intervals(t0, t1)
+        
+        future_list = []
+        
+        for start_int, end_int, scale_int in relevant_intervals:
+            if scale is not None:
+                scale_int *= scale
+            if scale_int == 0:
+                continue
+            try:
+                future_poisson_rates = self._forecast[(start_int, end_int)]
+            except KeyError:
+                LOG.error(f"no forecast found for interval {(start_int, end_int)} | {self._forecast.keys()}")
+                raise KeyError
+            for o_zone, d_zone_dict in future_poisson_rates.items():
+                number = sum(d_zone_dict.values())
+                d_dict = d_distributions.get(o_zone, None)
+                if d_dict is None:
+                    d_dict = {z : 1.0/len(self.zones) for z in range(len(self.zones))}
+                
+                for d_zone, d_fraction in d_dict.items():
+                    poisson_rate = number * d_fraction * scale_int
+                    number_rqs = np.random.poisson(poisson_rate * scale_int )
+                    ts = [np.random.randint(start_int, high=end_int) for _ in range(number_rqs)]
+                    for t in ts:
+                        o_n = self.get_random_node(o_zone, only_boarding_nodes=True)
+                        d_n = self.get_random_node(d_zone, only_boarding_nodes=True)
+                        if o_n >= 0 and d_n >= 0:
+                            future_list.append( (t, o_n, d_n) )
+                        else:
+                            LOG.warning(f"no node found for zone {o_zone} or {d_zone}")
+        future_list.sort(key=lambda x:x[0])
+
+        LOG.debug("perfect forecast list: {}".format(future_list))
+        return future_list

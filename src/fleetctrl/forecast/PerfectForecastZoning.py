@@ -245,11 +245,6 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
         future_list = []
         
         for start_int, end_int, scale_int in relevant_intervals:
-            if start_int < t0:
-                frac_outside = (t0 - start_int) / (end_int - start_int)
-                start_int = t0
-                scale_int /= (1 - frac_outside)
-                LOG.warning(f"start_int was before t0. scale_int was adjusted to {scale_int}")
             if scale is not None:
                 scale_int *= scale
             if scale_int == 0:
@@ -263,7 +258,7 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
                 raise KeyError
             for o_zone, d_zone_dict in future_poisson_rates.items():
                 for d_zone, poisson_rate in d_zone_dict.items():
-                    number_rqs = np.random.poisson(poisson_rate * scale_int * scale)
+                    number_rqs = np.random.poisson(poisson_rate * scale_int)
                     ts = [np.random.randint(start_int, high=end_int) for _ in range(number_rqs)]
                     for t in ts:
                         o_n = self.get_random_node(o_zone, only_boarding_nodes=True)
