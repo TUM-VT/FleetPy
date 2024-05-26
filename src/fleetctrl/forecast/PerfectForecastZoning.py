@@ -254,8 +254,8 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
             try:
                 future_poisson_rates = self._forecast[(start_int, end_int)]
             except KeyError:
-                LOG.error(f"no forecast found for interval {(start_int, end_int)} | {self._forecast.keys()}")
-                raise KeyError
+                LOG.warning(f"no forecast found for interval {(start_int, end_int)} | {self._forecast.keys()}")
+                future_poisson_rates = {}
             for o_zone, d_zone_dict in future_poisson_rates.items():
                 for d_zone, poisson_rate in d_zone_dict.items():
                     number_rqs = np.random.poisson(poisson_rate * scale_int)
