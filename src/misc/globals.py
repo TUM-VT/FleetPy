@@ -195,6 +195,7 @@ G_RA_RES_LG_MAX_CUT = "op_res_loc_graph_max_cut_time"   # for GraphContractionTS
 G_RA_RES_APP_BUF_TIME = "op_res_approach_buffer_time"   # time buffer before vehicle starts driving to the position of an assigned VRL with reservation in future
 G_RA_RES_PRE_COMP_FOLDER = "op_precomp_off_sol_folder"
 G_RA_RES_PRE_COMP_SOL_FILE = "op_precomp_off_sol_file"  # file storing a precompute offline solution to load
+G_RA_RES_ASS_OFF_PLAN = "op_res_assign_offplan" # bool if reservation offline plan is actual assigned to vehicles
 
 # RV heuristics
 G_RA_MAX_VR = "op_max_VR_con"
@@ -232,6 +233,7 @@ G_OP_REPO_SR_F = "op_repo_sharing_rate_file"
 G_OP_REPO_QBT = "op_repo_quadratic_benefit_threshold"
 G_OP_REPO_FRONTIERS_M = "op_repo_frontiers_method"          # Method name for Frontier's approaches
 G_OP_REPO_RES_PUF = "op_repo_res_buffer_time"       # if reservation leg, how long in future to be considered for repo
+G_OP_REPO_RES_PRIORITIZE = "op_repo_res_prio_reservation"   # in true, reservation requests are prioritized in repositioning (in sampling based repositioning)
 
 # Dynamic Pricing
 G_OP_DYN_P_M = "op_dyn_pricing_method"
