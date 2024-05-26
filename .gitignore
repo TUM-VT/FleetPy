@@ -180,3 +180,6 @@ dmypy.json
 data/networks/example_network/downloaded_map.tif
 studies/stochastic_PUDO_duration/Concept of the study.pdf
 data/demand/validateMajid_easyridesc1/*
+data/demand/stochastic_PUDO_duration/distribution_parameters.csv
+data/demand/stochastic_PUDO_duration/log_distribution_parameters_scenarios.csv
+data/demand/stochastic_PUDO_duration/stochastic_PUDO_durationdf.csv

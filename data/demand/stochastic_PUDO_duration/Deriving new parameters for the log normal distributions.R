@@ -1,9 +1,7 @@
 # Coming up with new parameters for the log normal distribution
 
 # Set working directory to the location of this file
-
-# Set the working directory to the directory containing the script file
-# setwd(dirname(script_path))
+setwd("C:/Users/ge75mum/Documents/Research/Fleetpy/tum-vt-fleet-simulation/FleetPy/data/demand/stochastic_PUDO_duration")
 
 
 # Parameters from the Machado-Leon paper
@@ -285,7 +283,53 @@ legend("topright",
 
 
 
+### Calculating all combinations in a single step and saving it -----
+# Parameters from the Machado-Leon paper
+mulog = -0.69
+sdlog = 1.14
 
+mean = exp(mulog + sdlog^2/2)
+variance = (exp(sdlog^2) - 1) * exp(2 * mulog + sdlog^2)
+
+# df with results
+df = data.frame(mulog = numeric(0), sdlog = numeric(0), var_mulog = numeric(0), var_sdlog = numeric(0)) 
+
+for(factor_sdlog in  seq(0.5, 1.5, 0.1)){
+  # factor_sdlog = 0.4
+  var_mulog = 0
+  var_sdlog = -(1-factor_sdlog)
+  # var_sdlog = -0.3 # -10%
+  
+  sdlog_new = sqrt(log(((variance*factor_sdlog)/exp(2*log(mean)))+1))
+  mulog_new = log(mean) - sdlog_new^2/2
+  
+  mean_new = exp(mulog_new + sdlog_new^2/2)
+  variance_new = (exp(sdlog_new^2) - 1) * exp(2 * mulog_new + sdlog_new^2)
+  factor_sd_log_check = variance_new/variance
+  df = rbind(df, data.frame(mulog = mulog_new, sdlog = sdlog_new, var_mulog = var_mulog, var_sdlog = var_sdlog))
+}
+
+for(factor_mulog in  seq(0.5, 1.5, 0.1)){
+  # factor_mulog = 0.9
+  var_mulog = -(1-factor_mulog) 
+  var_sdlog = 0 
+  
+  sdlog_new = sqrt(log(((variance)/exp(2*log(mean*factor_mulog)))+1))
+  mulog_new = log(mean*factor_mulog) - sdlog_new^2/2
+  
+  mean_new = exp(mulog_new + sdlog_new^2/2)
+  variance_new = (exp(sdlog_new^2) - 1) * exp(2 * mulog_new + sdlog_new^2)
+  factor_mulog_check = mean_new/mean
+  df = rbind(df, data.frame(mulog = mulog_new, sdlog = sdlog_new, var_mulog = var_mulog, var_sdlog = var_sdlog))
+  
+}
+
+df
+
+if(FALSE){
+  # save df as csv
+  write.csv(df, "distribution_parameters.csv", row.names = FALSE)
+  }
 
 
 
