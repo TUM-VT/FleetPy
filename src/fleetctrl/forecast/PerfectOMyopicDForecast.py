@@ -314,8 +314,8 @@ class PerfectOMyopicDForecast(PerfectForecastDistributionZoneSystem):
             try:
                 future_poisson_rates = self._forecast[(start_int, end_int)]
             except KeyError:
-                LOG.error(f"no forecast found for interval {(start_int, end_int)} | {self._forecast.keys()}")
-                raise KeyError
+                LOG.warning(f"no forecast found for interval {(start_int, end_int)} | {self._forecast.keys()}")
+                future_poisson_rates = {}
             for o_zone, d_zone_dict in future_poisson_rates.items():
                 number = sum(d_zone_dict.values())
                 d_dict = d_distributions.get(o_zone, None)
