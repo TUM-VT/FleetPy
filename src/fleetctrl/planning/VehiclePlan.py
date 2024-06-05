@@ -977,5 +977,5 @@ class VehiclePlan:
                 rm = True
         if rm:
             new_plan.list_plan_stops = tmp
-            new_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
+            new_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, keep_feasible=True)
         return new_plan

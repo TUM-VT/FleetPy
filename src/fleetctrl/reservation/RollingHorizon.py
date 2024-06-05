@@ -139,6 +139,7 @@ class RollingHorizonReservation(ReservationBase):
         return_list = []
         for rid in rid_list:
             prq = self.active_reservation_requests[rid]
-            return_list.append((prq.get_o_stop_info()[1], prq.get_o_stop_info()[0], prq.get_d_stop_info()[0]))
+            return_list.append((prq.get_o_stop_info()[1], prq.get_o_stop_info()[0][0], prq.get_d_stop_info()[0][0]))
+        LOG.debug(f"upcoming unassigned reservation requests in intervall [{t0}, {t1}]: {return_list}")
         return return_list
     

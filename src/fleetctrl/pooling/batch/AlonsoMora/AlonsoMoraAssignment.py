@@ -787,7 +787,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 veh_locations_to_vid[veh_obj.pos] = [vid]
         current_time = self.sim_time
         # # LOG.debug(f"compute RV: veh_locations_to_vid {veh_locations_to_vid}; to compute {self.requests_to_compute}")
-        vid_dict = {}  # vid -> tt
+        #vid_dict = {}  # vid -> tt
         # prepare travel times in parallel processing
         if self.alonso_mora_parallelization_manager:
             rids_to_compute_to_rq = {rid: self.active_requests[rid] for rid in self.requests_to_compute.keys()}
@@ -801,6 +801,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             travel_infos = {}
             rids_to_compute_to_rq = {}
         for rid in self.requests_to_compute.keys():
+            vid_dict = {}  # vid -> tt
             prq = self.active_requests[rid]
             if not self.alonso_mora_parallelization_manager:
                 # get routing results in single processing
@@ -1239,9 +1240,13 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
 
         if number_locked_rids == 0:
             rtv_key = createRTVKey(vid, [rid])
+            LOG.debug(f"no locked rids for rtv_key {rtv_key}")
             if self.rtv_obj.get(rtv_key, None) is not None:
                 return
             V2RB_obj = V2RB(self.routing_engine, self.active_requests, self.sim_time, rtv_key, self.veh_objs[vid], self.std_bt, self.add_bt, self.objective_function, new_prq_obj=self.active_requests[rid])
+            LOG.debug(f"V2RB: {V2RB_obj}")
+            LOG.debug(f"RV: {self.r2v.get(rid)}")
+            LOG.debug(f" -> is feasible {V2RB_obj.isFeasible()}")
             if V2RB_obj.isFeasible():
                 self._addRtvKey(rtv_key, V2RB_obj)
 
