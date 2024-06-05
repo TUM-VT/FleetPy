@@ -12,11 +12,13 @@ from scipy.special import comb
 import math
 import plotly.graph_objects as go
 from src.routing.NetworkBasic import NetworkBasic
+import rtree
+
 
 class PTScheduleGen:
     def __init__(self, route_no: int, demand_csv: str, GTFS_path: str, network_nodes_file: str,
                  to_trip_id: str, back_trip_id: str, nodes_df: pd.DataFrame, edges_df: pd.DataFrame,
-                 network_path:str, shape_ids=None, dwell_time=30, ):
+                 network_path: str, shape_ids=None, dwell_time=30, ):
         """
         PT Route Schedule Generator
         :param route_no: the route number
@@ -99,6 +101,12 @@ class PTScheduleGen:
                                             geometry=gpd.points_from_xy(stop_coordinates['stop_lon'],
                                                                         stop_coordinates['stop_lat']))
 
+        # Create a spatial index for the network nodes
+        spatial_index = rtree.index.Index()
+        for idx, geom in self.network_nodes_crs.geometry.items():
+            spatial_index.insert(idx, geom.bounds)
+        self.spatial_index = spatial_index
+
         # Prepare columns for the nearest node and distance
         stop_coordinates['nearest_node'] = None
         stop_coordinates['distance'] = None
@@ -106,7 +114,8 @@ class PTScheduleGen:
         # Iterate over each stop coordinate
         for index, stop in stop_coordinates.iterrows():
             # Find the nearest point and distance
-            nearest_node, distance = self.find_nearest_and_distance(stop.geometry, self.network_nodes_crs)
+            nearest_node, distance = self.find_nearest_and_distance(stop.geometry, self.network_nodes_crs,
+                                                                    self.spatial_index)
 
             # Store the information in the stop_coordinates GeoDataFrame
             stop_coordinates.at[index, 'nearest_node'] = nearest_node['node_index']
@@ -153,7 +162,6 @@ class PTScheduleGen:
 
         fleetpy_network = NetworkBasic(network_path)
 
-
         # along route_stop_seq_df["nearest_node"], find the shortest path length between every two nodes
         for i in range(len(route_stop_seq_df) - 1):
             # route_stop_seq_df.loc[i, "travel_time"] = nx.shortest_path_length(G,
@@ -165,7 +173,6 @@ class PTScheduleGen:
                 (route_stop_seq_df.loc[i, "nearest_node"], None, None),
                 (route_stop_seq_df.loc[i + 1, "nearest_node"], None, None)
             )[1]
-
 
         # calculate the arrival time for each stop, including the dwell time, round up to the nearest 30 s
         for i in range(len(route_stop_seq_df)):
@@ -228,7 +235,7 @@ class PTScheduleGen:
         return (abs(max_len) - abs(x)) / abs(max_len)
 
     def output_demand(self, terminus_stop: str, demand_file=None, max_distance_km=0.5, seed=0, time_range=None,
-                      export_fixed_route=False, demand_factor=1.0, save_complete=False, offset_time=1200,
+                      export_fixed_route=False, demand_factor=1.0, save_complete=False, offset_time=1800,
                       ) -> None:
         """
         Generate passenger demand for the route
@@ -296,14 +303,15 @@ class PTScheduleGen:
         # Iterate over each stop coordinate
         for index, stop in route_with_coords.iterrows():
             # Find the nearest point and distance
-            # TODO: find rtree nearest node
             origin_point = shapely.Point(stop['final_origin_lon'], stop['final_origin_lat'])
-            nearest_node, distance = self.find_nearest_and_distance(origin_point, self.network_nodes_crs)
+            nearest_node, distance = self.find_nearest_and_distance(origin_point, self.network_nodes_crs,
+                                                                    self.spatial_index)
             route_with_coords.at[index, 'origin_node'] = nearest_node['node_index']
             route_with_coords.at[index, 'origin_distance'] = distance
 
             destination_point = shapely.Point(stop['final_destination_lon'], stop['final_destination_lat'])
-            nearest_node, distance = self.find_nearest_and_distance(destination_point, self.network_nodes_crs)
+            nearest_node, distance = self.find_nearest_and_distance(destination_point, self.network_nodes_crs,
+                                                                    self.spatial_index)
             route_with_coords.at[index, 'destination_node'] = nearest_node['node_index']
             route_with_coords.at[index, 'destination_distance'] = distance
 
@@ -316,6 +324,7 @@ class PTScheduleGen:
         route_with_coords_origin_gdf["route_departure"] = \
             route_with_coords_origin_gdf["route_departure"] + \
             np.random.randint(-offset_time, offset_time, route_with_coords_origin_gdf.shape[0])
+        route_with_coords_origin_gdf["route_departure"] = route_with_coords_origin_gdf["route_departure"] % 86400
         route_with_coords_origin_gdf.sort_values(by=["route_departure"], inplace=True)
 
         passenger_demand = route_with_coords_origin_gdf[
@@ -366,9 +375,17 @@ class PTScheduleGen:
         gdf.to_file(os.path.join(output_path, file_name), driver='GeoJSON')
         print("Alignment saved to {}".format(os.path.join(output_path, file_name)))
 
-    def find_nearest_and_distance(self, input_point: shapely.Point, gdf, input_crs="EPSG:4326"):
+    def find_nearest_and_distance(self, input_point: shapely.Point,
+                                  gdf: gpd.GeoDataFrame,
+                                  spatial_index: rtree.index,
+                                  input_crs="EPSG:4326"):
         """
         Find the nearest node and distance
+        :param input_point: the input point
+        :param gdf: the GeoDataFrame
+        :param spatial_index: the spatial index (rtree)
+        :param input_crs: the input CRS
+        :return: the nearest node and distance
         """
         # Define the input CRS and the target CRS from the GeoDataFrame
         # WGS84 Latitude/Longitude
@@ -381,16 +398,21 @@ class PTScheduleGen:
         transformed_point = transformer.transform(input_lon, input_lat)
         input_point = shapely.Point(transformed_point)
 
+        # Find the nearest point using the spatial index
+        nearest_idx = list(spatial_index.nearest(input_point.bounds, 1))[0]
+        nearest_geom = gdf.geometry.iloc[nearest_idx]
+        nearest_point = gdf.iloc[nearest_idx]
+
         # Find the nearest point
-        nearest_geom = nearest_points(input_point, gdf.unary_union)[1]
-        nearest_point = gdf[gdf.geometry == nearest_geom].iloc[0]
+        # nearest_geom = nearest_points(input_point, gdf.unary_union)[1]
+        # nearest_point = gdf[gdf.geometry == nearest_geom].iloc[0]
 
         # Calculate distance in the transformed CRS
         distance = input_point.distance(nearest_geom)
 
         return nearest_point, distance
 
-    def output_station(self, output_path, station_file="stations.csv"):
+    def output_station(self, output_path, station_file="stations.csv", only_in_schedule=True):
         """
         Output the station file
         :param output_path: the path to save the station file
@@ -398,6 +420,10 @@ class PTScheduleGen:
         """
         output_schedule = self.stop_coordinates.nearest_node.reset_index()
         output_schedule.columns = ['station_id', 'network_node_index']
+        if only_in_schedule:
+            route_stop_seq_df = self.route_stop_seq_df
+            output_schedule = output_schedule[output_schedule["station_id"].isin(route_stop_seq_df["index"])]
+
         output_schedule.to_csv(os.path.join(output_path, station_file), index=False)
         print("Station file saved to {}".format(os.path.join(output_path, station_file)))
 
@@ -416,7 +442,8 @@ class PTScheduleGen:
 
     def output_schedule(self, output_path,
                         schedules_file="schedules.csv",
-                        # headway=10 / 60, n_veh=5
+                        # headway=10 / 60, n_veh=5,
+                        veh_type="default_vehtype"
                         ) -> None:
         """
         Output the schedule file
@@ -436,7 +463,7 @@ class PTScheduleGen:
         schedules_df = pd.concat([schedules_df, new_rows])
 
         schedules_df["LINE"] = self.route_no
-        schedules_df["vehicle_type"] = "default_vehtype"
+        schedules_df["vehicle_type"] = veh_type
 
         schedules_df.to_csv(os.path.join(output_path, schedules_file), index=False)
         print("Schedule file saved to {}".format(os.path.join(output_path, schedules_file)))
@@ -496,11 +523,12 @@ class PTScheduleGen:
                                demand_factor=demand_factor,
                                save_complete=save_complete
                                )
+
     def return_lambda_(self, total_demand, x_flex, route_len, h):
         return total_demand * (x_flex / route_len) * h
 
     def t_c_bound(self, t_r, h, h_p):
-        return t_r * (h/h_p) - 1
+        return t_r * (h / h_p) - 1
 
     def irvin_hall_cdf(self, n, x):
         """
@@ -517,10 +545,9 @@ class PTScheduleGen:
         # Divide the sum by n! and return
         return total_sum / math.factorial(n)
 
-
     # Define the probability calculation function
     # def calculate_probability(t, lambda_, mu, sigma):
-    def calculate_probability(self, t, lambda_, width, v_d=40/3.6, t_s=30):
+    def calculate_probability(self, t, lambda_, width, v_d=40 / 3.6, t_s=30):
         """
         Calculate the probability of detour time exceeding time t
         :param t: the time threshold
@@ -591,14 +618,14 @@ class PTScheduleGen:
         return interpolated_value
 
     def return_total_flex_time(self,
-                               x_flex:float,
-                               route_len:float,
-                               h:float,
-                               width:int,
-                               v_d=40/3.6,
+                               x_flex: float,
+                               route_len: float,
+                               h: float,
+                               width: int,
+                               v_d=40 / 3.6,
                                target_value=0.95,
                                t_values=np.linspace(0, 2000, 51),
-                               max_t_c = None
+                               max_t_c=None
                                ) -> float:
         """
         Return the total flex time (include detour and x-dir travel) for scheduling
@@ -623,7 +650,6 @@ class PTScheduleGen:
         flex_route_fixed_time = x_flex * 1000 / v_d * 2
 
         return min(interpolated_value, max_t_c) + flex_route_fixed_time
-
 
     def plot_route_with_nodes(self, html_name=None):
         # Plot stops and network nodes
@@ -670,7 +696,6 @@ class PTScheduleGen:
         ),
         )
 
-
         # Updating layout
         # fig.update_layout(mapbox_style="carto-positron", showlegend=False)
         # fig.update_traces(marker=dict(size=10))
@@ -691,7 +716,7 @@ class PTScheduleGen:
         return fig
 
     def plot_route_with_demand(self, terminus_stop: str, time_range=None,
-                      demand_factor=1.0, html_name=None):
+                               demand_factor=1.0, html_name=None):
         """
         Plot the route with the demand
         :param terminus_stop: the terminus stop name of the route
@@ -700,7 +725,7 @@ class PTScheduleGen:
         """
         if self.route_with_coords_origin_gdf is None:
             self.output_demand(terminus_stop=terminus_stop, time_range=time_range,
-                      demand_factor=demand_factor)
+                               demand_factor=demand_factor)
         fig = self.plot_route_with_nodes()
 
         route_with_coords_origin_gdf = self.route_with_coords_origin_gdf
