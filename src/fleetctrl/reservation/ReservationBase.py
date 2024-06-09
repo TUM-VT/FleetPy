@@ -127,7 +127,7 @@ class ReservationBase(metaclass=ABCMeta):
         :return: tuple (start location, planned starting time) of next supporting point"""
         return None, None
     
-    def get_upcoming_unassigned_reservation_requests(self, t0, t1):
+    def get_upcoming_unassigned_reservation_requests(self, t0, t1, with_assigned=False):
         """ this function returns exact future request attributes of unassigned reservation requests in the intervall  [t0, t1] which can be used for repositioning
         :param t0: start of forecast time horizon
         :type t0: float
