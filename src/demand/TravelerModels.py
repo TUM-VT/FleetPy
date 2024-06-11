@@ -66,6 +66,7 @@ class RequestBase(metaclass=ABCMeta):
         self.nr_pax = rq_row.get(G_RQ_PAX, 1)   # TODO RPP: neue attribute für größe/menge/gewicht
         self.duration_pudo_boarding = None # santi
         self.duration_pudo_alighting = None
+        self.insertion_with_heterogenous_PUDO_duration = scenario_parameters.get("insertion_with_heterogenous_PUDO_duration", False)
         #
         self.o_node = int(rq_row[G_RQ_ORIGIN])
         self.o_pos = routing_engine.return_node_position(self.o_node)
@@ -93,6 +94,29 @@ class RequestBase(metaclass=ABCMeta):
         self.direct_route_travel_distance = None
         # 
         self.modal_state = G_RQ_STATE_MONOMODAL # mono-modal trip by default 
+
+
+        column_boarding_name = scenario_parameters.get("column_PUDO_duration_boarding")
+        column_alighting_name = scenario_parameters.get("column_PUDO_duration_alighting")
+        
+        if column_boarding_name is not None:
+            self.duration_pudo_boarding = rq_row.get(column_boarding_name)
+            
+            if self.duration_pudo_boarding is None:
+                raise IOError(f'ERROR: {column_boarding_name} column is not specified in the input demand data!')
+
+        else:
+            self.duration_pudo_boarding = scenario_parameters.get(G_OP_CONST_BT, 0)
+
+        if column_alighting_name is not None:
+            self.duration_pudo_alighting = rq_row.get(column_alighting_name)
+
+            if self.duration_pudo_alighting is None:
+                raise IOError(f'ERROR: {column_alighting_name} column is not specified in the input demand data!')
+            
+        else:
+            self.duration_pudo_alighting = scenario_parameters.get(G_OP_CONST_BT, 0)
+
 
     def get_rid(self):
         return self.rid
@@ -728,7 +752,7 @@ class RequestWithPUDODuration(RequestBase): # Santi
                     if self.max_rel_error_black_box_PUDO_duration>100 or self.max_rel_error_black_box_PUDO_duration<0:
                         raise ValueError(f'ERROR: max_rel_error_black_box_PUDO_duration is {self.max_rel_error_black_box_PUDO_duration}, but it has to be a value between 0 and 100!')
                 except:
-                    raise TypeError(f'ERROR: max_rel_error_black_box_PUDO_duration is {type(self.max_rel_error_black_box_PUDO_duration)} type, but it has to be a float or integer value!')
+                    raise TypeError(f'ERROR: max_rel_error_black_box_PUDO_duration is {type(self.max_rel_error_black_box_PUDO_duration)} type, but it has to be a float or integer value between 0 and 100!')
                 
        
     def choose_offer(self, sc_parameters, simulation_time): # Santi: using the same as in class BasicRequest(RequestBase)
