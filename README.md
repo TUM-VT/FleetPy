@@ -82,7 +82,7 @@ Everything is set up! :thumbsup: Now you could run your first simulation!
 
 ### C++ Router
 We recommend to use the C++ router unless your network is small enough to preprocess the complete travel time matrix.
-If you want to use the C++ router, you need to have a C++ compiler and Cython set up on your computer.
+If you want to use the C++ router, you need to have a C++ compiler and Cython set up on your computer (you can find more info in [cpp_router/setup.py](https://github.com/TUM-VT/FleetPy/blob/main/src/routing/cpp_router/setup.py)).
 
 Moreover, you need to compile the module on your system. Please go to 
 
