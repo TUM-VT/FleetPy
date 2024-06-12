@@ -6,8 +6,7 @@ from shapely.geometry import LineString
 import geopandas as gpd
 import pyproj
 from shapely.ops import nearest_points
-import networkx as nx
-from scipy.stats import norm, poisson
+from scipy.stats import poisson
 from scipy.special import comb
 import math
 import plotly.graph_objects as go
@@ -16,19 +15,17 @@ import rtree
 
 
 class PTScheduleGen:
-    def __init__(self, route_no: int, demand_csv: str, GTFS_path: str, network_nodes_file: str,
-                 to_trip_id: str, back_trip_id: str, nodes_df: pd.DataFrame, edges_df: pd.DataFrame,
+    def __init__(self, route_no: int, demand_csv: str, gtfs_path: str, network_nodes_file: str,
+                 to_trip_id: str, back_trip_id: str,
                  network_path: str, shape_ids=None, dwell_time=30, ):
         """
         PT Route Schedule Generator
         :param route_no: the route number
         :param demand_csv: the path to the demand file
-        :param GTFS_path: the path to the GTFS files
+        :param gtfs_path: the path to the GTFS files
         :param network_nodes_file: the path to the network nodes file
         :param to_trip_id: the trip ID for the forward direction
         :param back_trip_id: the trip ID for the backward direction
-        :param nodes_df: the nodes dataframe
-        :param edges_df: the edges dataframe
         :param network_path: folder path of network
         :param shape_ids: the shape IDs for the route
         :param dwell_time: the dwell time at each stop
@@ -43,11 +40,11 @@ class PTScheduleGen:
 
         print("Loading GTFS data for route {}".format(route_no))
         # Read GTFS
-        routes = pd.read_csv(os.path.join(GTFS_path, 'routes.txt'))
-        trips = pd.read_csv(os.path.join(GTFS_path, 'trips.txt'))
-        shapes = pd.read_csv(os.path.join(GTFS_path, 'shapes.txt'))
-        stops = pd.read_csv(os.path.join(GTFS_path, 'stops.txt'))
-        stop_times = pd.read_csv(os.path.join(GTFS_path, 'stop_times.txt'))
+        routes = pd.read_csv(os.path.join(gtfs_path, 'routes.txt'))
+        trips = pd.read_csv(os.path.join(gtfs_path, 'trips.txt'))
+        shapes = pd.read_csv(os.path.join(gtfs_path, 'shapes.txt'))
+        stops = pd.read_csv(os.path.join(gtfs_path, 'stops.txt'))
+        stop_times = pd.read_csv(os.path.join(gtfs_path, 'stop_times.txt'))
 
         # Identify the route ID for the route
         route_id = routes[routes['route_short_name'] == str(route_no)]['route_id'].iloc[0]
@@ -63,7 +60,6 @@ class PTScheduleGen:
         linestrings = []
         for shape_id in shape_ids:
             shape_points = filtered_shapes[filtered_shapes['shape_id'] == shape_id]
-            # points = shape_points[['shape_pt_lat', 'shape_pt_lon']].values
             points = shape_points[['shape_pt_lon', 'shape_pt_lat']].values
             linestring = LineString(points)
             linestrings.append(linestring)
@@ -145,30 +141,11 @@ class PTScheduleGen:
             route_stop_seq_df = pd.concat([route_stop_seq_df, route_stop_seq_reversed], ignore_index=True)
 
         print("Calculating travel time for route {}".format(route_no))
-        # use edge file to estimate the travel time between stops
-        # Create a NetworkX graph
-        G = nx.Graph()  # Use nx.DiGraph() for a directed graph
-
-        # Add nodes to the graph
-        for idx, row in nodes_df.iterrows():
-            # Assuming 'node_id' is the column for node identifiers
-            G.add_node(row['node_index'], **row.to_dict())
-
-        # Add edges to the graph
-        for idx, row in edges_df.iterrows():
-            # Assuming 'start_node' and 'end_node' columns define the edge
-            # and 'weight' is an attribute of the edge
-            G.add_edge(row['from_node'], row['to_node'], weight=row['travel_time'])
-
+        # Create a network object through FleetPy
         fleetpy_network = NetworkBasic(network_path)
 
         # along route_stop_seq_df["nearest_node"], find the shortest path length between every two nodes
         for i in range(len(route_stop_seq_df) - 1):
-            # route_stop_seq_df.loc[i, "travel_time"] = nx.shortest_path_length(G,
-            #                                                                   route_stop_seq_df.loc[i, "nearest_node"],
-            #                                                                   route_stop_seq_df.loc[
-            #                                                                       i + 1, "nearest_node"],
-            #                                                                   weight='weight')
             route_stop_seq_df.loc[i, "travel_time"] = fleetpy_network.return_travel_costs_1to1(
                 (route_stop_seq_df.loc[i, "nearest_node"], None, None),
                 (route_stop_seq_df.loc[i + 1, "nearest_node"], None, None)
@@ -214,7 +191,10 @@ class PTScheduleGen:
 
         print("Initialization finished for route {}".format(route_no))
 
-    def return_hourly_demand(self, time_range, demand_factor=1.0):
+    def return_hourly_demand(self, time_range: tuple[int, int], demand_factor=1.0):
+        """
+        Return the hourly demand for the route
+        """
         # filter by time_range
         route_with_coords = self.route_with_coords.copy()
 
@@ -225,10 +205,29 @@ class PTScheduleGen:
         self.hourly_demand = route_with_coords.shape[0] / (time_range[1] - time_range[0]) * 3600 * demand_factor
         return self.hourly_demand
 
+    def return_terminus_demand_proportion(self, terminus_stop: str, time_range: tuple[int, int]):
+        """
+        Return the proportion of demand at the terminus stop
+        """
+        route_with_coords = self.route_with_coords.copy()
+
+        if time_range is not None:
+            route_with_coords = route_with_coords[(route_with_coords["route_departure"] >= time_range[0]) &
+                                                  (route_with_coords["route_departure"] <= time_range[1])]
+
+        terminus_demand = route_with_coords[route_with_coords["origin_stop"] == terminus_stop].shape[0] + \
+                          route_with_coords[route_with_coords["destination_stop"] == terminus_stop].shape[0]
+        total_demand = route_with_coords.shape[0]
+
+        return terminus_demand / total_demand
+
     def return_route_length(self):
+        """
+        Return the route length
+        """
         return self.route_length
 
-    def return_demand_walking_dist(self, max_len, x):
+    def return_demand_walking_dist(self, max_len: float, x: float):
         """
         Return the demand distribution based on walking distance
         """
@@ -403,10 +402,6 @@ class PTScheduleGen:
         nearest_geom = gdf.geometry.iloc[nearest_idx]
         nearest_point = gdf.iloc[nearest_idx]
 
-        # Find the nearest point
-        # nearest_geom = nearest_points(input_point, gdf.unary_union)[1]
-        # nearest_point = gdf[gdf.geometry == nearest_geom].iloc[0]
-
         # Calculate distance in the transformed CRS
         distance = input_point.distance(nearest_geom)
 
@@ -417,6 +412,7 @@ class PTScheduleGen:
         Output the station file
         :param output_path: the path to save the station file
         :param station_file: the file name of the station file
+        :param only_in_schedule: whether to output only the stations in the schedule
         """
         output_schedule = self.stop_coordinates.nearest_node.reset_index()
         output_schedule.columns = ['station_id', 'network_node_index']
@@ -442,13 +438,13 @@ class PTScheduleGen:
 
     def output_schedule(self, output_path,
                         schedules_file="schedules.csv",
-                        # headway=10 / 60, n_veh=5,
                         veh_type="default_vehtype"
                         ) -> None:
         """
         Output the schedule file
         :param output_path: the path to save the schedule file
         :param schedules_file: the file name of the schedule file
+        :param veh_type: the vehicle type
         """
 
         route_stop_seq_df = self.route_stop_seq_df.copy()
@@ -475,7 +471,7 @@ class PTScheduleGen:
         return self.route_stop_seq_df.iloc[0]["index"]
 
     # Function to generate random offset
-    def random_offset(self, max_distance_km=1.) -> tuple:
+    def random_offset(self, max_distance_km=1.) -> tuple[float, float]:
         """
         Generate random offset
         :param max_distance_km: the maximum distance of the random offset
@@ -524,13 +520,13 @@ class PTScheduleGen:
                                save_complete=save_complete
                                )
 
-    def return_lambda_(self, total_demand, x_flex, route_len, h):
+    def return_lambda_(self, total_demand: float, x_flex: float, route_len: float, h: float) -> float:
+        """
+        Return the lambda parameter for the Poisson distribution from demand
+        """
         return total_demand * (x_flex / route_len) * h
 
-    def t_c_bound(self, t_r, h, h_p):
-        return t_r * (h / h_p) - 1
-
-    def irvin_hall_cdf(self, n, x):
+    def irvin_hall_cdf(self, n: int, x: float) -> float:
         """
         Compute the CDF of the Irvin-Hall distribution
         """
@@ -547,7 +543,7 @@ class PTScheduleGen:
 
     # Define the probability calculation function
     # def calculate_probability(t, lambda_, mu, sigma):
-    def calculate_probability(self, t, lambda_, width, v_d=40 / 3.6, t_s=30):
+    def calculate_probability(self, t: float, lambda_: float, width: float, v_d=40 / 3.6, t_s=30) -> float:
         """
         Calculate the probability of detour time exceeding time t
         :param t: the time threshold
@@ -573,31 +569,31 @@ class PTScheduleGen:
             total_probability += cond_prob * poisson_prob
         return total_probability
 
-    def interpolate_index(self, P_T_le_t_values, target_value=0.95):
+    def interpolate_index(self, p_t_le_t_values: np.ndarray, target_value=0.95) -> int:
         # Ensure the array is a numpy array
-        P_T_le_t_values = np.asarray(P_T_le_t_values)
+        p_t_le_t_values = np.asarray(p_t_le_t_values)
 
         # Check if target_value is within the range of the array
-        # if target_value < P_T_le_t_values[0] or target_value > P_T_le_t_values[-1]:
-        if target_value < P_T_le_t_values[0]:
+        # if target_value < p_t_le_t_values[0] or target_value > p_t_le_t_values[-1]:
+        if target_value < p_t_le_t_values[0]:
             return 0
-        if target_value > P_T_le_t_values[-1]:
+        if target_value > p_t_le_t_values[-1]:
             raise ValueError("Target value is out of the range of the array")
 
         # Find the indices of the two array elements between which target_value lies
-        idx_below = np.searchsorted(P_T_le_t_values, target_value) - 1
+        idx_below = np.searchsorted(p_t_le_t_values, target_value) - 1
         idx_above = idx_below + 1
 
         # Get the values at these indices
-        x0, x1 = P_T_le_t_values[idx_below], P_T_le_t_values[idx_above]
+        x0, x1 = p_t_le_t_values[idx_below], p_t_le_t_values[idx_above]
         y0, y1 = idx_below, idx_above
 
         # Interpolate the index
         interpolated_index = y0 + (target_value - x0) * (y1 - y0) / (x1 - x0)
 
-        return interpolated_index
+        return int(interpolated_index)
 
-    def interpolate_value_at_index(self, t_values, interpolated_index):
+    def interpolate_value_at_index(self, t_values: np.ndarray, interpolated_index: int) -> float:
         # Ensure the array is a numpy array
         t_values = np.asarray(t_values)
 
@@ -622,7 +618,7 @@ class PTScheduleGen:
                                route_len: float,
                                h: float,
                                width: int,
-                               v_d=40 / 3.6,
+                               v_d=30 / 3.6,
                                target_value=0.95,
                                t_values=np.linspace(0, 2000, 51),
                                max_t_c=None
@@ -644,15 +640,19 @@ class PTScheduleGen:
         assert total_demand > 0
 
         lambda_ = self.return_lambda_(total_demand, x_flex, route_len, h)
-        P_T_le_t_values = np.array([self.calculate_probability(t, lambda_, width, v_d=v_d) for t in t_values])
-        index_at_095 = self.interpolate_index(P_T_le_t_values, target_value=target_value)
+        p_t_le_t_values = np.array([self.calculate_probability(t, lambda_, width, v_d=v_d) for t in t_values])
+        index_at_095 = self.interpolate_index(p_t_le_t_values, target_value=target_value)
         interpolated_value = self.interpolate_value_at_index(t_values, index_at_095)
+        if max_t_c is not None:
+            interpolated_value = min(interpolated_value, max_t_c)
         flex_route_fixed_time = x_flex * 1000 / v_d * 2
 
-        return min(interpolated_value, max_t_c) + flex_route_fixed_time
+        return interpolated_value + flex_route_fixed_time
 
-    def plot_route_with_nodes(self, html_name=None):
-        # Plot stops and network nodes
+    def plot_route_with_nodes(self, html_name=None) -> go.Figure:
+        """
+        Plot stops and network nodes
+        """
 
         # Creating a figure with Plotly Express
         fig = go.Figure()
@@ -671,17 +671,18 @@ class PTScheduleGen:
 
         stop_coordinates = self.stop_coordinates
         # plot stop_coordinates[["stop_lon", "stop_lat"]]
-        fig.add_trace(go.Scattermapbox(
-            lat=stop_coordinates["stop_lat"],
-            lon=stop_coordinates["stop_lon"],
-            mode='markers',
-            marker=dict(size=10, color='green'),
-            name='Stops',
-            # hovertext=stop_coordinates['stop_name']
-            hovertext=stop_coordinates.index.astype(str) + "," +
-                      stop_coordinates["stop_name"] + "," +
-                      stop_coordinates["nearest_node"].astype(str)
-        ),
+        fig.add_trace(
+            go.Scattermapbox(
+                lat=stop_coordinates["stop_lat"],
+                lon=stop_coordinates["stop_lon"],
+                mode='markers',
+                marker=dict(size=10, color='green'),
+                name='Stops',
+                # hovertext=stop_coordinates['stop_name']
+                hovertext=stop_coordinates.index.astype(str) + "," +
+                          stop_coordinates["stop_name"] + "," +
+                          stop_coordinates["nearest_node"].astype(str)
+            ),
         )
 
         network_nodes = self.network_nodes
@@ -696,9 +697,6 @@ class PTScheduleGen:
         ),
         )
 
-        # Updating layout
-        # fig.update_layout(mapbox_style="carto-positron", showlegend=False)
-        # fig.update_traces(marker=dict(size=10))
         # Set up the map layout
         fig.update_layout(
             mapbox=dict(
@@ -716,12 +714,13 @@ class PTScheduleGen:
         return fig
 
     def plot_route_with_demand(self, terminus_stop: str, time_range=None,
-                               demand_factor=1.0, html_name=None):
+                               demand_factor=1.0, html_name=None) -> go.Figure:
         """
         Plot the route with the demand
         :param terminus_stop: the terminus stop name of the route
-        :param demand_file: the file to save the demand
-        :param time_range: the time range for the demand
+        :param time_range: the time range
+        :param demand_factor: the demand factor
+        :param html_name: the name of the HTML file to save
         """
         if self.route_with_coords_origin_gdf is None:
             self.output_demand(terminus_stop=terminus_stop, time_range=time_range,
@@ -753,19 +752,3 @@ class PTScheduleGen:
         if html_name:
             fig.write_html(html_name)
         return fig
-# demand_csv = '../../../data/demand/SoD_demand/raw_data/demand_full_seed_0.csv'
-# to_trip_id = "100.T2.3-193-G-013-1.4.H"
-# back_trip_id = "4.T0.3-193-G-013-1.2.R"
-# nodes_df = pd.read_csv("../../../data/networks/osm_route_193_road/base/nodes.csv")
-# edges_df = pd.read_csv("../../../data/networks/osm_route_193_road/base/edges.csv")
-# pt_gen = PTScheduleGen(193, demand_csv, "../../../data/pubtrans/MVG_GTFS",
-#                        "../../../data/networks/osm_route_193_road/base/nodes_all_infos.geojson",
-#                        to_trip_id, back_trip_id, nodes_df, edges_df,
-#                        shape_ids=["3-193-G-013-1.4.H"])
-# pt_gen.save_alignment_geojson("../../../data/pubtrans/route_193", )
-# pt_gen.output_station("../../../data/pubtrans/route_193", )
-# pt_gen.output_schedule("../../../data/pubtrans/route_193", )
-#
-# terminus_stop = "Trudering Bf."
-# demand_file = "../../../data/pubtrans/route_193/passenger_demand.csv"
-# pt_gen.output_demand(terminus_stop, demand_file, max_distance_km=0.667, )
