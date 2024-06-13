@@ -241,7 +241,9 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
         if assignment_reward_per_rq is None:
             assignment_reward_per_rq = MAX_DISTANCE * distance_cost + MAX_DELAY * traveler_vot
             assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        ignore_reservation_stop = vr_control_func_dict.get("irs", True) # ignore travel distance to reservation stop (last in plan; usually far in the future)
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
+        LOG.info(f" -> ignore_reservation_stop: {ignore_reservation_stop}")
         reassignment_penalty = vr_control_func_dict.get("p_reassign", None)  # penalty for reassigning a request
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
@@ -259,6 +261,8 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             sum_dist = 0
             last_pos = veh_obj.pos
             for ps in veh_plan.list_plan_stops:
+                if ps.is_locked_end() and ignore_reservation_stop:
+                    break
                 pos = ps.get_pos()
                 if pos != last_pos:
                     sum_dist += routing_engine.return_travel_costs_1to1(last_pos, pos)[2]
@@ -288,7 +292,9 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
         reservation_rq_weight = vr_control_func_dict.get("rrw", 10) # reward factor for assigning not assigned reservation requests
         assignment_reward_per_rq = MAX_DISTANCE * distance_cost + MAX_DELAY * traveler_vot
         assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        ignore_reservation_stop = vr_control_func_dict.get("irs", True) # ignore travel distance to reservation stop (last in plan; usually far in the future)
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
+        LOG.info(f" -> ignore_reservation_stop: {ignore_reservation_stop}")
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function combines the total driving costs and the value of customer time.
@@ -311,6 +317,8 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             sum_dist = 0
             last_pos = veh_obj.pos
             for ps in veh_plan.list_plan_stops:
+                if ps.is_locked_end() and ignore_reservation_stop:
+                    break
                 pos = ps.get_pos()
                 if pos != last_pos:
                     sum_dist += routing_engine.return_travel_costs_1to1(last_pos, pos)[2]

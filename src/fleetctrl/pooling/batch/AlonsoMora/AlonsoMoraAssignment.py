@@ -222,7 +222,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         #self._computeRR()
         
         t_rr = time.time()
-        LOG.debug(f"new RR cons {self.rr}")
+        LOG.debug(f"new RR cons { {k : v for k, v in self.rr.items() if v == 1} }")
         
         # if self.veh_tree_build_timeout is not None:
         #     self._set_init_solution_insertion()
