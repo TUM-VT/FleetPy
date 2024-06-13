@@ -2,7 +2,7 @@ from src.demand.TravelerModels import BasicRequest, offer_str
 
 import logging
 import numpy as np
-import pandas as pd
+import math
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -12,19 +12,25 @@ from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
 INPUT_PARAMETERS_SoDRequest = {
-    "doc" : "This request only performs a mode choice based on if it recieved an offer or not. if an offer is recieved, it accepts the offer. if multiple offers are recieved an error is thrown",
-    "inherit" : "RequestBase",
+    "doc": "This request only performs a mode choice based on if it received an offer or not. if an offer is received,"
+           " it accepts the offer. if multiple offers are received an error is thrown",
+    "inherit": "RequestBase",
     "input_parameters_mandatory": [],
     "input_parameters_optional": [],
     "mandatory_modules": [],
     "optional_modules": []
 }
 
+
 class SoDRequest(BasicRequest):
     """This request performs a mode choice based on walking distance.
-        if an offer is recieved, it accepts the offer
-        if multiple offers are recieved an error is thrown"""
+        if an offer is received, it accepts the offer
+        if multiple offers are received an error is thrown"""
     type = "SoDRequest"
+
+    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
+        self.walk_logit_beta = scenario_parameters.get(G_PT_WALK_LOGIT_BETA, 0)
 
     def choose_offer(self, sc_parameters, simulation_time):
         test_all_decline = super().choose_offer(sc_parameters, simulation_time)
@@ -40,12 +46,11 @@ class SoDRequest(BasicRequest):
         elif len(opts) == 1:
             self.fare = self.offer[opts[0]].get(G_OFFER_FARE, 0)
 
-            max_walking_dist = sc_parameters.get("max_walking_dist", 500)
-            total_walking_dist = self.offer[opts[0]].get(G_OFFER_WALKING_DISTANCE_ORIGIN, 0) + \
-                                 self.offer[opts[0]].get(G_OFFER_WALKING_DISTANCE_DESTINATION, 0)
+            total_walking_dist = (self.offer[opts[0]].get(G_OFFER_WALKING_DISTANCE_ORIGIN, 0) +
+                                  self.offer[opts[0]].get(G_OFFER_WALKING_DISTANCE_DESTINATION, 0))
 
             # decide probability based on walking distance
-            prob_accept = 1 - total_walking_dist / max_walking_dist
+            prob_accept = self.return_walk_logit_prob(total_walking_dist / 1000)
 
             LOG.debug(f"Basic request: {self.rid} ; walking distance: {total_walking_dist} | prob {prob_accept:2f}")
             # decide if to accept the offer
@@ -53,7 +58,15 @@ class SoDRequest(BasicRequest):
                 LOG.debug(f"Basic request: {self.rid} ; accepted offer {opts[0]}")
                 return opts[0]
             else:
-                LOG.debug(f"Basic request: {self.rid} ; declined offer {opts[0]}")
+                LOG.debug(f"Basic request: {self.rid} ; declined offer {opts[0]} for walking distance")
                 return -1
         else:
             LOG.error(f"not implemented {offer_str(self.offer)}")
+
+    def return_walk_logit_prob(self, walking_dist):
+        """
+        return the probability of accepting the offer based on walking distance
+        :param walking_dist: walking distance in km (or compatible with walk_logit_beta)
+        """
+        prob = math.exp(self.walk_logit_beta * walking_dist)
+        return prob
