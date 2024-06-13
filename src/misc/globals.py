@@ -92,6 +92,7 @@ G_PT_TERMINUS_ID = "terminus_id"
 G_PT_DEMAND_DIST = "demand_dist_file"
 # G_PT_REG_VEH = "pt_regular_veh"
 G_PT_N_ZONES = "pt_n_zones"
+G_PT_N_VEH = "pt_n_veh"
 G_PT_ZONE_MIN_DETOUR_TIME = "pt_zone_min_detour_time"
 G_PT_ZONE_MAX_DETOUR_TIME = "pt_zone_max_detour_time"
 G_PT_REG_HEADWAY = "pt_regular_headway"
@@ -102,7 +103,10 @@ G_PT_RL_REWARD_WAIT_TIME = "pt_rl_reward_wait_time"
 G_PT_RL_REWARD_RIDE_TIME = "pt_rl_reward_ride_time"
 G_PT_RL_REWARD_VEH_DIST = "pt_rl_reward_veh_dist"
 G_PT_RL_TRAIN_ITER = "pt_rl_train_iter"
-
+G_PT_ZONE_N_REG_VEH = "pt_zonal_n_reg_veh"
+G_PT_DISPATCH_DELAY = "pt_dispatch_delay"
+G_PT_ROUTE_ID = "pt_route_id"
+G_PT_WALK_LOGIT_BETA = "pt_walk_logit_beta"
 G_PT_X_TOL = 0.01
 
 # zonal control reward attributes
