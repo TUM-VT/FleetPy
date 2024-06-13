@@ -2,7 +2,6 @@
 # standard distribution imports
 # -----------------------------
 import logging
-from src.BatchOfferSimulation import BatchOfferSimulation
 import time
 import datetime
 from tqdm import tqdm
@@ -12,15 +11,16 @@ from tqdm import tqdm
 
 # src imports
 # -----------
-from src.FleetSimulationBase import FleetSimulationBase
+from src.BatchOfferSimulation import BatchOfferSimulation
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------
 from src.misc.globals import *
+
 LOG = logging.getLogger(__name__)
 PROGRESS_LOOP = "off"
-PROGRESS_LOOP_VEHICLE_STATUS = [VRL_STATES.IDLE,VRL_STATES.CHARGING,VRL_STATES.REPOSITION]
+PROGRESS_LOOP_VEHICLE_STATUS = [VRL_STATES.IDLE, VRL_STATES.CHARGING, VRL_STATES.REPOSITION]
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # functions
@@ -31,26 +31,28 @@ PROGRESS_LOOP_VEHICLE_STATUS = [VRL_STATES.IDLE,VRL_STATES.CHARGING,VRL_STATES.R
 # main
 # ----
 INPUT_PARAMETERS_BatchOfferSimulation = {
-    "doc" :     """
+    "doc": """
     customers request trips from a single ride-pooling operator continously in time.
     offers are only created after the optimisation step of the operator and fetched from the time_trigger function.
     """,
-    "inherit" : "BatchOfferSimulation",
+    "inherit": "BatchOfferSimulation",
     "input_parameters_mandatory": [
     ],
     "input_parameters_optional": [
     ],
     "mandatory_modules": [
-    ], 
+    ],
     "optional_modules": []
 }
+
 
 class RLBatchOfferSimulation(BatchOfferSimulation):
     """
     customers request trips from a single ride-pooling operator continously in time.
     offers are only created after the optimisation step of the operator and fetched from the time_trigger function
     """
-    def step(self, sim_time, RL_action=None):
+
+    def step(self, sim_time: int, rl_action: int | None = None):
         """This method determines the simulation flow in a time step.
             # 1) update fleets and network
             # 2) get new travelers, add to undecided request
@@ -61,6 +63,7 @@ class RLBatchOfferSimulation(BatchOfferSimulation):
             # 7) trigger charging ops
 
         :param sim_time: new simulation time
+        :param rl_action: action from RL agent
         :return: None
         """
         # 1)
@@ -87,10 +90,10 @@ class RLBatchOfferSimulation(BatchOfferSimulation):
         # 5)
         for op_id, op_obj in enumerate(self.operators):
             # here offers are created in batch assignment
-            if RL_action is None:
+            if rl_action is None:
                 op_obj.time_trigger(sim_time)
             else:
-                RL_var = op_obj.time_trigger(sim_time, RL_action=RL_action)
+                rl_var = op_obj.time_trigger(sim_time, rl_action=rl_action)
 
         # 6)
         for rid, rq_obj in self.demand.get_undecided_travelers(sim_time):
@@ -100,7 +103,7 @@ class RLBatchOfferSimulation(BatchOfferSimulation):
                 if amod_offer is not None:
                     rq_obj.receive_offer(op_id, amod_offer, sim_time)
             self._rid_chooses_offer(rid, rq_obj, sim_time)
-            
+
         # 7)
         for ch_op_dict in self.charging_operator_dict.values():
             for ch_op in ch_op_dict.values():
@@ -108,17 +111,17 @@ class RLBatchOfferSimulation(BatchOfferSimulation):
 
         self.record_stats()
 
-        if RL_action is not None:
-            return RL_var
+        if rl_action is not None:
+            return rl_var
 
-    def run(self, tqdm_position=0, RL_init=False):
+    def run(self, tqdm_position=0, rl_init=False):
         self._start_realtime_plot()
         t_run_start = time.perf_counter()
         if not self._started:
             self._started = True
             if PROGRESS_LOOP == "off":
                 for sim_time in range(self.start_time, self.end_time, self.time_step):
-                    if RL_init:  # end if it's for RL initialization
+                    if rl_init:  # end if it's for RL initialization
                         return
                     self.step(sim_time)
                     self._update_realtime_plots_dict(sim_time)
@@ -129,10 +132,10 @@ class RLBatchOfferSimulation(BatchOfferSimulation):
                     pbar.set_description(self.scenario_parameters.get(G_SCENARIO_NAME))
                     for sim_time in range(self.start_time, self.end_time, self.time_step):
                         remaining_requests = sum([len(x) for x in self.demand.future_requests.values()])
-                        if RL_init: # end if it's for RL initialization
+                        if rl_init:  # end if it's for RL initialization
                             return
                         self.step(sim_time)
-                        cur_perc = int(100 * (1 - remaining_requests/all_requests))
+                        cur_perc = int(100 * (1 - remaining_requests / all_requests))
                         pbar.update(cur_perc - pbar.n)
                         vehicle_counts = self.count_fleet_status()
                         info_dict = {"simulation_time": sim_time,
@@ -173,7 +176,6 @@ class RLBatchOfferSimulation(BatchOfferSimulation):
         LOG.info(prt_str)
         self._end_realtime_plot()
 
-
     def record_stats(self, force=True):
         """This method records the stats at the end of the simulation."""
         super().record_stats(force=force)
@@ -187,11 +189,7 @@ class RLBatchOfferSimulation(BatchOfferSimulation):
             op_obj.output_assigned_zone_time(outputfile)
         outputfile = os.path.join(output_dir, "3-0_n_SAV_zone.csv")
         for op_id, op_obj in enumerate(self.operators):
-            op_obj.output_no_SAV_zone_assigned_time(outputfile)
+            op_obj.output_no_sav_zone_assigned_time(outputfile)
         outputfile = os.path.join(output_dir, "3-0_RL_state_time.csv")
         for op_id, op_obj in enumerate(self.operators):
             op_obj.output_state_df(outputfile)
-
-        # outputfile = os.path.join(output_dir, "3-0_RL_action_time.csv")
-        # for op_id, op_obj in enumerate(self.operators):
-        #     op_obj.output_action_time(outputfile)

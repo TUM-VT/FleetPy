@@ -13,16 +13,21 @@ import logging
 
 LOG = logging.getLogger(__name__)
 
+
 class FleetPyEnv(gym.Env):
+    """
+    Custom FleetPy environment for Gymnasium API
+    """
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, RL_config):
+    def __init__(self, rl_config):
+        # Initialize the FleetPy environment
         super(FleetPyEnv, self).__init__()
-        use_case: str = RL_config["use_case"]
-        action_no = RL_config["action_no"]
-        start_config_i = RL_config["start_config_i"]
-        cc_file = RL_config["cc_file"]
-        sc_file = RL_config["sc_file"]
+        use_case: str = rl_config["use_case"]
+        action_no = rl_config["action_no"]
+        start_config_i = rl_config["start_config_i"]
+        cc_file = rl_config["cc_file"]
+        sc_file = rl_config["sc_file"]
         self.use_case: str = use_case
         self.action_no = action_no
         # Initialize your FleetPy simulation here using the config argument if necessary
@@ -31,13 +36,12 @@ class FleetPyEnv(gym.Env):
         cc = os.path.join(scs_path, cc_file)
         # sc = os.path.join(scs_path, "zonal_RL.csv")
         sc = os.path.join(scs_path, sc_file)
-        if use_case == "train" or use_case == "baseline" or use_case=="zbaseline" or use_case.endswith("result"):
+        if use_case == "train" or use_case == "baseline" or use_case == "zbaseline" or use_case.endswith("result"):
             log_level = "info"
             # sc = os.path.join(scs_path, "zonal_RL.csv")
-        elif use_case == "test" or use_case == "baseline_test" or use_case=="zbaseline_test":
+        elif use_case == "test" or use_case == "baseline_test" or use_case == "zbaseline_test":
             log_level = "debug"
             # sc = os.path.join(scs_path, "example_test.csv")
-
 
         constant_cfg = config.ConstantConfig(cc)
         scenario_cfgs = config.ScenarioConfig(sc)
@@ -50,7 +54,7 @@ class FleetPyEnv(gym.Env):
         constant_cfg["log_level"] = log_level
         constant_cfg["keep_old"] = False
 
-        if use_case == "train" or use_case == "baseline" or use_case=="zbaseline":
+        if use_case == "train" or use_case == "baseline" or use_case == "zbaseline":
             constant_cfg["skip_file_writing"] = 1
         else:
             constant_cfg["skip_file_writing"] = 0
@@ -63,18 +67,16 @@ class FleetPyEnv(gym.Env):
 
         print(f"Loading simulation environment {self.current_config_i}...")
         self.SF: RLBatchOfferSimulation = load_simulation_environment(self.scenario_cfgs[self.current_config_i])
-        self.SF.run(RL_init=True)
+        self.SF.run(rl_init=True)
         self.sim_time = self.SF.start_time
-
-        # self.gamma = 0.98
 
         # Define action and observation space
         # They must be gym.spaces objects
         # Example when assuming discrete actions:
-        self.n_action = 2+1+1  # number of actions (2 zones, do nothing, regular)
+        # TODO: load this from parameters instead of hard code
+        self.n_action = 2 + 1 + 1  # number of actions (2 zones, do nothing, regular)
         # self.n_action = 2 + 1  # number of actions (2 zones, do nothing)
-        # self.action_space = spaces.Discrete(self.n_action)  # Adjust N to your number of actions
-        self.n_action_boundary = (2-1) * 2 + 1 # move a zone boundary left/right or do nothing
+        self.n_action_boundary = (2 - 1) * 2 + 1  # move a zone boundary left/right or do nothing
         if action_no == 2:
             self.action_space = spaces.MultiDiscrete([self.n_action, self.n_action_boundary])
         elif action_no == 1:
@@ -82,11 +84,13 @@ class FleetPyEnv(gym.Env):
         else:
             raise ValueError("Invalid action number")
         # Example for observation space that is an array:
+
+        # TODO: load this from parameters instead of hard code
         self.n_state = 19
-        # self.n_state = 22
         # state_val_low = np.zeros(self.n_state)
         # state_val_high = np.array([500,10000,500,5,500,10000,500,50,50,500,500])
-        self.observation_space = spaces.Box(low=-10, high=10, shape=(self.n_state,), dtype=np.float32)  # Adjust shape and range
+        self.observation_space = spaces.Box(low=-10, high=10, shape=(self.n_state,),
+                                            dtype=np.float32)  # Adjust shape and range
 
         self.n_zone = self.SF.scenario_parameters[G_PT_N_ZONES]
 
@@ -100,10 +104,10 @@ class FleetPyEnv(gym.Env):
         self.n_SAV_avail = 4
         self.zonal_regular_headway_s = self.SF.scenario_parameters["pt_regular_headway"]
 
-
     def step(self, action):
         # Execute one time step within the environment
-        # You should interact with your FleetPy simulation here based on the action and return the next state, reward, done, and info
+        # You should interact with your FleetPy simulation here based on the action
+        # and return the next state, reward, done, and info
         # for sim_time in range(self.SF.start_time, self.SF.end_time, self.SF.time_step):
 
         # skip the step that do not deploy vehicles?
@@ -119,7 +123,6 @@ class FleetPyEnv(gym.Env):
         # if action_z > self.n_zone:
         #     action_z = -1
 
-        # regular_headway = 5
         regular_headway_s = 5 * 60
 
         # regular_penalty = 0
@@ -161,7 +164,7 @@ class FleetPyEnv(gym.Env):
                 #     regular_penalty = 5
                 action_z = z
 
-        action = action_z, self.n_action_boundary-1
+        action = action_z, self.n_action_boundary - 1
         if action_z != self.n_zone:
             # print(action_z)
             z = action_z
@@ -169,11 +172,12 @@ class FleetPyEnv(gym.Env):
             #     z = -1
             self.last_dept[z] = self.sim_time
         # observation, reward, done, truncated, info, zonal_veh_deployed = self.SF.step(self.sim_time, action)
-            # accumulated_reward = reward + accumulated_reward / self.gamma
+        # accumulated_reward = reward + accumulated_reward / self.gamma
 
-        observation, reward, done, truncated, info, zonal_veh_deployed, n_SAV_avail = self.SF.step(self.sim_time, action)
+        observation, reward, done, truncated, info, zonal_veh_deployed, n_sav_avail = self.SF.step(self.sim_time,
+                                                                                                   action)
         # reward -= regular_penalty
-        self.n_SAV_avail = n_SAV_avail
+        self.n_SAV_avail = n_sav_avail
         self.sim_time += self.SF.time_step
         # fast forward till next dispatchment
         # while self.sim_time % regular_headway_s != 0 and not done:
@@ -183,7 +187,7 @@ class FleetPyEnv(gym.Env):
         #         self.sim_time += self.SF.time_step
 
         # skip first 60 minute reward (initialization)
-        if self.sim_time <= self.SF.start_time + 60*60:
+        if self.sim_time <= self.SF.start_time + 60 * 60:
             reward = 0
 
         return observation, reward, done, truncated, info
@@ -210,11 +214,12 @@ class FleetPyEnv(gym.Env):
         if self.current_config_i >= len(self.scenario_cfgs):
             self.current_config_i = 0
 
-        self.SF.run(RL_init=True)
+        self.SF.run(rl_init=True)
         self.sim_time = self.SF.start_time
 
         observation, reward, done, truncated, info, zonal_veh_deployed, _ \
-            = self.SF.step(self.sim_time, (self.n_action-1, self.n_action_boundary-1)) # do nothing at first timestep
+            = self.SF.step(self.sim_time,
+                           (self.n_action - 1, self.n_action_boundary - 1))  # do nothing at first timestep
         # self.sim_time += self.SF.time_step
         self.n_SAV_avail = 4
 
@@ -224,7 +229,6 @@ class FleetPyEnv(gym.Env):
             self.last_dept[1] = self.SF.start_time - 5 * 60
 
         # TODO: look into truncated setting
-
         return observation, None  # Return the initial observation
 
     def render(self, mode='human', close=False):
@@ -233,12 +237,12 @@ class FleetPyEnv(gym.Env):
 
     def close(self):
         # Perform any cleanup when the environment is closed
-        # TODO: carry out metric evaluation
         pass
 
     def action_masks(self) -> List[bool]:
-        # return action masks
-
+        """
+        Return action masks
+        """
         # check regular time
         z = -1
         if self.last_dept[z] + self.zonal_regular_headway_s <= self.sim_time:
@@ -246,8 +250,8 @@ class FleetPyEnv(gym.Env):
         else:
             masks = [True] * (self.n_action - 1) + [False]
 
-            no_SAV_avail = self.n_SAV_avail
-            if no_SAV_avail == 0:
+            no_sav_avail = self.n_SAV_avail
+            if no_sav_avail == 0:
                 for i in range(self.n_zone):
                     masks[i] = False
         LOG.debug(f"{self.sim_time} Action masks: {masks}")

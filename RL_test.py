@@ -1,16 +1,8 @@
 import os.path
 import sys
 
-# import torch
-# import torch.nn as nn
-# import torch.nn.functional as F
-# import numpy as np
-# from torch.distributions import Categorical
-# from src.fleetctrl.SoDZonalControlRL import SoDZonalControlRL
 from FleetPy_gym import FleetPyEnv
-# from src.fleetctrl.SoDZonalControlRL import FeedForwardNN
 from stable_baselines3 import PPO
-# from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 from stable_baselines3.common.env_util import make_vec_env
 
@@ -19,8 +11,6 @@ from sb3_contrib.common.maskable.utils import get_action_masks
 
 import datetime
 import warnings
-# import sys
-# sys.setrecursionlimit(1000000)
 
 # Wrapper method to create a vectorized environment
 def make_fleetpy_env(env_class, n_envs=1, env_kwargs=None):
@@ -50,7 +40,7 @@ def standard_ppo(use_case, action_no, model_name, iter, cc_file, sc_file, n_envs
         "cc_file": cc_file,
         "sc_file": sc_file,
     }
-    # env = FleetPyEnv(RL_config)
+    # env = FleetPyEnv(rl_config)
     # use parallelized environment
 
     # model_name = "ppo_fleetpy_baseline_multiaction"
@@ -60,7 +50,7 @@ def standard_ppo(use_case, action_no, model_name, iter, cc_file, sc_file, n_envs
     model_path = os.path.join(model_dir, model_name + ".zip")
 
     if use_case=="train" or use_case=="baseline" or use_case=="zbaseline":
-        env = make_fleetpy_env(FleetPyEnv, n_envs=n_envs, env_kwargs={"RL_config": RL_config})
+        env = make_fleetpy_env(FleetPyEnv, n_envs=n_envs, env_kwargs={"rl_config": RL_config})
         # check if model exists
 
 
@@ -137,53 +127,10 @@ def standard_ppo(use_case, action_no, model_name, iter, cc_file, sc_file, n_envs
         print(f"Total Reward: {total_rewards}")
 
 
-# def train_ppo(env_name='CartPole-v1', num_episodes=100, max_timesteps=1000):
-#     env = gym.make(env_name)
-#     in_dim = env.observation_space.shape[0]
-#     out_dim = env.action_space.n
-#
-#     ppo = SoDZonalControlRL(in_dim, out_dim, lr_actor=3e-4, lr_critic=3e-4, gamma=0.99)
-#
-#     total_rewards = 0
-#     for episode in range(num_episodes):
-#         state = env.reset()[0]
-#         done = False
-#         timestep = 0
-#
-#         states, actions, rewards, old_log_probs, times = [], [], [], [], []
-#
-#         while not done and timestep < max_timesteps:
-#             timestep += 1
-#             action, log_prob, _ = ppo.select_action(state)
-#             next_state, reward, done, _, _ = env.step(action)
-#
-#             states.append(state)
-#             actions.append(action)
-#             rewards.append(reward)
-#             old_log_probs.append(log_prob)
-#             times.append(timestep)
-#
-#             state = next_state
-#
-#             total_rewards += reward
-#         ppo.ppo_update(states, actions, rewards, old_log_probs, times)
-#
-#         print(f"Episode {episode + 1}: Cum. Reward: {sum(rewards)}")
-#
-#     policy_losses, value_losses, discounted_rewards = ppo.return_losses()
-#     # print(policy_losses)
-#     # print(value_losses)
-#     # print(f"Total Reward: {total_rewards}")
-#     # print(discounted_rewards)
-#     ppo.save_model("ppo_cartpole.pth")
-
-
 # Main execution
 if __name__ == "__main__":
     # read argument for use_case, action_no, and model_name
     masked = False
-
-
 
     if len(sys.argv) == 2:
         # read from scenario file
