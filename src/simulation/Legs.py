@@ -61,7 +61,7 @@ class VehicleRouteLeg:
             return False
 
     def __str__(self):
-        return "VRL: status {} dest {} duration {} earliest start time {} locked {} bd: {}".format(self.status, self.destination_pos, self.duration, self.earliest_start_time, self.locked, {key: [rq.get_rid_struct() for rq in val] for key, val in self.rq_dict.items()})
+        return "VRL: status {} dest {} duration {} earliest start time {} earliest end time {} locked {} bd: {}".format(self.status, self.destination_pos, self.duration, self.earliest_start_time, self.earliest_end_time, self.locked, {key: [rq.get_rid_struct() for rq in val] for key, val in self.rq_dict.items()})
 
     def additional_str_infos(self):
         return "{}".format(self.rq_dict)
