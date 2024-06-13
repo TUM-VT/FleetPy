@@ -1213,3 +1213,20 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
             return new_earliest_pu, new_latest_pu
         else:
             return None
+
+    def change_prq_time_constraints(self, sim_time : int, rid : Any, new_lpt : float, new_ept : float=None):
+        """this function registers if time constraints of a requests is changed during the simulation"""
+        LOG.debug("change time constraints for rid {}".format(rid))
+        prq = self.rq_dict[rid]
+        exceed_tw = True
+        if new_lpt <= prq.t_pu_latest:
+            if new_ept is None or new_ept >= prq.t_pu_earliest:
+                exceed_tw = False
+        prq.set_new_pickup_time_constraint(new_lpt, new_earliest_pu_time=new_ept)
+        ass_vid = self.rid_to_assigned_vid.get(rid)
+        if ass_vid is not None:
+            self.veh_plans[ass_vid].update_prq_hard_constraints(self.sim_vehicles[ass_vid], sim_time,
+                                                                self.routing_engine, prq, new_lpt, new_ept=new_ept,
+                                                                keep_feasible=True)
+        # self.RPBO_Module.register_change_in_time_constraints(rid, prq, assigned_vid=ass_vid,
+        #                                                    exceeds_former_time_windows=exceed_tw)
