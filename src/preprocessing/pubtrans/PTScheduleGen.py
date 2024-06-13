@@ -578,7 +578,9 @@ class PTScheduleGen:
         if target_value < p_t_le_t_values[0]:
             return 0
         if target_value > p_t_le_t_values[-1]:
-            raise ValueError("Target value is out of the range of the array")
+            # raise ValueError("Target value is out of the range of the array")
+            print("Target value is out of the range of the array")
+            return len(p_t_le_t_values) - 1
 
         # Find the indices of the two array elements between which target_value lies
         idx_below = np.searchsorted(p_t_le_t_values, target_value) - 1
