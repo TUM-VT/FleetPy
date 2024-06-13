@@ -218,11 +218,18 @@ class PyPlot(Process):
             masks = []
             for status in possible_status:
                 masks.append(self.shared_dict["veh_coord_status_df"]["status"] == status)
+        elif self.shared_dict['map_plot'] == "zone":
+            possible_status = ['-1','0','1','2','3']
+            color_list = STATUS_COLOR_LIST
+            vid_zone = [0,0,0,0,1,2,3,4,1,2,3,4]
+            masks = []
+            for status in range(len(possible_status)):
+                masks.append([vid_zone[i] == status for i in range(len(vid_zone))])
 
         axes = self.axes
 
         # Plot PT line alignment
-        if self.line_alignmen is not None:
+        if self.line_alignment is not None:
             axes[3].plot(self.first_part_x, self.first_part_y, color="black", linewidth=0.5, zorder=1)
             axes[3].plot(self.second_part_x, self.second_part_y, color="black", linewidth=0.5, linestyle="--", zorder=1)
 
@@ -238,8 +245,10 @@ class PyPlot(Process):
         mode = "passengers" if self.shared_dict['passengers'] else "parcels"
         if not self.shared_dict['parcels'] and not self.shared_dict['passengers']:
             mode = "pax"
-        axes[3].text(0.87,0.97, f"Mode: {mode}"
-                     f"\n Number of passengers: {passengers} \n Number of parcels = {parcels} ",
+        # axes[3].text(0.87,0.97, f"Mode: {mode}"
+        #              f"\n Number of passengers: {passengers} \n Number of parcels = {parcels} ",
+        #              transform=axes[3].transAxes)
+        axes[3].text(0.8, 0.97, f"\n Number of passengers: {passengers}",
                      transform=axes[3].transAxes)
         ctx.add_basemap(axes[3], source=self.bg_map_path)
 
@@ -292,6 +301,10 @@ class PyPlot(Process):
 
         self.fig, self.grid_spec, self.axes = self.generate_plot_axes()
         ani = animation.FuncAnimation(self.fig, self.__animate, interval=REALTIME_UPDATE_INTERVAL)
+
+        # TODO: This is to ignore plot tight_layout warnings
+        # warnings.filterwarnings("ignore", category=UserWarning)
+
         plt.show()
         
     def _create_occ_stack_plot(self, axis_id):

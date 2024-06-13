@@ -55,6 +55,8 @@ G_INIT_STATE_F = "init_state_file"
 G_UNPROCESSED_NETWORK_NAME = "unprocessed_network"  # network path with original exported data and source_ids
 G_MAX_IM_OF_PROC = "max_im_offer_process"
 
+# output behavior
+G_SKIP_OUTPUT = "skip_file_writing"
 
 # network general attributes
 G_NETWORK_TYPE = "network_type"
@@ -87,6 +89,30 @@ G_PT_FLEX_DETOUR = "pt_flex_detour"
 G_PT_STATION_F = "station_file"
 G_PT_ALIGNMENT_F = "alignment_file"
 G_PT_TERMINUS_ID = "terminus_id"
+G_PT_DEMAND_DIST = "demand_dist_file"
+# G_PT_REG_VEH = "pt_regular_veh"
+G_PT_N_ZONES = "pt_n_zones"
+G_PT_N_VEH = "pt_n_veh"
+G_PT_ZONE_MIN_DETOUR_TIME = "pt_zone_min_detour_time"
+G_PT_ZONE_MAX_DETOUR_TIME = "pt_zone_max_detour_time"
+G_PT_REG_HEADWAY = "pt_regular_headway"
+# G_PT_ZONAL_HEADWAY = "pt_zonal_headway"
+G_PT_RL_REWARD_TIME_WINDOW = "pt_rl_reward_time_window"
+G_PT_RL_REWARD_SAT_DEMAND = "pt_rl_reward_satisfied_demand"
+G_PT_RL_REWARD_WAIT_TIME = "pt_rl_reward_wait_time"
+G_PT_RL_REWARD_RIDE_TIME = "pt_rl_reward_ride_time"
+G_PT_RL_REWARD_VEH_DIST = "pt_rl_reward_veh_dist"
+G_PT_RL_TRAIN_ITER = "pt_rl_train_iter"
+G_PT_ZONE_N_REG_VEH = "pt_zonal_n_reg_veh"
+G_PT_DISPATCH_DELAY = "pt_dispatch_delay"
+G_PT_ROUTE_ID = "pt_route_id"
+G_PT_WALK_LOGIT_BETA = "pt_walk_logit_beta"
+G_PT_X_TOL = 0.01
+
+# zonal control reward attributes
+G_PT_ZC_RID_SIM_TIME = 0
+G_PT_ZC_RID_WAIT_TIME = 1
+G_PT_ZC_RID_RIDE_TIME = 2
 
 # traveler general attributes
 G_RQ_FILE = "rq_file"
@@ -118,6 +144,7 @@ G_MC_C_D_PV = "private_vehicle_full_costs_per_m"
 
 # traveler specific attributes
 G_WALKING_SPEED = "walking_speed"
+G_MAX_WALKING_DIST = "max_walking_dist"
 
 # -> inter-modal travellers
 G_IM_MIN_MOD_DISTANCE = "min_IM_MOD_distance"
@@ -501,6 +528,9 @@ G_OFFER_BROKER_FLAG = "chosen_by_broker"    # for easyride broker
 
 G_OFFER_WALKING_DISTANCE_ORIGIN = "walking_distance_origin"
 G_OFFER_WALKING_DISTANCE_DESTINATION = "walking_distance_destination"
+
+G_OFFER_ZONAL_ORIGIN_ZONE = "origin_zone"
+G_OFFER_ZONAL_DESTINATION_ZONE = "destination_zone"
 
 # additional parameters for intermodal solutions
 # ----------------------------------------------

@@ -26,6 +26,7 @@ def get_src_simulation_environments():
     # FleetPy simulation environments
     sim_env_dict = {}  # str -> (module path, class name)
     sim_env_dict["BatchOfferSimulation"] = ("src.BatchOfferSimulation", "BatchOfferSimulation")
+    sim_env_dict["RLBatchOfferSimulation"] = ("src.RLBatchOfferSimulation", "RLBatchOfferSimulation")
     sim_env_dict["ImmediateDecisionsSimulation"] = ("src.ImmediateDecisionsSimulation", "ImmediateDecisionsSimulation")
     sim_env_dict["BrokerDecision"] = ("src.BrokerSimulation", "BrokerDecisionSimulation")
     sim_env_dict["UserDecisionSimulation"] = ("src.BrokerSimulation", "UserDecisionSimulation")
@@ -57,6 +58,7 @@ def get_src_request_modules():
     # FleetPy request model options
     rm_dict = {}  # str -> (module path, class name)
     rm_dict["BasicRequest"] = ("src.demand.TravelerModels", "BasicRequest")
+    rm_dict["SoDRequest"] = ("src.demand.SoDTravelerModels", "SoDRequest")
     rm_dict["IndividualConstraintRequest"] = ("src.demand.TravelerModels", "IndividualConstraintRequest")
     rm_dict["PriceSensitiveIndividualConstraintRequest"] = ("src.demand.TravelerModels", "PriceSensitiveIndividualConstraintRequest")
     rm_dict["MasterRandomChoiceRequest"] = ("src.demand.TravelerModels", "MasterRandomChoiceRequest")
@@ -153,6 +155,9 @@ def get_src_ride_pooling_batch_optimizers():
     rbo_dict = {}  # str -> (module path, class name)
     rbo_dict["AlonsoMora"] = ("src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignment", "AlonsoMoraAssignment")
     rbo_dict["InsertionHeuristic"] = ("src.fleetctrl.pooling.batch.InsertionHeuristic.BatchInsertionHeuristicAssignment", "BatchInsertionHeuristicAssignment")
+    rbo_dict["ZonalInsertionHeuristic"] = (
+    "src.fleetctrl.pooling.batch.InsertionHeuristic.BatchZonalInsertionHeuristicAssignment",
+    "BatchZonalInsertionHeuristicAssignment")
     # add development content
     if dev_content is not None:
         dev_rbo_dict = dev_content.add_ride_pooling_batch_optimizer_modules()

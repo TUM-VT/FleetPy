@@ -268,9 +268,10 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                     sum_dist += routing_engine.return_travel_costs_1to1(last_pos, pos)[2]
                     last_pos = pos
                 # add fixed reward for number of requests served in the fixed route portion
-                if ps.direct_earliest_end_time is not None:
-                    this_fixed_reward = fixed_reward_coeff * (len(ps.get_list_boarding_rids())
-                                     +  len(ps.get_list_alighting_rids()))
+                # if ps.direct_earliest_end_time is not None:
+                if ps.is_fixed_stop():
+                    this_fixed_reward = (fixed_reward_coeff *
+                                         (len(ps.get_list_boarding_rids()) + len(ps.get_list_alighting_rids())))
                     fixed_reward += this_fixed_reward
                     # if this_fixed_reward>0:
                     #     LOG.debug(f"veh_plan {veh_plan.vid} has fixed reward {this_fixed_reward} for ps {ps} with nos of boarding "

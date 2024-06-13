@@ -632,6 +632,10 @@ class ReplayPyPlot(Replay):
         super().load_scenario(output_dir, start_time_in_seconds=start_time_in_seconds,
                               end_time_in_seconds=end_time_in_seconds,parcels=self.parcels,passengers=self.passengers)
         self.plots_dir = Path(output_dir).joinpath("plots")
+        # check if plots_dir exists and create it if not
+        if not self.plots_dir.exists():
+            self.plots_dir.mkdir()
+
         if plot_extend is None:
             bounds = self.active_nodes_gdf.bounds
             self._map_extent = (bounds.minx.min(), bounds.maxx.max(), bounds.miny.min(), bounds.maxy.max())
@@ -690,7 +694,7 @@ class ReplayPyPlot(Replay):
             
             images = []
             for filename in images_p:
-                images.append(imageio.imread(filename))
+                images.append(imageio.v2.imread(filename))
             imageio.mimsave(os.path.join(self.plots_dir, video_name), images)
             print("Video created: {}".format(os.path.join(self.plots_dir, video_name)))
 
