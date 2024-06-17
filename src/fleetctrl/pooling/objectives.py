@@ -326,9 +326,10 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             # value of time term (treat waiting and in-vehicle time the same)
             sum_user_times = 0
             for rid, boarding_info_list in veh_plan.pax_info.items():
-                rq_time = rq_dict[rid].rq_time
+                #rq_time = rq_dict[rid].rq_time
+                ept = rq_dict[rid].get_o_stop_info()[1]
                 drop_off_time = boarding_info_list[1]
-                sum_user_times += (drop_off_time - rq_time)
+                sum_user_times += (drop_off_time - ept)
             # vehicle costs are taken from simulation vehicle (cent per meter)
             # value of travel time is scenario input (cent per second)
             # LOG.debug(f" -> obj eval: sum_dist {sum_dist} * distance_cost {distance_cost} + sum_user_times {sum_user_times} * traveler_vot {traveler_vot} - assignment_reward {assignment_reward}")
