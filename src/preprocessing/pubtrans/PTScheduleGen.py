@@ -780,7 +780,7 @@ class PTScheduleGen:
 
 if __name__ == "__main__":
     print(os.getcwd())
-    demand_csv = 'data/demand/SoD_demand/raw_data/demand_full_seed_0.csv'
+    demand_csv = 'data/demand/SoD_demand/sample.csv'
     GTFS_folder = "data/pubtrans/MVG_GTFS"
     network_path = "data/networks/osm_route_MVG_road"
 
@@ -846,7 +846,7 @@ if __name__ == "__main__":
     pt_gen.plot_route_with_demand(
         terminus_stop,
         time_range=(start_time, end_time),
-        html_name=f"data/pubtrans/route_{route_no}/route_{route_no}_demand.html"
+        html_name=f"data/pubtrans/route_{route_no}/route_{route_no}_demand_sample.html"
     )
 
     terminus_id = pt_gen.return_terminus_id()
