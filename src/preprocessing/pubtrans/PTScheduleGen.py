@@ -8,35 +8,35 @@ import pyproj
 from shapely.ops import nearest_points
 from scipy.stats import poisson
 from scipy.special import comb
-import math
 import plotly.graph_objects as go
 from src.routing.NetworkBasic import NetworkBasic
 import rtree
+import math
 
 
 class PTScheduleGen:
-    def __init__(self, route_no: int, demand_csv: str, gtfs_path: str, network_nodes_file: str,
-                 to_trip_id: str, back_trip_id: str,
+    def __init__(self, route_no: int, gtfs_path: str, network_nodes_file: str,
+                 to_trip_id: str, back_trip_id: str | None,
                  network_path: str, shape_ids=None, dwell_time=30, ):
         """
         PT Route Schedule Generator
         :param route_no: the route number
-        :param demand_csv: the path to the demand file
-        :param gtfs_path: the path to the GTFS files
-        :param network_nodes_file: the path to the network nodes file
+        :param gtfs_path: the path to the GTFS directory with files (routes, trips, shapes, stops, stop_times)
+        :param network_nodes_file: the path to the network nodes file (consistent with FleetPy format)
         :param to_trip_id: the trip ID for the forward direction
-        :param back_trip_id: the trip ID for the backward direction
+        :param back_trip_id: the trip ID for the backward direction (if None, assumed to be the reverse of to_trip_id)
         :param network_path: folder path of network
         :param shape_ids: the shape IDs for the route
         :param dwell_time: the dwell time at each stop
         """
+        # and migrate to general FleetPy demand files
+
         self.hourly_demand = None
         self.route_with_coords_origin_gdf = None
+        self.route_with_coords = None
 
         print("Loading data for route {}".format(route_no))
         self.route_no = route_no
-        demand_df = pd.read_csv(demand_csv)
-        route_df = demand_df[demand_df['route_ID'] == route_no]
 
         print("Loading GTFS data for route {}".format(route_no))
         # Read GTFS
@@ -118,25 +118,21 @@ class PTScheduleGen:
             # stop_coordinates.at[index, 'distance'] = distance * 111139
             stop_coordinates.at[index, 'distance'] = distance
 
-        self.stop_coordinates = stop_coordinates
         print("Creating schedule for route {}".format(route_no))
-
         route_stop_seq = stop_times[stop_times['trip_id'] == to_trip_id]["stop_id"].to_list()
-        if back_trip_id:
+        if back_trip_id is not None:
             route_stop_seq.extend(stop_times[stop_times['trip_id'] == back_trip_id]["stop_id"].iloc[1:].to_list())
-        # else:
-        #     route_stop_seq.extend(route_stop_seq[::-1])
-
         # create a dataframe for the route stop sequence
         route_stop_seq_df = pd.DataFrame(route_stop_seq, columns=["stop_id"])
         # match with stop_coordinates["nearest_node"]
         route_stop_seq_df = route_stop_seq_df.merge(
             stop_coordinates.reset_index()[["index", "stop_id", "nearest_node"]], on="stop_id")
+        self.stop_coordinates = stop_coordinates
 
-        if not back_trip_id:
+        # if back_trip_id is None, create a copy of the original DataFrame in reverse order
+        if back_trip_id is None:
             # Create a copy of the original DataFrame in reverse order
             route_stop_seq_reversed = route_stop_seq_df.iloc[::-1].reset_index(drop=True)
-
             # Concatenate the original and reversed DataFrames
             route_stop_seq_df = pd.concat([route_stop_seq_df, route_stop_seq_reversed], ignore_index=True)
 
@@ -162,12 +158,23 @@ class PTScheduleGen:
                 route_stop_seq_df.at[i, "arrival_time"] = (int(route_stop_seq_df.at[i, "arrival_time"] / 30) + 1) * 30
         self.route_stop_seq_df = route_stop_seq_df
 
+        print("Initialization finished for route {}".format(route_no))
+
+    def load_demand(self, demand_csv: str):
+        """
+        Load the demand file and generate self.route_with_coords
+        :param demand_csv: the path to the demand file
+        (with columns route_ID, route_departure, origin_stop, destination_stop)
+        """
+        demand_df = pd.read_csv(demand_csv)
+        route_df = demand_df[demand_df['route_ID'] == route_no]
+
         route_with_coords = route_df[['route_departure', 'origin_stop', 'destination_stop']].copy()
         # add the index of route_df as well
         route_with_coords["index"] = route_df.index
         print(route_with_coords.head(5))
 
-        stop_coordinates_oneway = stop_coordinates.drop_duplicates(subset=["stop_name"])
+        stop_coordinates_oneway = self.stop_coordinates.drop_duplicates(subset=["stop_name"])
         print(stop_coordinates_oneway.head(5))
         # Merge the dataframes to get coordinates for each stop
         route_with_coords = route_with_coords.merge(stop_coordinates_oneway[['stop_name', 'stop_lat', 'stop_lon']],
@@ -176,7 +183,6 @@ class PTScheduleGen:
         route_with_coords = route_with_coords.merge(stop_coordinates_oneway[['stop_name', 'stop_lat', 'stop_lon']],
                                                     left_on='destination_stop', right_on='stop_name', how='left')
         route_with_coords.rename(columns={'stop_lat': 'destination_lat', 'stop_lon': 'destination_lon'}, inplace=True)
-        self.route_with_coords: pd.DataFrame = route_with_coords
 
         # convert route_departure from time format to seconds
         for i in route_with_coords.index:
@@ -187,14 +193,24 @@ class PTScheduleGen:
             route_with_coords.at[i, "route_departure"] = int(sep_colon_part[0]) * 3600 + int(
                 sep_colon_part[1]) * 60 + int(sep_colon_part[2])
 
+        self.route_with_coords: pd.DataFrame = route_with_coords
+
+        print("Demand file loaded for route {}".format(route_no))
         print(route_with_coords.head(5))
 
-        print("Initialization finished for route {}".format(route_no))
+    def check_demand_loaded(self):
+        """
+        Check if the demand file is loaded; raise exception if self.route_with_coords is None
+        """
+        if self.route_with_coords is None:
+            raise ValueError("route_with_coords is None, please load demand file first with load_demand(demand_csv)")
 
     def return_hourly_demand(self, time_range: tuple[int, int], demand_factor=1.0):
         """
         Return the hourly demand for the route
         """
+        self.check_demand_loaded()
+
         # filter by time_range
         route_with_coords = self.route_with_coords.copy()
 
@@ -209,6 +225,8 @@ class PTScheduleGen:
         """
         Return the proportion of demand at the terminus stop
         """
+        self.check_demand_loaded()
+
         route_with_coords = self.route_with_coords.copy()
 
         if time_range is not None:
@@ -249,6 +267,8 @@ class PTScheduleGen:
         :param offset_time: the offset time for the demand
         :return: None
         """
+        self.check_demand_loaded()
+
         route_with_coords = self.route_with_coords.copy()
 
         # Set the seed
@@ -754,3 +774,86 @@ class PTScheduleGen:
         if html_name:
             fig.write_html(html_name)
         return fig
+
+
+if __name__ == "__main__":
+    print(os.getcwd())
+    demand_csv = 'data/demand/SoD_demand/raw_data/demand_full_seed_0.csv'
+    GTFS_folder = "data/pubtrans/MVG_GTFS"
+    nodes_file = "data/networks/osm_route_MVG_road/base/nodes_all_infos.geojson"
+    route_param_csv = "studies/SoDMultiRoute/preprocessing/fleet_size/route_param.csv"
+    network_path = "data/networks/osm_route_MVG_road"
+
+    route_no = 193
+    to_trip_id = "100.T2.3-193-G-013-1.4.H"
+    back_trip_id = None
+    shape_ids = ["3-193-G-013-1.4.H"]
+    terminus_stop = "Trudering Bf."
+
+    start_time = 75600
+    end_time = 86400
+
+    n_seed = 2
+    start_seed = 0
+
+    # Generate demand
+    pt_gen = PTScheduleGen(route_no, GTFS_folder, nodes_file, to_trip_id, back_trip_id, network_path,
+                           shape_ids=shape_ids)
+    pt_gen.load_demand(demand_csv)
+
+    output_demand_folder = f"data/demand/route_{route_no}_demand/matched/osm_route_MVG_road"
+    if not os.path.exists(output_demand_folder):
+        os.mkdir(output_demand_folder)
+
+    hourly_demand = pt_gen.return_hourly_demand(time_range=(start_time, end_time))
+    print(f"Route {route_no} hourly demand: {hourly_demand}")
+
+    pt_gen.output_all_demand(n_seed, terminus_stop, output_demand_folder, time_range=(start_time, end_time),
+                             start_i=start_seed, max_distance_km=0.5,
+                             # export_fixed_route=True,
+                             save_complete=True
+                             )
+
+    # Generate alignment, schedule
+    scenario_name_base = "route_{}_flex_{:.1f}_demand_{}"
+
+    h_sod = 5  # SoD headway (min)
+    s_opt = 13  # fleet size (veh)
+    t_c = 40  # cycle time (min)
+    max_t_c = (s_opt * h_sod - t_c) * 60
+    veh_size = 20  # veh size (passenger)
+
+    pt_gen = PTScheduleGen(route_no, GTFS_folder, nodes_file, to_trip_id, back_trip_id, network_path,
+                           shape_ids=shape_ids)
+    pt_gen.load_demand(demand_csv)
+    pt_gen.save_alignment_geojson(f"data/pubtrans/route_{route_no}")
+
+    hourly_demand = pt_gen.return_hourly_demand(time_range=(start_time, end_time))
+    print(f"Route {route_no} hourly demand: {hourly_demand}")
+
+    terminus_demand_prop = pt_gen.return_terminus_demand_proportion(terminus_stop,
+                                                                    time_range=(start_time, end_time))
+
+    route_len = pt_gen.return_route_length()
+    print(f"Route {route_no} length: {route_len}")
+
+    pt_gen.output_station(f"data/pubtrans/route_{route_no}")
+
+    # schedule is now standard instead of dependent on headway and n_veh
+    schedule_file_name = f"{route_no}_schedules.csv"
+    veh_type = f"veh_{veh_size}"
+    pt_gen.output_schedule(f"data/pubtrans/route_{route_no}", schedules_file=schedule_file_name, veh_type=veh_type)
+    gtfs_name = f"route_{route_no}"
+    demand_name = f"route_{route_no}_demand"
+
+    pt_gen.plot_route_with_demand(
+        terminus_stop,
+        time_range=(start_time, end_time),
+        html_name=f"data/pubtrans/route_{route_no}/route_{route_no}_demand.html"
+    )
+
+    terminus_id = pt_gen.return_terminus_id()
+
+    x_flex = 1.0  # km
+    total_flex_time = pt_gen.return_total_flex_time(
+        x_flex=x_flex, route_len=route_len, h=h_sod / 60, width=500, target_value=0.95, max_t_c=max_t_c)
