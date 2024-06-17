@@ -15,19 +15,20 @@ import math
 
 
 class PTScheduleGen:
-    def __init__(self, route_no: int, gtfs_path: str, network_nodes_file: str,
-                 to_trip_id: str, back_trip_id: str | None,
-                 network_path: str, shape_ids=None, dwell_time=30, ):
+    def __init__(self, route_no: int, gtfs_path: str,
+                 to_trip_id: str, network_path: str,
+                 shape_ids: list[str],
+                 back_trip_id: str | None = None, dwell_time=30, ):
         """
         PT Route Schedule Generator
         :param route_no: the route number
         :param gtfs_path: the path to the GTFS directory with files (routes, trips, shapes, stops, stop_times)
-        :param network_nodes_file: the path to the network nodes file (consistent with FleetPy format)
         :param to_trip_id: the trip ID for the forward direction
-        :param back_trip_id: the trip ID for the backward direction (if None, assumed to be the reverse of to_trip_id)
-        :param network_path: folder path of network
+        :param network_path: folder path of network (consistency with FleetPy)
         :param shape_ids: the shape IDs for the route
-        :param dwell_time: the dwell time at each stop
+        :param back_trip_id: the trip ID for the backward direction
+            (optional: if None, assumed to be the reverse of to_trip_id)
+        :param dwell_time: the dwell time at each stop (s)
         """
         # and migrate to general FleetPy demand files
 
@@ -87,6 +88,7 @@ class PTScheduleGen:
         # Get stop coordinates
         stop_coordinates = stops[stops['stop_id'].isin(stop_ids)][['stop_id', 'stop_name', 'stop_lat', 'stop_lon']]
 
+        network_nodes_file = os.path.join(network_path, "base", "nodes_all_infos.geojson")
         network_nodes = gpd.read_file(network_nodes_file)
         self.network_nodes = network_nodes
         # set original crs of self.network_nodes to be self.network_crs
@@ -780,13 +782,10 @@ if __name__ == "__main__":
     print(os.getcwd())
     demand_csv = 'data/demand/SoD_demand/raw_data/demand_full_seed_0.csv'
     GTFS_folder = "data/pubtrans/MVG_GTFS"
-    nodes_file = "data/networks/osm_route_MVG_road/base/nodes_all_infos.geojson"
-    route_param_csv = "studies/SoDMultiRoute/preprocessing/fleet_size/route_param.csv"
     network_path = "data/networks/osm_route_MVG_road"
 
     route_no = 193
     to_trip_id = "100.T2.3-193-G-013-1.4.H"
-    back_trip_id = None
     shape_ids = ["3-193-G-013-1.4.H"]
     terminus_stop = "Trudering Bf."
 
@@ -797,7 +796,7 @@ if __name__ == "__main__":
     start_seed = 0
 
     # Generate demand
-    pt_gen = PTScheduleGen(route_no, GTFS_folder, nodes_file, to_trip_id, back_trip_id, network_path,
+    pt_gen = PTScheduleGen(route_no, GTFS_folder, to_trip_id, network_path,
                            shape_ids=shape_ids)
     pt_gen.load_demand(demand_csv)
 
@@ -810,7 +809,6 @@ if __name__ == "__main__":
 
     pt_gen.output_all_demand(n_seed, terminus_stop, output_demand_folder, time_range=(start_time, end_time),
                              start_i=start_seed, max_distance_km=0.5,
-                             # export_fixed_route=True,
                              save_complete=True
                              )
 
@@ -823,8 +821,6 @@ if __name__ == "__main__":
     max_t_c = (s_opt * h_sod - t_c) * 60
     veh_size = 20  # veh size (passenger)
 
-    pt_gen = PTScheduleGen(route_no, GTFS_folder, nodes_file, to_trip_id, back_trip_id, network_path,
-                           shape_ids=shape_ids)
     pt_gen.load_demand(demand_csv)
     pt_gen.save_alignment_geojson(f"data/pubtrans/route_{route_no}")
 
@@ -842,7 +838,8 @@ if __name__ == "__main__":
     # schedule is now standard instead of dependent on headway and n_veh
     schedule_file_name = f"{route_no}_schedules.csv"
     veh_type = f"veh_{veh_size}"
-    pt_gen.output_schedule(f"data/pubtrans/route_{route_no}", schedules_file=schedule_file_name, veh_type=veh_type)
+    pt_gen.output_schedule(f"data/pubtrans/route_{route_no}",
+                           schedules_file=schedule_file_name, veh_type=veh_type)
     gtfs_name = f"route_{route_no}"
     demand_name = f"route_{route_no}_demand"
 
