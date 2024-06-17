@@ -316,3 +316,10 @@ if __name__ == "__main__":
         cc = os.path.join(scs_path, "constant_config_rpp.csv")
         sc = os.path.join(scs_path, "example_rpp.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
+
+        # i) Semi-on-Demand Public Transit example
+        # Run PTScheduleGen.py to generate required PT files first
+        log_level = "info"
+        cc = os.path.join(scs_path, "constant_config_sod.csv")
+        sc = os.path.join(scs_path, "example_sod.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
