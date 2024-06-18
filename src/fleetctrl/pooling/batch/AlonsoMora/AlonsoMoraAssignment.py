@@ -293,6 +293,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param is_allready_assigned: if not considered for global optimisation, this flag indicates, if the rid is allready assigned
             in the init solution"""
         if consider_for_global_optimisation:
+            if self.active_requests.get(rid) is not None:
+                self._delRRcons(rid)
             self.new_requests[rid] = 1
             self.requests_to_compute[rid] = 1
         if self.alonso_mora_parallelization_manager is not None:
@@ -608,6 +610,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param rid2: (optional) other plan_request_id"""
         if rid2 is not None:
             rr_key = getRRKey(rid, rid2)
+            if self.rr.get(rr_key) is not None:
+                del self.rr[rr_key]
         else:
             for rid2 in self.active_requests.keys():
                 rr_key = getRRKey(rid, rid2)
