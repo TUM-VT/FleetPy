@@ -293,8 +293,10 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
         assignment_reward_per_rq = MAX_DISTANCE * distance_cost + MAX_DELAY * traveler_vot
         assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
         ignore_reservation_stop = vr_control_func_dict.get("irs", True) # ignore travel distance to reservation stop (last in plan; usually far in the future)
+        ignore_user_cost_horizon = vr_control_func_dict.get("iuch", None) # ignore user cost horizon for reservation requests
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         LOG.info(f" -> ignore_reservation_stop: {ignore_reservation_stop}")
+        LOG.info(f" -> ignore_user_cost_horizon: {ignore_user_cost_horizon}")
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function combines the total driving costs and the value of customer time.
@@ -328,6 +330,8 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             for rid, boarding_info_list in veh_plan.pax_info.items():
                 #rq_time = rq_dict[rid].rq_time
                 ept = rq_dict[rid].get_o_stop_info()[1]
+                if ignore_user_cost_horizon is not None and ept - simulation_time > ignore_user_cost_horizon:
+                    continue
                 drop_off_time = boarding_info_list[1]
                 sum_user_times += (drop_off_time - ept)
             # vehicle costs are taken from simulation vehicle (cent per meter)
