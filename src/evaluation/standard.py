@@ -128,7 +128,7 @@ def create_vehicle_type_db(vehicle_data_dir):
     veh_type_db = {}    # veh_type -> veh_type_data
     for f in list_veh_data_f:
         veh_type_name = os.path.basename(f)[:-4]
-        veh_type_data = pd.read_csv(f, index_col=0, squeeze=True)
+        veh_type_data = pd.read_csv(f, index_col=0).squeeze()
         veh_type_db[veh_type_name] = {}
         for k, v in veh_type_data.items():
             try:
@@ -381,7 +381,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
                 # Extract the value in rq_time of the request with request_id = rq_id
                 try:
                     request_time = float(op_users.loc[op_users.request_id == rq_id]["rq_time"])
-                    offer_pick_up_time = request_time + t_wait_request
+                    offer_pick_up_time = request_time + t_wait_request # TODO: check if this is correct. It seems it does not consider the time for the vehicle to arrive to the request
                     offer_drop_off_time = offer_pick_up_time + t_drive_request
 
                     real_pick_up_time = float(op_users.loc[op_users.request_id == rq_id]["pickup_time"])
@@ -407,11 +407,15 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
                     dev_pickup_time = real_pick_up_time - offer_pick_up_time
                     dev_dropoff_time = real_drop_off_time - offer_drop_off_time
-                    df_deviation_PUDO_time = df_deviation_PUDO_time.append({'rq_id': rq_id,
-                                                                            'dev_pickup_time': dev_pickup_time,
-                                                                            'dev_dropoff_time': dev_dropoff_time,
-                                                                            'picked_up_too_early': picked_up_too_early,
-                                                                            'dropped_off_too_late': dropped_off_too_late}, ignore_index=True)
+
+                    new_row = pd.DataFrame([{'rq_id': rq_id,
+                         'dev_pickup_time': dev_pickup_time,
+                         'dev_dropoff_time': dev_dropoff_time,
+                         'picked_up_too_early': picked_up_too_early,
+                         'dropped_off_too_late': dropped_off_too_late}])
+
+                    df_deviation_PUDO_time = pd.concat([df_deviation_PUDO_time, new_row], ignore_index=True)
+
                 except:
                     pass # The trip was no served and therefore did not receive an offer
             

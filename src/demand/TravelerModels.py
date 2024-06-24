@@ -66,14 +66,14 @@ class RequestBase(metaclass=ABCMeta):
         self.nr_pax = rq_row.get(G_RQ_PAX, 1)   # TODO RPP: neue attribute für größe/menge/gewicht
         self.duration_pudo_boarding = None # santi
         self.duration_pudo_alighting = None
-        self.insertion_with_heterogenous_PUDO_duration = scenario_parameters.get("insertion_with_heterogenous_PUDO_duration", False)
+        self.insertion_with_heterogenous_PUDO_duration = scenario_parameters.get("insertion_with_heterogenous_PUDO_duration", False) # TODO Santi: discuss with Flo if this is appropriate here
         #
         self.o_node = int(rq_row[G_RQ_ORIGIN])
         self.o_pos = routing_engine.return_node_position(self.o_node)
         self.d_node = int(rq_row[G_RQ_DESTINATION])
         self.d_pos = routing_engine.return_node_position(self.d_node)
         # store miscellaneous custom values from demand file
-        for param, value in rq_row.drop([G_RQ_TIME, G_RQ_ID, G_RQ_ORIGIN, G_RQ_DESTINATION]).iteritems():
+        for param, value in rq_row.drop([G_RQ_TIME, G_RQ_ID, G_RQ_ORIGIN, G_RQ_DESTINATION]).items():
             setattr(self, str(param), value)
         # offer: operator_id > offer class entity
         self.offer = {}
@@ -722,6 +722,9 @@ class RequestWithPUDODuration(RequestBase): # Santi
         column_alighting_name = scenario_parameters.get("column_PUDO_duration_alighting")
         self.insertion_with_heterogenous_PUDO_duration = scenario_parameters.get("insertion_with_heterogenous_PUDO_duration", False) # Not used in this file, but necessary to access this variable in insertion.py 
         self.max_rel_error_black_box_PUDO_duration = scenario_parameters.get("max_rel_error_black_box_PUDO_duration", False) # Not used in this file, but necessary to access this variable in insertion.py 
+        # TODO: instead of having 3 variables for the black box, join them into one that is "parameters_black_box" -> dict with all the parameters
+        self.lower_bound_black_box_PUDO_dur = scenario_parameters.get("lower_bound_black_box_PUDO_dur", False) # Not used in this file, but necessary to access this variable in insertion.py
+        self.upper_bound_black_box_PUDO_dur = scenario_parameters.get("upper_bound_black_box_PUDO_dur", False) # Not used in this file, but necessary to access this variable in insertion.py
 
         if column_boarding_name is not None:
             self.duration_pudo_boarding = rq_row.get(column_boarding_name)
@@ -754,6 +757,24 @@ class RequestWithPUDODuration(RequestBase): # Santi
                 except:
                     raise TypeError(f'ERROR: max_rel_error_black_box_PUDO_duration is {type(self.max_rel_error_black_box_PUDO_duration)} type, but it has to be a float or integer value between 0 and 100!')
                 
+                if self.lower_bound_black_box_PUDO_dur is False:
+                    # error missing value
+                    raise IOError(f'ERROR: lower_bound_black_box_PUDO_dur column is not specified in the input demand data (neither in constant_config nor in scenario_config!')
+                if self.upper_bound_black_box_PUDO_dur is False:
+                    # error missing value
+                    raise IOError(f'ERROR: upper_bound_black_box_PUDO_dur column is not specified in the input demand data (neither in constant_config nor in scenario_config!')
+                
+                try:
+                    self.lower_bound_black_box_PUDO_dur = float(self.lower_bound_black_box_PUDO_dur)
+                    self.upper_bound_black_box_PUDO_dur = float(self.upper_bound_black_box_PUDO_dur)
+                except:
+                    raise TypeError(f'ERROR: lower_bound_black_box_PUDO_dur is {type(self.lower_bound_black_box_PUDO_dur)} and upper_bound_black_box_PUDO_dur is {type(self.upper_bound_black_box_PUDO_dur)} type, but they have to be a float or integer value!')
+
+                if self.lower_bound_black_box_PUDO_dur>=self.upper_bound_black_box_PUDO_dur:
+                    raise ValueError(f'ERROR: lower_bound_black_box_PUDO_dur is {self.lower_bound_black_box_PUDO_dur}, but it has to be smaller than upper_bound_black_box_PUDO_dur {self.upper_bound_black_box_PUDO_dur}!')
+                
+                if self.lower_bound_black_box_PUDO_dur<0:
+                    raise ValueError(f'ERROR: lower_bound_black_box_PUDO_dur is {self.lower_bound_black_box_PUDO_dur}, but it has to be a positive value!')
        
     def choose_offer(self, sc_parameters, simulation_time): # Santi: using the same as in class BasicRequest(RequestBase)
         test_all_decline = super().choose_offer(sc_parameters, simulation_time)
