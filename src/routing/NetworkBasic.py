@@ -178,10 +178,13 @@ class NetworkBasic(NetworkBase):
         print(f"Loading nodes from {nodes_f} ...")
         nodes_df = pd.read_csv(nodes_f)
         self.nodes = nodes_df.apply(read_node_line, axis=1)
-        #
         edges_f = os.path.join(network_name_dir, "base", "edges.csv")
         print(f"Loading edges from {edges_f} ...")
         edges_df = pd.read_csv(edges_f)
+
+        # Santi: here you would load the data with the stochasticity parameters for the travel time of each link
+        # Santi: produce an object with the timestamps of the beginning of each period (similar to travel_time_file_folders within update_network() method)
+
         for _, row in edges_df.iterrows():
             o_node = self.nodes[row[G_EDGE_FROM]]
             d_node = self.nodes[row[G_EDGE_TO]]
@@ -229,12 +232,17 @@ class NetworkBasic(NetworkBase):
         :return: new_tt_flag True, if new travel times found; False if not
         :rtype: bool
         """
+        # Santi: this method is called in the upper level scripts (e.g., BatchOfferSimulation.py) to update the network at every step
         LOG.debug(f"update network {simulation_time}")
         self.sim_time = simulation_time
         if update_state:
             if self.travel_time_file_folders.get(simulation_time, None) is not None:
                 self.load_tt_file(simulation_time)
                 return True
+            
+        # Santi: add another if statement to check if the simulation time is in the list of timestamps of the beginning of each period
+        # If yes, re-draw stochastic travel times for each link and store them in the corresponding attribute "travel_infos_stochastic_from" and "travel_infos_stochastic_to"
+        
         return False
     
     def reset_network(self, simulation_time: float):
@@ -827,28 +835,28 @@ class NetworkBasic(NetworkBase):
         last_dyn_step = None
         for i in range(len(route)):
             # check remaining time on current edge
-            if c_pos[2] is None:
+            if c_pos[2] is None: # Santi: This means the vehicle is exactly in a Node
                 c_pos = (c_pos[0], route[i], 0)
-            rel_factor = (1 - c_pos[2])
-            tt, td = self.nodes[c_pos[0]].get_travel_infos_to(c_pos[1])
+            rel_factor = (1 - c_pos[2] ) # Santi: this indicates what relative length of the edge is left
+            tt, td = self.nodes[c_pos[0]].get_travel_infos_to(c_pos[1]) # SANTI_UCI: the magic should happen here!
             if tt > 86400:
                 LOG.warning(f"move_along_route: very large travel time on edge ({c_pos[0]} -> {c_pos[1]} for vid {sim_vid_id} at time {new_sim_time}) (blocked after tt update?) -> vehicle jumps this edge")
                 tt = 0
-            c_edge_tt = tt
-            c_edge_td = td
-            next_node_time = last_time + rel_factor * c_edge_tt
-            if next_node_time > end_time:
+            c_edge_tt = tt # This is where the stochasticity can be changed!
+            c_edge_td = td # Stay the same
+            next_node_time = last_time + rel_factor * c_edge_tt # Santi: expected arrival at end of the current edge
+            if next_node_time > end_time: # Santi: the arrival at end of the edge is NOT in the current simulation step
                 # move vehicle to final position of current edge
-                end_rel_factor = (end_time - last_time) / tt + c_pos[2]
+                end_rel_factor = (end_time - last_time) / tt + c_pos[2] # Santi: relative position in the edge at the end of the simulation step
                 #print(end_rel_factor, end_time, last_time, c_edge_tt, c_pos[2])
                 driven_distance += (end_rel_factor - c_pos[2]) * c_edge_td
                 c_pos = (c_pos[0], c_pos[1], end_rel_factor)
                 arrival_in_time_step = -1
-                break
-            else:
+                break # Santi: the vehicle is only moved until that edge and then the loop is broken
+            else: # Santi: the vehicle is arriving to the next node during this simulation step and proceeds with next edge
                 # move vehicle to next node/edge and record data
                 driven_distance += rel_factor * c_edge_td
-                next_node = route[i]
+                next_node = route[i] # Santi: why is this the next node? Isn't it the current one?
                 list_passed_nodes.append(next_node)
                 if record_node_times:
                     list_passed_node_times.append(next_node_time)

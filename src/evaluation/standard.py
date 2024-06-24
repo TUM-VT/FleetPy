@@ -256,6 +256,9 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
     number_total_travelers = user_stats[G_RQ_PAX].sum()
 
     for op_id, op_users in user_stats.groupby(G_RQ_OP_ID):
+
+        if op_id is None:
+            continue
         op_name = "?"
         
         op_reservation_horizon = list_operator_attributes[int(op_id)].get(G_RA_OPT_HOR,0)
