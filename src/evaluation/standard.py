@@ -244,11 +244,12 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         offer_entry = entries[G_RQ_OFFERS]
         offer = decode_offer_str(offer_entry)
         row_id_to_offer_dict[key] = offer
+        rid = entries[G_RQ_ID]
         for op_id, op_offer in offer.items():
             try:
-                op_id_to_offer_dict[op_id][key] = op_offer
+                op_id_to_offer_dict[op_id][rid] = op_offer
             except KeyError:
-                op_id_to_offer_dict[op_id] = {key : op_offer}
+                op_id_to_offer_dict[op_id] = {rid : op_offer}
             for offer_param in op_offer.keys():
                 active_offer_parameters[offer_param] = 1
     
