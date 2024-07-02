@@ -1113,15 +1113,22 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
                     self._create_user_offer(prq, simulation_time, assigned_vehicle_plan=assigned_plan)
             for rid in self.unassigned_requests_2.keys():  # check second try rids
                 assigned_vid = self.rid_to_assigned_vid.get(rid, None)
-                if assigned_vid is None:  # decline
-                    self._create_user_offer(self.rq_dict[rid], simulation_time)
+                prq = self.rq_dict[rid]
+                if assigned_vid is None:  # decline if wait time reached
+                    _, _, latest_pu = prq.get_o_stop_info()
+                    if simulation_time >= latest_pu:
+                        self._create_user_offer(prq, simulation_time)
+                    else:
+                        new_unassigned_requests_2[rid] = 1
+                        self.RPBO_Module.delete_request(rid)
+                        self.RPBO_Module.add_new_request(rid, prq)
+                    # self._create_user_offer(self.rq_dict[rid], simulation_time)
                 else:
-                    prq = self.rq_dict[rid]
                     assigned_plan = self.veh_plans[assigned_vid]
                     self._create_user_offer(prq, simulation_time, assigned_vehicle_plan=assigned_plan)
             self.unassigned_requests_1 = {}
             self.unassigned_requests_2 = new_unassigned_requests_2  # retry rids
-            LOG.debug("end of opt:")
+            LOG.debug(f"time{simulation_time}, end of opt:")
             LOG.debug("unassigned_requests_2 {}".format(self.unassigned_requests_2))
             LOG.debug("offers: {}".format(rid_to_offers))
 
@@ -1183,6 +1190,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
                                    additional_parameters=add_offer)
             rq.set_service_offered(offer)
         else:
+            # TODO: fix auto rejection
             offer = self._create_rejection(rq, simulation_time)
 
         return offer
