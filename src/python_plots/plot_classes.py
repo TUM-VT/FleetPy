@@ -9,7 +9,12 @@ from pathlib import Path
 import contextily as ctx
 from pyproj import Transformer
 from datetime import datetime, timedelta
-
+import geopandas as gpd
+from shapely.geometry import LineString
+from shapely.ops import substring
+from src.misc.globals import *
+import pandas as pd
+import warnings
 
 FIG_SIZE = (15,10)
 # Number of historical points to be displayed on the x-axis
@@ -23,13 +28,13 @@ BOARDER_SIZE = 1000
 import matplotlib.colors
 tab20 = plt.cm.get_cmap('Oranges', 20)
 cl = tab20(np.linspace(0, 1, 5))
-STATUS_COLOR_LIST= ["lightgrey","red","blue","orange","green","dimgrey"]
+STATUS_COLOR_LIST= ["lightgrey","red","blue","orange","green","dimgrey","purple","beige"]
 OCCUPANCY_COLOR_LIST = ['dodgerblue'] + list(cl) + ['dimgrey']
 
 
 class PyPlot(Process):
 
-    def __init__(self, nw_dir, shared_dict: dict, plot_folder: str = None, plot_extent=None):
+    def __init__(self, nw_dir, shared_dict: dict, plot_folder: str = None, plot_extent=None, output_dir=None):
         """ Class for plotting real time information
 
         :param nw_dir:      network directory, where the background map is/will be saved
@@ -76,10 +81,46 @@ class PyPlot(Process):
             'service_rate': self._create_service_rate_stack_plot
         }
 
-    def convert_lat_lon(self, lats: list, lons: list, to_epsg: str = "epsg:3857"):
-        proj_transformer = Transformer.from_proj('epsg:4326', to_epsg)
+        self.line_alignment = None
+        # load PT Line alignment parameters
+        if output_dir is not None:
+            scenario_parameters, list_operator_attributes, _ = load_scenario_inputs(output_dir)
+            dir_names = get_directory_dict(scenario_parameters)
+
+            schedules = pd.read_csv(os.path.join(dir_names[G_DIR_PT], scenario_parameters[G_PT_SCHEDULE_F]))
+            # TODO: to generalize for more than 1 line
+            for key, _ in schedules.groupby(["LINE", "line_vehicle_id", "vehicle_type"]):
+                self.line_id = key[0]
+                break
+            alignment_file = scenario_parameters.get(G_PT_ALIGNMENT_F, 0)
+            self.line_alignment: LineString = gpd.read_file(
+                os.path.join(dir_names[G_DIR_PT], alignment_file.format(line_id=self.line_id)))['geometry'].iloc[0]
+
+            self.pt_fixed_length_km: float = scenario_parameters.get(G_PT_FIXED_LENGTH, None)  # km
+            self.crs_km = "EPSG:32632"
+
+            line_alignment_km: LineString = self.convert_lat_lon_line(self.line_alignment, from_epsg='epsg:4326',
+                                                                      to_epsg=self.crs_km, always_xy=True)
+            split_point = self.pt_fixed_length_km * 1000 / line_alignment_km.length
+            first_part_km = substring(self.line_alignment, 0, split_point, normalized=True)
+            second_part_km = substring(self.line_alignment, split_point, 1, normalized=True)
+
+            lon, lat = first_part_km.xy
+            self.first_part_x, self.first_part_y = self.convert_lat_lon(lat, lon, from_epsg='epsg:4326')
+            lon, lat = second_part_km.xy
+            self.second_part_x, self.second_part_y = self.convert_lat_lon(lat, lon, from_epsg='epsg:4326')
+
+    def convert_lat_lon(self, lats: list, lons: list, to_epsg: str = "epsg:3857", from_epsg: str = 'epsg:4326'):
+        proj_transformer = Transformer.from_proj(from_epsg, to_epsg)
         x, y = proj_transformer.transform(lats, lons)
         return list(x), list(y)
+
+    def convert_lat_lon_line(self, line: LineString, to_epsg: str = "epsg:3857", from_epsg: str = 'epsg:4326',
+                             always_xy:bool = False):
+        lats, lons = line.xy
+        proj_transformer = Transformer.from_proj(from_epsg, to_epsg, always_xy=always_xy)
+        x, y = proj_transformer.transform(lats, lons)
+        return LineString(zip(x, y))
 
     def generate_plot_axes(self):
         fig = plt.figure(1, figsize=FIG_SIZE, tight_layout=True)
@@ -90,7 +131,7 @@ class PyPlot(Process):
 
     def draw_plots(self):
         #print("draw")
-        #color_list = ['blue','orange','green','red','purple','beige']
+        # color_list = ['blue','orange','green','red','purple','beige']
             
         self._times.append(self.shared_dict["sim_time_float"])
         for k, v in self.shared_dict["status_counts"].items():
@@ -173,11 +214,26 @@ class PyPlot(Process):
             masks.append(self.shared_dict["veh_coord_status_df"]["status"] == "idle")
         elif self.shared_dict['map_plot'] == "vehicle_status":
             possible_status = self.shared_dict["possible_status"]
+            color_list = STATUS_COLOR_LIST
             masks = []
             for status in possible_status:
                 masks.append(self.shared_dict["veh_coord_status_df"]["status"] == status)
+        elif self.shared_dict['map_plot'] == "zone":
+            possible_status = ['-1','0','1','2','3']
+            color_list = STATUS_COLOR_LIST
+            vid_zone = [0,0,0,0,1,2,3,4,1,2,3,4]
+            masks = []
+            for status in range(len(possible_status)):
+                masks.append([vid_zone[i] == status for i in range(len(vid_zone))])
 
         axes = self.axes
+
+        # Plot PT line alignment
+        if self.line_alignment is not None:
+            axes[3].plot(self.first_part_x, self.first_part_y, color="black", linewidth=0.5, zorder=1)
+            axes[3].plot(self.second_part_x, self.second_part_y, color="black", linewidth=0.5, linestyle="--", zorder=1)
+
+
         # Plot the data on the map
         ### Plot the vehicle status statistics
         ###
@@ -189,8 +245,10 @@ class PyPlot(Process):
         mode = "passengers" if self.shared_dict['passengers'] else "parcels"
         if not self.shared_dict['parcels'] and not self.shared_dict['passengers']:
             mode = "pax"
-        axes[3].text(0.87,0.97, f"Mode: {mode}"
-                     f"\n Number of passengers: {passengers} \n Number of parcels = {parcels} ",
+        # axes[3].text(0.87,0.97, f"Mode: {mode}"
+        #              f"\n Number of passengers: {passengers} \n Number of parcels = {parcels} ",
+        #              transform=axes[3].transAxes)
+        axes[3].text(0.8, 0.97, f"\n Number of passengers: {passengers}",
                      transform=axes[3].transAxes)
         ctx.add_basemap(axes[3], source=self.bg_map_path)
 
@@ -243,15 +301,23 @@ class PyPlot(Process):
 
         self.fig, self.grid_spec, self.axes = self.generate_plot_axes()
         ani = animation.FuncAnimation(self.fig, self.__animate, interval=REALTIME_UPDATE_INTERVAL)
+
+        # TODO: This is to ignore plot tight_layout warnings
+        # warnings.filterwarnings("ignore", category=UserWarning)
+
         plt.show()
         
     def _create_occ_stack_plot(self, axis_id):
         self.axes[axis_id ].set_title("Occupancy Stack Chart")
         self.axes[axis_id ].set_ylabel("Number Vehicles")
-        list_list_values = [self._pax_counts[k] for k in ['0 (reposition)', '0 (route)','1','2','3','4','idle']]
+        # list_list_values = [self._pax_counts[k] for k in ['0 (reposition)', '0 (route)','1','2','3','4','idle']]
+        # print(self._pax_counts)
+        list_list_values = [self._pax_counts[k] for k in list(self.shared_dict["pax_info"].keys())]
         self.axes[axis_id ].stackplot(self._times, *list_list_values,
                                             colors=OCCUPANCY_COLOR_LIST,
-                                            labels = [ '0 (reposition)', '0 (route)','1','2','3','4','idle' ])
+                                            # labels = [ '0 (reposition)', '0 (route)','1','2','3','4','idle' ]
+                                            labels = list(self.shared_dict["pax_info"].keys())
+                                      )
         self.axes[axis_id ].legend(loc="upper left")
         self.axes[axis_id ].set_xlabel("Simulation Time [h]")
         
@@ -266,7 +332,12 @@ class PyPlot(Process):
         
     def _create_occ_count_plot(self, axis_id):
         self.axes[axis_id ].set_title("Occupancy Counts")
-        ks = [ '0 (reposition)', '0 (route)','1','2','3','4','idle' ]
+        max_pax = len(self.shared_dict["pax_info"])
+        # print(self.shared_dict["pax_info"])
+        # ks = [ '0 (reposition)', '0 (route)','1','2','3','4','idle' ]
+        # ks = [ '0 (reposition)', '0 (route)'] + [str(i) for i in range(max_pax-2)]
+        ks = list(self.shared_dict["pax_info"].keys())
+
         self.axes[axis_id ].bar(ks, 
                                     [self.shared_dict["pax_info"][k] for k in ks],
                                     color = OCCUPANCY_COLOR_LIST)
@@ -274,7 +345,7 @@ class PyPlot(Process):
         self.axes[axis_id ].set_xticks(ks)
         self.axes[axis_id ].set_xticklabels(ks, rotation=45)
         self.axes[axis_id ].set_xlabel("Occupancy")
-        self.axes[axis_id ].set_ylabel("Number Vehicles")
+        self.axes[axis_id ].set_ylabel("Number of Vehicles")
         
     def _create_avg_occ_plot(self, axis_id):
         self.axes[axis_id].set_title("Average Occupancy")

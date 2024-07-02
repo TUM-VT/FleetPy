@@ -48,6 +48,11 @@ class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
             if len(r_list) != 0:
                 best_vid, best_plan, _ = min(r_list, key = lambda x:x[2])
                 self.fleetcontrol.assign_vehicle_plan(self.fleetcontrol.sim_vehicles[best_vid], best_plan, sim_time)
+                # update utility
+                veh_obj = self.fleetcontrol.sim_vehicles[best_vid]
+                upd_utility_val = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, self.fleetcontrol.veh_plans[best_vid])
+                self.fleetcontrol.veh_plans[best_vid].set_utility(upd_utility_val)
+
         self.unassigned_requests = {} # only try once
             
     
