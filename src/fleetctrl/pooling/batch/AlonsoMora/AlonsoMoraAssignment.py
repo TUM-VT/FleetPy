@@ -7,6 +7,8 @@ import numpy as np
 from functools import cmp_to_key
 from typing import Callable, Dict, List, Any, Tuple, TYPE_CHECKING
 
+from requests import get
+
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
 from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase, SimulationVehicleStruct
 from src.fleetctrl.pooling.batch.AlonsoMora.misc import *
@@ -25,8 +27,8 @@ if TYPE_CHECKING:
 
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000
-MAX_LENGTH_OF_TREES = 1024 # TODO
-RETRY_TIME = 24*3600
+MAX_LENGTH_OF_TREES = 15 # TODO
+RETRY_TIME = 300# 24*3600
 GUROBI_MIPGAP = 10**-8
 
 INPUT_PARAMETERS_AlonsoMoraAssignment = {
@@ -991,11 +993,16 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         # assigned tree
         assigned_rtv_tree_N = {}
         if assigned_key is not None:
-            necessary_ob_rids = []
-            for ass_rid in getRidsFromRTVKey(assigned_key):
-                if self.v2r_locked.get(vid, {}).get( self._get_associated_baserid(ass_rid) ):
-                    necessary_ob_rids.append(ass_rid)
-            assigned_rtv_tree_N = get_full_assigned_tree(assigned_key, necessary_ob_rids)
+            N_assigned = len(getRidsFromRTVKey(assigned_key))
+            if N_assigned <= MAX_LENGTH_OF_TREES:
+                # LOG.debug(f"assigned key {assigned_key}"
+                necessary_ob_rids = []
+                for ass_rid in getRidsFromRTVKey(assigned_key):
+                    if self.v2r_locked.get(vid, {}).get( self._get_associated_baserid(ass_rid) ):
+                        necessary_ob_rids.append(ass_rid)
+                assigned_rtv_tree_N = get_full_assigned_tree(assigned_key, necessary_ob_rids)
+            else:
+                assigned_rtv_tree_N = {N_assigned : {assigned_key : 1}}
             # LOG.debug(f"necessary keys: {list(getNecessaryKeys(assigned_key, necessary_ob_rids))}")
             # for key in getNecessaryKeys(assigned_key, necessary_ob_rids):
             #     n = len(getRidsFromRTVKey(key))
@@ -1336,7 +1343,10 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         for ass_rid in getRidsFromRTVKey(assigned_key):
             if base_ob_rids_dict.get( self._get_associated_baserid(ass_rid) ):
                 necessary_ob_rids.append(ass_rid)
-        necessary_keys = getNecessaryKeys(assigned_key, necessary_ob_rids)
+        if len(assigned_key) > MAX_LENGTH_OF_TREES:
+            necessary_keys = [assigned_key]
+        else:
+            necessary_keys = getNecessaryKeys(assigned_key, necessary_ob_rids)
         assigned_v2rb = self.rtv_obj.get(assigned_key)
         if assigned_v2rb is None:
             #LOG.warning("assigned rtv-key not created after build! {} for vid {}".format(assigned_key, vid))
