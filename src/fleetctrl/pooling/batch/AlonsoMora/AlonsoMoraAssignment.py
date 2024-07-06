@@ -2,12 +2,9 @@ from __future__ import annotations
 import logging
 
 import time
-from tkinter import N
 import numpy as np
 from functools import cmp_to_key
 from typing import Callable, Dict, List, Any, Tuple, TYPE_CHECKING
-
-from requests import get
 
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
 from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase, SimulationVehicleStruct
