@@ -31,7 +31,7 @@ LOG_LEVEL = logging.WARNING
 LOG = logging.getLogger(__name__)
 
 
-class PerfectOMyopicDForecast(PerfectForecastDistributionZoneSystem):
+class PerfectORandomDForecast(PerfectForecastDistributionZoneSystem):
     """
     this class can be used like the "basic" ZoneSystem class
     but instead of getting values from a demand forecast dabase, this class has direct access to the demand file
@@ -44,8 +44,6 @@ class PerfectOMyopicDForecast(PerfectForecastDistributionZoneSystem):
         super().__init__(zone_network_dir, scenario_parameters, dir_names, operator_attributes)
         if self.fc_temp_resolution is None:
             self.fc_temp_resolution = operator_attributes[G_RA_FC_TR] # TODO ?
-            
-        self._past_request_ods = [] # list of (request_time, origin_zone, destination_zone)
         
     def time_trigger(self, sim_time):
         """"
@@ -53,16 +51,6 @@ class PerfectOMyopicDForecast(PerfectForecastDistributionZoneSystem):
         -> here: cleaning of past request od list
         """
         super().time_trigger(sim_time)
-        LOG.debug(f"trigger at {sim_time}: past rqs before {self._past_request_ods}")
-        if len(self._past_request_ods) > 0 and self._past_request_ods[0][0] < sim_time - self.fc_temp_resolution:
-            # remove old requests from list
-            break_index = 0
-            for i, entry in enumerate(self._past_request_ods):
-                if entry[0] >= sim_time - self.fc_temp_resolution:
-                    break_index = i
-                    break
-            self._past_request_ods = self._past_request_ods[break_index:]
-            LOG.debug(f"past rqs after: {self._past_request_ods}")
             
     def register_new_request(self, sim_time: int, plan_request: PlanRequest):
         """ 
@@ -70,11 +58,7 @@ class PerfectOMyopicDForecast(PerfectForecastDistributionZoneSystem):
         :param sim_time: current simulation time
         :param plan_request: plan_request obj
         """
-        o_node = plan_request.get_o_stop_info()[0][0]
-        o_zone = self.get_zone_from_node(o_node)
-        d_node = plan_request.get_d_stop_info()[0][0]
-        d_zone = self.get_zone_from_node(d_node)
-        self._past_request_ods.append( (sim_time, o_zone, d_zone) )
+        pass
     
     def register_rejected_request(self, sim_time, plan_request):
         """ 
@@ -181,19 +165,6 @@ class PerfectOMyopicDForecast(PerfectForecastDistributionZoneSystem):
             scale = 1.0
         LOG.debug(f"call get od forecasts: {t0} {t1} {self.fc_temp_resolution}")
         d_distributions = {}
-        for _, o_zone, d_zone in self._past_request_ods:
-            if o_zone >= 0 and d_zone >= 0:
-                try:
-                    d_distributions[o_zone][d_zone] += future_fraction
-                except KeyError:
-                    try:
-                        d_distributions[o_zone][d_zone] = future_fraction
-                    except KeyError:
-                        d_distributions[o_zone] = {d_zone : future_fraction}
-        for o_zone, d_dict in d_distributions.items():
-            s = sum(d_dict.values())
-            for d_zone in d_dict.keys():
-                d_dict[d_zone] /= s
                 
         return_dict = {}
         for t in range(t0, t1):
@@ -235,19 +206,6 @@ class PerfectOMyopicDForecast(PerfectForecastDistributionZoneSystem):
         
         LOG.debug(f"call get od forecasts: {t0} {t1} {self.fc_temp_resolution}")
         d_distributions = {}
-        for _, o_zone, d_zone in self._past_request_ods:
-            if o_zone >= 0 and d_zone >= 0:
-                try:
-                    d_distributions[o_zone][d_zone] += 1
-                except KeyError:
-                    try:
-                        d_distributions[o_zone][d_zone] = 1
-                    except KeyError:
-                        d_distributions[o_zone] = {d_zone : 1}
-        for o_zone, d_dict in d_distributions.items():
-            s = sum(d_dict.values())
-            for d_zone in d_dict.keys():
-                d_dict[d_zone] /= s
         
         relevant_intervals = self._get_relevant_forcast_intervals(t0, t1)
         
