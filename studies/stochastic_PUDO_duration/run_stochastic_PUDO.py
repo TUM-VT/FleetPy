@@ -20,7 +20,7 @@ if __name__ == "__main__":
    
     show_progress_bar = False
    
-    compare_eval_results_in_excel = True
+    compare_eval_results_in_excel = False
 
     #f_out = open(os.path.join( os.path.dirname(os.path.abspath(__file__)), "sys_out.txt"), "w")
     #sys.stdout = f_out
@@ -40,9 +40,13 @@ if __name__ == "__main__":
             print(scs_path)
             log_level = "info" # "debug"
             cc = os.path.join(scs_path, r"constant_config_stochastic_PUDO.csv")
+            # sc = os.path.join(scs_path, r"debugging_scenario_name_change.csv")
             sc = os.path.join(scs_path, r"scenario_config_stochastic_PUDO.csv")
+            sc = os.path.join(scs_path, r"scenario_config_stochastic_PUDO_DEBUGGING.csv")
+
+            # run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=2, n_parallel_sim=3)
             run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
-           
+
             # log_level = "info"
             # cc = os.path.join(SC_PATH, r"const_cfg_all.yaml")
             # sc = os.path.join(SC_PATH, r"scaling.csv")
