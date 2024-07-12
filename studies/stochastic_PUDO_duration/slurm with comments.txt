@@ -1,0 +1,22 @@
+#!/bin/bash
+#SBATCH -J FirstClusterTest
+#SBATCH -o /gpfs/scratch/t5621/ge75mum2/ge75mum2/logs/first_test_logs.txt
+#SBATCH -D ./ #Working directory where things should go; Using ./ corresponds to the file where the slurm file is 
+#SBATCH --get-user-env
+#SBATCH --clusters=cm2
+#SBATCH --partition=cm2_std
+#SBATCH --nodes=4 # Better to keep relatively low. Otherwise less likely to get into the queue. There's also a minimum value that is described in the LRZ website
+#SBATCH --tasks-per-node=2 # How many simulations we can run in paralell on a single node (https://doku.lrz.de/job-processing-on-the-linux-cluster-10745970.html). muc2->8-way Haswell-EP nodes with Infiniband FDR14 interconnect and 2 hardware threads per physical core -> in theory 56 processes in parallel at the same time (BUT THIS IS LIMITED BY THE MEMORY LIMIT AVAILABLE AND THE NEEDED MEMORY PER NODE)
+#SBATCH --cpus-per-task=1
+#SBATCH --mail-type=end
+#SBATCH --mail-user=santiago.alvarez@tum.de
+#SBATCH --export=NONE
+#SBATCH --time=36:00:00 #estimation of the time the job will take
+#SBATCH --array=0-1 # This means two arrays. We need to adjust this based on the number of scenarios, the nodes we have and the tasks per node. n_arrays = ROUND_UP(n_scenarios/(task_per_node*nodes))
+
+module load slurm_setup
+module load gurobi
+module load python
+source activate fp_env
+
+srun python slurm_run_job_array.py Fleetpy/studies/STUDY_DIR/scenarios/CONSTANT_NAME.csv Fleetpy/studies/STUDY_DIR/scenarios/SCENARIO_DEF_NAME.csv
