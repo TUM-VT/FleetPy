@@ -45,7 +45,7 @@ class SimulationVehicleStruct():
             self.assigned_route = [VehicleRouteLeg(x.status, x.destination_pos, x.rq_dict, power=x.power, duration=x.duration, route=x.route, locked=x.locked, earliest_start_time=x.earliest_start_time)
                                 for x in simulation_vehicle.assigned_route]
 
-            self.locked_planstops = VehiclePlan(self, sim_time, routing_engine, [])
+            self.locked_planstops = VehiclePlan(self, sim_time, routing_engine, []) # this is not updated dynamically if vehicle states are updated (dangerous!) TODO
             self.set_locked_vehplan(assigned_veh_plan, sim_time, routing_engine)
             
         else:
@@ -158,6 +158,9 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         if fleetcontrol is not None:
             self.fo_id = fleetcontrol.op_id
             self.solver = fleetcontrol.solver
+        else:
+            self.fo_id = None
+            self.solver = "Gurobi"
         self.routing_engine = routing_engine
         self.sim_time = sim_time
         self.std_bt = operator_attributes.get(G_OP_CONST_BT, 0)

@@ -5,6 +5,7 @@ import time
 import numpy as np
 from functools import cmp_to_key
 from typing import Callable, Dict, List, Any, Tuple, TYPE_CHECKING
+import traceback
 
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
 from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase, SimulationVehicleStruct
@@ -147,18 +148,19 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
 
         self.current_best_cfv = 0 #stores the global cost function value from last optimisation
         
-        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("RV_computation_time")
-        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("Update_V2RB_computation_time")
-        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("Compute_V2RB_computation_time")
-        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("Solve_assignment_computation_time")
-        
-        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_V2RBs_at_start")
-        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_V2RBs_after_update")
-        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_V2RBs_after_build")
-        
-        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_Rqs_unassigned")
-        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_Rqs_assigned")
-        self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_Rqs_locked")
+        if self.fleetcontrol is not None:
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("RV_computation_time")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("Update_V2RB_computation_time")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("Compute_V2RB_computation_time")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("Solve_assignment_computation_time")
+            
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_V2RBs_at_start")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_V2RBs_after_update")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_V2RBs_after_build")
+            
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_Rqs_unassigned")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_Rqs_assigned")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_Rqs_locked")
 
     def register_parallelization_manager(self, alonsomora_parallelization_manager : ParallelizationManager):
         LOG.info("AM register parallelization manager")
@@ -208,9 +210,10 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         n_rqs_lock = len(self.r2v_locked.keys())
         n_rqs_unassinged = len(self.unassigned_requests.keys())
         n_rqs_assigned = len(self.active_requests.keys()) - n_rqs_lock - n_rqs_unassinged
-        self.fleetcontrol._add_to_dynamic_fleetcontrol_output(sim_time, {
-            "N_Rqs_unassigned" : n_rqs_unassinged, "N_Rqs_assigned" : n_rqs_assigned, "N_Rqs_locked" : n_rqs_lock
-            })
+        if self.fleetcontrol is not None:
+            self.fleetcontrol._add_to_dynamic_fleetcontrol_output(sim_time, {
+                "N_Rqs_unassigned" : n_rqs_unassinged, "N_Rqs_assigned" : n_rqs_assigned, "N_Rqs_locked" : n_rqs_lock
+                })
         
         t_setup = time.time()
         
@@ -230,8 +233,9 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             ## LOG.debug(f"untracked boarding for vid {vid}")
             assigned_key = self.current_assignments[vid]
             if not self.rtv_obj.get(assigned_key):
-                ## LOG.debug(f"create v2rb {assigned_key}")
+                LOG.debug(f"create v2rb {assigned_key}")
                 assigned_plan = self.external_assignments[vid][1]
+                LOG.debug(f"externally assigned plan: {assigned_plan}")
                 assigned_v2rb = V2RB(self.routing_engine, self.active_requests, sim_time, assigned_key, self.veh_objs[vid], self.std_bt, self.add_bt, self.objective_function, orig_veh_plans=[assigned_plan])
                 self._addRtvKey(assigned_key, assigned_v2rb)
         # LOG.info("build V2RBs")
@@ -279,7 +283,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             "RV_computation_time" : times["rv"],
             "Solve_assignment_computation_time" : times["opt"],
         }
-        self.fleetcontrol._add_to_dynamic_fleetcontrol_output(sim_time, dyn_out_dict)
+        if self.fleetcontrol is not None:
+            self.fleetcontrol._add_to_dynamic_fleetcontrol_output(sim_time, dyn_out_dict)
 
 
     def add_new_request(self, rid : Any, prq : PlanRequest, consider_for_global_optimisation : bool = True, is_allready_assigned : bool = False):
@@ -435,13 +440,18 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         else:
             rtv_key = getRTVkeyFromVehPlan(assigned_plan)
             self.current_assignments[vid] = rtv_key
-            #LOG.debug(f"assign {vid} -> {rtv_key} | is external? {is_external_vehicle_plan}")
+            LOG.debug(f"assign {vid} -> {rtv_key} | is external? {is_external_vehicle_plan}")
+            LOG.debug(f" -> assigned plan {assigned_plan}")
             if is_external_vehicle_plan and not _is_init_sol:
                 self.external_assignments[vid] = (rtv_key, None)
                 self.rebuild_rtv[vid] = 1
                 self.delete_vehicle_database_entries(vid)
             elif _is_init_sol and not is_external_vehicle_plan:
                 self.external_assignments[vid] = (rtv_key, assigned_plan)
+            elif is_external_vehicle_plan and _is_init_sol: # TODO its strange here, but would not touch it
+                self.external_assignments[vid] = (rtv_key, assigned_plan)
+                self.rebuild_rtv[vid] = 1
+                self.delete_vehicle_database_entries(vid)
 
     def get_current_assignment(self, vid : int) -> VehiclePlan:
         """ returns the vehicle plan assigned to vid currently
@@ -585,7 +595,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         rtv_key = getRTVkeyFromVehPlan(vehicle_plan)
         new_rtv_key = deleteRidFromRtv(rid_to_remove, rtv_key)
         if new_rtv_key is None:
-            return None
+            return simple_remove(veh_obj, vehicle_plan, rid_to_remove, sim_time, self.routing_engine, self.objective_function, self.active_requests, self.std_bt, self.add_bt)
         new_v2rb = self.rtv_obj.get(new_rtv_key)
         if new_v2rb is not None:
             return new_v2rb.getBestPlan()
@@ -921,13 +931,14 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 self._buildTreeForVid(vid)
                 t_build += time.time() - t
                 N_v2rbs_after_build += len(self.rtv_v.get(vid, {}))
-            self.fleetcontrol._add_to_dynamic_fleetcontrol_output(self.sim_time, {
-                "Update_V2RB_computation_time" : t_update,
-                "Compute_V2RB_computation_time" : t_build,
-                "N_V2RBs_at_start" : N_v2rbs_before,
-                "N_V2RBs_after_update" : N_v2rbs_after_update,
-                "N_V2RBs_after_build" : N_v2rbs_after_build
-            })
+            if self.fleetcontrol is not None:
+                self.fleetcontrol._add_to_dynamic_fleetcontrol_output(self.sim_time, {
+                    "Update_V2RB_computation_time" : t_update,
+                    "Compute_V2RB_computation_time" : t_build,
+                    "N_V2RBs_at_start" : N_v2rbs_before,
+                    "N_V2RBs_after_update" : N_v2rbs_after_update,
+                    "N_V2RBs_after_build" : N_v2rbs_after_build
+                })
         else:
             new_v2rbs_all = []
             batch_size = max(float(np.floor(len(self.veh_objs)/self.alonso_mora_parallelization_manager.number_cores/5.0)), 1)
@@ -1509,7 +1520,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         while not grb_available and delta_t <= RETRY_TIME:
             try:
                 with gurobi.Env(empty=True) as env:
-                    if self.fleetcontrol.log_gurobi:
+                    if self.fleetcontrol is not None and self.fleetcontrol.log_gurobi:
                         import os
                         from src.misc.globals import G_DIR_OUTPUT
                         with open(os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT], "gurobi_log.log"), "a") as f:
@@ -1662,6 +1673,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 delta_t = time.time() - t0
                 if not warning_created:
                     print("GUROBI ERROR: License Server not found or License not up to date!")
+                    traceback.print_exc()
                     warning_created = True
         gurobi.disposeDefaultEnv()
 

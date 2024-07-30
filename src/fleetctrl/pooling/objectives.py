@@ -535,5 +535,24 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     else:
         raise IOError(f"Did not find valid request assignment control objective string."
                       f" Please check the input parameter {G_OP_VR_CTRL_F}!")
+        
+    def embedded_control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
+        """This function is the embedded objective function which is returned to the calling function.
 
-    return control_f
+        :param simulation_time: current simulation time
+        :param veh_obj: simulation vehicle object
+        :param veh_plan: vehicle plan in question
+        :param rq_dict: rq -> Plan request dictionary
+        :param routing_engine: for routing queries
+        :return: objective function value
+        """
+        try:
+            return control_f(simulation_time, veh_obj, veh_plan, rq_dict, routing_engine)
+        except Exception as e:
+            LOG.error(f"Error in computing control objective function: {e}")
+            LOG.error(f" -> simulation_time: {simulation_time}")
+            LOG.error(f" -> veh_obj: {veh_obj}")
+            LOG.error(f" -> veh_plan: {veh_plan}")
+            raise e
+
+    return embedded_control_f
