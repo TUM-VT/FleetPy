@@ -267,8 +267,10 @@ class FleetControlBase(metaclass=ABCMeta):
             prt_strategy_str += f"\t Dynamic Fleet Sizing: None\n"
 
         # log and print summary of additional strategies
+        self.skip_output = True if scenario_parameters.get(G_SKIP_OUTPUT, 0) > 0 else False
         LOG.info(prt_strategy_str)
-        print(prt_strategy_str)
+        if not self.skip_output:
+            print(prt_strategy_str)
 
     def add_init(self, operator_attributes, scenario_parameters):
         """ additional init for stuff that has to be loaded (i.e. in modules) that requires full init of fleetcontrol
@@ -405,6 +407,9 @@ class FleetControlBase(metaclass=ABCMeta):
         :return: TravellerOffer or None for the request
         :rtype: TravellerOffer or None
         """
+        if self.rq_dict.get(rid) is None:
+            LOG.warning(f"rid {rid} not in database when querrying an offer! -> this might result from an auto reject due to similar o-d pairs in a Batch Offer Framework -> send rejection!")
+            return Rejection(rid, self.op_id)
         return self.rq_dict[rid].get_current_offer()
 
     @abstractmethod

@@ -73,7 +73,10 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
             
             next_o_plan.list_plan_stops[i] = BoardingPlanStop(prq_o_stop_pos, boarding_dict=new_boarding_dict, max_trip_time_dict=mtt_dict.copy(),
                                                               latest_arrival_time_dict=lat_dict.copy(), earliest_pickup_time_dict=new_earliest_pickup_time_dict,
-                                                              latest_pickup_time_dict=new_latest_pickup_time_dict, change_nr_pax=change_nr_pax,duration=stop_duration, change_nr_parcels=old_pstop.get_change_nr_parcels())
+                                                              latest_pickup_time_dict=new_latest_pickup_time_dict, change_nr_pax=change_nr_pax,duration=stop_duration,
+                                                              change_nr_parcels=old_pstop.get_change_nr_parcels(),
+                                                              earliest_start_time=old_pstop.direct_earliest_start_time, earliest_end_time=old_pstop.direct_earliest_end_time,
+                                                              latest_start_time=old_pstop.direct_latest_start_time, fixed_stop=old_pstop.is_fixed_stop())
             #LOG.debug(f"test first if boarding: {next_o_plan}")
             is_feasible = next_o_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
             if is_feasible:
@@ -148,7 +151,9 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                 next_d_plan.list_plan_stops[j] = BoardingPlanStop(d_stop_pos, boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
                                                                   latest_arrival_time_dict=lat_dict.copy(), earliest_pickup_time_dict=ept_dict.copy(),
                                                                   latest_pickup_time_dict=lpt_dict.copy(), change_nr_pax=change_nr_pax, change_nr_parcels=old_pstop.get_change_nr_parcels(),
-                                                                  duration=stop_duration)
+                                                                  duration=stop_duration,
+                                                                  earliest_start_time=old_pstop.direct_earliest_start_time, earliest_end_time=old_pstop.direct_earliest_end_time,
+                                                                  latest_start_time=old_pstop.direct_latest_start_time, fixed_stop=old_pstop.is_fixed_stop())
 
                 is_feasible = next_d_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, init_plan_state)
                 if is_feasible:
@@ -241,14 +246,15 @@ def simple_remove(veh_obj : SimulationVehicle, veh_plan : VehiclePlan, remove_ri
             else:
                 rid_found_in_plan_flag = True
                 change_nr_pax += rq_dict[rid].nr_pax
-        if len(new_boarding_dict.keys()) > 0 or ps.is_locked() or ps.is_locked_end():
+        if len(new_boarding_dict.keys()) > 0 or ps.is_locked() or ps.is_locked_end() or ps.is_fixed_stop():
             dur, _ = ps.get_duration_and_earliest_departure()
             # new_ps = BoardingPlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
             #                           earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
             #                           change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked())
             new_ps = PlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
                                       earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
-                                      change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked(), locked_end=ps.is_locked_end())
+                                      change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked(), locked_end=ps.is_locked_end(), fixed_stop=ps.is_fixed_stop(),
+                                      earliest_start_time=ps.direct_earliest_start_time, earliest_end_time=ps.direct_earliest_end_time, latest_start_time=ps.direct_latest_start_time)
             new_plan_list.append(new_ps)
     #LOG.info("simple remove: {}".format([str(x) for x in new_plan_list]))
     external_pax_info = veh_plan.pax_info.copy()
@@ -373,7 +379,9 @@ def insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : Fle
         return immediate_insertion_with_heuristics(sim_time, prq, fleetctrl, force_feasible_assignment)
 
 
-def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase, force_feasible_assignment : bool=True) -> List[Tuple[Any, VehiclePlan, float]]:
+def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase,
+                                        force_feasible_assignment : bool=True, excluded_vid = []
+                                        ) -> List[Tuple[Any, VehiclePlan, float]]:
     """This function has access to all FleetControl attributes and therefore can trigger different heuristics and
     is easily extendable if new ideas for heuristics are developed.
 
@@ -407,7 +415,7 @@ def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleet
     # -> separation into multiple parts or if-clause for Parallelization_Manager in between?
 
     # 1) pre vehicle-search processes
-    excluded_vid = []
+    # excluded_vid = []
 
     # 2) vehicle-search process
     rv_vehicles, rv_results_dict = veh_search_for_immediate_request(sim_time, prq, fleetctrl, excluded_vid)

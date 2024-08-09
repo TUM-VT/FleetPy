@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Dict, Any, Callable
 if TYPE_CHECKING:
     from src.fleetctrl.planning.VehiclePlan import VehiclePlan
@@ -10,7 +11,7 @@ if TYPE_CHECKING:
 from src.misc.globals import *
 
 LARGE_INT = 1000000
-
+LOG = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # main function
@@ -239,6 +240,56 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             # vehicle costs are taken from simulation vehicle (cent per meter)
             # value of travel time is scenario input (cent per second)
             return sum_dist * distance_cost + sum_user_times * traveler_vot - assignment_reward
+
+    elif func_key == "distance_and_user_times_man_SoD":
+        traveler_vot = vr_control_func_dict["vot"]
+        distance_cost = vr_control_func_dict["dc"]
+        fixed_reward_coeff = vr_control_func_dict["fr"]
+
+        def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
+            """This function combines the total driving costs and the value of customer time.
+
+            :param simulation_time: current simulation time
+            :param veh_obj: simulation vehicle object
+            :param veh_plan: vehicle plan in question
+            :param rq_dict: rq -> Plan request dictionary
+            :param routing_engine: for routing queries
+            :return: objective function value
+            """
+            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            fixed_reward = 0
+
+            # distance term
+            sum_dist = 0
+            last_pos = veh_obj.pos
+            for ps in veh_plan.list_plan_stops:
+                pos = ps.get_pos()
+                if pos != last_pos:
+                    sum_dist += routing_engine.return_travel_costs_1to1(last_pos, pos)[2]
+                    last_pos = pos
+                # add fixed reward for number of requests served in the fixed route portion
+                # if ps.direct_earliest_end_time is not None:
+                if ps.is_fixed_stop():
+                    this_fixed_reward = (fixed_reward_coeff *
+                                         (len(ps.get_list_boarding_rids()) + len(ps.get_list_alighting_rids())))
+                    fixed_reward += this_fixed_reward
+                    # if this_fixed_reward>0:
+                    #     LOG.debug(f"veh_plan {veh_plan.vid} has fixed reward {this_fixed_reward} for ps {ps} with nos of boarding "
+                    #           f"{len(ps.get_list_boarding_rids())} and alighting {len(ps.get_list_alighting_rids())}"
+                    #           )
+
+            # value of time term (treat waiting and in-vehicle time the same)
+            sum_user_times = 0
+            for rid, boarding_info_list in veh_plan.pax_info.items():
+                rq_time = rq_dict[rid].rq_time
+                drop_off_time = boarding_info_list[1]
+                sum_user_times += (drop_off_time - rq_time)
+            # vehicle costs are taken from simulation vehicle (cent per meter)
+            # value of travel time is scenario input (cent per second)
+
+            obj = sum_dist * distance_cost + sum_user_times * traveler_vot - assignment_reward - fixed_reward
+            return obj
+
 
     elif func_key == "distance_and_user_times_with_walk":
         traveler_vot = vr_control_func_dict["vot"]
