@@ -19,7 +19,8 @@ when implementing a new ride-pooling assginment algorithm these functions have t
 
 class SimulationVehicleStruct():
     """ this class can be used to get basic vehicle information for optimisation """
-    def __init__(self, simulation_vehicle : SimulationVehicle, assigned_veh_plan : VehiclePlan, sim_time : int, routing_engine : NetworkBase, empty_init = False):
+    def __init__(self, simulation_vehicle : SimulationVehicle, assigned_veh_plan : VehiclePlan, sim_time : int, 
+                 routing_engine : NetworkBase, empty_init = False, add_assigned_route = True):
         self.op_id = simulation_vehicle.op_id
         self.vid = simulation_vehicle.vid
 
@@ -41,9 +42,12 @@ class SimulationVehicleStruct():
 
             self.cl_start_time = simulation_vehicle.cl_start_time
             
-            # assigned route = list of assigned vehicle legs (copy and remove stationary process (TODO?))
-            self.assigned_route = [VehicleRouteLeg(x.status, x.destination_pos, x.rq_dict, power=x.power, duration=x.duration, route=x.route, locked=x.locked, earliest_start_time=x.earliest_start_time)
-                                for x in simulation_vehicle.assigned_route]
+            if add_assigned_route:
+                # assigned route = list of assigned vehicle legs (copy and remove stationary process (TODO?))
+                self.assigned_route = [VehicleRouteLeg(x.status, x.destination_pos, x.rq_dict, power=x.power, duration=x.duration, route=x.route, locked=x.locked, earliest_start_time=x.earliest_start_time)
+                                    for x in simulation_vehicle.assigned_route]
+            else:
+                self.assigned_route = []
 
             self.locked_planstops = VehiclePlan(self, sim_time, routing_engine, []) # this is not updated dynamically if vehicle states are updated (dangerous!) TODO
             self.set_locked_vehplan(assigned_veh_plan, sim_time, routing_engine)
