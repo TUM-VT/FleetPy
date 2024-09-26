@@ -901,7 +901,20 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 else:
                     to_keep_vids = rv_keep
             else:
-                to_keep_vids = {vid: 1 for vid in vid_dict.keys()}
+                rv_vehicles = [self.veh_objs[vid] for vid in vid_dict.keys()]
+                LOG.debug(f"rv for rid {rid} : number vehicles {len(rv_vehicles)}")
+                if self.max_rv_connections is not None:
+                    LOG.info("not sure if you want to have this here!")
+                    max_rv = self.max_rv_connections
+                    sorted_vids = sorted(vid_dict.keys(), key=lambda x: vid_dict[x])
+                    rv_keep = {vid: 1 for vid in sorted_vids[:max_rv]}
+                    for vid, rtv_key in self.current_assignments.items():
+                        if rid in getRidsFromRTVKey(rtv_key):
+                            rv_keep[vid] = 1
+                    LOG.debug(f" -> number to keep after random heu : {len(rv_keep)} | {rv_keep}")
+                    to_keep_vids = rv_keep
+                else:
+                    to_keep_vids = {vid: 1 for vid in vid_dict.keys()}
             for vid in to_keep_vids.keys():
                 try:
                     self.r2v[rid][vid] = 1
@@ -911,6 +924,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     self.v2r[vid][rid] = 1
                 except:
                     self.v2r[vid] = {rid: 1}
+            
 
     def _computeV2RBdatabase(self):
         """ this function computes the V2RB database for all vehicles """
