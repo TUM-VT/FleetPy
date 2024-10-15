@@ -20,11 +20,12 @@ INPUT_PARAMETERS_TransmoveFleetControl = {
     "optional_modules": []
 }
 
+
 class TransmoveFleetControl(RidePoolingBatchOptimizationFleetControlBase):
     def __init__(self, op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                 dir_names, op_charge_depot_infra=None, list_pub_charging_infra= []):
+                 dir_names, op_charge_depot_infra=None, list_pub_charging_infra=[]):
         """
-        The fleet control module for the transmove project. 
+        The fleet control module for the transmove project.
         Ride pooling optimisation is called after every optimisation_time_step and offers are created in the time_trigger function.
         All requests that are not assigned to a vehicle in the first try will be created a hypothetical offer.
 
@@ -46,7 +47,8 @@ class TransmoveFleetControl(RidePoolingBatchOptimizationFleetControlBase):
         :type list_pub_charging_infra: list of PublicChargingInfrastructureOperator
         """
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra)
+                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra,
+                         list_pub_charging_infra=list_pub_charging_infra)
         self.hypothetical_alighting_requests: dict = {}
         self.incoming_requests: dict = {}
 
@@ -69,7 +71,7 @@ class TransmoveFleetControl(RidePoolingBatchOptimizationFleetControlBase):
         super().user_request(rq, sim_time)
         self.incoming_requests[rq.get_rid_struct()] = 1
         return {}
-    
+
     def _call_time_trigger_request_batch(self, simulation_time):
         """ this function first triggers the upper level batch optimisation
         based on the optimisation solution offers to newly assigned requests are created in the second step with following logic:
@@ -91,7 +93,7 @@ class TransmoveFleetControl(RidePoolingBatchOptimizationFleetControlBase):
             for rid in self.incoming_requests.keys():
                 assigned_vid = self.rid_to_assigned_vid.get(rid, None)
                 prq = self.rq_dict[rid]
-                if assigned_vid is None: # request not assigned to a vehicle
+                if assigned_vid is None:  # request not assigned to a vehicle
                     # create hypothetical offer for the request
                     self._create_hypothetical_offer(prq)
                     # delete it from self.rq_dict and RPBO_Module
@@ -125,7 +127,7 @@ class TransmoveFleetControl(RidePoolingBatchOptimizationFleetControlBase):
         rq_time = prq.rq_time
         direct_tt = prq.init_direct_tt
         pu_time = rq_time + self.max_wt
-        do_time = pu_time + self.bt + direct_tt * (1 + self.max_dtf/100)
+        do_time = pu_time + self.bt + direct_tt * (1 + self.max_dtf / 100)
         fare = 10000
         # offer = {
         #     "t_access": 0,
@@ -148,6 +150,6 @@ class TransmoveFleetControl(RidePoolingBatchOptimizationFleetControlBase):
         prq.set_reservation_flag(False)
         self.hypothetical_alighting_requests[rid] = offer
 
-            
-            
-        
+
+
+
