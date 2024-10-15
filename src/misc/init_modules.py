@@ -79,6 +79,7 @@ def get_src_fleet_control_modules():
     op_dict["PoolingIRSOnly"] = ("src.fleetctrl.PoolingIRSOnly", "PoolingInsertionHeuristicOnly")
     op_dict["PoolingIRSAssignmentBatchOptimization"] = ("src.fleetctrl.PoolingIRSBatchOptimization", "PoolingIRSAssignmentBatchOptimization")
     op_dict["RidePoolingBatchAssignmentFleetcontrol"] = ("src.fleetctrl.RidePoolingBatchAssignmentFleetcontrol", "RidePoolingBatchAssignmentFleetcontrol")
+    op_dict["TransmoveFleetControl"] = ("src.fleetctrl.TransmoveFleetControl", "TransmoveFleetControl")
     op_dict["BrokerExChangeCtrl"] = ("src.fleetctrl.BrokerAndExchangeFleetControl", "BrokerExChangeCtrl")
     op_dict["BrokerBaseCtrl"] = ("src.fleetctrl.BrokerAndExchangeFleetControl", "BrokerBaseCtrl")
     op_dict["BrokerDecisionCtrl"] = ("src.fleetctrl.BrokerAndExchangeFleetControl", "BrokerDecisionCtrl")
@@ -98,6 +99,9 @@ def get_src_repositioning_strategies():
     repo_dict["PavoneFCV2"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingV2RepositioningFC")
     repo_dict["DensityFrontiers"] = ("src.fleetctrl.repositioning.FrontiersDensityBasedRepositioning", "DensityRepositioning")
     repo_dict["AlonsoMoraRepositioning"] = ("src.fleetctrl.repositioning.AlonsoMoraRepositioning", "AlonsoMoraRepositioning")
+    repo_dict["MOIARepoPavone_aggressive"] = ("src.fleetctrl.repositioning.MOIARepoPavone_aggressive", "MOIARepoPavone_aggressive")
+    repo_dict["MOIARepoPavone"] = ("src.fleetctrl.repositioning.MOIARepoPavone", "MOIARepoPavone")
+    repo_dict["MOIARepoPavoneRelative"] = ("src.fleetctrl.repositioning.MOIARepoPavoneRelative", "MOIARepoPavoneRelative")
     # add development content
     if dev_content is not None:
         dev_repo_dict = dev_content.add_repositioning_modules()

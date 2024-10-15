@@ -930,3 +930,101 @@ class FleetControlBase(metaclass=ABCMeta):
                                                 duration=stop_duration, earliest_start_time=earliest_start_time, earliest_end_time=departure_time,
                                                 locked=pstop.is_locked(), stationary_process=stationary_process))
         return list_vrl
+
+    def get_current_fleet_state(self, simulation_time):
+        """This method is used to get the current fleet state. It returns a list of vehicles with their current status dictionsary.
+        """
+        list_veh_status_dict = []
+        for vehicle_obj in self.sim_vehicles:
+            vehicle_plan = self.veh_plans[vehicle_obj.vid]
+            plan_stops_list = []
+            # record current position information
+            # 0: idle, 10: routing, 1: boarding
+            veh_statue = vehicle_obj.status.value
+            if veh_statue == 0:
+                # current position information
+                plan_stop_node = vehicle_obj.pos[0]
+                remaining_time = 0
+                remaining_capacity = vehicle_obj.max_pax
+                cur_pos = {
+                    'plan_stop_node': int(plan_stop_node),
+                    'remaining_time': remaining_time,
+                    'remaining_capacity': int(remaining_capacity),
+                    'status': int(veh_statue),
+                }
+                plan_stops_list.append(cur_pos)
+            elif veh_statue == 10:
+                # current position information
+                plan_stop_node = vehicle_obj.pos[0]
+                remaining_time = 0
+                remaining_capacity = vehicle_obj.max_pax - len(vehicle_obj.pax)
+                # cur_pos = {
+                #     'plan_stop_node' : int(plan_stop_node),
+                #     'remaining_time' : remaining_time,
+                #     'remaining_capacity' : int(remaining_capacity),
+                #     'status' : int(veh_statue),
+                #     # 'rids' : [pax.get_rid() for pax in vehicle_obj.pax],
+                # }
+                # plan_stops_list.append(cur_pos)
+                # add plan stop information
+                pax_list = [pax.get_rid() for pax in vehicle_obj.pax]
+                plan_stops_list = self._encode_vehicle_plan_stops(vehicle_obj.max_pax, pax_list, vehicle_plan,
+                                                                  plan_stops_list, simulation_time)
+            elif veh_statue == 1:
+                # ignore current position information
+                pax_list = [pax.get_rid() for pax in vehicle_obj.pax]
+                plan_stops_list = self._encode_vehicle_plan_stops(vehicle_obj.max_pax, pax_list, vehicle_plan,
+                                                                  plan_stops_list, simulation_time)
+            else:
+                LOG.error(f"vehicle status {vehicle_obj.status} of vehicle {vehicle_obj.vid} is not supported")
+                continue
+                # plan_stop_node = vehicle_obj.pos[0]
+                # remaining_time = 0
+                # remaining_capacity = vehicle_obj.max_pax
+                # cur_pos = {
+                #     'plan_stop_node' : int(plan_stop_node),
+                #     'remaining_time' : remaining_time,
+                #     'remaining_capacity' : int(remaining_capacity),
+                #     'status' : int(veh_statue),
+                #     # 'error' : f'vehicle status {veh_statue} is not supported',
+                # }
+                # plan_stops_list.append(cur_pos)
+
+            vehicle_state_dict = {
+                'vehicle_id': int(vehicle_obj.vid),
+                'vehicle_plan_stops': plan_stops_list,
+            }
+            list_veh_status_dict.append(vehicle_state_dict)
+
+        fleet_state = {
+            'time': int(simulation_time),
+            'vehicleStates': list_veh_status_dict,
+        }
+        return fleet_state
+
+    def _encode_vehicle_plan_stops(self, vehicle_def_cap, pax_list, vehicle_plan, plan_stops_list, simulation_time):
+        """This method is used to encode the vehicle plan stop info for the given vehicle id.
+        """
+        i = 0
+        for plan_stop in vehicle_plan.list_plan_stops:
+            plan_stop_node = plan_stop.pos[0]
+            remaining_time = plan_stop.get_planned_arrival_and_departure_time()[1] - simulation_time
+            if i == 0:
+                pax_onBoard = list(set(pax_list) - set(plan_stop.get_list_boarding_rids()))
+                init_vehicle_cap = vehicle_def_cap - len(pax_onBoard)
+            remaining_capacity = init_vehicle_cap - len(plan_stop.get_list_boarding_rids()) + len(
+                plan_stop.get_list_alighting_rids())
+            plan_stop_info = {
+                'plan_stop_node': int(plan_stop_node),
+                'remaining_time': remaining_time,
+                'remaining_capacity': int(remaining_capacity),
+                'status': 1,
+                # 'bording_rids' : plan_stop.get_list_boarding_rids(),
+                # 'alighting_rids' : plan_stop.get_list_alighting_rids(),
+            }
+            plan_stops_list.append(plan_stop_info)
+            # update capacity
+            init_vehicle_cap = remaining_capacity
+            # update index
+            i += 1
+        return plan_stops_list
