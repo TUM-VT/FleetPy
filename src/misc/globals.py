@@ -269,6 +269,9 @@ G_OP_PA_ASSTH = "op_parcel_assignment_threshold"
 G_OP_PA_OBASS = "op_parcel_passenger_ob_assignment"
 G_OP_PA_REDEL = "op_parcel_remaining_delivery_time"
 
+# ml
+G_OP_FS_REC = "op_record_fleet_state"
+
 # -------------------------------------------------------------------------------------------------------------------- #
 # Charging Stations/Depots
 # ------------------------

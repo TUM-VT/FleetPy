@@ -614,6 +614,9 @@ class FleetSimulationBase:
                 self.operators[op_id].receive_status_update(vid, next_time, passed_VRL, True)
             else:
                 self.operators[op_id].receive_status_update(vid, next_time, passed_VRL, force_update_plan)
+        # record fleet state for machine learning
+        for op_id in range(self.n_op):
+            self.operators[op_id].record_fleet_state(next_time)
         # TODO # after ISTTT: live visualization: send vehicle states (self.live_visualization_flag==True)
 
     def update_vehicle_routes(self, sim_time):

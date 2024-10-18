@@ -39,6 +39,7 @@ op_vr_control_func_dict,func_key:distance_and_user_times_with_walk;vot:0.45
 op_reoptimisation_timestep,60
 op_repo_timestep,300
 op_repo_lock,True
+op_record_fleet_state,True
 ##3,TravelerModel
 rq_type,BasicRequest
 user_max_decision_time,0
