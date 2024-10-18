@@ -98,6 +98,7 @@ def get_src_repositioning_strategies():
     repo_dict["PavoneFCV2"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingV2RepositioningFC")
     repo_dict["DensityFrontiers"] = ("src.fleetctrl.repositioning.FrontiersDensityBasedRepositioning", "DensityRepositioning")
     repo_dict["AlonsoMoraRepositioning"] = ("src.fleetctrl.repositioning.AlonsoMoraRepositioning", "AlonsoMoraRepositioning")
+    repo_dict["MOIARepoPavoneRelative"] = ("src.fleetctrl.repositioning.MOIARepoPavoneRelative", "MOIARepoPavoneRelative")
     # add development content
     if dev_content is not None:
         dev_repo_dict = dev_content.add_repositioning_modules()
