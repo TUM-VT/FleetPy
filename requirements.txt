@@ -1,0 +1,43 @@
+# TODO # merge wasnt easy here!
+# Packages required to run the simulation
+# Non-specific version requirements
+ipython
+numba
+scikit-learn
+
+# Specific version requirements
+# ">=" could be replaced with "~="
+attrs==19.2.0
+#certifi==2019.9.11
+certifi>=2019.9.11
+click==7.0
+click-plugins==1.1.1
+cligj==0.7.1
+dill==0.3.3
+Fiona==1.8.4
+Flask==1.1.2
+Flask-SocketIO==4.3.2
+geopandas==0.7.0
+matplotlib==3.1.1
+numpy==1.19.5
+munch==2.5.0
+networkx==2.3
+pandas==1.2.0
+pyproj==2.6.1.post1
+python-engineio==3.14.2
+python-socketio==4.5.1
+pytz==2019.3
+pyyaml>=5.1.2
+rtree>=0.9.3
+scipy>=1.3.1
+Shapely>=1.6.4
+six==1.12.0
+tqdm==4.36.1
+contextily==1.1.0
+colorama==0.4.4
+
+## deprecated/separated installation required
+# eventlet==0.30.0
+# gurobipy==9.1.1
+# python-dateutil==2.8.1
+# yaml>=0.1.7
