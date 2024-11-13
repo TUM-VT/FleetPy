@@ -236,13 +236,20 @@ class FleetSimulationBase:
         network_type = self.scenario_parameters[G_NETWORK_TYPE]
         network_dynamics_file = self.scenario_parameters.get(G_NW_DYNAMIC_F, None)
         # TODO # check consistency of scenario inputs / another way to refactor add_init_data ?
+
         self.routing_engine: NetworkBase = load_routing_engine(network_type, self.dir_names[G_DIR_NETWORK],
                                                                network_dynamics_file_name=network_dynamics_file)
+        if network_type == "NetworkBasicReliabilityWithStoreCppSumoCoupling":
+            self.routing_engine.set_user_vor(self.scenario_parameters[G_OP_VR_CTRL_F]["vor"])
+            self.routing_engine.set_user_vot(self.scenario_parameters[G_OP_VR_CTRL_F]["vot"])
+            self.routing_engine.loadNetwork(self.dir_names[G_DIR_NETWORK], network_dynamics_file_name=network_dynamics_file)
+       
         if network_type == "NetworkDynamicNFDClusters":
             self.routing_engine.add_init_data(self.start_time, self.time_step,
                                               self.scenario_parameters[G_NW_DENSITY_T_BIN_SIZE],
                                               self.scenario_parameters[G_NW_DENSITY_AVG_DURATION], self.zones,
                                               self.network_stat_f)
+       
         # public transportation module
         LOG.info("Initialization of line-based public transportation...")
         pt_type = self.scenario_parameters.get(G_PT_TYPE)

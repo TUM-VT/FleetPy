@@ -163,6 +163,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
             new_vehicle_plan = self.tmp_assignment[rid]
             vid = new_vehicle_plan.vid
             veh_obj = self.sim_vehicles[vid]
+            LOG.info(f"Assign Vehicle Plan {veh_obj}, {simulation_time}")
             self.assign_vehicle_plan(veh_obj, new_vehicle_plan, simulation_time)
             del self.tmp_assignment[rid]
 
@@ -278,30 +279,30 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
 
         waiting_time = 0 + waiting_time_boarding_stops * prq.boarding_time
         waiting_distance = 0
-        waiting_time_std = 0
+        waiting_time_var = 0
         waiting_cost_function_value = 0
 
         for leg in legs_waiting:
-            tt , dis, std, cfv = self.routing_engine.return_travel_costs_1to1(leg[0],leg[1],mode=self.routing_engine.routing_mode)
+            tt , dis, var, cfv = self.routing_engine.return_travel_costs_1to1(leg[0],leg[1],mode=self.routing_engine.routing_mode)
             waiting_time += tt
             waiting_distance += dis
-            waiting_time_std += std
+            waiting_time_var += var
             waiting_cost_function_value += cfv
         
         driving_time = 0 + driving_time_boarding_stops * prq.boarding_time
         driving_distance = 0
-        driving_time_std = 0
+        driving_time_var = 0
         driving_cost_function_value = 0
 
         for leg in legs_drving:
-            tt , dis, std, cfv = self.routing_engine.return_travel_costs_1to1(leg[0],leg[1],mode=self.routing_engine.routing_mode)
+            tt , dis, var, cfv = self.routing_engine.return_travel_costs_1to1(leg[0],leg[1],mode=self.routing_engine.routing_mode)
             driving_time += tt
             driving_distance += dis
-            driving_time_std += std
+            driving_time_var += var
             driving_cost_function_value += cfv
         
-        return{"wait_t":waiting_time,"wait_dis":waiting_distance,"wait_std":waiting_time_std,"wait_cfv":waiting_cost_function_value,"wait_stops":waiting_time_boarding_stops,
-               "drive_t":driving_time,"drive_dis":driving_distance,"drive_std":driving_time_std,"drive_cfv":driving_cost_function_value,"drive_stops":driving_time_boarding_stops}
+        return{"wait_t":waiting_time,"wait_dis":waiting_distance,"wait_var":waiting_time_var,"wait_cfv":waiting_cost_function_value,"wait_stops":waiting_time_boarding_stops,
+               "drive_t":driving_time,"drive_dis":driving_distance,"drive_var":driving_time_var,"drive_cfv":driving_cost_function_value,"drive_stops":driving_time_boarding_stops}
     def _create_user_offer(self, prq, simulation_time, assigned_vehicle_plan=None, offer_dict_without_plan={}):
         """ creating the offer for a requests
 

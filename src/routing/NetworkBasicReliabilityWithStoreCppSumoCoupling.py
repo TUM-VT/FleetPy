@@ -8,6 +8,10 @@ import logging
 # ------------------------------------------
 import pandas as pd
 import numpy as np
+from datetime import datetime
+import pathlib
+import random
+import math
 
 # src imports
 # -----------
@@ -35,8 +39,8 @@ class Node(BasicNode):
         self.edges_to = {}  #node_obj -> edge
         self.edges_from = {}    #node_obj -> edge
         #
-        self.travel_infos_from = {} #node_index -> (tt, dis,std)
-        self.travel_infos_to = {}   #node_index -> (tt, dis,std)
+        self.travel_infos_from = {} #node_index -> (tt, dis,var)
+        self.travel_infos_to = {}   #node_index -> (tt, dis,var)
         #
         # attributes set during path calculations
         self.is_target_node = False     # is set and reset in computeFromNodes
@@ -54,11 +58,11 @@ class Node(BasicNode):
     def add_next_edge_to(self, other_node, edge):
         #print("add next edge to: {} -> {}".format(self.node_index, other_node.node_index))
         self.edges_to[other_node] = edge
-        self.travel_infos_to[other_node.node_index] = (edge.get_tt(),edge.get_distance(), edge.get_tt_std())
+        self.travel_infos_to[other_node.node_index] = (edge.get_tt(),edge.get_distance(), edge.get_tt_var())
 
     def add_prev_edge_from(self, other_node, edge):
         self.edges_from[other_node] = edge
-        self.travel_infos_from[other_node.node_index] = (edge.get_tt(),edge.get_distance(), edge.get_tt_std())
+        self.travel_infos_from[other_node.node_index] = (edge.get_tt(),edge.get_distance(), edge.get_tt_var())
 
     def get_travel_infos_to(self, other_node_index):
         return self.travel_infos_to[other_node_index]
@@ -68,30 +72,33 @@ class Node(BasicNode):
     
 
 class Edge(BasicEdge):
-    def __init__(self, edge_index, distance, travel_time,travel_time_std):
+    def __init__(self, edge_index, distance, travel_time,travel_time_var):
         self.edge_index = edge_index
         self.distance = distance
         self.travel_time = travel_time
-        self.travel_time_std = travel_time_std
+        self.travel_time_var = travel_time_var
         self.cost_function_value = None
     
-    def set_tt_std(self, travel_time_std):
-        self.travel_time_std = travel_time_std
+    def set_tt_var(self, travel_time_var):
+        self.travel_time_var = travel_time_var
     
-    def get_tt_std(self):
+    def get_tt_var(self):
         """
         :return: (current) travel time standard deviation on edge
         """
-        return self.travel_time_std
+        return self.travel_time_var
     
     def set_cfv(self,cfv):
         self.cost_function_value = cfv
 
-    def get_tt_mean_std(self):
+    def get_tt_mean_var(self):
         """
         :return: (travel time mean, travel time standard deviation) tuple
         """
-        return (self.travel_time, self.travel_time_std)
+        return (self.travel_time, self.travel_time_var)
+    
+    def get_init_cfv(self,cost_function):
+        self.cost_function_value = cost_function(tt_mean=self.travel_time,tt_var=self.travel_time_var,dis=self.distance)
 
 class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSumoCoupling):
     def __init__(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
@@ -107,10 +114,31 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
         :param network_dynamics_file_name: file-name of the network dynamics file
         :type network_dynamics_file_name: str
         """
-        super().__init__(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
+
+        #super().__init__(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
         #self.cpp_router = None
+        """
+        The network will be initialized.
+        This network only uses basic routing algorithms (dijkstra and bidirectional dijkstra)
+        :param network_name_dir: name of the network_directory to be loaded
+        :param type: determining whether the base or a pre-processed network will be used
+        :param scenario_time: applying travel times for a certain scenario at a given time in the scenario
+        :param network_dynamics_file_name: file-name of the network dynamics file
+        :type network_dynamics_file_name: str
+        """
+        self.nodes = []     #list of all nodes in network (index == node.node_index)
+        self.network_name_dir = network_name_dir
+        self._tt_infos_from_folder = True
+        self._current_tt_factor = None
+        self.travel_time_file_infos = self._load_tt_folder_path(network_dynamics_file_name=network_dynamics_file_name)
+        #self.loadNetwork(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
+        self.current_dijkstra_number = 1    #used in dijkstra-class
+        self.sim_time = 0   # TODO #
+        self.zones = None   # TODO #
+        with open(os.sep.join([self.network_name_dir, "base","crs.info"]), "r") as f:
+            self.crs = f.read()   
         self.travel_time_infos = {} #(o,d) -> (tt, dis)       
-        self.travel_time_infos_reliability = {} #(o,d) -> (tt, std)
+        self.travel_time_infos_reliability = {} #(o,d) -> (tt, var)
         self.user_vot = None
         self.user_vor = None
         self.routing_mode = "edge_tt"
@@ -121,11 +149,40 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
         #edges_f = os.path.join(network_name_dir, "base", "edges.csv")
        # self.cpp_router = PyNetwork(nodes_f.encode(), edges_f.encode())
        # super().loadNetwork(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
-       # for attr, value in vars(self).items():
+        #for attr, value in vars(self).items():
             #print(f"{attr}: {value}")
+
     def set_routing_mode(self,routing_mode):
         self.routing_mode = routing_mode
-    def load_tt_file(self, scenario_time):
+    
+    def set_user_vor(self,user_vor):
+        self.user_vor = user_vor
+
+    def set_user_vot(self,user_vot):
+        self.user_vot = user_vot
+    
+    def _save_cpp_tt_file(self,tt_file_df,scenario_time):
+        """
+        cleans folder for csv handover to cpp form preivious simulation runs and saves tt_file_df as a new csv file into it.
+        """
+        py_path  = pathlib.Path(__file__)
+        save_path_dir = py_path.parent/"cpp_router"/"tt_updates"
+        if os.path.exists(save_path_dir):
+            for filename in os.listdir(save_path_dir):
+                file_path = os.path.join(save_path_dir, filename)
+                try:
+                    # If it's a file, delete it
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                except Exception as e:
+                    print(f"Failed to delete {file_path}. Reason: {e}")
+        random_number = random.randint(0, 9999)
+        date = datetime.now().strftime("%Y%m%d%H%M%S%f")
+        save_file_path_cpp = save_path_dir/f"{scenario_time}_tt_update_{date}_{random_number}.csv"
+        tt_file_df.to_csv(save_file_path_cpp)
+        return str(save_file_path_cpp)
+    
+    def load_tt_file(self, scenario_time): ##TODO adjust for 
         """
         loads new travel time files for scenario_time
         """
@@ -133,14 +190,16 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
         if self._tt_infos_from_folder:
             f = self.travel_time_file_infos[scenario_time]
             tt_file = os.path.join(f, "edges_td_att.csv")
-            tt_file_df = pd.read_csv(tt_file)       
-            tt_file_df['edge_cfv'] = tt_file_df.apply(lambda row: self.customized_section_cost_function(tt_mean=row['edge_tt'], tt_std=row['edge_std']), axis=1)
-            columns_to_keep = ['from_node', 'to_node', 'edge_tt', 'distance', 'edge_std', 'edge_cfv']
+            tt_file_df = pd.read_csv(tt_file)  
+            if "edge_std" in tt_file_df.keys():
+                tt_file_df["edge_var"] = tt_file_df["edge_std"].apply(lambda x: x**2)
+            tt_file_df['edge_cfv'] = tt_file_df.apply(lambda row: self.customized_section_cost_function(tt_mean=row['edge_tt'], tt_var=row['edge_var']), axis=1)
+            columns_to_keep = ['from_node', 'to_node', 'edge_tt', 'distance', 'edge_std', 'edge_cfv','edge_var']
             tt_file_df = tt_file_df.drop(columns=[col for col in tt_file_df.columns if col not in columns_to_keep])
-            tt_file_df.to_csv(tt_file)
-            self.cpp_router.updateEdgeTravelTimes(tt_file.encode())
-            for from_node, to_node, edge_tt, edge_tt_std,edge_cfv in zip(tt_file_df[G_EDGE_FROM], tt_file_df[G_EDGE_TO], tt_file_df['edge_tt'], tt_file_df[G_EDGE_TT_STD],tt_file_df['edge_cfv']):
-                self._set_edge_tt(from_node, to_node, edge_tt,edge_tt_std,edge_cfv)
+            save_file_path_cpp = self._save_cpp_tt_file(tt_file_df=tt_file_df,scenario_time=scenario_time)           
+            self.cpp_router.updateEdgeTravelTimes(save_file_path_cpp.encode())
+            for from_node, to_node, edge_tt, edge_var,edge_cfv in zip(tt_file_df[G_EDGE_FROM], tt_file_df[G_EDGE_TO], tt_file_df['edge_tt'], tt_file_df["edge_var"],tt_file_df['edge_cfv']):
+                self._set_edge_tt(o_node_index=from_node, d_node_index=to_node, new_travel_time=edge_tt,new_travel_time_var=edge_var,new_cost_function_value=edge_cfv)
 
     def loadNetwork(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
         nodes_f = os.path.join(network_name_dir, "base", "nodes.csv")
@@ -158,7 +217,8 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
                 travel_time_std = row[G_EDGE_TT_STD]
             else:
                 travel_time_std = 0
-            tmp_edge = Edge(edge_index=(o_node, d_node), distance=row[G_EDGE_DIST], travel_time= row[G_EDGE_TT],travel_time_std=travel_time_std)
+            tmp_edge = Edge(edge_index=(o_node, d_node), distance=row[G_EDGE_DIST], travel_time= row[G_EDGE_TT],travel_time_var=travel_time_std^2)
+            tmp_edge.get_init_cfv(self.customized_section_cost_function)
             o_node.add_next_edge_to(d_node, tmp_edge)
             d_node.add_prev_edge_from(o_node, tmp_edge)
         print("... {} nodes loaded!".format(len(self.nodes)))
@@ -174,20 +234,16 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
     
 
 
-    def _set_edge_tt(self, o_node_index, d_node_index, new_travel_time,new_travel_time_std,new_cost_function_value=None):
+    def _set_edge_tt(self, o_node_index, d_node_index, new_travel_time,new_travel_time_var,new_cost_function_value=None):
         o_node = self.nodes[o_node_index]
         d_node = self.nodes[d_node_index]
         edge_obj = o_node.edges_to[d_node]
         edge_obj.set_tt(new_travel_time)
-        edge_obj.set_tt_std(new_travel_time_std)
+        edge_obj.set_tt_var(new_travel_time_var)
         edge_obj.set_cfv(new_cost_function_value)
         new_tt, dis = edge_obj.get_tt_distance()
-        o_node.travel_infos_to[d_node_index] = (new_tt, dis,new_travel_time_std)
-        d_node.travel_infos_from[o_node_index] = (new_tt, dis,new_travel_time_std)
-
-
-
-
+        o_node.travel_infos_to[d_node_index] = (new_tt, dis,new_travel_time_var)
+        d_node.travel_infos_from[o_node_index] = (new_tt, dis,new_travel_time_var)
 
 
     def external_update_edge_travel_times(self, new_travel_time_dict):
@@ -219,7 +275,7 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
         :param destination_position: (destination_edge_origin_node_index, destination_edge_destination_node_index, relative_position)
         :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_node) -> cost_value
                 if None: travel_time is considered as the cost_function of a section
-        :return: (cost_function_value, travel time, travel_time_std) between the two nodes
+        :return: (cost_function_value, travel time, travel_time_var) between the two nodes
         """
         trivial_test = self.test_and_get_trivial_route_tt_and_dis(origin_position, destination_position)
         if trivial_test is not None:
@@ -247,6 +303,7 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
 
   
             self._add_to_database(origin_node, destination_node, s[0], s[1], s[2],s[3])
+
         return (s[0] + origin_overhead[0] + destination_overhead[0], s[1] + origin_overhead[1] + destination_overhead[1], s[2] + origin_overhead[2] + destination_overhead[2], s[3] + origin_overhead[3] + destination_overhead[3])
 
     
@@ -264,36 +321,36 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
         """
         if position[1] is None:
             return 0.0, 0.0, 0.0, 0.0
-        all_travel_time, all_travel_distance,all_travel_time_std = self.get_section_infos(position[0], position[1])
+        all_travel_time, all_travel_distance,all_travel_time_var = self.get_section_infos(position[0], position[1])
         overhead_fraction = position[2]
         if not from_start:
             overhead_fraction = 1.0 - overhead_fraction
-        all_travel_cost = self.customized_section_cost_function(tt_mean=all_travel_time,tt_std=all_travel_time_std, dis=all_travel_distance)
-        return all_travel_time * overhead_fraction, all_travel_distance * overhead_fraction,all_travel_time_std*overhead_fraction,all_travel_cost*overhead_fraction
+        all_travel_cost = self.customized_section_cost_function(tt_mean=all_travel_time,tt_var=all_travel_time_var, dis=all_travel_distance)
+        return all_travel_time * overhead_fraction, all_travel_distance * overhead_fraction,all_travel_time_var*overhead_fraction,all_travel_cost*overhead_fraction
     
     def get_section_infos(self, start_node_index, end_node_index):
         """
         :param start_node_index_index: index of start_node of section
         :param end_node_index: index of end_node of section
-        :return: (travel time, distance, std); if no section between nodes (None, None)
+        :return: (travel time, distance, var); if no section between nodes (None, None)
         """
-        tt, dis, tt_std = self.nodes[start_node_index].get_travel_infos_to(end_node_index)
+        tt, dis, tt_var = self.nodes[start_node_index].get_travel_infos_to(end_node_index)
 
-        return tt, dis, tt_std
+        return tt, dis, tt_var
   
 
-    def customized_section_cost_function(self,tt_mean=None,tt_std=None,dis=None):
+    def customized_section_cost_function(self,tt_mean=None,tt_var=None,dis=None):
             vor=self.user_vor
             vot=self.user_vot
-            cfv = vot * tt_mean + vor * tt_std
+            cfv = vot * tt_mean + vor * math.sqrt(tt_var)
             return cfv
     
-    def _add_to_database(self, o_node, d_node, tt, dis,std,cfv):
+    def _add_to_database(self, o_node, d_node, tt, dis,var,cfv):
         """ this function is call when new routing results have been computed
         depending on the class the function can be overwritten to store certain results in the database
         """
         if self.travel_time_infos.get((o_node, d_node)) is None:
-            self.travel_time_infos[(o_node, d_node)] = (tt,dis,std,cfv)
+            self.travel_time_infos[(o_node, d_node)] = (tt,dis,var,cfv)
 
     def return_travel_costs_Xto1(self, list_origin_positions, destination_position, max_routes=None, max_cost_value=None, customized_section_cost_function = None,mode="edge_tt"):
         """
@@ -332,12 +389,12 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
         
         if len(origin_nodes.keys()) > 0:
             s = self.cpp_router.computeTravelCostsXto1(destination_node, origin_nodes.keys(), max_time_range = max_cost_value, max_targets = max_routes,mode=mode)
-            # s has structure [(origin_node,tt,dis,std,cfv)]
+            # s has structure [(origin_node,tt,dis,var,cfv)]
             for result in s:
-                org_node,tt, dis,std,cfv = result
+                org_node,tt, dis,var,cfv = result
                 if tt < -0.0001:
                     continue
-                self._add_to_database(org_node, destination_node, tt, dis, std,cfv)
+                self._add_to_database(org_node, destination_node, tt, dis, var,cfv)
                 tt += destination_overhead[1]
                 dis += destination_overhead[2]
                 for origin_position in origin_nodes[org_node]:
@@ -347,12 +404,12 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
                         
                     tt += origin_overhead[0]
                     dis += origin_overhead[1]
-                    std += origin_overhead[2]
+                    var += origin_overhead[2]
                     cfv += origin_overhead[3]
                     if max_cost_value is not None and tt > max_cost_value:
                         #pass
                         continue
-                    return_list.append( (origin_position, tt, dis,std,cfv) )
+                    return_list.append( (origin_position, tt, dis,var,cfv) )
         if max_routes is not None and len(return_list) > max_routes:
             return sorted(return_list, key = lambda x:x[1])[:max_routes]
         return return_list
@@ -391,6 +448,7 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
         else
         :return (route, (travel_time, travel_distance))
         """
+        #LOG.debug(f"Trivial Test: {origin_position} --> {destination_position}")
         if origin_position[0] == destination_position[0]:
             if origin_position[1] is None:
                 if destination_position[1] is None:
@@ -406,8 +464,8 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
                             return None
                         else:
                             effective_position = (origin_position[0], origin_position[1], destination_position[2] - origin_position[2])
-                            tt, dis, std,cfv = self.get_section_overhead(effective_position, from_start = True)
-                            return ([destination_position[0], destination_position[1]], (tt, dis, std,cfv)) 
+                            tt, dis, var,cfv = self.get_section_overhead(effective_position, from_start = True)
+                            return ([destination_position[0], destination_position[1]], (tt, dis, var,cfv)) 
                     else:
                         return None
         elif origin_position[1] is not None and origin_position[1] == destination_position[0]:
@@ -439,18 +497,18 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
         """
         arrival_time = start_time
         distance = 0
-        travel_time_std = 0
+        travel_time_var = 0
         cost_function_value = 0
-        start_tt, start_dis, start_std,start_cfv = self.get_section_overhead( (route[0], route[1], rel_start_edge_position), from_start=False)
+        start_tt, start_dis, start_var,start_cfv = self.get_section_overhead( (route[0], route[1], rel_start_edge_position), from_start=False)
         arrival_time += start_tt
         distance += start_dis
-        travel_time_std += start_std
+        travel_time_var += start_var
         cost_function_value += start_cfv
         if len(route) > 2:
             for i in range(2, len(route)):
-                tt, dis,std = self.get_section_infos(route[i-1], route[i])
+                tt, dis,var = self.get_section_infos(route[i-1], route[i])
                 arrival_time += tt
                 distance += dis
-                travel_time_std += std
-                cost_function_value += self.customized_section_cost_function(tt_mean=tt,tt_std=std,dis=dis)
-        return (arrival_time, distance,travel_time_std,cost_function_value)
+                travel_time_var += var
+                cost_function_value += self.customized_section_cost_function(tt_mean=tt,tt_var=var,dis=dis)
+        return (arrival_time, distance,travel_time_var,cost_function_value)

@@ -178,6 +178,9 @@ class SimulationVehicle:
         :param simulation_time
         :return: list of currently boarding requests, list of starting to alight requests
         """
+        if self.vid == 9:
+            LOG.info(f"start_next_leg {self.vid} : {self.assigned_route[0]}")
+
         if self.assigned_route:
             LOG.debug(f"start_next_leg {self.vid} : {self.assigned_route[0]}")
         else:
@@ -258,7 +261,7 @@ class SimulationVehicle:
         """
         if self.assigned_route and not self.start_next_leg_first:
             ca = self.assigned_route[0]
-            LOG.debug(f"Vehicle {self.vid} ends the VRL {ca} at time {simulation_time}")
+            LOG.info(f"Vehicle {self.vid} ends the VRL {ca} at time {simulation_time}")
             if ca.stationary_process is not None:
                 ca.stationary_process.end_task(simulation_time)
             # record
@@ -592,6 +595,8 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
         if self.status in G_DRIVING_STATUS:
             if veh_pos is None:
                 LOG.debug("non moving vehicle registered? {}".format(self))
+                print("non moving vehicle registered? {}".format(self))
+                breakpoint()
                 self._route_update_needed = True
             else:
                 self.pos = veh_pos
@@ -613,7 +618,9 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                     elif len(self.cl_remaining_route) == 0:
                         LOG.warning("no route planned anymore? {} {}".format(veh_pos, self))
         elif veh_pos is not None and not self.start_next_leg_first:
-            raise EnvironmentError(f"moving without having a driving task? {self}")
+            LOG.warning(f"moving without having a driving task veh {self},{self.start_next_leg_first}")
+            breakpoint()
+            #raise EnvironmentError(f"moving without having a driving task? {self}")
 
     def start_next_leg(self, simulation_time):
         """
@@ -642,28 +649,57 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
         return -1
 
     def get_new_route(self):
-        """ this function is used to return the current pos of the vehicle and the route that is needed to be driven in the aimsun simulation
+        """ this function is used to return the current pos of the vehicle and the route that is needed to be driven in the SUMO simulation
         if something is return (i.e. a new driven vrl needs to be started) is indicated by the flag self.start_new_route_flag
         :return: None, if no route has to be started; node_index_list otherwise
         """
-        #LOG.debug(f"get_pos_and_route: {self.vid} | {self.start_new_route_flag} | {self.assigned_route} | {self.pos} | {self.cl_remaining_route}")
-        #LOG.debug('Is this ever entered?')
+        if self._route_update_needed: 
+            leglist = []
+            for leg in self.assigned_route:
+                leglist.append(leg)
+            LOG.info(f"get_pos_and_route: {self.vid}, {self.status} |{[(leg.destination_pos,leg.status) for leg in self.assigned_route]} | {self.pos} | {self.cl_remaining_route} | {[pax.rid for pax in self.pax]} | {self._route_update_needed}")
+        
         if self._route_update_needed:
             #LOG.debug(f"new route for vehicle {self}")
-            self._route_update_needed = False
+            
             if not self.assigned_route:
+                LOG.warning(f"Veh {self.vid} needs Route update but has no route assigned! {self}")
+                # Vehicle without assigned FP-Route found on Edge:
                 if self.pos[1] is not None:
                     LOG.debug(f" -> {self.vid} -> {[self.pos[0], self.pos[1]]}")
+                    self._route_update_needed = False
                     return [self.pos[0], self.pos[1]]
+                
+                # Vehicle without assigned FP-Route found on Node:
                 else:
-                    LOG.warning("new route to start after unassignment but on edge!")
-                    LOG.debug(f" -> {self.vid} -> {[self.pos[0]]}")
+                    
+                    LOG.info(f" -> {self.vid} -> {[self.pos[0]]}")
+                    self._route_update_needed = False
                     return [self.pos[0]]
             else:
-                route = self.cl_remaining_route
-                route = [self.pos[0]] + route
-                LOG.debug(f" -> {self.vid} -> {route}")
-                return route
+                # New Route already saved in current Leg:
+                if len(self.cl_remaining_route) > 0: 
+                    route = self.cl_remaining_route
+                    route = [self.pos[0]] + route
+                    LOG.info(f"veh {self.vid} at {self.pos}  gets new Route  -> {route}")
+                    self._route_update_needed = False
+                    return route
+                
+                # New Route not saved in current Leg --> will hapen in next FP step --> Vehicle gets no update this time in next Step
+                else: 
+                    self._route_update_needed = True
+                    if self.pos[1] != None:
+                        route = [self.pos[0],self.pos[1]]
+                        LOG.info(f"BEFORE: veh {self.vid} clears edge {self.pos} before it gets new Route  -> {route}")
+                        route = None
+                        LOG.info(f"NOW: veh {self.vid} on edge {self.pos} gets no Route but in next timestep. Proceeds with current Route: {route}")
+                        return route
+
+                    else:
+                        route = None
+                        LOG.warning(f"Veh {self.vid} at {self.pos} is at node and stays there -> {route}")
+                        return route                       
+               
         else:
             #LOG.debug('_route_update_needed is False')
             return None
@@ -679,13 +715,14 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
         :type force_ignore_lock: bool
         """
         # transform rq from PlanRequest to SimulationRequest (based on RequestBase)
-        # LOG.info(f"Vehicle {self.vid} before new assignment: {[str(x) for x in self.assigned_route]} at time {sim_time}")
+        LOG.debug(f"Vehicle {self.vid ,self.status} before new assignment: {[str(x) for x in self.assigned_route]} at time {sim_time}")
         for vrl in list_route_legs:
             boarding_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(1,[])]
             alighting_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(-1,[])]
             vrl.rq_dict = {1:boarding_list, -1:alighting_list}
-        #LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
-        #LOG.debug(f"  -> current assignment: {self.assigned_route}")
+        LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
+        LOG.debug(f"  -> current assignment: {self.assigned_route}")
+        LOG.debug(f"start next leg first {self.start_next_leg_first}")
         start_flag = True
         if self.assigned_route:
             if not list_route_legs or list_route_legs[0] != self.assigned_route[0]:
@@ -703,8 +740,10 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                         raise AssertionError("assign_vehicle_plan(): Trying to assign new VRLs instead of a locked VRL.")
             else:
                 start_flag = False
-
+        
+        LOG.debug(f"After End Leg {self.assigned_route} start_flag: {start_flag}, status: {self.status}")
         self.assigned_route = list_route_legs
+        LOG.debug(f"New Assignement {self.assigned_route} start_flag: {start_flag}, status: {self.status}")
         if list_route_legs:
             if start_flag:
                 self.start_next_leg_first = True
@@ -718,7 +757,7 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                 self._route_update_needed = True
 
     def reached_destination(self, simulation_time):
-        """ this function is called, when the corresponding SUMO vehicle reaches its destination in aimsun
+        """ this function is called, when the corresponding SUMO vehicle reaches its destination
         :param simulation_time: time the vehicle reached destination
         """
         if self.status in G_DRIVING_STATUS:
@@ -728,16 +767,17 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                     self.cl_driven_route.append(self.pos[1])
                     self.cl_driven_route_times.append(simulation_time)
                 self.pos = self.routing_engine.return_node_position(self.pos[1])
+            ## Get Driven Distance for stats
             if len(self.cl_driven_route) > 1:
                 try:
-                    travel_time, driven_distance,travel_time_std,route_cfv = self.routing_engine.return_route_infos(self.cl_driven_route, 0.0, 0.0)
+                    travel_time, driven_distance,travel_time_var,route_cfv = self.routing_engine.return_route_infos(self.cl_driven_route, 0.0, 0.0)
                 except KeyError:
                     LOG.debug(f'reached_destination had a Keyerror')
                     driven_distance = 0
                     if len(self.cl_driven_route) > 2:
                         for i in range(2, len(self.cl_driven_route)):
                             try:
-                                tt, dis,std,cfv = self.routing_engine.get_section_infos(self.cl_driven_route[i-1], self.cl_driven_route[i])
+                                tt, dis,var,cfv = self.routing_engine.get_section_infos(self.cl_driven_route[i-1], self.cl_driven_route[i])
                             except:
                                 dis = 0
                             driven_distance += dis
@@ -747,6 +787,7 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
 
             if len(self.assigned_route) == 0:
                 LOG.debug("no assigned route but moved -> unassignment?")
+                print(f" {self.vid} no assigned route but moved -> unassignment?")
             else:
                 target_pos = self.assigned_route[0].destination_pos
                 if self.pos != target_pos:

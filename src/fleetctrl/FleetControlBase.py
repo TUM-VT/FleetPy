@@ -488,7 +488,7 @@ class FleetControlBase(metaclass=ABCMeta):
         :param add_arg: possible additional argument if needed
         :type add_arg: not defined here
         """
-        LOG.debug(f"assign to {veh_obj.vid} at time {sim_time} : {vehicle_plan}")
+        LOG.info(f"assign to veh {veh_obj.vid} at time {sim_time} : {vehicle_plan}")
         vehicle_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)  ## Is this really necessary?
         if self._vid_to_assigned_charging_process.get(veh_obj.vid) is not None:
             veh_plan_ch_task = None
@@ -510,6 +510,7 @@ class FleetControlBase(metaclass=ABCMeta):
             self._vid_to_assigned_charging_process[veh_obj.vid] = assigned_charging_task[0]
         new_list_vrls = self._build_VRLs(vehicle_plan, veh_obj, sim_time)
         veh_obj.assign_vehicle_plan(new_list_vrls, sim_time, force_ignore_lock=force_assign)
+        LOG.info(veh_obj)
         self.veh_plans[veh_obj.vid] = vehicle_plan
         for rid in get_assigned_rids_from_vehplan(vehicle_plan):
             pax_info = vehicle_plan.get_pax_info(rid)

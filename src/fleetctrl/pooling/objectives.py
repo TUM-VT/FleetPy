@@ -1,5 +1,6 @@
 from __future__ import annotations
 from scipy.stats import norm
+import math
 
 from typing import TYPE_CHECKING, Dict, Any, Callable
 if TYPE_CHECKING:
@@ -438,7 +439,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             """
             assignment_reward = len(veh_plan.pax_info) * LARGE_INT
             # Reliability term
-            sum_std = 0
+            sum_var = 0
             last_pos = veh_obj.pos
 
             if traveler_vor > 0:
@@ -446,8 +447,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                     pos = ps.get_pos()
                     if pos != last_pos:
                         res =  routing_engine.return_travel_costs_1to1(last_pos, pos,mode=routing_engine.routing_mode)
-                        std = res[2]
-                        sum_std += std
+                        sum_var += res[2]
                         last_pos = pos
             # value of time term (treat waiting and in-vehicle time the same)
             sum_user_times = 0
@@ -456,7 +456,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                 drop_off_time = boarding_info_list[1]
                 sum_user_times += (drop_off_time - rq_time)
             # value of travel time is scenario input (cent per second)
-            return sum_user_times * traveler_vot + sum_std * traveler_vor - assignment_reward
+            return sum_user_times * traveler_vot + sum_var * traveler_vor - assignment_reward
     
     elif func_key == "probabilistic_dt":
 
@@ -485,68 +485,67 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             if prq == None:
                 return -assignment_reward
 
-            # Reliability term
-            stops_list_waiting_time = [veh_obj.pos]
-            waiting_time_boarding_stops = 0
-    
-            for index,stop in enumerate(veh_plan.list_plan_stops):
-                if stop.boarding_dict.get(1) != None and prq.rid in stop.boarding_dict.get(1):
-                    stops_list_waiting_time.append(stop.pos)
-                    pu_index = index
-                    break
-                elif (stop.boarding_dict.get(1) != None and prq.rid not in stop.boarding_dict.get(1)) or stop.boarding_dict.get(-1) != None:
-                    stops_list_waiting_time.append(stop.pos) 
-                    waiting_time_boarding_stops +=1
-                else:
-                    stops_list_waiting_time.append(stop.pos)
-
-            stop_list_driving_time =[]
-            driving_time_boarding_stops = 0 
-            for index,stop in enumerate(veh_plan.list_plan_stops[pu_index:]):          
-                if stop.boarding_dict.get(-1) != None and prq.rid in stop.boarding_dict.get(-1):
-                    stop_list_driving_time.append(stop.pos)  
-                    break
-                elif stop.boarding_dict.get(1) != None or (stop.boarding_dict.get(-1) != None and prq.rid not in stop.boarding_dict.get(-1)):
-                    stop_list_driving_time.append(stop.pos) 
-                    driving_time_boarding_stops +=1
-                else:
-                    stop_list_driving_time.append(stop.pos)
-
-            legs_waiting = list(zip(stops_list_waiting_time, stops_list_waiting_time[1:]))
-            legs_drving = list(zip(stop_list_driving_time, stop_list_driving_time[1:]))
-
-            waiting_time = 0 + waiting_time_boarding_stops * prq.boarding_time
-            waiting_time_std = 0
-
-            for leg in legs_waiting:
-                tt , dis, std, cfv = routing_engine.return_travel_costs_1to1(leg[0],leg[1],mode=routing_engine.routing_mode)
-                waiting_time += tt
-                waiting_time_std += std
-            
-            driving_time = 0 + driving_time_boarding_stops * prq.boarding_time
-            driving_time_std = 0
-    
-            for leg in legs_drving:
-                tt , dis, std, cfv = routing_engine.return_travel_costs_1to1(leg[0],leg[1],mode=routing_engine.routing_mode)
-                driving_time += tt
-                driving_time_std += std
-            
+            driving_time,driving_time_var, waiting_time, waiting_time_var = get_travel_cost_of_vehplan(routing_engine,veh_plan,veh_obj,prq)
             max_wait_time = prq.t_pu_latest-simulation_time
-            if waiting_time_std == 0:
-                waiting_time_std = 0.000001
-            if driving_time_std == 0:
-                driving_time_std = 0.000001
-            #print(waiting_time,waiting_time_std,driving_time,driving_time_std)
-            #print(f"Current Time: {simulation_time}")
-            #print(f"Latest PU: {prq.t_pu_latest} --> Max.Wait Time: {max_wait_time}")
-            #print(f"Latest DO: {prq.t_do_latest}--> Max.Drive Time: {prq.max_trip_time}")
 
-            cumulative_prob_wt = norm.cdf(max_wait_time, loc=waiting_time, scale=waiting_time_std)
-            cumulative_prob_dt = norm.cdf(prq.max_trip_time, loc=driving_time, scale=driving_time_std)
+            cumulative_prob_wt = norm.cdf(max_wait_time, loc=waiting_time, scale=math.sqrt(waiting_time_var))
+            cumulative_prob_dt = norm.cdf(prq.max_trip_time, loc=driving_time, scale=math.sqrt(driving_time_var))
             
             return -cumulative_prob_dt - assignment_reward
     else:
         raise IOError(f"Did not find valid request assignment control objective string."
                       f" Please check the input parameter {G_OP_VR_CTRL_F}!")
-
     return control_f
+
+def get_travel_cost_of_vehplan(routing_engine,veh_plan,veh_obj,prq):
+    stops_list_waiting_time = [veh_obj.pos]
+    waiting_time_boarding_stops = 0
+    
+    for index,stop in enumerate(veh_plan.list_plan_stops):
+        if stop.boarding_dict.get(1) != None and prq.rid in stop.boarding_dict.get(1):
+            stops_list_waiting_time.append(stop.pos)
+            pu_index = index
+            break
+        elif (stop.boarding_dict.get(1) != None and prq.rid not in stop.boarding_dict.get(1)) or stop.boarding_dict.get(-1) != None:
+            stops_list_waiting_time.append(stop.pos) 
+            waiting_time_boarding_stops +=1
+        else:
+            stops_list_waiting_time.append(stop.pos)
+
+    stop_list_driving_time =[]
+    driving_time_boarding_stops = 0 
+    for index,stop in enumerate(veh_plan.list_plan_stops[pu_index:]):          
+        if stop.boarding_dict.get(-1) != None and prq.rid in stop.boarding_dict.get(-1):
+            stop_list_driving_time.append(stop.pos)  
+            break
+        elif stop.boarding_dict.get(1) != None or (stop.boarding_dict.get(-1) != None and prq.rid not in stop.boarding_dict.get(-1)):
+            stop_list_driving_time.append(stop.pos) 
+            driving_time_boarding_stops +=1
+        else:
+            stop_list_driving_time.append(stop.pos)
+
+    legs_waiting = list(zip(stops_list_waiting_time, stops_list_waiting_time[1:]))
+    legs_drving = list(zip(stop_list_driving_time, stop_list_driving_time[1:]))
+
+    waiting_time = 0 + waiting_time_boarding_stops * prq.boarding_time
+    waiting_time_var = 0
+
+    for leg in legs_waiting:
+        tt , dis, var, cfv = routing_engine.return_travel_costs_1to1(leg[0],leg[1],mode=routing_engine.routing_mode)
+        waiting_time += tt
+        waiting_time_var += var
+            
+    driving_time = 0 + driving_time_boarding_stops * prq.boarding_time
+    driving_time_var = 0
+    
+    for leg in legs_drving:
+        tt , dis, var, cfv = routing_engine.return_travel_costs_1to1(leg[0],leg[1],mode=routing_engine.routing_mode)
+        driving_time += tt
+        driving_time_var += var
+            
+    if waiting_time_var == 0:
+        waiting_time_var = 0.000001
+    if driving_time_var == 0:
+        driving_time_var = 0.000001
+
+    return driving_time,driving_time_var, waiting_time, waiting_time_var

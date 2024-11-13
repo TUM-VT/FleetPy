@@ -4,12 +4,15 @@ import subprocess
 import multiprocessing
 import os
 import re
+import gzip
+import shutil
+import os
 
 py_path = pathlib.Path(__file__)
 
-SELECTED_SCENARIOS = list(range(73,74))
+SELECTED_SCENARIOS = list(range(83,84))
 STUDY_NAME = "fleetpy_sumo_coupling_in"
-PROCESS_COUNT = 2
+PROCESS_COUNT = 4
 SIM_NETWORK_NAME = "sumo_in"
 
 def get_current_max_key(FP_path):
@@ -31,6 +34,7 @@ class SimulationRunner:
         self.sc_config = sc_config
         self.sc_config_file_dict = {}
         self.sim_network_name = sim_network_name
+        self.res_dir = py_path.parent / "studies" / self.study_name / "results"
 
     def create_sc_config_files(self):
         
@@ -87,7 +91,33 @@ class SimulationRunner:
         with multiprocessing.Pool(self.process_count) as pool:
             pool.map(self.run_sumo_command,self.selected_scenarios)  # Mapping the function to run across multiple processes
 
+
+    def zip_files(self):
+        zip_files = []
+        for scenario in self.selected_scenarios:
+            sc_res_dir = self.res_dir /self.sc_config_file_dict[scenario].get("scenario_name")
+            zip_files.append(sc_res_dir / "SumoDumps" / "vehRoutes.xml")
+            zip_files.append(sc_res_dir / "00_simulation.log")
+        
+        for file_path in zip_files:
+            if os.path.isfile(file_path):
+                # Create the .gz file name
+                gz_file_path = str(file_path) + '.gz'
+                
+                # Open the original file and the gzip file
+                with open(file_path, 'rb') as f_in, gzip.open(gz_file_path, 'wb') as f_out:
+                    # Copy the contents to the gzip file
+                    shutil.copyfileobj(f_in, f_out)
+                
+                # Delete the original file
+                os.remove(file_path)
+                print(f"Compressed and deleted: {file_path}")
+            else:
+                print(f"File not found: {file_path}")
+
+
 if __name__ == "__main__":
     sim_runner = SimulationRunner(selected_scenarios=SELECTED_SCENARIOS,study_name=STUDY_NAME,process_count=PROCESS_COUNT,sim_network_name=SIM_NETWORK_NAME)
     sim_runner.create_sc_config_files()
     sim_runner.run_in_parallel()
+    sim_runner.zip_files()

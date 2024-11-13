@@ -39,7 +39,7 @@ def veh_search_for_immediate_request(sim_time, prq, fleetctrl, list_excluded_vid
                                                                     max_routes=max_routes, max_cost_value=sr)
     rv_vehicles = []
     rv_results_dict = {}
-    for vid_pos,tt,dis,std,cfv in rv_routing:
+    for vid_pos,tt,dis,var,cfv in rv_routing:
         for vid in fleetctrl.pos_veh_dict[vid_pos]:
             rv_vehicles.append(fleetctrl.sim_vehicles[vid])
             rv_results_dict[(prq_o_stop_pos, vid_pos)] = (cfv, tt, dis)

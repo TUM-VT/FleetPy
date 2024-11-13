@@ -85,7 +85,7 @@ class SUMOcontrolledSim(FleetSimulationBase):
         :param sim_time: new simulation time
         :return: None
         """
-        LOG.debug(f"--------- Current time: {sim_time} ---------")
+        LOG.debug(f"________SUMOcontrolledSimulation time: {sim_time}_______")
         # 1) update fleets and network
         leg_status_dict = self.update_sim_state_fleets(sim_time - self.time_step, sim_time)
         new_travel_times = self.routing_engine.update_network(sim_time)
@@ -231,20 +231,13 @@ class SUMOcontrolledSim(FleetSimulationBase):
             for a single operator operator_id = 0
         :param simulation_time: current simulation time
         return: None'''
-        for op_veh_id, veh in self.sim_vehicles.items():
-            pos = vehicle_to_position_dict.get(op_veh_id, None)
-            if pos is not None:
-                LOG.debug(f'updating position for {op_veh_id} to position {pos}')
-            veh.update_vehicle_position(pos, simulation_time)
-        # for op_veh_id, position in vehicle_to_position_dict.items():
-        #     #LOG.debug(f'This is the position {position}')
-        #     if position:
-        #         try:
-        #             LOG.debug(f'updating position for {op_veh_id} to position {position}')
-        #             self.sim_vehicles[op_veh_id].update_vehicle_position(position, simulation_time)
-        #         except KeyError:
-        #             LOG.warning("update_vehicle_positions failed")#never occurs
-        #             continue
+        for op_veh_id, position in vehicle_to_position_dict.items():
+            LOG.debug(f'This is the position {position}')
+            if position:
+                try:
+                    self.sim_vehicles[op_veh_id].update_vehicle_position(position, simulation_time)
+                except KeyError:
+                    LOG.warning("update_vehicle_positions failed")
 
     def get_vehicle_and_op_ids(self):
         opid_vid_tuple_list = []
@@ -267,7 +260,7 @@ class SUMOcontrolledSim(FleetSimulationBase):
             new_route = veh_obj.get_new_route()      
             if new_route is not None:
                 return_dict[opid_vid_tuple] = new_route
-        LOG.info(f'This is the return_dict from get_new_vehicle_routes{return_dict}')
+        LOG.debug(f'This is the return_dict from get_new_vehicle_routes{return_dict}')
         return return_dict
 
     def get_unserved_request_information(self):

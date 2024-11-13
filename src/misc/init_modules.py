@@ -193,7 +193,6 @@ def load_simulation_environment(scenario_parameters) -> FleetSimulationBase:
     sim_env_dict = get_src_simulation_environments()
     # load simulation environment instance
     sim_env_class = load_module(sim_env_dict, sim_env_str, "Simulation environment")
-    print(sim_env_class(scenario_parameters))
     return sim_env_class(scenario_parameters) 
 
 
