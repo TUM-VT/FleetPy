@@ -9,7 +9,7 @@ rq_file,
 random_seed,0
 start_time,0
 end_time,1800
-time_step,4
+time_step,1
 route_output_flag,True
 replay_flag,True
 nr_mod_operators,1
