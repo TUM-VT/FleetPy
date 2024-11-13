@@ -6,14 +6,12 @@ import pandas as pd
 import csv
 import logging 
 from operator import itemgetter
-import statistics
 import sys, getopt
 from time import perf_counter
 from typing import Tuple
-import pathlib
 from datetime import datetime
 from tqdm import tqdm
-import xml.etree.ElementTree
+import xml.etree.ElementTree as ET
 import time
 import numpy as np
 
@@ -37,7 +35,6 @@ Additionally, the vehicle_types (str-names) used in the FleetPy have to be defin
 """
 
 LOG = logging.getLogger(__name__)
-
 if 'SUMO_HOME' in os.environ:
     tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
     sys.path.append(tools)
@@ -46,355 +43,625 @@ else:
 
 t1_start = perf_counter()
 
-def fleetpy_v_id_to_sumo_v_id(op_vid_tuple : Tuple[int, int]) -> str:
-    """ converts the fleetpy vehicle id tuple (op_id, vid) into the sumo string id (fp_{op_id}_{v_id})"""
-    return f"fp_{op_vid_tuple[0]}_{op_vid_tuple[1]}"
-
-def sumo_v_id_to_fleetpy_v_id(sumo_v_id_str : str) -> Tuple[int, int]:
-    """ converts the sumo v_id into the fleetpy vehicle id (op_id, vid)"""
-    _, op_id, vid = sumo_v_id_str.split("_")
-    return (int(op_id), int(vid))
-
-def setup_fleetsimulation(constant_config_file, scenario_file, n_cpu_per_sim=1, evaluate=1, log_level="debug",
-                keep_old=False, continue_next_after_error=False) -> SUMOcontrolledSim:
-    """
-    This function combines constant study parameters and scenario parameters.
-    Then it sets up a pool of workers and starts a simulation for each scenario.
-    The required parameters are stated in the documentation.
-
-    :param constant_config_file: this file contains all input parameters that remain constant for a study
-    :type constant_config_file: str
-    :param scenario_file: this file contain all input parameters that are varied for a study
-    :type scenario_file: str
-    :param n_parallel_sim: number of parallel simulation processes
-    :type n_parallel_sim: int
-    :param n_cpu_per_sim: number of cpus for a single simulation
-    :type n_cpu_per_sim: int
-    :param evaluate: 0: no automatic evaluation / != 0 automatic simulation after each simulation
-    :type evaluate: int
-    :param log_level: hierarchical output to the logging file. Possible inputs with hierarchy from low to high:
-            - "verbose": lowest level -> logs everything; even code which could scale exponentially
-            - "debug": standard debugging logger. code which scales exponentially should not be logged here
-            - "info": basic information during simulations (default)
-            - "warning": only logs warnings
-    :type log_level: str
-    :param keep_old: does not start new simulation if result files are already available in scenario output directory
-    :type keep_old: bool
-    :param continue_next_after_error: continue with next simulation if one the simulations threw an error (only SP)
-    :type continue_next_after_error: bool
-    """
-    # read constant and scenario config files
-    constant_cfg = config.ConstantConfig(constant_config_file)
-    scenario_cfgs = config.ScenarioConfig(scenario_file)
-    # set constant parameters from function arguments
-    const_abs = os.path.abspath(constant_config_file)
-    study_name = os.path.basename(os.path.dirname(os.path.dirname(const_abs)))
-    
-    if study_name == "scenarios":
-        print("ERROR! The path of the config files is not longer up to date!")
-        print("See documentation/Data_Directory_Structure.md for the updated directory structure needed as input!")
-        exit()
-      
-    if constant_cfg.get(G_STUDY_NAME) is not None and study_name != constant_cfg.get(G_STUDY_NAME):
-        print("ERROR! {} from constant config is not consitent with study directory: {}".format(constant_cfg[G_STUDY_NAME], study_name))
-        print("{} is now given directly by the folder name !".format("G_STUDY_NAME"))
-        exit()
-    constant_cfg[G_STUDY_NAME] = study_name
-    constant_cfg["n_cpu_per_sim"] = n_cpu_per_sim
-    constant_cfg["evaluate"] = evaluate
-    constant_cfg["log_level"] = log_level
-    constant_cfg["keep_old"] = keep_old
-    
-    
-    # combine constant and scenario parameters into verbose scenario parameters
-    for i, scenario_cfg in enumerate(scenario_cfgs):
-        scenario_cfgs[i] = constant_cfg + scenario_cfg
+class SUMOFleetPyServer():
+    def __init__(self,constant_config, scenario_config, sumo_config, sumoBinary, log_level):
+        """
+        :param constant_config_file: this file contains all input parameters that remain constant for a study
+        :type constant_config_file: str
+        :param scenario_file: this file contain all input parameters that are varied for a study
+        :type scenario_file: str
+        :param n_parallel_sim: number of parallel simulation processes
+        :type n_parallel_sim: int
+        :param n_cpu_per_sim: number of cpus for a single simulation
+        :type n_cpu_per_sim: int
+        :param evaluate: 0: no automatic evaluation / != 0 automatic evalaution after each simulation
+        :type evaluate: int
+        :param log_level: hierarchical output to the logging file. Possible inputs with hierarchy from low to high:
+                - "verbose": lowest level -> logs everything; even code which could scale exponentially
+                - "debug": standard debugging logger. code which scales exponentially should not be logged here
+                - "info": basic information during simulations (default)
+                - "warning": only logs warnings
+        :type log_level: str
+        :param keep_old: does not start new simulation if result files are already available in scenario output directory
+        :type keep_old: bool
+        """
         
-    scenario_cfgs[0][G_SIM_START_TIME] += scenario_cfgs[0].get(G_SUMO_SIM_TIME_OFFSET, 0)
-    
-    SF = load_simulation_environment(scenario_cfgs[0])
-    
-    return SF
+        self.fp_constant_config_path = constant_config
+        self.fp_scenario_config_path = scenario_config
+        self.fp_log_level = log_level
+        self.fp_n_cpu_per_sim=1
+        self.fp_evaluate = 1
+        self.fp_keep_old = False
+        self.sumo_config_path = sumo_config
+        self.sumo_binary = sumoBinary
+        self.sumo_edgeData_interval = 3600
+        self.g_start_time = time.time()
 
-def setup_traci(sumo_config, results_path, sumoBinary, seed,start_time, sumo_fcd_output=False, sumo_edge_output=False, sumo_lane_output=True):
-    """ TODO can you put all theses specifications into sumo_config?"""
-    if not os.path.isdir(os.path.join(results_path, "SumoDumps")):
-        os.mkdir(os.path.join(results_path, "SumoDumps"))
-    Trajectoriespath = os.path.join(results_path, "SumoDumps", "Trajectories.xml") 
-    TripInfoPath = os.path.join(results_path, "SumoDumps", "TripInfo.xml") 
-    vehRoutePath = os.path.join(results_path, "SumoDumps", "vehRoutes.xml") 
-    collisionPath = os.path.join(results_path, "SumoDumps", "collisionPath.xml") 
-    statisticsPath = os.path.join(results_path, "SumoDumps", "statistics.xml") 
-    fullOutputPath = os.path.join(results_path, "FullOutput.xml")
-    edges_output = os.path.join(results_path, "SumoDumps", "edge-output.xml")
-    additional_file = os.path.join(results_path, "SumoDumps", "additional.xml")
-    sumo_cnfg_path = os.path.dirname(sumo_config)
-    sumoCmd = [sumoBinary, "-c", sumo_config ,"--collision.action","warn","--begin",str(start_time),
-               "--step-length","1","--tripinfo-output",TripInfoPath,
-               "--vehroute-output",vehRoutePath,"--vehroute-output.exit-times","--vehroute-output.incomplete","--collision-output",collisionPath,"--statistic-output",statisticsPath,"--start", "--seed", str(seed)]
-    fcdPath = os.path.join(results_path, "SumoDumps", "fcd-output.xml")
-    if sumo_fcd_output:
-        sumoCmd += ["--fcd-output", fcdPath, "--fcd-output.geo"]
+    def _finalize_setup(self):
+        self.g_end_time_setup = time.time()
 
-    """ TODO fix this"""
-    if sumo_edge_output:
-        raise NotImplementedError("Edgeoutput requires specifing the path in an additional file. This is not easily doable in this script. Manually setting the path is needed! ")
-        with open(additional_file, "w") as f:
-            f.write(f'<additional>\n<edgeData id="edge_1" file="{edges_output}"/>\n</additional>')
-        print("warning: you should not do that!!! SUMO_TraciServer")
-        sumoCmd += ["--additional-files", additional_file+f",{os.path.join(sumo_cnfg_path, 'routes_calibrated_v1.rou.xml')}"+f",{os.path.join(sumo_cnfg_path, 'vehicles_2018_calibrated_v1.rou.xml')}"]
-    # if sumo_lane_output:
-    #     sumoCmd += ["--lanedata-output", lane_output]
-    traci.start(sumoCmd)
-    print(f"SUMO-Simulation Initialized at t={start_time}")
-    
-def setup_network_translation(FleetPy : SUMOcontrolledSim):
-    """Edge ID Dict Translator 
-    :param sumo_edge_id_to_fs_edge --> SUMO_EDGE_ID : (FP_START_NODE,FP_END_NODE)
-    :param fs_edge_to_sumo_edge_id -->  (FP_START_NODE,FP_END_NODE):SUMO_EDGE_ID
-    :param sumo_node_list --> [J1,J1,J2...]
-    :param fs_edge_to_ff_tt --> (FP_START_NODE,FP_END_NODE): TRAVEL_TIME
-    :param fs_edge_to_len --> (FP_START_NODE,FP_END_NODE): DISTANCE
-    """
-    nw_path = FleetPy.dir_names[G_DIR_NETWORK]
-    edge_df = pd.read_csv(os.path.join(nw_path, "base", "edges.csv"))
-    node_df = pd.read_csv(os.path.join(nw_path, "base", "nodes.csv"))
+    def setup_fleetsimulation(self, n_cpu_per_sim=1, evaluate=1,keep_old=False) -> SUMOcontrolledSim:
+        """
+        This function combines constant study parameters and scenario parameters.
+        Then it sets up a pool of workers and starts a simulation for each scenario.
+        The required parameters are stated in the documentation.
+        """
+        # read constant and scenario config files
+        constant_cfg = config.ConstantConfig(self.fp_constant_config_path)
 
-    sumo_edge_id_to_fs_edge = {}
-    fs_edge_to_sumo_edge_id = {}
-    fs_edge_to_ff_tt = {}
-    fs_edge_to_len ={}
-    for _, row in edge_df.iterrows():
-        if row["from_node"] != row["to_node"]:
-            sumo_edge_id = row["source_edge_id"]
-            if sumo_edge_id != sumo_edge_id:
-                print(f"Warning: no sumo edge for {row['from_node']} -> {row['to_node']} exists!")
-                continue
-            sumo_edge_id = str(sumo_edge_id)
-            start_node_index = row["from_node"]
-            end_node_index = row["to_node"]
-            sumo_edge_id_to_fs_edge[sumo_edge_id] = (start_node_index, end_node_index)  ## SUMO_EDGE_ID : (FP_START_NODE,FP_END_NODE)
-            fs_edge_to_sumo_edge_id[(start_node_index, end_node_index)] = sumo_edge_id ## (FP_START_NODE,FP_END_NODE):SUMO_EDGE_ID 
-            fs_edge_to_ff_tt[(start_node_index, end_node_index)] = row["travel_time"] ## (FP_START_NODE,FP_END_NODE): TRAVEL_TIME
-            fs_edge_to_len[(start_node_index, end_node_index)] = row["distance"] ## (FP_START_NODE,FP_END_NODE): DISTANCE
-
-    sumo_node_list = node_df.source_node_id
-    sumo_node_list = sumo_node_list.values.tolist()
-
-    return sumo_edge_id_to_fs_edge, fs_edge_to_sumo_edge_id, sumo_node_list, fs_edge_to_ff_tt, fs_edge_to_len
-
-##########Handover functions########
-
-def get_current_vehicle_positions(fleetsim, sumo_edge_id_to_fs_edge):
-    """ this function reads the positions of the specified vehicles from sumo and returns a dictionary
-    :param vehicle_ids: list integer of sumo vehicle ids to read positions
-    :param vehicle_to_position_dict: dictionary (operator_id, fleetsim vehicle id) -> fleetsim network position (tuple (o_node, d_node, frac_position) or (o_node, None, None))
-            for a single operator operator_id = 0
-    :return: """
-    fleetsim_vehicles = fleetsim.get_vehicle_and_op_ids()
-    vehicle_to_position_dict = {}
-    for opid_vid_tuple in fleetsim_vehicles:
-        sumo_vid = fleetpy_v_id_to_sumo_v_id(opid_vid_tuple)
-        if str(sumo_vid) in traci.vehicle.getIDList():
-            LOG.debug("Vehicle is in IDList and position should be updated")
-            currentLane = traci.vehicle.getLaneID(str(sumo_vid))
-            laneLength = traci.lane.getLength(currentLane)
-            currentLanePosition = traci.vehicle.getLanePosition(str(sumo_vid)) #returns something like: 20.267898023103246 (Other format needed?!)
-            frac_position = currentLanePosition/laneLength
-            currentEdge = traci.lane.getEdgeID(currentLane)
-            if sumo_edge_id_to_fs_edge.get(currentEdge) is not None:# currentEdge in sumo_edge_id_to_fs_edge.keys():
-                o_node, d_node = sumo_edge_id_to_fs_edge[currentEdge]
-                CurrentPosition = (o_node, d_node, frac_position)
-                LOG.debug("Vehicle is on edge")
-            else:
-                last_pos = fleetsim.sim_vehicles[opid_vid_tuple].pos
-                CurrentPosition = last_pos
-            vehicle_to_position_dict[opid_vid_tuple] = CurrentPosition
-        else:
-            LOG.debug(f"Position of {sumo_vid} remained the same")
-
-    return vehicle_to_position_dict
-
-def update_routes_and_add_vehicles(fleetsim: SUMOcontrolledSim, initializedVehicles, sim_time, sumo_node_list, fs_edge_to_sumo_edge_id, opvid_to_veh_type,sumo_edge_id_to_fs_edge):
-    '''This functions reads a dict of routes with vehicleIDs as strings (key) and a list of edg (value) and sets the taxi routes accordingly ->(vehicleID, [e1,e2,e3])
-    :param vehicle_ids:  list string of sumo vehicle ids
-    :return: None'''
-    # Receive new routes from FleetPy
-    route_dict = fleetsim.get_new_vehicle_routes(sim_time) ## Gets new Routes (Leg by Leg from FP) {(op,veh_no):[n1,n2,...],...}
-    arrivedVehicles = []
-    for opid_vid_tuple in route_dict.keys():
-        veh_obj = fleetsim.sim_vehicles[opid_vid_tuple]
-        sumo_vid = fleetpy_v_id_to_sumo_v_id(opid_vid_tuple)
-        route = route_dict[opid_vid_tuple]       
-        sumoRoute = []
-        #Translate Route to sumoRoute
-        for i in range(0, len(route)-1):
-            o_node = route[i]
-            d_node = route[i+1]
+        scenario_cfgs = config.ScenarioConfig(self.fp_scenario_config_path)
+        # set constant parameters from function arguments
+        const_abs = os.path.abspath(self.fp_constant_config_path)
+        study_name = os.path.basename(os.path.dirname(os.path.dirname(const_abs)))
+        
+        if study_name == "scenarios":
+            print("ERROR! The path of the config files is not longer up to date!")
+            print("See documentation/Data_Directory_Structure.md for the updated directory structure needed as input!")
+            exit()
+        
+        if constant_cfg.get(G_STUDY_NAME) is not None and study_name != constant_cfg.get(G_STUDY_NAME):
+            print("ERROR! {} from constant config is not consitent with study directory: {}".format(constant_cfg[G_STUDY_NAME], study_name))
+            print("{} is now given directly by the folder name !".format("G_STUDY_NAME"))
+            exit()
+        constant_cfg[G_STUDY_NAME] = study_name
+        constant_cfg["n_cpu_per_sim"] = self.fp_n_cpu_per_sim
+        constant_cfg["evaluate"] = self.fp_evaluate
+        constant_cfg["log_level"] = self.fp_log_level
+        constant_cfg["keep_old"] = self.fp_keep_old
+        
+        
+        # combine constant and scenario parameters into verbose scenario parameters
+        for i, scenario_cfg in enumerate(scenario_cfgs):
+            scenario_cfgs[i] = constant_cfg + scenario_cfg
             
-            #If edge is an internal edge it does not need to be added to the sumoRoute, if route only consisted of internal edges, it would not be a sumoRoute
-            if o_node != d_node:
-                try:
-                    edgeID = fs_edge_to_sumo_edge_id[o_node,d_node]
-                    if not edgeID.startswith(":"): # internal edges start with ":"
-                        sumoRoute.append(edgeID)
-                except KeyError:
-                    LOG.warning(f'There is a KeyError in the Route which is {o_node} -> {d_node} : {route}')#No occurence
-                    continue
-        LOG.debug(f"New Route from FleetPy {opid_vid_tuple} {route} --> {sumo_vid} {sumoRoute}")
-        route_name = "Route_"+str(sumo_vid)+"_"+str(sim_time) 
-        # If route only consisted of internal edges, it would not be a sumoRoute
+        scenario_cfgs[0][G_SIM_START_TIME] += scenario_cfgs[0].get(G_SUMO_SIM_TIME_OFFSET, 0)
 
-        if len(sumoRoute) > 0:
-            traci.route.add(route_name, sumoRoute)  # TODO does this lead to an infinite amount of routes in long simulations?
-            # A) Vehicle is already in Simulation or currently teleporting
-            if sumo_vid in traci.vehicle.getIDList() or sumo_vid in traci.vehicle.getTeleportingIDList():
-                edgeID = traci.vehicle.getRoadID(sumo_vid)
-                currentRoute = traci.vehicle.getRoute(sumo_vid)
-                if sumoRoute != currentRoute: ## Route needs to be updated because of an new order of fleetpy/teleport
-                    if sumoRoute[0] == edgeID:# Check if current edgeID is the first element of the sumoRoute
+        SF = load_simulation_environment(scenario_cfgs[0])
+        
+
+        self.fp_scenario_config = scenario_cfgs[0]
+
+        self.fp_sim_env = SF
+
+        # Get interval in which new network statistics are gathered and sent to FleetPy to updated network (if not given, no statistics are gathered)
+        travel_time_interval = self.fp_sim_env.scenario_parameters.get(G_SUMO_STAT_INT)
+        if travel_time_interval is None:
+            self.g_update_fleetsim_traveltimes = False
+            self.g_update_travel_statistics_time_step = 10000000000000
+        else:
+            self.g_update_fleetsim_traveltimes = True
+            self.g_update_travel_statistics_time_step = travel_time_interval
+
+    def setup_traci(self):
+        results_path = self.fp_sim_env.dir_names[G_DIR_OUTPUT]
+        seed = self.fp_sim_env.scenario_parameters[G_RANDOM_SEED]
+        SUMO_start_time = self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME)
+        EdgeDataCfgPath = self._create_EdgeDataCfg_xml()
+       
+        if not os.path.isdir(os.path.join(results_path, "SumoDumps")):
+            os.mkdir(os.path.join(results_path, "SumoDumps"))
+
+        TripInfoPath = os.path.join(results_path, "SumoDumps", "TripInfo.xml") 
+        vehRoutePath = os.path.join(results_path, "SumoDumps", "vehRoutes.xml") 
+        collisionPath = os.path.join(results_path, "SumoDumps", "collisionPath.xml") 
+        statisticsPath = os.path.join(results_path, "SumoDumps", "statistics.xml") 
+        edges_output = os.path.join(results_path, "SumoDumps", "edge-output.xml")
+
+        sumoCmd = [self.sumo_binary, "-c", self.sumo_config_path ,"--collision.action","warn","--begin",str(SUMO_start_time),
+                "--step-length","1","--tripinfo-output",TripInfoPath,
+                "--vehroute-output",vehRoutePath,"--vehroute-output.exit-times","--vehroute-output.incomplete","--vehroute-output.write-unfinished",
+                "--collision-output",collisionPath,"--statistic-output",statisticsPath,"--start", "--seed", str(seed)]
+        #"+a",EdgeDataCfgPath, Currently not yet working
+        #Trajectoriespath = os.path.join(results_path, "SumoDumps", "Trajectories.xml") 
+        #fullOutputPath = os.path.join(results_path, "FullOutput.xml")
+        #fcdPath = os.path.join(results_path, "SumoDumps", "fcd-output.xml")
+        #if sumo_fcd_output:
+        #     sumoCmd += ["--fcd-output", fcdPath, "--fcd-output.geo"]
+        # if sumo_lane_output:
+        #     sumoCmd += ["--lanedata-output", lane_output]
+      
+        traci.start(sumoCmd)
+        print(f"SUMO-Simulation Initialized at t={SUMO_start_time}")
+
+    def _create_EdgeDataCfg_xml(self):
+        additional = ET.Element("additional")
+        edge_data = ET.SubElement(additional, "edgeData", {
+            "id": str(self.fp_sim_env.scenario_parameters[G_SCENARIO_NAME]),
+            "file": str(os.path.join(self.fp_sim_env.dir_names[G_DIR_OUTPUT], "SumoDumps", "EdgeData.xml")),
+            "begin": str(self.fp_sim_env.scenario_parameters.get(G_EVAL_INT_START,self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME))),
+            "end": str(self.fp_sim_env.scenario_parameters.get(G_EVAL_INT_END,self.fp_sim_env.scenario_parameters.get(G_SIM_END_TIME))),
+            "trackVehicles": str(True),
+            "period": str(self.sumo_edgeData_interval)
+        }) 
+        tree = ET.ElementTree(additional)
+        file_name = os.path.join(self.fp_sim_env.dir_names[G_DIR_OUTPUT], "EdgeData.cfg.add.xml")
+        tree.write(file_name, encoding='utf-8')
+        return file_name
+
+    def setup_network_translation(self):
+        """Edge ID Dict Translator 
+        :param sumo_edge_id_to_fs_edge --> SUMO_EDGE_ID : (FP_START_NODE,FP_END_NODE)
+        :param fs_edge_to_sumo_edge_id -->  (FP_START_NODE,FP_END_NODE):SUMO_EDGE_ID
+        :param sumo_node_list --> [J1,J1,J2...]
+        :param fs_edge_to_ff_tt --> (FP_START_NODE,FP_END_NODE): TRAVEL_TIME
+        :param fs_edge_to_len --> (FP_START_NODE,FP_END_NODE): DISTANCE
+        :param fs_node_to_sumo_junction --> FP_Node: DUMO_JUNCTION
+        """
+        nw_path = self.fp_sim_env.dir_names[G_DIR_NETWORK]
+        edge_df = pd.read_csv(os.path.join(nw_path, "base", "edges.csv"))
+        node_df = pd.read_csv(os.path.join(nw_path, "base", "nodes.csv"))
+        sumo_edge_id_to_fs_edge = {}
+        fs_edge_to_sumo_edge_id = {}
+        fs_edge_to_ff_tt = {}
+        fs_edge_to_len ={}
+        for _, row in edge_df.iterrows():
+            if row["from_node"] != row["to_node"]:
+                sumo_edge_id = row["source_edge_id"]
+                if sumo_edge_id != sumo_edge_id:
+                    print(f"Warning: no sumo edge for {row['from_node']} -> {row['to_node']} exists!")
+                    continue
+                sumo_edge_id = str(sumo_edge_id)
+                start_node_index = row["from_node"]
+                end_node_index = row["to_node"]
+                sumo_edge_id_to_fs_edge[sumo_edge_id] = (start_node_index, end_node_index)  ## SUMO_EDGE_ID : (FP_START_NODE,FP_END_NODE)
+                fs_edge_to_sumo_edge_id[(start_node_index, end_node_index)] = sumo_edge_id ## (FP_START_NODE,FP_END_NODE):SUMO_EDGE_ID 
+                fs_edge_to_ff_tt[(start_node_index, end_node_index)] = row["travel_time"] ## (FP_START_NODE,FP_END_NODE): TRAVEL_TIME
+                fs_edge_to_len[(start_node_index, end_node_index)] = row["distance"] ## (FP_START_NODE,FP_END_NODE): DISTANCE
+                
+        fs_node_to_sumo_junction = node_df.set_index('node_index')['source_node_id'].to_dict()
+            
+        sumo_node_list = node_df.source_node_id
+        sumo_node_list = sumo_node_list.values.tolist()
+
+        self.g_sumo_edge_id_to_fs_edge = sumo_edge_id_to_fs_edge
+        self.g_fs_edge_to_sumo_edge_id = fs_edge_to_sumo_edge_id
+        self.sumo_node_list = sumo_node_list
+        self.g_fs_edge_to_ff_tt = fs_edge_to_ff_tt
+        self.g_fs_edge_to_len = fs_edge_to_len
+        self.g_fs_node_to_sumo_junction =fs_node_to_sumo_junction
+        self._finalize_setup()
+
+    def run_simulation(self):
+        vehicle_to_position_dict = {}
+        resultsPath = self.fp_sim_env.dir_names[G_DIR_OUTPUT]
+        sim_time_offset = self.fp_sim_env.scenario_parameters.get(G_SUMO_SIM_TIME_OFFSET, 0)
+        end_time = self.fp_sim_env.scenario_parameters[G_SIM_END_TIME]
+
+        ##tt-retrieval
+        veh_edge_start_time_count = {}  #{(veh_id,edge,start_time):time_counter}
+        veh_start_time_dict ={} #{(veh_id,start_time_on_current_edge)}
+        veh_edge_dict ={} # {(veh_id,sim_time):edge_id,..}
+        
+        # get vehicle types of the simulation vehicles
+        self.fp_opvid_to_veh_type = {op_vid : veh.veh_type for op_vid, veh in self.fp_sim_env.sim_vehicles.items()} # {(op_id,veh_id):"veh_type"}
+
+        #Check for old EdgeTravelTimes and delete them if they are still there
+        if os.path.isfile(os.path.join(resultsPath, "EdgeTravelTimes", "new_travel_times.csv")):
+            os.remove(os.path.join(resultsPath, "EdgeTravelTimes", "new_travel_times.csv"))
+
+        ### SIMULATION
+        active_pois = {}
+        step = 0
+        last_time = -1
+        while True:
+            # 1) fleetpy time step  
+            sim_time = int(traci.simulation.getTime()) # sumo time in milliseconds
+            sim_time += sim_time_offset
+            if sim_time > end_time:
+                break
+            if sim_time != last_time: # avoid same time step again due to rounding
+                LOG.info(f"---- FleetPy Step ----- {sim_time}")
+                leg_status_dict = self.fp_sim_env.step(sim_time) # fleetpy timestep and computing new routes TODO: Implement Different step Sizes for SUMO and FP
+                
+                #print(f"---- FleetPy Step ----- {sim_time}")
+                last_time = sim_time
+            
+            if sim_time % 120 == 0:
+                print("{}: current simtime: {}/{}".format(self.fp_sim_env.scenario_parameters[G_SCENARIO_NAME], sim_time, end_time))
+
+            #if sim_time%60==0:
+            #for (op_id, veh_id) in fleetsim.sim_vehicles:
+                #print((op_id, veh_id),fleetsim.sim_vehicles[(op_id, veh_id)])
+                #if len(fleetsim.sim_vehicles[(op_id, veh_id)].pax)>0:
+                    # for passenger in fleetsim.sim_vehicles[(op_id, veh_id)].pax:
+                        # print(f"id: {passenger.rid} {passenger.o_node} --> {passenger.d_node}")
+            
+            # 2) check for new routes and finished boarding processes
+            arrivedVehicles_internal = self._update_routes_and_add_vehicles(sim_time)
+            # 3) sumo time step
+            LOG.info(f"---- Traci Step ----- {sim_time}")
+            traci.simulationStep()
+            
+            #print(f"---- Traci Step ----- {sim_time}")
+
+            # 4) get current vehicle positions and update travel time statistics (if needed)
+            if sim_time%1==0 and self.g_update_fleetsim_traveltimes==True:
+                veh_edge_dict,veh_start_time_dict,veh_edge_start_time_count = self._get_current_edge_tt(sim_time=sim_time,veh_edge_dict=veh_edge_dict,veh_start_time_dict=veh_start_time_dict,veh_edge_start_time_count=veh_edge_start_time_count)
+            
+            # 5) send new travel times to fleetsim
+            if (sim_time%self.g_update_travel_statistics_time_step==0) and self.g_update_fleetsim_traveltimes==True:
+
+                time_df = self._process_tt_data(veh_edge_start_time_count,veh_start_time_dict)
+                time_update_dict = dict(zip(zip(list(time_df["from_node"]),list(time_df["to_node"])),zip(list(time_df["edge_tt"]),list(time_df["edge_std"]))))
+                self._save_tt_to_csv(time_df, sim_time)
+                veh_edge_start_time_count ={}
+                veh_start_time_dict ={}
+                veh_edge_dict ={}
+                            
+                if self.g_update_fleetsim_traveltimes==True:
+                    self.fp_sim_env.update_network_travel_times(time_update_dict, sim_time)
+                    #fleetsim.routing_engine.load_tt_file_SUMO(resultsPath,sim_time)    
+                
+            # 6) collect the current positions of all fleet vehicles in SUMO
+            vehicle_to_position_dict = self._get_current_vehicle_positions()
+            LOG.info(vehicle_to_position_dict)
+            #print(vehicle_to_position_dict)
+            # 7) set the new positions in FleetPy
+            self.fp_sim_env.update_vehicle_positions(vehicle_to_position_dict,sim_time)
+
+            # 8) check for vehicles that arrived at their destination
+            self._update_arrived_vehicles(arrivedVehicles_internal,sim_time)
+
+            if self.sumo_binary == "sumo-gui":
+                active_pois = self._show_idle_vehicles_gui(active_pois)
+
+            step+=1
+    
+        t1_stop = perf_counter()
+        time_elapsed = []
+        time_elapsed.append(t1_stop)
+        timefile = resultsPath+"Computationaltime.csv"
+
+        with open(timefile, 'w', newline = '') as csvfile:
+            my_writer = csv.writer(csvfile, delimiter = ' ')
+            my_writer.writerow(time_elapsed)
+
+        evaluation_start_time = self.fp_sim_env.scenario_parameters.get(G_EVAL_INT_START,self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME))
+        evaluation_end_time = self.fp_sim_env.scenario_parameters.get(G_EVAL_INT_END,self.fp_sim_env.scenario_parameters.get(G_SIM_END_TIME))
+
+        eval.standard_evaluation(resultsPath, evaluation_start_time =evaluation_start_time, evaluation_end_time =evaluation_end_time, print_comments=True, dir_names_in = {})
+        eval.evaluate_folder(resultsPath,evaluation_start_time = evaluation_start_time, evaluation_end_time = evaluation_end_time, print_comments = False)
+        traci.close()
+        sys.stdout.flush()
+
+    def  _update_routes_and_add_vehicles(self, sim_time):
+        '''This functions reads a dict of routes with vehicleIDs as strings (key) and a list of edge (value) and sets the vehicle routes accordingly ->(vehicleID, [e1,e2,e3])
+        :param vehicle_ids:  list string of sumo vehicle ids
+        :return: None'''
+        # Receive new routes from FleetPy
+        route_dict = self.fp_sim_env.get_new_vehicle_routes(sim_time) ## Gets new Routes (Leg by Leg from FP) {(op,veh_no):[n1,n2,...],...}
+        arrivedVehicles_internal = {}
+        for opid_vid_tuple in route_dict.keys():
+            veh_obj = self.fp_sim_env.sim_vehicles[opid_vid_tuple]
+            sumo_vid = self._fleetpy_v_id_to_sumo_v_id(opid_vid_tuple)
+            route = route_dict[opid_vid_tuple]       
+            sumoRoute = self._transform_route_fp_to_sumo(route)
+            
+            #print("New Route for veh:",veh_obj.vid,veh_obj.status,veh_obj.pos,veh_obj.cl_remaining_route)
+            #if sumo_vid in traci.vehicle.getIDList():
+                #print(f"Current SUMO Route: {traci.vehicle.getRoute(sumo_vid)} at {traci.vehicle.getRoadID(sumo_vid)} ")
+            #print("New Route",route,"-->",sumoRoute)
+
+            LOG.debug(f"New Route from FleetPy {opid_vid_tuple} {route} --> {sumo_vid} {sumoRoute}")
+            route_name = "Route_"+str(sumo_vid)+"_"+str(sim_time) 
+            #print(route_name, sumoRoute)
+            # If route only consisted of internal edges, it would not be a sumoRoute
+
+            if len(sumoRoute) > 0:
+                                    
+                
+                    
+                traci.route.add(route_name, sumoRoute)  # TODO does this lead to an infinite amount of routes in long simulations? -->Yes but removal function is not yet included in traci and will probably included in SUMO 1.22.0  
+                
+                # A) Vehicle is already in Simulation or currently teleporting
+                if sumo_vid in traci.vehicle.getIDList() or sumo_vid in traci.vehicle.getTeleportingIDList():
+                    edgeID = traci.vehicle.getRoadID(sumo_vid)
+                    currentRoute = traci.vehicle.getRoute(sumo_vid)
+
+                    ## SUMO-Route Update needed?
+                    if sumoRoute != currentRoute: ## Route needs to be updated because of an new order of fleetpy/teleport
+                        #print("Route Update in SUMO",sumo_vid,"@",edgeID,currentRoute,"-->",sumoRoute)
                         is_valid_route = True
                         try:
                             traci.vehicle.setRoute(sumo_vid,sumoRoute)
-                            traci.vehicle.setParameter(objID=sumo_vid,param="cleg_dest",value=sumoRoute[-1])
-                            traci.vehicle.setParameter(objID=sumo_vid,param="cleg",value=sumoRoute)
                             if traci.vehicle.isRouteValid(sumo_vid) is False:
                                 LOG.warning(f'Route of {sumo_vid} is not valid') # No occurence
                                 is_valid_route = False
+                            else:
+                                traci.vehicle.setParameter(objID=sumo_vid,param="cleg_dest",value=sumoRoute[-1])
+                                traci.vehicle.setParameter(objID=sumo_vid,param="cleg",value=sumoRoute)
                         except:
-                            LOG.warning(f'Route of {sumo_vid} could not be set 2: {sumoRoute}')
+                            LOG.warning(f'Route of {sumo_vid} could not be set to: {sumoRoute}')
+                            #print(f'Route of {sumo_vid} could not be set to: {sumoRoute}')
                             is_valid_route = False
-                        if not is_valid_route:
-                            LOG.warning(f"Vehicle {sumo_vid} has an invalid route {sumoRoute}")
-                            LOG.info("Use SUMO rerouter")
-                            try:
-                                traci.vehicle.changeTarget(sumo_vid, sumoRoute[-1])
-                                traci.vehicle.rerouteTraveltime(sumo_vid)
-                                LOG.info(f"Vehicle {sumo_vid} has been rerouted to {sumoRoute[-1]} on {traci.vehicle.getRoute(sumo_vid)}")
-                            except:
-                                LOG.warning(f"Vehicle {sumo_vid} could not be rerouted")
-                    elif sumoRoute == currentRoute:
+                        
+                        if is_valid_route == False:
+                                LOG.warning(f"Vehicle {sumo_vid} has an invalid route {sumoRoute}")
+                                LOG.info("Use SUMO rerouter")
+                                try:
+                                    traci.vehicle.changeTarget(sumo_vid, sumoRoute[-1])
+                                    #traci.vehicle.rerouteTraveltime(sumo_vid)
+                                    LOG.info(f"Vehicle {sumo_vid} has been rerouted to {sumoRoute[-1]} on {traci.vehicle.getRoute(sumo_vid)}")
+                                    #print(f"Vehicle {sumo_vid} has been rerouted to {sumoRoute[-1]} on {traci.vehicle.getRoute(sumo_vid)}")
+
+                                except:
+                                    LOG.warning(f"Vehicle {sumo_vid} could not be rerouted")
+                                    breakpoint()
+                    else:
                         LOG.debug(f"Vehicle {sumo_vid} is Loaded and in Network and SumoRoute {sumoRoute} is current Route {currentRoute}")
                         pass 
+                        
 
-            # B) Vehicle is not in the simulation, but already loaded and waiting to be inserted (pending) --> gets inserted in Fleetpy just at the beginning of the first edge
-            elif sumo_vid not in traci.vehicle.getIDList() and sumo_vid in traci.simulation.getPendingVehicles(): 
-                pending_veh_pos = sumo_edge_id_to_fs_edge[traci.vehicle.getRoute(sumo_vid)[0]]
-                fleetsim.update_vehicle_positions({sumo_v_id_to_fleetpy_v_id(sumo_vid):tuple((pending_veh_pos[0],pending_veh_pos[1],0.000001))}, sim_time)
-                LOG.info(f"{sumo_vid}/{sumo_v_id_to_fleetpy_v_id(sumo_vid)} has to wait to get inserted at Edge {traci.vehicle.getRoute(sumo_vid)[0]}/{pending_veh_pos}") 
+                # B) Vehicle is not in the simulation, but already loaded and waiting to be inserted (pending) --> no new route needed
+                elif (sumo_vid not in traci.vehicle.getIDList()) and (sumo_vid in traci.simulation.getPendingVehicles()): 
+                    LOG.debug(f"{sumo_vid}/{self._sumo_v_id_to_fleetpy_v_id(sumo_vid)} has to wait to get inserted at Edge {traci.vehicle.getRoute(sumo_vid)[0]}") 
+                
+                # C) Vehicle not in Simualtion: Try to Load Vehicle and insert it in the simulation    
+                else: 
+                    if self.sumo_binary == "sumo":
+                        try:
+                            traci.vehicle.addFull(vehID=sumo_vid, routeID=route_name, typeID=self.fp_opvid_to_veh_type[opid_vid_tuple])   
+                        except:
+                                LOG.debug(f'Vehicle {sumo_vid} could not be added')#No occurence
+                                print(f'Vehicle {sumo_vid} could not be added')
+                                print(traci.simulation.getLoadedIDList())
+                                print(traci.simulation.getEndingTeleportIDList())
+                                print(traci.simulation.getStartingTeleportIDList())
+                                print(traci.vehicle.getTeleportingIDList())
+                                print(sumo_vid in traci.vehicle.getIDList())
+                                breakpoint()
+                                pass 
+                    elif self.sumo_binary == "sumo-gui":
+                    
+                        try:
+                            traci.vehicle.addFull(vehID=sumo_vid, routeID=route_name, typeID=self.fp_opvid_to_veh_type[opid_vid_tuple])
+                            traci.vehicle.setParameter(objID=sumo_vid,param="Num_PAX",value=len([rq.get_rid_struct() for rq in veh_obj.pax]))
+                            traci.vehicle.setParameter(objID=sumo_vid,param="PAX",value=[rq.get_rid_struct() for rq in veh_obj.pax])
+                            traci.vehicle.setParameter(objID=sumo_vid,param="cleg_dest",value=sumoRoute[-1])
+                            traci.vehicle.setParameter(objID=sumo_vid,param="cleg",value=sumoRoute)
 
+                            LOG.info(f"Inserted Vehicle to SUMO: {sumo_vid},{route_name},{self.fp_opvid_to_veh_type[opid_vid_tuple]}")
+                            if traci.vehicle.isRouteValid(sumo_vid) is False:
+                                LOG.warning(f'Route of {sumo_vid} is not valid')
+                    
+                        except:
+                                LOG.debug(f'Vehicle {sumo_vid} could not be added')#No occurence
+                                print(f'Vehicle {sumo_vid} could not be added')
+                                print(traci.simulation.getLoadedIDList())
+                                breakpoint()
+                                pass
+                if sumo_vid in traci.simulation.getEndingTeleportIDList():
+                    LOG.warning(f"SUMO-vehicle  {sumo_vid} ended to teleport in this timestep")      
             
-            # C) First Try to Load Vehicle and insert it in the simulation    
-            else: 
-                if sumoBinary == "sumo":
-                    try:
-                        traci.vehicle.addFull(vehID=sumo_vid, routeID=route_name, typeID=opvid_to_veh_type[opid_vid_tuple])   
-                    except:
-                            LOG.debug(f'Vehicle {sumo_vid} could not be added')#No occurence
-                            print(f'Vehicle {sumo_vid} could not be added')
-                            print(traci.simulation.getLoadedIDList())
-                            print(traci.simulation.getEndingTeleportIDList())
-                            print(traci.simulation.getStartingTeleportIDList())
-                            print(traci.vehicle.getTeleportingIDList())
-                            print(sumo_vid in traci.vehicle.getIDList())
-                            breakpoint()
-                            pass 
-                elif sumoBinary == "sumo-gui":
+            ## If the SUMO route is len(0) it consists only of internal edges. The vehicles  are immediately considered to be "arrived" an teleported to the node
+            else:  
+                LOG.info(f"veh {veh_obj.vid} @ {veh_obj.pos} gets internal route: {route}")
+                if veh_obj.pos[0] == route[-1] and veh_obj.pos[1] == None:
+                    LOG.debug(f"Vehicle gets Route to own position:{veh_obj.vid} {veh_obj.pos}")
+                elif veh_obj.status == VRL_STATES.IDLE:
+                    LOG.info(f"IDLE Vehicle with new Route found that is only internal: {veh_obj}, {veh_obj.cl_remaining_route} --> No Route Change, Vehicle will be rerouted in next step")
+                else:
+                    #print(f"{veh_obj.vid} FP Route: {route} --> {sumoRoute} results in a sumo route consisting of only internal edges")
+                    arrivedVehicles_internal.update({sumo_vid:route[-1]})
+
+        #print("FP-Vehicles Currently running:")
+        #for sumo_vehicle in traci.vehicle.getIDList():
+            #if sumo_vehicle.split(sep="_")[0]=="fp":
+                #print(f"{sumo_vehicle} at {traci.vehicle.getRoadID(sumo_vehicle)}, Route: {traci.vehicle.getRoute(sumo_vehicle)}")
+
+        return arrivedVehicles_internal
+
+    def _fleetpy_v_id_to_sumo_v_id(self,op_vid_tuple : Tuple[int, int]) -> str:
+        """ converts the fleetpy vehicle id tuple (op_id, vid) into the sumo string id (fp_{op_id}_{v_id})"""
+        return f"fp_{op_vid_tuple[0]}_{op_vid_tuple[1]}"
+
+    def _sumo_v_id_to_fleetpy_v_id(self,sumo_v_id_str : str) -> Tuple[int, int]:
+        """ converts the sumo v_id into the fleetpy vehicle id (op_id, vid)"""
+        _, op_id, vid = sumo_v_id_str.split("_")
+        return (int(op_id), int(vid))
+    
+    def _transform_route_fp_to_sumo(self,route):
+        sumoRoute = []
+        for i in range(0, len(route)-1):
+            o_node = route[i]
+            d_node = route[i+1]
                 
-                    try:
-                        traci.vehicle.addFull(vehID=sumo_vid, routeID=route_name, typeID=opvid_to_veh_type[opid_vid_tuple])
-                        traci.vehicle.setParameter(objID=sumo_vid,param="Num_PAX",value=len([rq.get_rid_struct() for rq in veh_obj.pax]))
-                        traci.vehicle.setParameter(objID=sumo_vid,param="PAX",value=[rq.get_rid_struct() for rq in veh_obj.pax])
-                        traci.vehicle.setParameter(objID=sumo_vid,param="cleg_dest",value=sumoRoute[-1])
-                        traci.vehicle.setParameter(objID=sumo_vid,param="cleg",value=sumoRoute)
+            #If edge is an internal edge it does not need to be added to the sumoRoute, if route only consisted of internal edges, it would not be a sumoRoute
+            if o_node != d_node:
+                edgeID = self.g_fs_edge_to_sumo_edge_id.get((o_node,d_node))
+            else:
+                edgeID = None
 
-                        LOG.debug(f"Inserted Vehicle to SUMO: {sumo_vid},{route_name},{opvid_to_veh_type[opid_vid_tuple]}")
-                        #breakpoint()
-                        if traci.vehicle.isRouteValid(sumo_vid) is False:
-                            LOG.warning(f'Route of {sumo_vid} is not valid')
+            if edgeID == None:
+                    LOG.warning(f'There is a KeyError in the Route which is {o_node} -> {d_node} : {route}')
+                    print(f'There is a KeyError in the Route which is {o_node} -> {d_node} : {route}')
+            if edgeID != None and not edgeID.startswith(":"): # internal edges start with ":"
+                sumoRoute.append(edgeID)
+        return sumoRoute
+
+    def _get_current_edge_tt(self,sim_time,veh_edge_dict,veh_start_time_dict,veh_edge_start_time_count):
+        vehicle_id_list = traci.vehicle.getIDList()
+        for veh_id in vehicle_id_list: ##TODO: Filter for relevant vehicles
+            edge = traci.vehicle.getRoadID(veh_id)
+            veh_edge_dict.update({(veh_id,sim_time):edge})
+            ## A) Vehicle was not in simulation last time step --> Initialise Count on new edge (0)
+            if (veh_id,sim_time-1) not in veh_edge_dict.keys(): 
+                veh_edge_start_time_count.update({(veh_id,edge,sim_time):0})
+                veh_start_time_dict.update({veh_id:sim_time})
+                    
+            ## B) Vehicle was simulation last time step, but on other edge --> Initialise Count on new edge (0)
+            elif veh_edge_dict[(veh_id,sim_time-1)] != edge:
+                veh_edge_start_time_count.update({(veh_id,edge,sim_time):0})
+                veh_start_time_dict.update({veh_id:sim_time})
+                    
+            ## C) Vehicle was simulation last time step and on same edge --> Update Count on edge (+1)
+            elif veh_edge_dict[(veh_id,sim_time-1)] == edge:
+                veh_edge_start_time_count[veh_id,edge,veh_start_time_dict[veh_id]] += 1
                 
-                    except:
-                            LOG.debug(f'Vehicle {sumo_vid} could not be added')#No occurence
-                            print(f'Vehicle {sumo_vid} could not be added')
-                            print(traci.simulation.getLoadedIDList())
-                            breakpoint()
-                            pass
-            if sumo_vid in traci.simulation.getEndingTeleportIDList():
-                LOG.warning(f"SUMO-vehicle  {sumo_vid} ended to teleport in this timestep")
-        else:   #If the route is only internal vehicles that have been initialized are immediately considered to be "arrived", if not they are added at a "HelpRoute" first. 
-                #This should only happen very early in the Simulation and not within the evaluation time
-            try:
-                #if str(vid) in traci.vehicle.getIDList():
-                if sumo_vid in initializedVehicles:
-                    arrivedVehicles.append(sumo_vid)
-                    LOG.debug(f'Vehicle {sumo_vid} is immediately considered to be arrived')#No occurence
-                else:# SumoRoute only consists of internal edge and the vehicle has not been initialize
-                    try:    # TODO i dont understand this part
-                        LOG.debug(f'SUMO Route vehicle {sumo_vid}')#Occured 7 times 
-                        arrivedVehicles.append(sumo_vid)
-                        LOG.debug(f'Vehicle {sumo_vid} is immediately considered to be arrived (2)') #This now works
-                    except:
-                        LOG.debug(f"Error is thrown here")
-            except:
-                LOG.debug("Something went wrong while adding the route in traci")#6 Occurences
+        ### Save Memory and delete entrys in veh_edge_dicts after 2 seconds
+        keys_to_delete = [key for key in veh_edge_dict if key[1] == sim_time-2]
+        for key in keys_to_delete:
+            del veh_edge_dict[key]
+                
+        return veh_edge_dict,veh_start_time_dict,veh_edge_start_time_count
 
-    #print("FP-Vehicles Currently running:")
-    #for sumo_vehicle in traci.vehicle.getIDList():
-        #if sumo_vehicle.split(sep="_")[0]=="fp":
-            #print(f"{sumo_vehicle} at {traci.vehicle.getRoadID(sumo_vehicle)}, Route: {traci.vehicle.getRoute(sumo_vehicle)}")
+    def _process_tt_data(self,veh_edge_start_time_count,veh_start_time_dict):
+        t_veh_ids =[]
+        t_starting_times = []
+        t_edges =[]
+        t_traveltimes =[]
+                
+        for key, value in veh_edge_start_time_count.items():
+            if key[2]  == veh_start_time_dict.get(key[0]): ## Do not consider entries if Edge has not been completed yet
+                continue
+            t_veh_ids.append(str(key[0]))
+            t_edges.append(str(key[1]))
+            t_starting_times.append(key[2])
+            t_traveltimes.append(float((value+1)))
+        tt_df = pd.DataFrame(data={"veh_id":t_veh_ids,"edge_id":t_edges,"starting_time":t_starting_times,"edge_tt":t_traveltimes})
+        tt_df["starting_time"] = tt_df["starting_time"].astype(int)
+        tt_df = tt_df.groupby('edge_id').agg({'edge_tt': ['mean', 'std']}).reset_index()       
+        tt_df.columns = ['_'.join(col).strip('_') if isinstance(col, tuple) else col for col in tt_df.columns]
+        tt_df = tt_df.rename(columns={f'edge_tt_mean':"edge_tt",f'edge_tt_std':"edge_std"})       
+        tt_df["edge_tt"]=tt_df['edge_tt'].round(3)
+        tt_df["edge_std"]=tt_df['edge_std'].round(3)
+        ## if no std --> std equals 0
+        tt_df["edge_std"] = tt_df["edge_std"].fillna(0)
+        # if only one second than no update 
+        tt_df = tt_df[tt_df['edge_tt'] > 1] 
+        tt_df["edge_id"] = tt_df["edge_id"].apply(lambda x: self.g_sumo_edge_id_to_fs_edge.get(x, None))
+        tt_df = tt_df.dropna(subset=['edge_id'])
+        tt_df["from_node"] = tt_df["edge_id"].apply(lambda x: x[0])
+        tt_df["to_node"] = tt_df["edge_id"].apply(lambda x: x[1])
+        tt_df.drop(columns="edge_id",inplace=True)
+        return tt_df 
 
-    LOG.debug(f"initialized Vehciles {initializedVehicles}")
-    return arrivedVehicles, initializedVehicles
+    def _save_tt_to_csv(self,tt_df, sim_time):
+        resultsPath = self.fp_sim_env.dir_names[G_DIR_OUTPUT]
+        if not os.path.isdir(os.path.join(resultsPath, "EdgeTravelTimes")):
+            os.mkdir(os.path.join(resultsPath, "EdgeTravelTimes")) 
+        tt_df.to_csv(os.path.join(resultsPath, "EdgeTravelTimes", f"SUMO_travel_times_{sim_time}.csv"))
+        LOG.debug(f"SUMO Traveltimes sent to FP saved at: {os.path.join(resultsPath, 'EdgeTravelTimes', f'SUMO_travel_times_{sim_time}.csv')}")
+
+    def _get_current_vehicle_positions(self):
+        """ this function reads the positions of the specified vehicles from sumo and returns a dictionary
+        :param vehicle_ids: list integer of sumo vehicle ids to read positions
+        :param vehicle_to_position_dict: dictionary (operator_id, fleetsim vehicle id) -> fleetsim network position (tuple (o_node, d_node, frac_position) or (o_node, None, None))
+                for a single operator operator_id = 0
+        :return: """
+        fleetsim_vehicles = self.fp_sim_env.get_vehicle_and_op_ids()
+        vehicle_to_position_dict = {}
+        for opid_vid_tuple in fleetsim_vehicles:
+            sumo_vid = self._fleetpy_v_id_to_sumo_v_id(opid_vid_tuple)
+            
+            ## A) Vehicle Moving on the Road --> Get Update 
+            if str(sumo_vid) in traci.vehicle.getIDList():
+                LOG.debug("Vehicle is in IDList and position should be updated")
+                currentLane = traci.vehicle.getLaneID(str(sumo_vid))
+                laneLength = traci.lane.getLength(currentLane)
+                currentLanePosition = traci.vehicle.getLanePosition(str(sumo_vid)) #returns something like: 20.267898023103246 (Other format needed?!)
+                frac_position = currentLanePosition/laneLength
+                currentEdge = traci.lane.getEdgeID(currentLane)
+                if self.g_sumo_edge_id_to_fs_edge.get(currentEdge) is not None:
+                    o_node, d_node = self.g_sumo_edge_id_to_fs_edge[currentEdge]
+                    CurrentPosition = (o_node, d_node, frac_position)
+                    vehicle_to_position_dict[opid_vid_tuple] = CurrentPosition
+                else:
+                    LOG.debug(f"Edge {currentEdge} not known in FP, no update this timestep")
+
+            ## B) Vehicle Pending and Waiting to get Inserted --> Update relative Position to 0.000001
+            elif sumo_vid in traci.simulation.getPendingVehicles():           
+                pending_veh_pos = self.g_sumo_edge_id_to_fs_edge[traci.vehicle.getRoute(sumo_vid)[0]]
+                vehicle_to_position_dict[opid_vid_tuple] = (pending_veh_pos[0],pending_veh_pos[1],0.000001)
+            
+            ## C) Not in Network and not Moving --> No Update
+            else:
+                LOG.debug(f"Position of {sumo_vid} remained the same")
+
+            ## D) TODO: Consider teleported Vehicles
+
+        return vehicle_to_position_dict
+
+    def _update_arrived_vehicles(self,arrivedVehicles_internal,sim_time):
+        arrivedVehicleIDs = list(traci.simulation.getArrivedIDList()) #vehicles that have reached destination and have been removed in this sim timestep
+        arrivedVehicleIDs = [s for s in arrivedVehicleIDs if s.startswith("fp_")] #Only consider FleetPy Vehicles
+
+        if len(arrivedVehicleIDs) == 0 and len(arrivedVehicles_internal)== 0:
+            return
+  
+        LOG.info(f"Internal Arrivals: {arrivedVehicles_internal}")
+        LOG.info(f"Normal Arrivals: {arrivedVehicleIDs}")
+
+        # This should not happen normally as arrived vehicles should be removed by sumo itself:
+        all_arrivedVehicleIDs = arrivedVehicleIDs + list(arrivedVehicles_internal.keys())
+        for sumo_vid in all_arrivedVehicleIDs:
+            if sumo_vid in traci.vehicle.getIDList():
+               LOG.warning(f"vehicle {sumo_vid} is being forcefully removed from SUMO")
+               traci.vehicle.remove(sumo_vid)
+        
+        arrival_dict = {}
+        for sumo_vid in arrivedVehicleIDs:
+            fp_vid = self._sumo_v_id_to_fleetpy_v_id(sumo_vid)
+            
+            #if type(sumo_vid) != str:
+                #continue
+            veh_obj = self.fp_sim_env.sim_vehicles[fp_vid]
+            
+            if len(veh_obj.cl_remaining_route)> 0: 
+                destination_node = veh_obj.cl_remaining_route[-1]
+
+            ## Edge Case: Vehicle arrived in SUMO but not yet in FleetPy - happens in some cases with values of relative distance of last edge > 0.95
+            else:
+                destination_node = veh_obj.pos[1]
+                LOG.info(f"{veh_obj.vid} Vehicle arrived in SUMO but not yet in FleetPy: Teleported to {(destination_node,None,None)}")
+
+
+            arrival_dict.update({fp_vid:(destination_node,None,None)})
+            #print(f"Vehicle {fp_vid} --> {sumo_vid} has arrived at {veh_obj.cl_remaining_route[-1]}")
+        
+        ## Handling of Internal Arrivals
+        for sumo_vid,dest in arrivedVehicles_internal.items():
+            fp_vid = self._sumo_v_id_to_fleetpy_v_id(sumo_vid)
+            veh_obj = self.fp_sim_env.sim_vehicles[fp_vid]
+            LOG.info(f"Internal Arrival: {veh_obj}, {veh_obj.cl_remaining_route},{veh_obj.status}") ##TODO:  Teleport idle vehicles without letting them arrive "reached destination"
+
+            arrival_dict.update({fp_vid:(dest,None,None)})
+            #print(f"Vehicle {fp_vid} --> {sumo_vid} has arrived on an internal route at {dest}")
+
+        self.fp_sim_env.update_vehicle_positions(arrival_dict, sim_time)
+        self.fp_sim_env.vehicles_reached_destination(sim_time,list(arrival_dict.keys()))
+
+    def _show_idle_vehicles_gui(self,active_pois):
+        for sumo_pos in active_pois.keys():
+            traci.poi.remove(sumo_pos)    
+        active_pois = {}
+        for (op_id, veh_id),veh_obj in self.fp_sim_env.sim_vehicles.items():
+            if veh_obj.pos[1] == None: #Only for vehicles which are not moving
+                op_veh_id = f"fp_{op_id}_{veh_id}"
+                sumo_pos = self.g_fs_node_to_sumo_junction[veh_obj.pos[0]]
+
+                if sumo_pos in active_pois.keys():
+                    active_pois[sumo_pos].append(op_veh_id)
+
+                else:  
+                    active_pois[sumo_pos]=[op_veh_id]
+
+        for sumo_pos,op_veh_ids in active_pois.items():
+            junction_pos = traci.junction.getPosition(sumo_pos)
+            traci.poi.add(sumo_pos,junction_pos[0],junction_pos[1]-5,poiType=' '.join(op_veh_ids),color=(0, 0, 0, 0))
+        return active_pois
+
+
+
+
+## Non-Implemented Functions:
 
 def absolute_to_relative_position(vehID):
     LanePositionInMeter = traci.vehicle.getLanePosition(vehID)
     LaneID = traci.vehicle.getLaneID(vehID)
     LaneLength = traci.lane.getLength(LaneID)
     relativePosition = LanePositionInMeter/LaneLength
-    return relativePosition
-
-def update_arrived_vehicles(arrivedVids, fleetsim, vehicle_to_position_dict, sim_time, vids_try_again):
-    arrivedVehicleIDs = list(traci.simulation.getArrivedIDList()) #vehciles that have reached destination and have been removed in this sim timestep
-    LOG.debug(f"traci.simulation.getArrivedIDList() {list(traci.simulation.getArrivedIDList())}") #Arrived vehicles in problematic situations from this
-    LOG.debug(f"arrivedVids {arrivedVids}")
-    for sumo_vid in arrivedVehicleIDs:
-        if sumo_vid in traci.vehicle.getIDList():
-            LOG.debug("vehicle is being removed")
-            traci.vehicle.remove(sumo_vid)
-    arrivedVehicleIDs.append(arrivedVids)
-    LOG.debug(f"arrivedVids {arrivedVehicleIDs}")
-    #### updating postion to be the last  step of route ###########
-    for sumo_vid in arrivedVehicleIDs:
-        if sumo_vid in traci.simulation.getLoadedIDList():
-            if sumo_vid in traci.vehicle.getIDList():
-                route = traci.vehicle.getRoute(sumo_vid)
-                lastEdge = route[-1]
-                if lastEdge in sumo_edge_id_to_fs_edge.keys():
-                    o_node, d_node = sumo_edge_id_to_fs_edge[lastEdge]
-                    frac_position = 1.0
-                CurrentPosition = (o_node, d_node, frac_position)
-                LOG.debug(f"Manually updated current position is: {CurrentPosition} and route is {route}") #This never happens
-                vehicle_to_position_dict[sumo_v_id_to_fleetpy_v_id(sumo_vid)] = CurrentPosition
-                EdgeLength = traci.edge.getLength(lastEdge)
-                laneID = lastEdge+"_0"
-                traci.vehicle.moveTo(sumo_vid,laneID,EdgeLength)
-            else:
-                LOG.debug(f"vehcile {sumo_vid}is not in ID List but arrived")#780 occurences
-        else:
-            LOG.debug(f"Vehicle has not been loaded but arrived")
-
-    fleetsim.update_vehicle_positions(vehicle_to_position_dict, sim_time)
-    ####
-    fleetsim_vehicles= fleetsim.get_vehicle_and_op_ids()
-    vids_reached_destination = []
-    for opid_vid_tuple in fleetsim_vehicles:
-        if fleetpy_v_id_to_sumo_v_id(opid_vid_tuple) in arrivedVehicleIDs:
-            vids_reached_destination.append(opid_vid_tuple)
-        
-    LOG.debug(f"vids-reached_destination is {vids_reached_destination} and arrivedVeicleIDs is {arrivedVehicleIDs}")    
-    fleetsim.vehicles_reached_destination(sim_time,vids_reached_destination)
-    LOG.debug(f'vids_try_again: {vids_try_again}')
-    
+    return relativePosition   
 
 def get_fco_mode(fleetsim):
     fco_vehicles = fleetsim.scenario_parameters.get(G_SUMO_FCO_VEHICLES)
@@ -409,32 +676,6 @@ def get_fco_mode(fleetsim):
         fco_vehicles_op_id = None
    
     return fco_vehicle_mode,fco_vehicles_op_id
-
-def get_current_edge_tt(sim_time,veh_edge_dict,veh_start_time_dict,veh_edge_start_time_count):
-    vehicle_id_list = traci.vehicle.getIDList()
-    for veh_id in vehicle_id_list: ##TODO: Filter for relevant vehicles
-        edge = traci.vehicle.getRoadID(veh_id)
-        veh_edge_dict.update({(veh_id,sim_time):edge})
-        ## A Vehicle was not in simulation last time step --> Initialise Count on new edge (0)
-        if (veh_id,sim_time-1) not in veh_edge_dict.keys(): 
-            veh_edge_start_time_count.update({(veh_id,edge,sim_time):0})
-            veh_start_time_dict.update({veh_id:sim_time})
-                
-        ## B Vehicle was simulation last time step, but on other edge --> Initialise Count on new edge (0)
-        elif veh_edge_dict[(veh_id,sim_time-1)] != edge:
-            veh_edge_start_time_count.update({(veh_id,edge,sim_time):0})
-            veh_start_time_dict.update({veh_id:sim_time})
-                
-        ## C Vehicle was simulation last time step and on same edge --> Update Count on edge (+1)
-        elif veh_edge_dict[(veh_id,sim_time-1)] == edge:
-            veh_edge_start_time_count[veh_id,edge,veh_start_time_dict[veh_id]] += 1
-            
-    ### Save Memory and delete entrys in veh_edge_dicts after 2 seconds
-    keys_to_delete = [key for key in veh_edge_dict if key[1] == sim_time-2]
-    for key in keys_to_delete:
-        del veh_edge_dict[key]
-            
-    return veh_edge_dict,veh_start_time_dict,veh_edge_start_time_count
             
 def get_current_sumo_Network_speeds(fleetsim,edge_to_veh_current_speed_list):
     fco_vehicle_mode,fco_vehicles_op_id = get_fco_mode(fleetsim)
@@ -467,65 +708,6 @@ def get_current_sumo_Network_speeds(fleetsim,edge_to_veh_current_speed_list):
             
     return edge_to_veh_current_speed_list 
 
-def process_tt_data(veh_edge_start_time_count,veh_start_time_dict,sumo_edge_id_to_fs_edge):
-    t_veh_ids =[]
-    t_starting_times = []
-    t_edges =[]
-    t_traveltimes =[]
-            
-    for key, value in veh_edge_start_time_count.items():
-        if key[2]  == veh_start_time_dict.get(key[0]): ## Do not consider entries if Edge has not been completed yet
-            continue
-        t_veh_ids.append(str(key[0]))
-        t_edges.append(str(key[1]))
-        t_starting_times.append(key[2])
-        t_traveltimes.append(float((value+1)))
-    tt_df = pd.DataFrame(data={"veh_id":t_veh_ids,"edge_id":t_edges,"starting_time":t_starting_times,"edge_tt":t_traveltimes})
-    tt_df["starting_time"] = tt_df["starting_time"].astype(int)
-    tt_df = tt_df.groupby('edge_id').agg({'edge_tt': ['mean', 'std']}).reset_index()       
-    tt_df.columns = ['_'.join(col).strip('_') if isinstance(col, tuple) else col for col in tt_df.columns]
-    tt_df = tt_df.rename(columns={f'edge_tt_mean':"edge_tt",f'edge_tt_std':"edge_std"})       
-    tt_df["edge_tt"]=tt_df['edge_tt'].round(3)
-    tt_df["edge_std"]=tt_df['edge_std'].round(3)
-    ## if no std --> std equals 0
-    tt_df["edge_std"] = tt_df["edge_std"].fillna(0)
-    # if only one second than no update 
-    tt_df = tt_df[tt_df['edge_tt'] > 1] 
-    tt_df["edge_id"] = tt_df["edge_id"].apply(lambda x: sumo_edge_id_to_fs_edge.get(x, None))
-    tt_df = tt_df.dropna(subset=['edge_id'])
-    tt_df["from_node"] = tt_df["edge_id"].apply(lambda x: x[0])
-    tt_df["to_node"] = tt_df["edge_id"].apply(lambda x: x[1])
-    tt_df.drop(columns="edge_id",inplace=True)
-    return tt_df  
-
-
-def save_tt_to_csv(tt_df, sim_time, resultsPath):
-    if not os.path.isdir(os.path.join(resultsPath, "EdgeTravelTimes")):
-        os.mkdir(os.path.join(resultsPath, "EdgeTravelTimes")) 
-    path = os.path.join(resultsPath, "EdgeTravelTimes", f"SUMO_travel_times_{sim_time}.csv")
-    tt_df.to_csv(path)
-    """
-    
-    path = os.path.join(resultsPath, "EdgeTravelTimes", f"SUMO_travel_times_{sim_time}.csv")
-    data_tuples = [(key[0], key[1], value) for key, value in fs_edge_to_avg_tt.items()]
-    df = pd.DataFrame(data_tuples, columns=['from_node', 'to_node', 'edge_tt'])
-    df.to_csv(path)
-    """
-    """
-    export_tt_list = [(sumo_edge, avg_tt, sim_time) for sumo_edge, avg_tt in sumo_edge_to_avg_tt.items()]
-    if os.path.isfile(path):
-        with open(path, 'a') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerows(export_tt_list)
-    else:
-        if not os.path.isdir(os.path.join(resultsPath, "EdgeTravelTimes")):
-            os.mkdir(os.path.join(resultsPath, "EdgeTravelTimes"))
-        traveltime_fields = ["edges","travel_times_0","sim_time"]    
-        with open(path, 'w') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(traveltime_fields)
-            writer.writerows(export_tt_list)
-    """
 
 def update_edge_traveltimes(edge_to_veh_current_speed_list, sumo_edge_id_to_fs_edge, fs_edge_to_len, sim_time, resultsPath):
     sumo_edge_to_avg_tt = {}
@@ -550,171 +732,6 @@ def update_edge_traveltimes(edge_to_veh_current_speed_list, sumo_edge_id_to_fs_e
     save_tt_to_csv(fs_edge_to_avg_tt, sim_time, resultsPath)
     return fs_edge_to_avg_tt
 
-def run_simulation(fleetsim : SUMOcontrolledSim, sumo_edge_id_to_fs_edge, fs_edge_to_sumo_edge_id, sumo_node_list, fs_edge_to_ff_tt,fs_edge_to_len,
-                   update_fleetsim_traveltimes = True, update_travel_statistics_time_step = 900):
-
-    edge_to_veh_current_speed_list = {}
-    vids_try_again = []
-    initializedVehicles = []
-    vehicle_to_position_dict = {}
-    resultsPath = fleetsim.dir_names[G_DIR_OUTPUT]
-    sim_time_offset = fleetsim.scenario_parameters.get(G_SUMO_SIM_TIME_OFFSET, 0)
-    end_time = fleetsim.scenario_parameters[G_SIM_END_TIME]
-
-    ##tt-retrieval
-    veh_edge_start_time_count = {}  #{(veh_id,edge,start_time):time_counter}
-    veh_start_time_dict ={} #{(veh_id,start_time_on_current_edge)}
-    veh_edge_dict ={} # {(veh_id,sim_time):edge_id,..}
-    # get vehicle types of the simulation vehicles
-    opvid_to_veh_type = {op_vid : veh.veh_type for op_vid, veh in fleetsim.sim_vehicles.items()} # {(op_id,veh_id):"veh_type"}
-
-    #Check for old EdgeTravelTimes and delete them if they are still there
-    if os.path.isfile(os.path.join(resultsPath, "EdgeTravelTimes", "new_travel_times.csv")):
-        os.remove(os.path.join(resultsPath, "EdgeTravelTimes", "new_travel_times.csv"))
-
-    ### SIMULATION
-    step = 0
-    last_time = -1
-    while True:
-
-        # 1) fleetpy time step  
-        sim_time = int(traci.simulation.getTime()) # sumo time in milliseconds
-        sim_time += sim_time_offset
-        if sim_time > end_time:
-            break
-        if sim_time != last_time: # avoid same time step again due to rounding
-            leg_status_dict = fleetsim.step(sim_time) # fleetpy timestep and computing new routes
-            last_time = sim_time
-        if sim_time % 120 == 0:
-            print("{}: current simtime: {}/{}".format(fleetsim.scenario_parameters[G_SCENARIO_NAME], sim_time, end_time))
-
-        #if sim_time%60==0:
-           #for (op_id, veh_id) in fleetsim.sim_vehicles:
-               #print((op_id, veh_id),fleetsim.sim_vehicles[(op_id, veh_id)])
-               #if len(fleetsim.sim_vehicles[(op_id, veh_id)].pax)>0:
-                   # for passenger in fleetsim.sim_vehicles[(op_id, veh_id)].pax:
-                       # print(f"id: {passenger.rid} {passenger.o_node} --> {passenger.d_node}")
-        
-        # 2) check for new routes and finished boarding processes
-        arrivedVehicles, initializedVehicles = update_routes_and_add_vehicles(fleetsim, initializedVehicles, sim_time, sumo_node_list, fs_edge_to_sumo_edge_id, opvid_to_veh_type,sumo_edge_id_to_fs_edge)
-
-        # 3) sumo time step
-        traci.simulationStep()
-                
-        # 4) get current vehicle positions and update travel time statistics (if needed
-        old = False
-        if sim_time%1==0 and update_travel_statistics_time_step<24*3600:
-            veh_edge_dict,veh_start_time_dict,veh_edge_start_time_count = get_current_edge_tt(sim_time=sim_time,veh_edge_dict=veh_edge_dict,veh_start_time_dict=veh_start_time_dict,veh_edge_start_time_count=veh_edge_start_time_count)
-        
-        # 5) send new travel times to fleetsim
-        if sim_time%update_travel_statistics_time_step==0:
-
-            time_df = process_tt_data(veh_edge_start_time_count,veh_start_time_dict,sumo_edge_id_to_fs_edge)
-            time_update_dict = dict(zip(zip(list(time_df["from_node"]),list(time_df["to_node"])),zip(list(time_df["edge_tt"]),list(time_df["edge_std"]))))
-            save_tt_to_csv(time_df, sim_time, resultsPath)
-            veh_edge_start_time_count ={}
-            veh_start_time_dict ={}
-            veh_edge_dict ={}
-                        
-            if update_fleetsim_traveltimes:
-                fleetsim.update_network_travel_times(time_update_dict, sim_time)
-                #fleetsim.routing_engine.load_tt_file_SUMO(resultsPath,sim_time)    
-            
-        # 6) collect the current positions of all fleet vehicles in SUMO
-        vehicle_to_position_dict = get_current_vehicle_positions(fleetsim, sumo_edge_id_to_fs_edge)
-        now = datetime.now()
-        
-        # 7) set the new positions in FleetPy
-        fleetsim.update_vehicle_positions(vehicle_to_position_dict, sim_time)
-
-        # 8) check for vehicles that arrived at their destination
-        vids_try_again = update_arrived_vehicles(arrivedVehicles, fleetsim, vehicle_to_position_dict, sim_time, vids_try_again)
-
-        for opid_vid_tuple in leg_status_dict:
-            sumo_vid = fleetpy_v_id_to_sumo_v_id(opid_vid_tuple)
-            LOG.debug(f"legstatus for {opid_vid_tuple} with vid {sumo_vid} is {leg_status_dict[opid_vid_tuple][0]}")
-            if leg_status_dict[opid_vid_tuple][0] == 10 and sumo_vid not in traci.vehicle.getIDList():
-                try:
-                    pos = leg_status_dict[opid_vid_tuple][1]
-                    LOG.debug(f"pos is {pos}")
-                    o_node = pos[0]
-                    d_node = o_node+1
-                    sumoEdgeID= fs_edge_to_sumo_edge_id[(o_node, d_node)]
-                    route = []
-                    route.append(sumoEdgeID)
-                    route_Name = "route_"+sumo_vid+"_"+str(sim_time)
-                    if sumo_vid not in traci.simulation.getLoadedIDList():
-                        LOG.debug(f"Vehicle {sumo_vid} is not laoded")
-                    LOG.debug(f"Is this tried?")
-                    #traci.vehicle.remove(str(vid))
-                    LOG.debug(f"Has the vehicle been removed?")
-                    traci.vehicle.addFull(sumo_vid,route_Name, typeID=opvid_to_veh_type[opid_vid_tuple])
-                    LOG.debug(f"Is this succcessfull?")
-                except:
-                    pass
-        step+=1
-
-    t1_stop = perf_counter()
-    time_elapsed = []
-    time_elapsed.append(t1_stop)
-    timefile = resultsPath+"Computationaltime.csv"
-    #print(timefile)
-    #print(time_elapsed)
-    with open(timefile, 'w', newline = '') as csvfile:
-        my_writer = csv.writer(csvfile, delimiter = ' ')
-        my_writer.writerow(time_elapsed)
-    EvaluationPath = resultsPath
-    #print(EvaluationPath)
-    eval.standard_evaluation(EvaluationPath, evaluation_start_time =None, evaluation_end_time =None, print_comments=True, dir_names_in = {})
-    eval.evaluate_folder(EvaluationPath,evaluation_start_time = None, evaluation_end_time = None, print_comments = False)
-    traci.close()
-    sys.stdout.flush()
-    
-
-def setup_and_run_sumo_simulation(constant_config, scenario_config, sumo_config, sumoBinary="sumo-gui", log_level = "info", sumo_fcd_output=False):
-    """ this method runs the coupled sumo and fleetpy simulation
-    :param constant_config: fleetpy const config file
-    :param scenario_config: fleetpy scenario config file (! only one scenario can be computed at once -> same format as constant config !)
-    :param sumo_config: sumo configuration file
-    :param sumoBinary: (str) if "sumo-gui", then sumo gui is shown, other option is "sumo" 
-    :param log_level: Fleetpy log level specifaction
-    :param sumo_fcd_output: if True, all vehicle coordinates per timestep is written to a file"""
-    
-    start_time = time.time()
-
-    # start FleetPy
-    print(constant_config)
-    print(scenario_config)
-    FleetPy = setup_fleetsimulation(constant_config, scenario_config, log_level=log_level)
-    resultsPath = FleetPy.dir_names[G_DIR_OUTPUT]
-    seed = FleetPy.scenario_parameters[G_RANDOM_SEED]
-    SUMO_start_time = FleetPy.scenario_parameters.get(G_SIM_START_TIME)
-
-    # setup traci connection to SUMO
-    setup_traci(sumo_config, resultsPath, sumoBinary, seed,SUMO_start_time, sumo_fcd_output=sumo_fcd_output)
-    
-    
-    # Edge ID Dict Translator
-    sumo_edge_id_to_fs_edge, fs_edge_to_sumo_edge_id, sumo_node_list, fs_edge_to_ff_tt, fs_edge_to_len = setup_network_translation(FleetPy)
-  
-    # Get interval in which new network statistics are gathered and sent to FleetPy to updated network (if not given, no statistics are gathered)
-    travel_time_interval = FleetPy.scenario_parameters.get(G_SUMO_STAT_INT)
-    if travel_time_interval is None:
-        update_fleetsim_traveltimes = False
-        update_travel_statistics_time_step = 10000000000000
-    else:
-        update_fleetsim_traveltimes = True
-        update_travel_statistics_time_step = travel_time_interval
-    
-    end_time_setup = time.time()
-    # run the simulation
-    run_simulation(FleetPy, sumo_edge_id_to_fs_edge, fs_edge_to_sumo_edge_id, sumo_node_list, fs_edge_to_ff_tt,fs_edge_to_len,
-                   update_fleetsim_traveltimes=update_fleetsim_traveltimes, update_travel_statistics_time_step=update_travel_statistics_time_step)
-    
-    end_time_simulation = time.time()
-
-    LOG.info(f"Simulation completed. \n Initialisation time: {end_time_setup-start_time} \n Simulation time: {end_time_simulation-end_time_setup} \n Total time: {end_time_simulation-start_time}")
-
 if __name__ == "__main__":
     
     try:
@@ -738,5 +755,9 @@ if __name__ == "__main__":
         import libsumo as traci
         print("No GUI Needed. Using libsumo instead of traci for better performance.")
 
-    setup_and_run_sumo_simulation(constant_config, scenario_config, sumo_config, sumoBinary=sumoBinary, log_level=log_level)
-    
+    #setup_and_run_sumo_simulation(constant_config, scenario_config, sumo_config, sumoBinary=sumoBinary, log_level=log_level)
+    SUMOFleetPyCoupling = SUMOFleetPyServer(constant_config=constant_config, scenario_config=scenario_config, sumo_config=sumo_config, sumoBinary=sumoBinary, log_level=log_level)
+    SUMOFleetPyCoupling.setup_fleetsimulation()
+    SUMOFleetPyCoupling.setup_traci()
+    SUMOFleetPyCoupling.setup_network_translation()
+    SUMOFleetPyCoupling.run_simulation()
