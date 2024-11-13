@@ -1,5 +1,6 @@
 {
 "type": "FeatureCollection",
+"name": "nodes_all_infos",
 "features": [
 { "type": "Feature", "properties": { "node_index": 0, "source_node_id": "J1", "pos_x": 100.0, "pos_y": 0.0, "is_stop_only": false }, "geometry": { "type": "Point", "coordinates": [ 100.0, 0.0 ] } },
 { "type": "Feature", "properties": { "node_index": 1, "source_node_id": "J0", "pos_x": 0.0, "pos_y": 0.0, "is_stop_only": false }, "geometry": { "type": "Point", "coordinates": [ 0.0, 0.0 ] } },
