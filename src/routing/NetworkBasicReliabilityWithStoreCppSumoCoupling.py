@@ -163,7 +163,7 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
     
     def _save_cpp_tt_file(self,tt_file_df,scenario_time):
         """
-        cleans folder for csv handover to cpp form preivious simulation runs and saves tt_file_df as a new csv file into it.
+        cleans folder for csv handover to cpp form prievious simulation runs and saves tt_file_df as a new csv file into it.
         """
         py_path  = pathlib.Path(__file__)
         save_path_dir = py_path.parent/"cpp_router"/"tt_updates"
@@ -191,8 +191,6 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
             f = self.travel_time_file_infos[scenario_time]
             tt_file = os.path.join(f, "edges_td_att.csv")
             tt_file_df = pd.read_csv(tt_file)  
-            if "edge_std" in tt_file_df.keys():
-                tt_file_df["edge_var"] = tt_file_df["edge_std"].apply(lambda x: x**2)
             tt_file_df['edge_cfv'] = tt_file_df.apply(lambda row: self.customized_section_cost_function(tt_mean=row['edge_tt'], tt_var=row['edge_var']), axis=1)
             columns_to_keep = ['from_node', 'to_node', 'edge_tt', 'distance', 'edge_std', 'edge_cfv','edge_var']
             tt_file_df = tt_file_df.drop(columns=[col for col in tt_file_df.columns if col not in columns_to_keep])
@@ -251,11 +249,11 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
         :param new_travel_time_dict: dict edge_id (o_node, d_node) -> edge_traveltime [s]
         :return None'''
         self._reset_internal_attributes_after_travel_time_update()
-        for edge_index_tuple, new_tt in new_travel_time_dict.items():
+        for edge_index_tuple, (new_tt,new_var) in new_travel_time_dict.items():
             o_node = self.nodes[edge_index_tuple[0]]
             d_node = self.nodes[edge_index_tuple[1]]
             edge_obj = o_node.edges_to[d_node]
-            self._set_edge_tt(edge_index_tuple[0], edge_index_tuple[1], new_tt) 
+            self._set_edge_tt(edge_index_tuple[0], edge_index_tuple[1], new_tt, new_var) 
         print(f"Updated {len(new_travel_time_dict)} edges in FP Routing Engine with simulated values.")
 
     def load_tt_file_SUMO(self, resultsPath,sim_time):
@@ -265,6 +263,7 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
         if self._tt_infos_from_folder:
             tt_file = os.path.join(resultsPath, "EdgeTravelTimes", f"SUMO_travel_times_{sim_time}.csv")
             self.cpp_router.updateEdgeTravelTimes(tt_file.encode())
+            print(f"{tt_file} loaded into cpp Router at step {sim_time}")
 
 
     

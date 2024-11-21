@@ -280,18 +280,16 @@ class SUMOFleetPyServer():
             
             # 5) send new travel times to fleetsim
             if (sim_time%self.g_update_travel_statistics_time_step==0) and self.g_update_fleetsim_traveltimes==True:
-
                 time_df = self._process_tt_data(veh_edge_start_time_count,veh_start_time_dict)
-                time_update_dict = dict(zip(zip(list(time_df["from_node"]),list(time_df["to_node"])),zip(list(time_df["edge_tt"]),list(time_df["edge_std"]))))
+                time_update_dict = dict(zip(zip(list(time_df["from_node"]),list(time_df["to_node"])),zip(list(time_df["edge_tt"]),list(time_df["edge_var"]))))
                 self._save_tt_to_csv(time_df, sim_time)
                 veh_edge_start_time_count ={}
                 veh_start_time_dict ={}
-                veh_edge_dict ={}
-                            
+                veh_edge_dict ={}         
                 if self.g_update_fleetsim_traveltimes==True:
                     self.fp_sim_env.update_network_travel_times(time_update_dict, sim_time)
-                    #fleetsim.routing_engine.load_tt_file_SUMO(resultsPath,sim_time)    
-                
+                    self.fp_sim_env.routing_engine.load_tt_file_SUMO(resultsPath,sim_time)  
+
             # 6) collect the current positions of all fleet vehicles in SUMO
             vehicle_to_position_dict = self._get_current_vehicle_positions()
             LOG.info(vehicle_to_position_dict)
@@ -408,9 +406,7 @@ class SUMOFleetPyServer():
                                 print(traci.simulation.getEndingTeleportIDList())
                                 print(traci.simulation.getStartingTeleportIDList())
                                 print(traci.vehicle.getTeleportingIDList())
-                                print(sumo_vid in traci.vehicle.getIDList())
-                                breakpoint()
-                                pass 
+                                print(sumo_vid in traci.vehicle.getIDList()) 
                     elif self.sumo_binary == "sumo-gui":
                     
                         try:
@@ -520,13 +516,13 @@ class SUMOFleetPyServer():
             t_traveltimes.append(float((value+1)))
         tt_df = pd.DataFrame(data={"veh_id":t_veh_ids,"edge_id":t_edges,"starting_time":t_starting_times,"edge_tt":t_traveltimes})
         tt_df["starting_time"] = tt_df["starting_time"].astype(int)
-        tt_df = tt_df.groupby('edge_id').agg({'edge_tt': ['mean', 'std']}).reset_index()       
+        tt_df = tt_df.groupby('edge_id').agg({'edge_tt': ['mean', 'var']}).reset_index()       
         tt_df.columns = ['_'.join(col).strip('_') if isinstance(col, tuple) else col for col in tt_df.columns]
-        tt_df = tt_df.rename(columns={f'edge_tt_mean':"edge_tt",f'edge_tt_std':"edge_std"})       
+        tt_df = tt_df.rename(columns={f'edge_tt_mean':"edge_tt",f'edge_tt_var':"edge_var"})       
         tt_df["edge_tt"]=tt_df['edge_tt'].round(3)
-        tt_df["edge_std"]=tt_df['edge_std'].round(3)
+        tt_df["edge_var"]=tt_df['edge_var'].round(3)
         ## if no std --> std equals 0
-        tt_df["edge_std"] = tt_df["edge_std"].fillna(0)
+        tt_df["edge_var"] = tt_df["edge_var"].fillna(0)
         # if only one second than no update 
         tt_df = tt_df[tt_df['edge_tt'] > 1] 
         tt_df["edge_id"] = tt_df["edge_id"].apply(lambda x: self.g_sumo_edge_id_to_fs_edge.get(x, None))
@@ -540,8 +536,10 @@ class SUMOFleetPyServer():
         resultsPath = self.fp_sim_env.dir_names[G_DIR_OUTPUT]
         if not os.path.isdir(os.path.join(resultsPath, "EdgeTravelTimes")):
             os.mkdir(os.path.join(resultsPath, "EdgeTravelTimes")) 
-        tt_df.to_csv(os.path.join(resultsPath, "EdgeTravelTimes", f"SUMO_travel_times_{sim_time}.csv"))
+        save_path = os.path.join(resultsPath, "EdgeTravelTimes", f"SUMO_travel_times_{sim_time}.csv")
+        tt_df.to_csv(save_path)
         LOG.debug(f"SUMO Traveltimes sent to FP saved at: {os.path.join(resultsPath, 'EdgeTravelTimes', f'SUMO_travel_times_{sim_time}.csv')}")
+
 
     def _get_current_vehicle_positions(self):
         """ this function reads the positions of the specified vehicles from sumo and returns a dictionary
