@@ -10,7 +10,9 @@ import os
 
 py_path = pathlib.Path(__file__)
 
-SELECTED_SCENARIOS = list(range(83,84))
+SELECTED_SCENARIOS = list(range(82,96))
+SELECTED_SCENARIOS = [91,94,95,82]
+SELECTED_SCENARIOS = [99]
 STUDY_NAME = "fleetpy_sumo_coupling_in"
 PROCESS_COUNT = 4
 SIM_NETWORK_NAME = "sumo_in"
@@ -40,7 +42,7 @@ class SimulationRunner:
         
         for sc_index, row in self.sc_config.iterrows():
             sc_df = pd.DataFrame()
-            scenario_name = f'{str(sc_index).zfill(2)}_{row["network_name"]}_{row["SAV_demand_ratio"]}_{row["sim_env"]}'
+            scenario_name = f'{str(sc_index).zfill(3)}_{row["network_name"]}_{row["SAV_demand_ratio"]}_{row["sim_env"]}'
             sc_df["scenario_name"] = [scenario_name]
             sc_df["op_module"] = ["PoolingIRSOnly"]
             sc_df['rq_file'] = [f'demand_in_{row["SAV_demand_ratio"]}.csv']
