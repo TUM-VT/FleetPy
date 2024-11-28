@@ -760,62 +760,68 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
         """ this function is called, when the corresponding SUMO vehicle reaches its destination
         :param simulation_time: time the vehicle reached destination
         """
-        if self.status in G_DRIVING_STATUS:
-            if self.pos[1] is not None:
-                LOG.debug(f'cl_driven_route {self.cl_driven_route}')
-                if self.cl_driven_route[-1] != self.pos[1]:
-                    self.cl_driven_route.append(self.pos[1])
-                    self.cl_driven_route_times.append(simulation_time)
-                self.pos = self.routing_engine.return_node_position(self.pos[1])
-            ## Get Driven Distance for stats
-            if len(self.cl_driven_route) > 1:
-                try:
-                    travel_time, driven_distance,travel_time_var,route_cfv = self.routing_engine.return_route_infos(self.cl_driven_route, 0.0, 0.0)
-                except KeyError:
-                    LOG.debug(f'reached_destination had a Keyerror')
-                    driven_distance = 0
-                    if len(self.cl_driven_route) > 2:
-                        for i in range(2, len(self.cl_driven_route)):
-                            try:
-                                tt, dis,var,cfv = self.routing_engine.get_section_infos(self.cl_driven_route[i-1], self.cl_driven_route[i])
-                            except:
-                                dis = 0
-                            driven_distance += dis
-                            LOG.debug(f'driven_distance {driven_distance}')
-            else:
+        
+
+        if self.pos[1] is not None: ## Vehicle on Edge
+            LOG.debug(f'cl_driven_route {self.cl_driven_route}')
+            if len(self.cl_driven_distance == 0):
+                print(self, "reached destination with no current leg assigned. Error?")
+                breakpoint()
+            if self.cl_driven_route[-1] != self.pos[1]:
+                self.cl_driven_route.append(self.pos[1])
+                self.cl_driven_route_times.append(simulation_time)
+            self.pos = self.routing_engine.return_node_position(self.pos[1])
+       
+        ## Get Driven Distance for stats
+        if len(self.cl_driven_route) > 1:
+            try:
+                travel_time, driven_distance,travel_time_var,route_cfv = self.routing_engine.return_route_infos(self.cl_driven_route, 0.0, 0.0)
+            except KeyError:
+                LOG.debug(f'reached_destination had a Keyerror')
                 driven_distance = 0
-
-            if len(self.assigned_route) == 0:
-                LOG.debug("no assigned route but moved -> unassignment?")
-                print(f" {self.vid} no assigned route but moved -> unassignment?")
-            else:
-                target_pos = self.assigned_route[0].destination_pos
-                if self.pos != target_pos:
-                    LOG.debug("reached destination but not at target {}: pos {} target pos {}".format(self, self.pos, target_pos))
-                    r = self._compute_new_route(target_pos)
-                    if len(r) <= 2:
-                        LOG.debug("only one edge missed: if this is a turn, everything is fine! route: {}".format(r))
-                        self.pos = target_pos
-                        self.cl_driven_route.append(target_pos[0])
-                        self.cl_driven_route_times.append( self.cl_driven_route_times[-1] )
-                        self._route_update_needed = False
-                    elif self.routing_engine.return_route_infos(r, 0, 0)[0] < 0.1:
-                        LOG.debug("more edges but very short edges -> assume reached destination!")
-                        self.pos = target_pos
-                        for x in r[1:]:
-                            self.cl_driven_route.append(x)
-                            self.cl_driven_route_times.append( simulation_time )
-                        self._route_update_needed = False
-                    else:
-                        self.cl_remaining_route = r
-                        LOG.debug(f"vehicle reached_destination but not at Target") #No occurence
-                        return
-
-            self.cl_driven_distance += driven_distance
-            self.end_current_leg(simulation_time)
-            self.start_next_leg_first = True
+                if len(self.cl_driven_route) > 2:
+                    for i in range(2, len(self.cl_driven_route)):
+                        try:
+                            tt, dis,var,cfv = self.routing_engine.get_section_infos(self.cl_driven_route[i-1], self.cl_driven_route[i])
+                        except:
+                            dis = 0
+                        driven_distance += dis
+                        LOG.debug(f'driven_distance {driven_distance}')
         else:
-            LOG.error("vehicle reached destination without performing routing VRL!")
-            LOG.error("unassignment might be the reason?")
-            LOG.error(f"sim time {simulation_time} route with time {self.cl_driven_route} {self.cl_driven_route_times} | veh {self}")
-            raise NotImplementedError
+            driven_distance = 0
+
+        if len(self.assigned_route) == 0:
+            LOG.debug("no assigned route but moved -> unassignment?")
+            print(f" {self.vid} no assigned route but moved -> unassignment?")
+        else:
+            target_pos = self.assigned_route[0].destination_pos
+            if self.pos != target_pos:
+                LOG.debug("reached destination but not at target {}: pos {} target pos {}".format(self, self.pos, target_pos))
+                r = self._compute_new_route(target_pos)
+                if len(r) <= 2:
+                    LOG.debug("only one edge missed: if this is a turn, everything is fine! route: {}".format(r))
+                    self.pos = target_pos
+                    self.cl_driven_route.append(target_pos[0])
+                    self.cl_driven_route_times.append( self.cl_driven_route_times[-1] )
+                    self._route_update_needed = False
+                elif self.routing_engine.return_route_infos(r, 0, 0)[0] < 0.1:
+                    LOG.debug("more edges but very short edges -> assume reached destination!")
+                    self.pos = target_pos
+                    for x in r[1:]:
+                        self.cl_driven_route.append(x)
+                        self.cl_driven_route_times.append( simulation_time )
+                    self._route_update_needed = False
+                else:
+                    self.cl_remaining_route = r
+                    LOG.debug(f"vehicle reached_destination but not at Target") #No occurence
+                    return
+
+        self.cl_driven_distance += driven_distance
+        self.end_current_leg(simulation_time)
+        self.start_next_leg_first = True
+       
+        if self.status not in G_DRIVING_STATUS:
+            LOG.warning("vehicle reached destination without performing routing VRL!")
+            LOG.warning("unassignment might be the reason?")
+            LOG.warning(f"sim time {simulation_time} route with time {self.cl_driven_route} {self.cl_driven_route_times} | veh {self} Route Update Needed? {self._route_update_needed}")
+        	
