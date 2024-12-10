@@ -1,4 +1,4 @@
-,from_node,to_node,edge_tt,distance,edge_std,edge_cfv
+,from_node,to_node,edge_tt,distance,edge_var,edge_cfv
 0,0,1,5.376,74.67,2,5.376
 1,2,3,5.786,80.37,2,5.786
 2,4,5,5.376,74.67,20,5.376
