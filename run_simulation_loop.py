@@ -7,14 +7,28 @@ import re
 import gzip
 import shutil
 import os
+import math
 
 py_path = pathlib.Path(__file__)
 
 SELECTED_SCENARIOS = list(range(82,96))
 SELECTED_SCENARIOS = [91,94,95,82]
-SELECTED_SCENARIOS = [99]
+
+SELECTED_SCENARIOS = list(range(114,128))
+SELECTED_SCENARIOS = [99,100,101,102]
+
+SELECTED_SCENARIOS = [163]
+SELECTED_SCENARIOS = list(range(163,184))
+SELECTED_SCENARIOS = list(range(175,202))
+SELECTED_SCENARIOS = list(range(186,202))
+
+SELECTED_SCENARIOS = [107,109]
+SELECTED_SCENARIOS = list(range(203,210))
+SELECTED_SCENARIOS = [209]
+
+
 STUDY_NAME = "fleetpy_sumo_coupling_in"
-PROCESS_COUNT = 4
+PROCESS_COUNT = 7
 SIM_NETWORK_NAME = "sumo_in"
 
 def get_current_max_key(FP_path):
@@ -39,26 +53,35 @@ class SimulationRunner:
         self.res_dir = py_path.parent / "studies" / self.study_name / "results"
 
     def create_sc_config_files(self):
-        
         for sc_index, row in self.sc_config.iterrows():
             sc_df = pd.DataFrame()
             scenario_name = f'{str(sc_index).zfill(3)}_{row["network_name"]}_{row["SAV_demand_ratio"]}_{row["sim_env"]}'
+            p_cstr_dt = row['p_cstr_dt'] if row['p_cstr_dt'] is not None else 0
+            p_cstr_wt = row['p_cstr_wt'] if row['p_cstr_wt'] is not None else 0
+            sumo_statistics_interval = (
+                int(row['sumo_statistics_interval']) 
+                if not pd.isna(row['sumo_statistics_interval']) 
+                else 24 * 3600
+)
+
+
+            
             sc_df["scenario_name"] = [scenario_name]
             sc_df["op_module"] = ["PoolingIRSOnly"]
             sc_df['rq_file'] = [f'demand_in_{row["SAV_demand_ratio"]}.csv']
             sc_df['demand_name'] = [f"demand_in_{row['SAV_demand_ratio']}"]
             sc_df['op_fleet_composition'] = [f"{row['vehtype']}:{row['fleet_size']}"]
-            sc_df['op_init_veh_distribution'] = ["init_veh_dist.csv"]
+            sc_df['op_init_veh_distribution'] = [row['op_init_veh_distribution']]
             sc_df['network_type'] = [row['network_type']]
-            sc_df['op_vr_control_func_dict'] = [f"func_key:{row['objective_function']};vot:{row['vot']};vor:{row['vor']}"]
+            sc_df['op_vr_control_func_dict'] = [f"func_key:{row['objective_function']};vot:{row['vot']};vor:{row['vor']};p_cstr_dt:{p_cstr_dt};p_cstr_wt:{p_cstr_wt}"]
             sc_df['sim_env'] = [row['sim_env']]
             sc_df['network_name'] = [row['network_name']]
-            sc_df['start_time'] = [row['start_time']]
+            sc_df['start_time'] = [int(row['start_time'])]
             sc_df['end_time'] = [row['end_time']]
-            sc_df['evaluation_int_start'] = [row['evaluation_int_start']]
-            sc_df['evaluation_int_end'] = [row['evaluation_int_end']]
+            sc_df['evaluation_int_start'] = [int(row['evaluation_int_start'])]
+            sc_df['evaluation_int_end'] = [int(row['evaluation_int_end'])]
             sc_df['SAV_demand_ratio'] = [row['SAV_demand_ratio']]
-            sc_df['sumo_statistics_interval'] = [row['sumo_statistics_interval']]
+            sc_df['sumo_statistics_interval'] = [sumo_statistics_interval]
             sc_df['sumo_fco_vehicles'] = [row['sumo_fco_vehicles']]
             sc_df['op_routing_mode'] = [row['op_routing_mode']]
 

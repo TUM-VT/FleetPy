@@ -281,6 +281,7 @@ class SUMOFleetPyServer():
             # 5) send new travel times to fleetsim
             if (sim_time%self.g_update_travel_statistics_time_step==0) and self.g_update_fleetsim_traveltimes==True:
                 time_df = self._process_tt_data(veh_edge_start_time_count,veh_start_time_dict)
+                #time_df = self._filter_by_fco_mode(time_df)
                 time_update_dict = dict(zip(zip(list(time_df["from_node"]),list(time_df["to_node"])),zip(list(time_df["edge_tt"]),list(time_df["edge_var"]))))
                 self._save_tt_to_csv(time_df, sim_time)
                 veh_edge_start_time_count ={}
@@ -345,10 +346,8 @@ class SUMOFleetPyServer():
             #print(route_name, sumoRoute)
             # If route only consisted of internal edges, it would not be a sumoRoute
 
-            if len(sumoRoute) > 0:
-                                    
+            if len(sumoRoute) > 0:                    
                 
-                    
                 traci.route.add(route_name, sumoRoute)  # TODO does this lead to an infinite amount of routes in long simulations? -->Yes but removal function is not yet included in traci and will probably included in SUMO 1.22.0  
                 
                 # A) Vehicle is already in Simulation or currently teleporting
@@ -516,6 +515,7 @@ class SUMOFleetPyServer():
             t_traveltimes.append(float((value+1)))
         tt_df = pd.DataFrame(data={"veh_id":t_veh_ids,"edge_id":t_edges,"starting_time":t_starting_times,"edge_tt":t_traveltimes})
         tt_df["starting_time"] = tt_df["starting_time"].astype(int)
+        tt_df = self._filter_by_fco_mode(tt_df) 
         tt_df = tt_df.groupby('edge_id').agg({'edge_tt': ['mean', 'var']}).reset_index()       
         tt_df.columns = ['_'.join(col).strip('_') if isinstance(col, tuple) else col for col in tt_df.columns]
         tt_df = tt_df.rename(columns={f'edge_tt_mean':"edge_tt",f'edge_tt_var':"edge_var"})       
@@ -649,8 +649,24 @@ class SUMOFleetPyServer():
             traci.poi.add(sumo_pos,junction_pos[0],junction_pos[1]-5,poiType=' '.join(op_veh_ids),color=(0, 0, 0, 0))
         return active_pois
 
+    def _filter_by_fco_mode(self,tt_df):
+        fco_mode = self.fp_sim_env.scenario_parameters.get(G_SUMO_FCO_VEHICLES)
+        seed = self.fp_sim_env.scenario_parameters[G_RANDOM_SEED]
+        tt_df["veh_id"] = tt_df["veh_id"].astype(str)
+        if fco_mode == "all":
+            return tt_df
+        else:
+            ## Filter for specified FCO SAVs
+            fco_sav_operators  = fco_mode.split("-")[0].split("_")[1:]
+            sav_tt_df = tt_df[tt_df['veh_id'].str.extract(r'fp_(\d+)_')[0].isin(fco_sav_operators)]
 
-
+            ##Filte for specified FCO PV-Share
+            fco_pv_share = float(fco_mode.split("-")[1].split("_")[1])
+            pv_tt_df = tt_df[tt_df['veh_id'].str.startswith(('pv', 'dv'))]
+            number_of_fco_pvs = round(int(len(pv_tt_df)) * fco_pv_share)
+            pv_tt_df = pv_tt_df.sample(n=number_of_fco_pvs, random_state=seed)
+            tt_df = pd.concat([sav_tt_df,pv_tt_df])
+            return tt_df
 
 ## Non-Implemented Functions:
 
@@ -661,74 +677,6 @@ def absolute_to_relative_position(vehID):
     relativePosition = LanePositionInMeter/LaneLength
     return relativePosition   
 
-def get_fco_mode(fleetsim):
-    fco_vehicles = fleetsim.scenario_parameters.get(G_SUMO_FCO_VEHICLES)
-    if not fco_vehicles == "all":
-        fco_vehicles_op_id  = fco_vehicles.split("_")[-1]
-        if fco_vehicles_op_id == "all":
-            fco_vehicle_mode = "all_savs" 
-        else:
-            fco_vehicle_mode = "op_specific"
-    else:
-        fco_vehicle_mode = "all_vehs"
-        fco_vehicles_op_id = None
-   
-    return fco_vehicle_mode,fco_vehicles_op_id
-            
-def get_current_sumo_Network_speeds(fleetsim,edge_to_veh_current_speed_list):
-    fco_vehicle_mode,fco_vehicles_op_id = get_fco_mode(fleetsim)
-    vehicles_in_net = traci.vehicle.getIDList()
-    if len(vehicles_in_net)==0:
-        return edge_to_veh_current_speed_list
-    visited_vehicles =[]
-    for vehicle_id in vehicles_in_net:
-        if vehicle_id in visited_vehicles: 
-            continue
-        if (fco_vehicle_mode == "all_savs" and not vehicle_id.startswith("fp_")) or (fco_vehicle_mode =="op_specific" and not vehicle_id.startswith(f"fp_{fco_vehicles_op_id}")):
-            continue
-
-        vehicle_edge = traci.vehicle.getRoadID(vehicle_id) ##Edge that the vehicle was the last timestep
-        VehiclesOnEdge = traci.edge.getLastStepVehicleIDs(vehicle_edge) ## Get all vehicles on this edge
-  
-        for Vid in VehiclesOnEdge:
-            if (fco_vehicle_mode == "all_savs" and not vehicle_id.startswith("fp_")) or (fco_vehicle_mode =="op_specific" and not vehicle_id.startswith(f"fp_{fco_vehicles_op_id}")):
-                continue
-            VehicleSpeed = traci.vehicle.getSpeed(Vid)          
-            # First time visit to this edge by any vehicle
-            if vehicle_edge not in edge_to_veh_current_speed_list:
-                 edge_to_veh_current_speed_list[vehicle_edge] = {Vid:[VehicleSpeed]}
-            # Edge already visited by other vehicles but not this one
-            elif vehicle_edge in edge_to_veh_current_speed_list and Vid not in edge_to_veh_current_speed_list[vehicle_edge]: 
-                edge_to_veh_current_speed_list[vehicle_edge][Vid] = [VehicleSpeed]
-            # Edge already visited by this vehicle --> add time to list
-            elif vehicle_edge in edge_to_veh_current_speed_list and Vid in edge_to_veh_current_speed_list[vehicle_edge]:
-                 edge_to_veh_current_speed_list[vehicle_edge][Vid].append(VehicleSpeed)
-            
-    return edge_to_veh_current_speed_list 
-
-
-def update_edge_traveltimes(edge_to_veh_current_speed_list, sumo_edge_id_to_fs_edge, fs_edge_to_len, sim_time, resultsPath):
-    sumo_edge_to_avg_tt = {}
-    fs_edge_to_avg_tt = {}
-    for sumo_edge_id in edge_to_veh_current_speed_list:
-        if sumo_edge_id not in sumo_edge_id_to_fs_edge:
-            continue        
-        edge_veh_list =[]
-        for veh_id in edge_to_veh_current_speed_list[sumo_edge_id]:
-            avg_veh_speed = np.mean(edge_to_veh_current_speed_list[sumo_edge_id][veh_id])
-            edge_veh_list.append(avg_veh_speed)
-        avg_edge_speed = np.mean(edge_veh_list)
-        if avg_edge_speed == 0 and len(edge_to_veh_current_speed_list[sumo_edge_id])<5:
-            continue
-        elif avg_edge_speed == 0 and len(edge_to_veh_current_speed_list[sumo_edge_id])>=5:
-            avg_edge_speed = 0.01
-        edge_len = fs_edge_to_len[sumo_edge_id_to_fs_edge[sumo_edge_id]]
-        avg_tt = round(edge_len/avg_edge_speed,3)
-        fs_edge = sumo_edge_id_to_fs_edge[sumo_edge_id]
-        sumo_edge_to_avg_tt[sumo_edge_id] = avg_tt
-        fs_edge_to_avg_tt[fs_edge] = avg_tt   
-    save_tt_to_csv(fs_edge_to_avg_tt, sim_time, resultsPath)
-    return fs_edge_to_avg_tt
 
 if __name__ == "__main__":
     

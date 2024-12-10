@@ -272,7 +272,7 @@ G_AIMSUN_VEH_TYPE_NAME = "aimsun_vehicle_type_name"
 # sumo api
 G_SUMO_STAT_INT = "sumo_statistics_interval"    # interval in which new network statistics are gathered and sent to FleetPy to updated network (if not given, no statistics are gathered)
 G_SUMO_SIM_TIME_OFFSET = "sumo_sim_time_offset" # offset between fleetpy and sumo simulation time (fleetpy simtime = sumo simtim + offset; if not given, 0)
-G_SUMO_FCO_VEHICLES = "sumo_fco_vehicles" # vehicles that are serving as a FCO for the Traffic Data used by Fleet Control ("all": all vehicles, "op_0": all vehicles of operator 0, "op_all"  all vehicles of all operators)
+G_SUMO_FCO_VEHICLES = "sumo_fco_vehicles" # vehicles that are serving as a FCO for the Real-Time Traffic Data used by Fleet Control ("all": all vehicles): Specified as: op_{operator_id_1}_{operator_id_2}_...-pv_{pv_share}
 
 # RPP fleetcontrol
 G_OP_PA_ASSTH = "op_parcel_assignment_threshold"
