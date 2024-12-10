@@ -262,7 +262,8 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             for ps in veh_plan.list_plan_stops:
                 pos = ps.get_pos()
                 if pos != last_pos:
-                    sum_dist += routing_engine.return_travel_costs_1to1(last_pos, pos)[2]
+                    tt , dis, var, cfv = routing_engine.return_travel_costs_1to1(last_pos,pos,mode=routing_engine.routing_mode)
+                    sum_dist += dis
                     last_pos = pos
             # value of time term (treat waiting and in-vehicle time the same)
             sum_user_times = 0
@@ -426,10 +427,8 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     elif func_key == "user_vot_vor":
         traveler_vot = vr_control_func_dict["vot"]
         traveler_vor = vr_control_func_dict["vor"]
-
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase,prq)->float:
             """This function combines the total driving costs and the value of customer time.
-
             :param simulation_time: current simulation time
             :param veh_obj: simulation vehicle object
             :param veh_plan: vehicle plan in question
@@ -461,8 +460,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     elif func_key == "probabilistic_dt":
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase,prq=None)->float:
-            """This function combines the total driving costs and the value of customer time.
-
+            """This function calculates the propability that the assigned VehPlan will fullfill the maximum driving time constraint.
             :param simulation_time: current simulation time
             :param veh_obj: simulation vehicle object
             :param veh_plan: vehicle plan in question
@@ -484,19 +482,149 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             assignment_reward = len(veh_plan.pax_info) * LARGE_INT
             if prq == None:
                 return -assignment_reward
+            driving_time,driving_time_var, waiting_time, waiting_time_var = get_travel_cost_of_vehplan(routing_engine,veh_plan,veh_obj,prq)
+            cumulative_prob_dt = norm.cdf(prq.max_trip_time, loc=driving_time, scale=math.sqrt(driving_time_var))
+            return -cumulative_prob_dt - assignment_reward
 
+    elif func_key == "probabilistic_wt":
+
+        def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase,prq=None)->float:
+            """This function calculates the propability that the assigned VehPlan will fullfill the maximum waiting time constraint.
+            :param simulation_time: current simulation time
+            :param veh_obj: simulation vehicle object
+            :param veh_plan: vehicle plan in question
+            :param rq_dict: rq -> Plan request dictionary
+            :param routing_engine: for routing queries
+            :return: objective function value
+            """
+            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            if prq == None:
+                return -assignment_reward
             driving_time,driving_time_var, waiting_time, waiting_time_var = get_travel_cost_of_vehplan(routing_engine,veh_plan,veh_obj,prq)
             max_wait_time = prq.t_pu_latest-simulation_time
+            cumulative_prob_wt = norm.cdf(max_wait_time, loc=waiting_time, scale=math.sqrt(waiting_time_var))
+            return -cumulative_prob_wt - assignment_reward   
 
+    elif func_key == "probabilistic_tt":
+
+        def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase,prq=None)->float:
+            """This function calculates the propability that the assigned VehPlan will fullfill the maximum waiting time AND maximum driving time constraint.
+            :param simulation_time: current simulation time
+            :param veh_obj: simulation vehicle object
+            :param veh_plan: vehicle plan in question
+            :param rq_dict: rq -> Plan request dictionary
+            :param routing_engine: for routing queries
+            :return: objective function value
+            """
+            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            if prq == None:
+                return -assignment_reward
+            driving_time,driving_time_var, waiting_time, waiting_time_var = get_travel_cost_of_vehplan(routing_engine,veh_plan,veh_obj,prq)
+            max_wait_time = prq.t_pu_latest-simulation_time
             cumulative_prob_wt = norm.cdf(max_wait_time, loc=waiting_time, scale=math.sqrt(waiting_time_var))
             cumulative_prob_dt = norm.cdf(prq.max_trip_time, loc=driving_time, scale=math.sqrt(driving_time_var))
             
-            return -cumulative_prob_dt - assignment_reward
+            return -(cumulative_prob_wt*cumulative_prob_dt) - assignment_reward   
+
+        
+    elif func_key == "deterministic_dt":
+
+        def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase,prq=None)->float:
+            """This function weights an vehplan by deterministic driving time of VehiclePlan to be assigned.
+            :param simulation_time: current simulation time
+            :param veh_obj: simulation vehicle object
+            :param veh_plan: vehicle plan in question
+            :param rq_dict: rq -> Plan request dictionary
+            :param routing_engine: for routing queries
+            :return: objective function value
+            """
+            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            if prq == None:
+                return -assignment_reward
+            driving_time,driving_time_var, waiting_time, waiting_time_var = get_travel_cost_of_vehplan(routing_engine,veh_plan,veh_obj,prq)
+            return driving_time - assignment_reward
+        
+    elif func_key == "deterministic_wt":
+
+        def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase,prq=None)->float:
+            """This function weights an vehplan by deterministic driving time of VehiclePlan to be assigned.
+
+            :param simulation_time: current simulation time
+            :param veh_obj: simulation vehicle object
+            :param veh_plan: vehicle plan in question
+            :param rq_dict: rq -> Plan request dictionary
+            :param routing_engine: for routing queries
+            :return: objective function value
+            """
+    
+            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            if prq == None:
+                return -assignment_reward
+
+            driving_time,driving_time_var, waiting_time, waiting_time_var = get_travel_cost_of_vehplan(routing_engine,veh_plan,veh_obj,prq)
+            
+            return waiting_time - assignment_reward
+
+    elif func_key == "deterministic_tt":
+
+        def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase,prq=None)->float:
+            """This function weights an vehplan by deterministic total travel time of VehiclePlan to be assigned.
+
+            :param simulation_time: current simulation time
+            :param veh_obj: simulation vehicle object
+            :param veh_plan: vehicle plan in question
+            :param rq_dict: rq -> Plan request dictionary
+            :param routing_engine: for routing queries
+            :return: objective function value
+            """
+    
+            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+            if prq == None:
+                return -assignment_reward
+
+            driving_time,driving_time_var, waiting_time, waiting_time_var = get_travel_cost_of_vehplan(routing_engine,veh_plan,veh_obj,prq)
+            
+            return waiting_time + driving_time - assignment_reward  
+        
+    elif func_key == "tt_probabilistic_penalties":
+
+        def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase,prq=None)->float:
+            """This function calculates the propability that the assigned VehPlan will fullfill the maximum waiting time AND maximum driving time constraint.
+            :param simulation_time: current simulation time
+            :param veh_obj: simulation vehicle object
+            :param veh_plan: vehicle plan in question
+            :param rq_dict: rq -> Plan request dictionary
+            :param routing_engine: for routing queries
+            :return: objective function value
+            """
+            p_cstr_dt = float(vr_control_func_dict.get("p_cstr_dt"))
+            p_cstr_wt = float(vr_control_func_dict.get("p_cstr_wt"))
+
+            assignment_reward = len(veh_plan.pax_info) * LARGE_INT
+
+            if prq == None:
+                return -assignment_reward
+            driving_time,driving_time_var, waiting_time, waiting_time_var = get_travel_cost_of_vehplan(routing_engine,veh_plan,veh_obj,prq)
+            max_wait_time = prq.t_pu_latest-simulation_time
+            cumulative_prob_wt = norm.cdf(max_wait_time, loc=waiting_time, scale=math.sqrt(waiting_time_var))
+            cumulative_prob_dt = norm.cdf(prq.max_trip_time, loc=driving_time, scale=math.sqrt(driving_time_var))
+
+            ## Apply penalties if constraints are not met with the probability
+            if cumulative_prob_dt < p_cstr_dt:
+                assignment_reward -= LARGE_INT/2
+            
+            if cumulative_prob_wt < p_cstr_wt:
+                assignment_reward -= LARGE_INT/2
+            
+
+            return waiting_time + driving_time - assignment_reward   
+           
     else:
         raise IOError(f"Did not find valid request assignment control objective string."
                       f" Please check the input parameter {G_OP_VR_CTRL_F}!")
     return control_f
 
+# -------------------------------------------------------------------------------------------------------------------- #
 def get_travel_cost_of_vehplan(routing_engine,veh_plan,veh_obj,prq):
     stops_list_waiting_time = [veh_obj.pos]
     waiting_time_boarding_stops = 0
