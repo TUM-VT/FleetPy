@@ -596,7 +596,6 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
             if veh_pos is None:
                 LOG.debug("non moving vehicle registered? {}".format(self))
                 print("non moving vehicle registered? {}".format(self))
-                breakpoint()
                 self._route_update_needed = True
             else:
                 self.pos = veh_pos
@@ -619,7 +618,6 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                         LOG.warning("no route planned anymore? {} {}".format(veh_pos, self))
         elif veh_pos is not None and not self.start_next_leg_first:
             LOG.warning(f"moving without having a driving task veh {self},{self.start_next_leg_first}")
-            breakpoint()
             #raise EnvironmentError(f"moving without having a driving task? {self}")
 
     def start_next_leg(self, simulation_time):
@@ -764,10 +762,9 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
 
         if self.pos[1] is not None: ## Vehicle on Edge
             LOG.debug(f'cl_driven_route {self.cl_driven_route}')
-            if len(self.cl_driven_distance == 0):
+            if len(self.cl_driven_route) == 0:
                 print(self, "reached destination with no current leg assigned. Error?")
-                breakpoint()
-            if self.cl_driven_route[-1] != self.pos[1]:
+            elif self.cl_driven_route[-1] != self.pos[1]:
                 self.cl_driven_route.append(self.pos[1])
                 self.cl_driven_route_times.append(simulation_time)
             self.pos = self.routing_engine.return_node_position(self.pos[1])
