@@ -946,142 +946,158 @@ class FleetControlBase(metaclass=ABCMeta):
         """
         if bool(self.record_fleet_state_flag):
             fleet_state = self.get_current_fleet_state(sim_time)
-            data_list = []
 
-            for vehicle in fleet_state['vehicleStates']:
-                vehicle_id = vehicle['vehicle_id']
-
-                plan_stop_nodes = []
-                remaining_times = []
-                remaining_capacities = []
-                statuses = []
-
-                for stop in vehicle['vehicle_plan_stops']:
-                    plan_stop_nodes.append(stop['plan_stop_node'])
-                    remaining_times.append(stop['remaining_time'])
-                    remaining_capacities.append(stop['remaining_capacity'])
-                    statuses.append(stop['status'])
-
-                data_list.append({
-                    'time': sim_time,
-                    'vehicle_id': vehicle_id,
-                    'plan_stop_node': ','.join(map(str, plan_stop_nodes)),
-                    'remaining_time': ','.join(map(str, remaining_times)),  
-                    'remaining_capacity': ','.join(map(str, remaining_capacities)),  
-                    'status': ','.join(map(str, statuses))
-                })
-
-            fs_df = pd.DataFrame(data_list)
-            if not os.path.exists(self.fs_output_f):
-                fs_df.to_csv(self.fs_output_f, index=False, mode='w', header=True)
-            else:
-                fs_df.to_csv(self.fs_output_f, index=False, mode='a', header=False)
+            for vehicle_state in fleet_state:
+                vs_df = pd.DataFrame([vehicle_state])
+                if not os.path.exists(self.fs_output_f):
+                    vs_df.to_csv(self.fs_output_f, index=False, mode='w', header=True)
+                else:
+                    vs_df.to_csv(self.fs_output_f, index=False, mode='a', header=False)
         else:
             pass
 
-    def get_current_fleet_state(self, sim_time : int):
-        """This method is used to get the current fleet state. It returns a list of vehicles with their current status dictionsary.
+    def get_current_fleet_state(self, sim_time : int) -> dict:
+        """This method is used to get the current fleet state. It returns a list of vehicles with their current status dictionary.
 
         :param sim_time: current simulation time
         :return: fleet state
         """
-        list_veh_status_dict = []
-        for vehicle_obj in self.sim_vehicles:  
-            vehicle_plan = self.veh_plans[vehicle_obj.vid]
-            plan_stops_list = []
-            # record current position information
-            # 0: idle, 10: routing, 1: boarding
-            veh_statue = vehicle_obj.status.value
-            if veh_statue == 0:
-                # current position information
-                plan_stop_node = vehicle_obj.pos[0]
-                remaining_time = 0
-                remaining_capacity = vehicle_obj.max_pax
-                cur_pos = {
-                    'plan_stop_node' : int(plan_stop_node),
-                    'remaining_time' : round(remaining_time, 1),
-                    'remaining_capacity' : int(remaining_capacity),
-                    'status' : int(veh_statue),
-                }
-                plan_stops_list.append(cur_pos)
-            elif veh_statue == 10:
-                # current position information
-                plan_stop_node = vehicle_obj.pos[0]
-                remaining_time = 0
-                remaining_capacity = vehicle_obj.max_pax - len(vehicle_obj.pax)
-                # cur_pos = {
-                #     'plan_stop_node' : int(plan_stop_node),
-                #     'remaining_time' : remaining_time,
-                #     'remaining_capacity' : int(remaining_capacity),
-                #     'status' : int(veh_statue),
-                #     # 'rids' : [pax.get_rid() for pax in vehicle_obj.pax],
-                # }
-                # plan_stops_list.append(cur_pos)
-                # add plan stop information
-                pax_list = [pax.get_rid() for pax in vehicle_obj.pax]
-                plan_stops_list = self._encode_vehicle_plan_stops(vehicle_obj.max_pax, pax_list, vehicle_plan, plan_stops_list, sim_time)
-            # TODO:Combine remaining veh_statue situations
-            elif veh_statue == 1:
-                # ignore current position information
-                pax_list = [pax.get_rid() for pax in vehicle_obj.pax]
-                plan_stops_list = self._encode_vehicle_plan_stops(vehicle_obj.max_pax, pax_list, vehicle_plan, plan_stops_list, sim_time)
-            else:
-                # LOG.error(f"vehicle status {vehicle_obj.status} of vehicle {vehicle_obj.vid} is not supported")
-                # plan_stop_node = vehicle_obj.pos[0]
-                # remaining_time = 0
-                # remaining_capacity = vehicle_obj.max_pax
-                # cur_pos = {
-                #     'plan_stop_node' : int(plan_stop_node),
-                #     'remaining_time' : remaining_time,
-                #     'remaining_capacity' : int(remaining_capacity),
-                #     'status' : int(veh_statue),
-                #     # 'error' : f'vehicle status {veh_statue} is not supported',
-                # }
-                # plan_stops_list.append(cur_pos)
-                pax_list = [pax.get_rid() for pax in vehicle_obj.pax]
-                plan_stops_list = self._encode_vehicle_plan_stops(vehicle_obj.max_pax, pax_list, vehicle_plan, plan_stops_list, sim_time)
-            
-            vehicle_state_dict = {
-                                'vehicle_id': int(vehicle_obj.vid), 
-                                'vehicle_plan_stops': plan_stops_list,               
-                                }
-            list_veh_status_dict.append(vehicle_state_dict) 
+        fleet_state = []
 
-        fleet_state = {
-            'time': int(sim_time),
-            'vehicleStates': list_veh_status_dict,
-        }   
+        for vehicle_obj in self.sim_vehicles:
+            vehicle_id = vehicle_obj.vid
+            operator_id = vehicle_obj.op_id
+            
+            vehicle_state_info = {
+                'time': sim_time,
+                'vehicle_id': int(vehicle_obj.vid),
+                'operator_id': int(operator_id),
+                'current_pos': None,
+                'current_vehicle_status': None,
+                # onboard request info
+                'current_onboard_rid': [],
+                'current_onboard_rq_o_pos': [],
+                'current_onboard_rq_d_pos': [],
+                'current_onbaord_rq_nr_pax': [],
+                'current_onboard_rq_pu_time': [],
+                'current_onboard_rq_max_trip_time': [],
+                'current_onboard_rq_t_do_latest': [],
+                # plan stop node info
+                'plan_stop_node': [],
+                'plan_stop_state': [],
+                'plan_stop_planned_arrival_time': [],
+                'plan_stop_planned_departure_time': [],
+                # boarding requests
+                'plan_stop_boarding_rid': [],
+                'plan_stop_boarding_rq_o_pos': [],
+                'plan_stop_boarding_rq_d_pos': [],
+                'plan_stop_boarding_rq_nr_pax': [],
+                'plan_stop_boarding_rq_t_pu_earliest': [],
+                'plan_stop_boarding_rq_t_pu_latest': [],
+                'plan_stop_boarding_rq_max_trip_time': [],
+                'plan_stop_boarding_rq_t_do_latest': [],
+                # alighting requests
+                'plan_stop_alighting_rid': [],
+                'plan_stop_alighting_rq_o_pos': [],
+                'plan_stop_alighting_rq_d_pos': [],
+                'plan_stop_alighting_rq_nr_pax': [],
+                'plan_stop_alighting_rq_t_pu_earliest': [],
+                'plan_stop_alighting_rq_t_pu_latest': [],
+                'plan_stop_alighting_rq_max_trip_time': [],
+                'plan_stop_alighting_rq_t_do_latest': [],
+            }
+
+            # collect vehicle current status and onboard request info
+            # TODO: check how to handle the current position of the vehicle
+            vehicle_state_info['current_pos'] = self._convert_pos(vehicle_obj.pos)
+            vehicle_state_info['current_vehicle_status'] = vehicle_obj.status.value
+            current_onboard_rid = [rq.get_rid() for rq in vehicle_obj.pax]
+            vehicle_state_info['current_onboard_rid'] = current_onboard_rid
+            current_onboard_prq = [self.rq_dict[rid] for rid in current_onboard_rid]
+            vehicle_state_info['current_onboard_rq_o_pos'] = [self._convert_pos(prq.o_pos) for prq in current_onboard_prq]
+            vehicle_state_info['current_onboard_rq_d_pos'] = [self._convert_pos(prq.d_pos) for prq in current_onboard_prq]
+            vehicle_state_info['current_onbaord_rq_nr_pax'] = [prq.nr_pax for prq in current_onboard_prq]
+            vehicle_state_info['current_onboard_rq_pu_time'] = [self._convert_time(prq.pu_time) for prq in current_onboard_prq]
+            vehicle_state_info['current_onboard_rq_max_trip_time'] = [self._convert_time(prq.max_trip_time) for prq in current_onboard_prq]
+            vehicle_state_info['current_onboard_rq_t_do_latest'] = [self._convert_time(prq.t_do_latest) for prq in current_onboard_prq]
+
+            vehicle_plan = self.veh_plans[vehicle_id]
+
+            # collect vehicle plan stop info
+            for plan_stop in vehicle_plan.list_plan_stops:
+                plan_stop_node = plan_stop.pos[0]
+                vehicle_state_info['plan_stop_node'].append(self._convert_plan_stop_node(plan_stop_node))
+
+                plan_stop_state = plan_stop.state.value
+                vehicle_state_info['plan_stop_state'].append(plan_stop_state)
+
+                plan_stop_planned_arrival_time, plan_stop_planned_departure_time = plan_stop.get_planned_arrival_and_departure_time()
+                vehicle_state_info['plan_stop_planned_arrival_time'].append(self._convert_time(plan_stop_planned_arrival_time))
+                vehicle_state_info['plan_stop_planned_departure_time'].append(self._convert_time(plan_stop_planned_departure_time))
+
+                plan_stop_boarding_rid = plan_stop.get_list_boarding_rids()
+                plan_stop_alighting_rid = plan_stop.get_list_alighting_rids()
+                vehicle_state_info['plan_stop_boarding_rid'].append(plan_stop_boarding_rid)
+                vehicle_state_info['plan_stop_alighting_rid'].append(plan_stop_alighting_rid)
+                
+                # collect information about boarding requests from rq_dict{rid: prq}
+                plan_stop_boarding_rq_o_pos = [self._convert_pos(self.rq_dict[rid].o_pos) for rid in plan_stop_boarding_rid]
+                plan_stop_boarding_rq_d_pos = [self._convert_pos(self.rq_dict[rid].d_pos) for rid in plan_stop_boarding_rid]
+                plan_stop_boarding_rq_nr_pax = [self.rq_dict[rid].nr_pax for rid in plan_stop_boarding_rid]
+                plan_stop_boarding_rq_t_pu_earliest = [self._convert_time(self.rq_dict[rid].t_pu_earliest) for rid in plan_stop_boarding_rid]
+                plan_stop_boarding_rq_t_pu_latest = [self._convert_time(self.rq_dict[rid].t_pu_latest) for rid in plan_stop_boarding_rid]
+                plan_stop_boarding_rq_max_trip_time = [self._convert_time(self.rq_dict[rid].max_trip_time) for rid in plan_stop_boarding_rid]
+                plan_stop_boarding_rq_t_do_latest = [self._convert_time(self.rq_dict[rid].t_do_latest) for rid in plan_stop_boarding_rid]
+                vehicle_state_info['plan_stop_boarding_rq_o_pos'].append(plan_stop_boarding_rq_o_pos)
+                vehicle_state_info['plan_stop_boarding_rq_d_pos'].append(plan_stop_boarding_rq_d_pos)
+                vehicle_state_info['plan_stop_boarding_rq_nr_pax'].append(plan_stop_boarding_rq_nr_pax)
+                vehicle_state_info['plan_stop_boarding_rq_t_pu_earliest'].append(plan_stop_boarding_rq_t_pu_earliest)
+                vehicle_state_info['plan_stop_boarding_rq_t_pu_latest'].append(plan_stop_boarding_rq_t_pu_latest)
+                vehicle_state_info['plan_stop_boarding_rq_max_trip_time'].append(plan_stop_boarding_rq_max_trip_time)
+                vehicle_state_info['plan_stop_boarding_rq_t_do_latest'].append(plan_stop_boarding_rq_t_do_latest)
+
+                # collect information about alighting requests from rq_dict{rid: prq}
+                plan_stop_alighting_rq_o_pos = [self._convert_pos(self.rq_dict[rid].o_pos) for rid in plan_stop_alighting_rid]
+                plan_stop_alighting_rq_d_pos = [self._convert_pos(self.rq_dict[rid].d_pos) for rid in plan_stop_alighting_rid]
+                plan_stop_alighting_rq_nr_pax = [self.rq_dict[rid].nr_pax for rid in plan_stop_alighting_rid]
+                plan_stop_alighting_rq_t_pu_earliest = [self._convert_time(self.rq_dict[rid].t_pu_earliest) for rid in plan_stop_alighting_rid]
+                plan_stop_alighting_rq_t_pu_latest = [self._convert_time(self.rq_dict[rid].t_pu_latest) for rid in plan_stop_alighting_rid]
+                plan_stop_alighting_rq_max_trip_time = [self._convert_time(self.rq_dict[rid].max_trip_time) for rid in plan_stop_alighting_rid]
+                plan_stop_alighting_rq_t_do_latest = [self._convert_time(self.rq_dict[rid].t_do_latest) for rid in plan_stop_alighting_rid]
+                vehicle_state_info['plan_stop_alighting_rq_o_pos'].append(plan_stop_alighting_rq_o_pos)
+                vehicle_state_info['plan_stop_alighting_rq_d_pos'].append(plan_stop_alighting_rq_d_pos)
+                vehicle_state_info['plan_stop_alighting_rq_nr_pax'].append(plan_stop_alighting_rq_nr_pax)
+                vehicle_state_info['plan_stop_alighting_rq_t_pu_earliest'].append(plan_stop_alighting_rq_t_pu_earliest)
+                vehicle_state_info['plan_stop_alighting_rq_t_pu_latest'].append(plan_stop_alighting_rq_t_pu_latest)
+                vehicle_state_info['plan_stop_alighting_rq_max_trip_time'].append(plan_stop_alighting_rq_max_trip_time)
+                vehicle_state_info['plan_stop_alighting_rq_t_do_latest'].append(plan_stop_alighting_rq_t_do_latest)
+
+            fleet_state.append(vehicle_state_info)
+        
         return fleet_state
     
-    def _encode_vehicle_plan_stops(self, vehicle_def_cap : int, pax_list : List[int], vehicle_plan : VehiclePlan, plan_stops_list : List[Dict[str, Any]], sim_time : int):
-        """This method is used to encode the vehicle plan stop info for the given vehicle id.
+    def _convert_pos(self, pos : tuple) -> list|int:
+        start_pos = pos[0]
+        if pos[1] is None:
+            return [start_pos]
+        else:
+            end_pos = pos[1]
+            current_pos = round(float(pos[2]), 3)
+            return [start_pos, end_pos, current_pos]
+        
+    def _convert_time(self, time : float|int) -> float:
+        try:
+            return round(float(time), 1)
+        except:
+            time_list = []
+            for t in time:
+                time_list.append(round(float(t), 1))
+            return time_list
 
-        :param vehicle_def_cap: default vehicle capacity
-        :param pax_list: list of pax on board
-        :param vehicle_plan: vehicle plan
-        :param plan_stops_list: list of plan stops
-        :param sim_time: current simulation time
-        :return: plan stops list
+    def _convert_plan_stop_node(self, plan_stop_node : int) -> int:
         """
-        i = 0
-        for plan_stop in vehicle_plan.list_plan_stops:
-            plan_stop_node = plan_stop.pos[0]
-            remaining_time = plan_stop.get_planned_arrival_and_departure_time()[1] - sim_time
-            if i == 0:
-                pax_onBoard = list(set(pax_list) - set(plan_stop.get_list_boarding_rids()))
-                init_vehicle_cap = vehicle_def_cap - len(pax_onBoard)
-            remaining_capacity = init_vehicle_cap - len(plan_stop.get_list_boarding_rids()) + len(plan_stop.get_list_alighting_rids())
-            plan_stop_info = {
-                'plan_stop_node' : int(plan_stop_node),
-                'remaining_time' : round(remaining_time, 1),
-                'remaining_capacity' : int(remaining_capacity),
-                'status' : plan_stop.state.value,
-                # 'bording_rids' : plan_stop.get_list_boarding_rids(),
-                # 'alighting_rids' : plan_stop.get_list_alighting_rids(),
-            }
-            plan_stops_list.append(plan_stop_info)
-            # update capacity
-            init_vehicle_cap = remaining_capacity
-            # update index
-            i += 1
-        return plan_stops_list
+        Repositioning stop nodes are recorded as np.int64, which need to be converted to int.
+        """
+        return int(plan_stop_node)
+
+
