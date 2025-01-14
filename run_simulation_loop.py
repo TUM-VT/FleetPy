@@ -8,6 +8,9 @@ import gzip
 import shutil
 import os
 import math
+import csv
+import xml.etree.ElementTree as ET
+
 
 py_path = pathlib.Path(__file__)
 
@@ -24,11 +27,12 @@ SELECTED_SCENARIOS = list(range(186,202))
 
 SELECTED_SCENARIOS = [107,109]
 SELECTED_SCENARIOS = list(range(203,210))
-SELECTED_SCENARIOS = [209]
-
-
+SELECTED_SCENARIOS = [175,102,97,212,213,214,215]
+SELECTED_SCENARIOS = [162,107,109]
+SELECTED_SCENARIOS = [118,119,120,121,102,109]
+SELECTED_SCENARIOS = [216]
 STUDY_NAME = "fleetpy_sumo_coupling_in"
-PROCESS_COUNT = 7
+PROCESS_COUNT = 4
 SIM_NETWORK_NAME = "sumo_in"
 
 def get_current_max_key(FP_path):
@@ -62,10 +66,7 @@ class SimulationRunner:
                 int(row['sumo_statistics_interval']) 
                 if not pd.isna(row['sumo_statistics_interval']) 
                 else 24 * 3600
-)
-
-
-            
+)           
             sc_df["scenario_name"] = [scenario_name]
             sc_df["op_module"] = ["PoolingIRSOnly"]
             sc_df['rq_file'] = [f'demand_in_{row["SAV_demand_ratio"]}.csv']
@@ -84,20 +85,35 @@ class SimulationRunner:
             sc_df['sumo_statistics_interval'] = [sumo_statistics_interval]
             sc_df['sumo_fco_vehicles'] = [row['sumo_fco_vehicles']]
             sc_df['op_routing_mode'] = [row['op_routing_mode']]
+            sc_df['random_seed'] = [row['random_seed']]
 
             self.sc_config_file_dict.update({sc_index:sc_df.squeeze()})
             sc_df.to_csv(py_path.parent/"studies"/STUDY_NAME/"scenarios"/f"{scenario_name}.csv", index=False)
         
+    def create_rerouting_xml_files(self):
+        rerouting_cfg_path = self.py_path.parent.parent / "fleetpy_coupling"/"Simulation"/self.sim_network_name/"Rerouting" /"rerouting_scenarios.csv"
+        with open(rerouting_cfg_path, 'r') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                root = ET.Element("additional")
+                tree = ET.ElementTree(root)
+                if row["type"] == "lane":
+                    rerouter = ET.SubElement(root, 'rerouter', {'id': str(row['id']), 'edges': str(row['rerouter_edges']),"probability":str(row['probability'])})
+                    param = ET.SubElement(rerouter, 'param', {'key': 'rerouting_name', 'value': str(row['rerouting_name'])})
+                    interval = ET.SubElement(rerouter, 'interval', {'begin': row['begin_time'], 'end': row['end_time']})
+                    ET.SubElement(interval, 'closingLaneReroute', {'id': row['closed_lane'], 'disallow': "all"})
+                    self.indent_xml(root)
+                    tree.write(rerouting_cfg_path.parent/f"{row['id']}_rerouting.add.xml", encoding='utf-8', xml_declaration=True)
 
-    def run_sumo_command(self,sc_index):
+
+    def run_fleetpy_sc(self,sc_index):
         SAV_demand_ratio = float(self.sc_config_file_dict[sc_index].get("SAV_demand_ratio"))
-        
         command = [
             "python",
-            str(self.py_path.parent/"SUMO_TraciServer.py"),
+            str(self.py_path.parent/"SUMOFleetPyServer.py"),
             str(self.py_path.parent/"studies"/self.study_name/"scenarios"/"constant_config.csv"),
             str(self.py_path.parent/"studies"/self.study_name/"scenarios"/f"{self.sc_config_file_dict[sc_index]['scenario_name']}.csv"),
-            str(self.py_path.parent.parent/"fleetpy_coupling"/"Simulation"/self.sim_network_name/f"{self.sim_network_name}_{str(1-SAV_demand_ratio)}.sumocfg"),
+            str(self.py_path.parent.parent/"fleetpy_coupling"/"Simulation"/self.sim_network_name/f"{self.sim_network_name}_{round(1-SAV_demand_ratio,2)}.sumocfg"),
             "sumo",
             "info"
         ]
@@ -114,7 +130,7 @@ class SimulationRunner:
 
         # Create a pool of workers and execute the function in parallel
         with multiprocessing.Pool(self.process_count) as pool:
-            pool.map(self.run_sumo_command,self.selected_scenarios)  # Mapping the function to run across multiple processes
+            pool.map(self.run_fleetpy_sc,self.selected_scenarios)  # Mapping the function to run across multiple processes
 
 
     def zip_files(self):
@@ -139,10 +155,26 @@ class SimulationRunner:
                 print(f"Compressed and deleted: {file_path}")
             else:
                 print(f"File not found: {file_path}")
-
+    
+    def indent_xml(self, elem, level=0):
+        i = "\n" + level * "  "
+        if len(elem):
+            if not elem.text or not elem.text.strip():
+                elem.text = i + "  "
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = i
+            for elem in elem:
+                self.indent_xml(elem, level + 1)
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = i
+        else:
+            if level and (not elem.tail or not elem.tail.strip()):
+                elem.tail = i
 
 if __name__ == "__main__":
     sim_runner = SimulationRunner(selected_scenarios=SELECTED_SCENARIOS,study_name=STUDY_NAME,process_count=PROCESS_COUNT,sim_network_name=SIM_NETWORK_NAME)
     sim_runner.create_sc_config_files()
+    sim_runner.create_rerouting_xml_files()
+    breakpoint()
     sim_runner.run_in_parallel()
     sim_runner.zip_files()
