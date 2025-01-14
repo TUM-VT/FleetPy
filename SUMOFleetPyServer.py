@@ -14,6 +14,7 @@ from tqdm import tqdm
 import xml.etree.ElementTree as ET
 import time
 import numpy as np
+import pathlib
 
 from src.SUMOcontrolledSim import SUMOcontrolledSim
 from src.misc.init_modules import load_simulation_environment
@@ -125,7 +126,7 @@ class SUMOFleetPyServer():
 
         # Get interval in which new network statistics are gathered and sent to FleetPy to updated network (if not given, no statistics are gathered)
         travel_time_interval = self.fp_sim_env.scenario_parameters.get(G_SUMO_STAT_INT)
-        if travel_time_interval is None:
+        if travel_time_interval is None or 24*3600:
             self.g_update_fleetsim_traveltimes = False
             self.g_update_travel_statistics_time_step = 10000000000000
         else:
@@ -146,6 +147,7 @@ class SUMOFleetPyServer():
         collisionPath = os.path.join(results_path, "SumoDumps", "collisionPath.xml") 
         statisticsPath = os.path.join(results_path, "SumoDumps", "statistics.xml") 
         edges_output = os.path.join(results_path, "SumoDumps", "edge-output.xml")
+  
 
         sumoCmd = [self.sumo_binary, "-c", self.sumo_config_path ,"--collision.action","warn","--begin",str(SUMO_start_time),
                 "--step-length","1","--tripinfo-output",TripInfoPath,
