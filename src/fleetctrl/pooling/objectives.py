@@ -59,7 +59,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     elif func_key == "total_system_time":
         ignore_repo_stop_wt = vr_control_func_dict.get("irswt", False)
         if not ignore_repo_stop_wt:
-            def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
+            def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase,prq=None)->float:
                 """This function evaluates the total spent time of a vehicle according to a vehicle plan.
 
                 :param simulation_time: current simulation time
