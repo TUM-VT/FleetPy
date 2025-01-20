@@ -14,25 +14,9 @@ import xml.etree.ElementTree as ET
 
 py_path = pathlib.Path(__file__)
 
-SELECTED_SCENARIOS = list(range(82,96))
-SELECTED_SCENARIOS = [91,94,95,82]
-
-SELECTED_SCENARIOS = list(range(114,128))
-SELECTED_SCENARIOS = [99,100,101,102]
-
-SELECTED_SCENARIOS = [163]
-SELECTED_SCENARIOS = list(range(163,184))
-SELECTED_SCENARIOS = list(range(175,202))
-SELECTED_SCENARIOS = list(range(186,202))
-
-SELECTED_SCENARIOS = [107,109]
-SELECTED_SCENARIOS = list(range(203,210))
-SELECTED_SCENARIOS = [175,102,97,212,213,214,215]
-SELECTED_SCENARIOS = [162,107,109]
-SELECTED_SCENARIOS = [118,119,120,121,102,109]
-SELECTED_SCENARIOS = [216]
+SELECTED_SCENARIOS = [305,309,310,311,314,315,316,317]
 STUDY_NAME = "fleetpy_sumo_coupling_in"
-PROCESS_COUNT = 4
+PROCESS_COUNT = 2
 SIM_NETWORK_NAME = "sumo_in"
 
 def get_current_max_key(FP_path):
@@ -69,8 +53,8 @@ class SimulationRunner:
 )           
             sc_df["scenario_name"] = [scenario_name]
             sc_df["op_module"] = ["PoolingIRSOnly"]
-            sc_df['rq_file'] = [f'demand_in_{row["SAV_demand_ratio"]}.csv']
-            sc_df['demand_name'] = [f"demand_in_{row['SAV_demand_ratio']}"]
+            sc_df['rq_file'] = [f"{row['simulation_network']}_s_{str(row['random_seed']).zfill(2)}_{row['SAV_demand_ratio']}.csv"]
+            sc_df['demand_name'] = [f"{row['simulation_network']}_s_{str(row['random_seed']).zfill(2)}_{row['SAV_demand_ratio']}"]
             sc_df['op_fleet_composition'] = [f"{row['vehtype']}:{row['fleet_size']}"]
             sc_df['op_init_veh_distribution'] = [row['op_init_veh_distribution']]
             sc_df['network_type'] = [row['network_type']]
@@ -113,7 +97,7 @@ class SimulationRunner:
             str(self.py_path.parent/"SUMOFleetPyServer.py"),
             str(self.py_path.parent/"studies"/self.study_name/"scenarios"/"constant_config.csv"),
             str(self.py_path.parent/"studies"/self.study_name/"scenarios"/f"{self.sc_config_file_dict[sc_index]['scenario_name']}.csv"),
-            str(self.py_path.parent.parent/"fleetpy_coupling"/"Simulation"/self.sim_network_name/f"{self.sim_network_name}_{round(1-SAV_demand_ratio,2)}.sumocfg"),
+            str(self.py_path.parent.parent/"fleetpy_coupling"/"Simulation"/self.sim_network_name/f"{self.sim_network_name}_s_{str(self.sc_config_file_dict[sc_index]['random_seed']).zfill(2)}_{round(SAV_demand_ratio,2)}.sumocfg"),
             "sumo",
             "info"
         ]
@@ -175,6 +159,5 @@ if __name__ == "__main__":
     sim_runner = SimulationRunner(selected_scenarios=SELECTED_SCENARIOS,study_name=STUDY_NAME,process_count=PROCESS_COUNT,sim_network_name=SIM_NETWORK_NAME)
     sim_runner.create_sc_config_files()
     sim_runner.create_rerouting_xml_files()
-    breakpoint()
     sim_runner.run_in_parallel()
     sim_runner.zip_files()

@@ -152,7 +152,7 @@ class SUMOFleetPyServer():
         sumoCmd = [self.sumo_binary, "-c", self.sumo_config_path ,"--collision.action","warn","--begin",str(SUMO_start_time),
                 "--step-length","1","--tripinfo-output",TripInfoPath,
                 "--vehroute-output",vehRoutePath,"--vehroute-output.exit-times","--vehroute-output.incomplete","--vehroute-output.write-unfinished",
-                "--collision-output",collisionPath,"--statistic-output",statisticsPath,"--start", "--seed", str(seed)]
+                "--collision-output",collisionPath,"--statistic-output",statisticsPath,"--start", "--seed", str(seed),"--no-warnings",str(True)]
         #"+a",EdgeDataCfgPath, Currently not yet working
         #Trajectoriespath = os.path.join(results_path, "SumoDumps", "Trajectories.xml") 
         #fullOutputPath = os.path.join(results_path, "FullOutput.xml")
