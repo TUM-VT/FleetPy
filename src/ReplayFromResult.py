@@ -403,7 +403,7 @@ class Replay(VehicleMovementSimulation):
         # ----------------
         print(f"... loading scenario information")
         scenario_parameters, list_operator_attributes, _ = load_scenario_inputs(output_dir)
-        dir_names = get_directory_dict(scenario_parameters)
+        dir_names = get_directory_dict(scenario_parameters, list_operator_attributes)
         replay_mode = scenario_parameters[G_SIM_REPLAY_FLAG]
         if not replay_mode:
             raise AssertionError("Original simulation was not saved in replay mode!")
@@ -749,6 +749,7 @@ class ReplayPyPlot(Replay):
 
         sim_time = datetime.datetime(self.dtuple[0], self.dtuple[1], self.dtuple[2], 0,0,0) + \
                    datetime.timedelta(seconds=self.replay_time)
+        #sim_time = str(datetime.timedelta(seconds=self.replay_time))
         # TODO # add dictionary for additional geographic information: key -> list_of_coordinates
         dict_add_coord = {}
         # TODO # add dictionary for additional scalar information: key -> value
@@ -788,4 +789,4 @@ class ReplayPyPlot(Replay):
                 self._plot_class_instance.save_single_plot(sim_time)
             if not os.path.isdir(self.plots_dir):
                 os.mkdir(self.plots_dir)
-            list_pos_df.to_csv(os.path.join(self.plots_dir, "data_points_{}.csv".format(self.replay_time)))
+            #list_pos_df.to_csv(os.path.join(self.plots_dir, "data_points_{}.csv".format(self.replay_time)))

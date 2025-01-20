@@ -5,10 +5,12 @@ import time
 import numpy as np
 from functools import cmp_to_key
 from typing import Callable, Dict, List, Any, Tuple, TYPE_CHECKING
+import traceback
 
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
 from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase, SimulationVehicleStruct
-from src.fleetctrl.pooling.GeneralPoolingFunctions import checkRRcomptibility
+from src.fleetctrl.pooling.batch.AlonsoMora.misc import *
+from src.fleetctrl.pooling.GeneralPoolingFunctions import checkRRcomptibility, checkRRcomptibillityOnBoard
 from src.fleetctrl.pooling.batch.AlonsoMora.V2RB import V2RB
 from src.fleetctrl.pooling.immediate.insertion import simple_remove, single_insertion
 from src.fleetctrl.pooling.immediate.SelectRV import filter_directionality, filter_least_number_tasks
@@ -23,168 +25,9 @@ if TYPE_CHECKING:
 
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000
-MAX_LENGTH_OF_TREES = 1024 # TODO
-RETRY_TIME = 24*3600
-
-
-# help functions
-# --------------
-def comp_key_entries(entry1 : Any, entry2 : Any) -> int:
-    """ this function is used to sort keys with different data types (int, tuple, str)
-    """
-    if type(entry1) == type(entry2):
-        if type(entry1) == tuple:
-            if len(entry1) < len(entry2):
-                return -1
-            elif len(entry1) > len(entry2):
-                return 1
-            else:
-                for x, y in zip(entry1, entry2):
-                    c = comp_key_entries(x, y)
-                    if c != 0:
-                        return c
-                return 0
-        else:
-            if entry1 < entry2:
-                return -1
-            elif entry1 > entry2:
-                return 1
-            else:
-                return 0
-    else:
-        if type(entry1) == str:
-            return -1
-        elif type(entry2) == str:
-            return 1
-        else:
-            if type(entry1) == int:
-                return -1
-            elif type(entry2) == int:
-                return 1
-    raise EnvironmentError("compare keys {} <-> {} : a new datatype within? -> not comparable".format(entry1, entry2))
-
-
-def deleteRidFromRtv(rid : Any, rtv_key : tuple) -> tuple:
-    """This method returns
-    - rtv_key without rid        in case rids are left
-    - None                       in case no rid is left
-    """
-    if rtv_key is None:
-        return None
-    vid = getVidFromRTVKey(rtv_key)
-    list_rids = list(getRidsFromRTVKey(rtv_key))
-    list_rids.remove(rid)
-    if list_rids:
-        return createRTVKey(vid, list_rids)
-    else:
-        return None
-
-
-def getRRKey(rid1 : Any, rid2 : Any) -> tuple:
-    """ this function returns an rr-key (ordered request_id pair)
-    :param rid1: request_id of plan_request 1
-    :param rid2: request_id of plan_request 2
-    :return: ordered tuple of rid1 and rid2 """
-    return tuple(sorted((rid1, rid2), key = cmp_to_key(comp_key_entries)))
-
-
-def getRidsFromRTVKey(rtv_key) -> List[Any]:
-    """ this function returns a list of plan_request_ids corresponding to the rtv_key
-    :param rtv_key: rtv_key corresponding to an v2rb-obj
-    :return: list of planrequest_ids """
-    if rtv_key is None:
-        return []
-    return rtv_key[1:]
-
-
-def getVidFromRTVKey(rtv_key : tuple) -> Any:
-    """ this function returns the vehicle_id corresponding to the rtv_key
-    :param rtv_key: rtv_key corresponding to an v2rb-obj
-    :return: vehicle_id """
-    return rtv_key[0]
-
-
-def createRTVKey(vid : int, rid_list : List[Any]) -> tuple:
-    """ this functions creates a new rtv_key from a vehicle_id and a list of plan_request_ids
-    :param vid: vehicle id
-    :param rid_list: list of plan_request_ids
-    :return: type tuple : rtv_key """
-    if len(rid_list) == 0:
-        return None
-    sorted_rid_list = tuple(sorted(rid_list, key = cmp_to_key(comp_key_entries)))
-    return (vid, ) + sorted_rid_list
-
-
-def createListLowerLevelKeys(build_key : tuple, new_rid : Any, do_not_remove_for_lower_keys : List[tuple]) -> List[tuple]:
-    """This function creates keys from build_key that are one level lower than build_key
-    by removing one of the rids.
-    If one of the rids is in do_not_remove_for_lower_keys, no key is created for this rid.
-    :param build_key: rtv_key of v2rbs to build on
-    :param new_rid: plan_request_id of new request
-    :param do_not_remove_for_lower_key: list of plan_request_ids that must be part of the lower key
-    :return: list of lower rtv_keys"""
-    return_keys = []
-    vid = getVidFromRTVKey(build_key)
-    list_rids = list(getRidsFromRTVKey(build_key))
-    if new_rid in list_rids:
-        return []
-    for rid in list_rids:
-        if rid not in do_not_remove_for_lower_keys:
-            copy_of_list = list_rids[:]
-            copy_of_list.remove(rid)
-            if len(copy_of_list) == 0:
-                return []
-            copy_of_list.append(new_rid)
-            new_key = createRTVKey(vid, copy_of_list)
-            return_keys.append(new_key)
-    return return_keys
-
-
-def getNecessaryKeys(rtv_key : tuple, r_ob : List[Any]) -> List[tuple]:
-    """ this functions computes all rtv_keys that must be existent for rtv_key to exist
-    :param rtv_key: rtv_key of v2rb_obj
-    :param r_ob: list of request_ids currently on board of the corresponding vehicle
-    :return: iterator of necessary keys """
-    if not rtv_key:
-        return []
-    vid = getVidFromRTVKey(rtv_key)
-    ass_rids = getRidsFromRTVKey(rtv_key)
-    v_r_ob = []
-    for rid in ass_rids:
-        if rid in r_ob:
-            v_r_ob.append(rid)
-    rid_combs = [v_r_ob]
-    for rid in ass_rids:
-        if rid in v_r_ob or rid in r_ob:
-            continue
-        #new_combs = []
-        for comb in rid_combs:
-            new_comb = comb[:]
-            new_comb.append(rid)
-            yield createRTVKey(vid, new_comb)
-    #         new_combs.append(new_comb)
-    #     rid_combs += new_combs
-    # nec_key = [createRTVKey(vid, comb) for comb in rid_combs if len(comb) > 0]
-    # return nec_key
-
-
-def getRTVkeyFromVehPlan(veh_plan : VehiclePlan) -> tuple:
-    """ creates the rtv_key based on a vehicle plan
-    :param veh_plan: vehicle plan object in question
-    :return: rtv_key
-    """
-    if veh_plan is None:
-        return None
-    rids = {}
-    vid = veh_plan.vid
-    for pstop in veh_plan.list_plan_stops:
-        for rid in pstop.get_list_boarding_rids():
-            rids[rid] = 1
-        for rid in pstop.get_list_alighting_rids():
-            rids[rid] = 1
-    if len(rids.keys()) == 0:
-        return None
-    return createRTVKey(vid, rids.keys())
+MAX_LENGTH_OF_TREES = 15 # TODO
+RETRY_TIME = 300# 24*3600
+GUROBI_MIPGAP = 10**-8
 
 INPUT_PARAMETERS_AlonsoMoraAssignment = {
     "doc" :  """This algorithm is a variant of the publication
@@ -194,7 +37,7 @@ INPUT_PARAMETERS_AlonsoMoraAssignment = {
     "inherit" : "BatchAssignmentAlgorithmBase",
     "input_parameters_mandatory": [G_RA_SOLVER],
     "input_parameters_optional": [
-        G_RA_TB_TO_PER_VEH, G_RA_MAX_VR, G_RA_OPT_TO, G_RA_HEU, G_RVH_B_DIR, G_RVH_DIR, G_RVH_B_LWL, G_RVH_LWL, G_RVH_AM_RR, G_RVH_AM_TI
+        G_RA_TB_TO_PER_VEH, G_RA_MAX_VR, G_RA_OPT_TO, G_RA_HEU, G_RVH_B_DIR, G_RVH_DIR, G_RVH_B_LWL, G_RVH_LWL, G_RVH_AM_RR, G_RVH_AM_TI, G_RA_MAX_TOUR, G_RA_MAX_EXH_DARP, G_RA_AM_ALWAYS_REBUILD
         ],
     "mandatory_modules": [],
     "optional_modules": []
@@ -227,7 +70,31 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         self.veh_tree_build_timeout : int = operator_attributes.get(G_RA_TB_TO_PER_VEH, None)
         self.optimisation_timeout : int = operator_attributes.get(G_RA_OPT_TO, None)
         self.max_rv_connections : int = operator_attributes.get(G_RA_MAX_VR, None)
+        if self.max_rv_connections is not None and type(self.max_rv_connections) != int:
+            if np.isnan(self.max_rv_connections):
+                self.max_rv_connections = None
+            else:
+                self.max_rv_connections = int(self.max_rv_connections)
+        self.max_tour_per_v2rb : int = operator_attributes.get(G_RA_MAX_TOUR, None)
+        if self.max_tour_per_v2rb is not None and type(self.max_tour_per_v2rb) != int:
+            if np.isnan(self.max_tour_per_v2rb):
+                self.max_tour_per_v2rb = None
+            else:
+                self.max_tour_per_v2rb = int(self.max_tour_per_v2rb)
+                
+        self._max_prqs_exhaustive_DARP = self.operator_attributes.get(G_RA_MAX_EXH_DARP)
+        if self._max_prqs_exhaustive_DARP is None or type(self._max_prqs_exhaustive_DARP) != int:
+            if self._max_prqs_exhaustive_DARP is None:
+                self._max_prqs_exhaustive_DARP = 4
+            else:
+                if np.isnan(self._max_prqs_exhaustive_DARP):
+                    self._max_prqs_exhaustive_DARP = 4
+                else:
+                    self._max_prqs_exhaustive_DARP = int(self._max_prqs_exhaustive_DARP)
+                    
         applied_heuristics = operator_attributes.get(G_RA_HEU, None)
+        
+        self._always_rebuild_from_scratch = operator_attributes.get(G_RA_AM_ALWAYS_REBUILD, False)
         
         self.applied_heuristics = {}
         if applied_heuristics is not None:
@@ -280,6 +147,20 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         self.untracked_boarding_detected = {}
 
         self.current_best_cfv = 0 #stores the global cost function value from last optimisation
+        
+        if self.fleetcontrol is not None:
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("RV_computation_time")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("Update_V2RB_computation_time")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("Compute_V2RB_computation_time")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("Solve_assignment_computation_time")
+            
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_V2RBs_at_start")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_V2RBs_after_update")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_V2RBs_after_build")
+            
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_Rqs_unassigned")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_Rqs_assigned")
+            self.fleetcontrol._init_dynamic_fleetcontrol_output_key("N_Rqs_locked")
 
     def register_parallelization_manager(self, alonsomora_parallelization_manager : ParallelizationManager):
         LOG.info("AM register parallelization manager")
@@ -296,7 +177,9 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param new_travel_times : bool; if True, the database will be recomputed from scratch
         :param build_from_scratch : bool; if True, the whole database will be cleared and recomputed from scratch
         """
+        
         t_start = time.time()
+        self.sim_time = sim_time
         if self.fleetcontrol is not None:
             for vid, ext_tuple in self.external_assignments.items():
                 if ext_tuple[1] is None:
@@ -311,7 +194,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 self.veh_objs[veh_obj.vid] = veh_obj_struct
         else:
             self.veh_objs = veh_objs_to_build
-        if build_from_scratch or new_travel_times:
+        if build_from_scratch or new_travel_times or self._always_rebuild_from_scratch:
             self.requests_to_compute = {rid:1 for rid in self.rid_to_consider_for_global_optimisation.keys()}
             self._clearV2RBDataBase()
         # # LOG.debug("setCurrentInformation")
@@ -324,23 +207,35 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         # for rid, prq in self.active_requests.items():
         #     # LOG.debug("rid: {}".format(prq))
         # LOG.info("computeRR")
+        n_rqs_lock = len(self.r2v_locked.keys())
+        n_rqs_unassinged = len(self.unassigned_requests.keys())
+        n_rqs_assigned = len(self.active_requests.keys()) - n_rqs_lock - n_rqs_unassinged
+        if self.fleetcontrol is not None:
+            self.fleetcontrol._add_to_dynamic_fleetcontrol_output(sim_time, {
+                "N_Rqs_unassigned" : n_rqs_unassinged, "N_Rqs_assigned" : n_rqs_assigned, "N_Rqs_locked" : n_rqs_lock
+                })
+        
         t_setup = time.time()
-        self._computeRR()
-        t_rr = time.time()
-        ## LOG.debug(f"new RR cons {self.rr}")
+        
         # LOG.info("computeRV")
         self._computeRV()
         t_rv = time.time()
-        ## LOG.debug(f"new RV cons {self.r2v}")
-        if self.veh_tree_build_timeout is not None:
-            self._set_init_solution_insertion()
+        LOG.debug(f"new RV cons {self.r2v}")
+        #self._computeRR()
+        
+        t_rr = time.time()
+        LOG.debug(f"new RR cons { {k : v for k, v in self.rr.items() if v == 1} }")
+        
+        # if self.veh_tree_build_timeout is not None:
+        #     self._set_init_solution_insertion()
        # # LOG.debug(f"check for untracked boardings")
         for vid in self.untracked_boarding_detected.keys():
             ## LOG.debug(f"untracked boarding for vid {vid}")
             assigned_key = self.current_assignments[vid]
             if not self.rtv_obj.get(assigned_key):
-                ## LOG.debug(f"create v2rb {assigned_key}")
+                LOG.debug(f"create v2rb {assigned_key}")
                 assigned_plan = self.external_assignments[vid][1]
+                LOG.debug(f"externally assigned plan: {assigned_plan}")
                 assigned_v2rb = V2RB(self.routing_engine, self.active_requests, sim_time, assigned_key, self.veh_objs[vid], self.std_bt, self.add_bt, self.objective_function, orig_veh_plans=[assigned_plan])
                 self._addRtvKey(assigned_key, assigned_v2rb)
         # LOG.info("build V2RBs")
@@ -359,10 +254,38 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             self._after_opt_rv_best_v2rb_heuristic()
         t_opt = time.time()
         # LOG.debug(f"after optimisation {self.optimisation_solutions}")
-        times = {"sim_time" : self.sim_time, "setup" : t_setup - t_start, "rr" : t_rr - t_setup, "rv" : t_rv - t_rr, "build" : t_build - t_rv, "opt" : t_opt - t_build, "all" : t_opt - t_start}
+        times = {"sim_time" : self.sim_time, "setup" : t_setup - t_start, "rr" : t_rr - t_rv, "rv" : t_rv - t_setup, "build" : t_build - t_rv, "opt" : t_opt - t_build, "all" : t_opt - t_start}
         time_str = ",".join(["{};{}".format(a, b) for a, b in times.items()])
         LOG.info("OPT TIMES:{}".format(time_str))
         LOG.info("Opt stats at sim time {} : opt duration {} | res cfv {}".format(self.sim_time, t_opt - t_start, self.current_best_cfv))
+        i_to_N={}
+        i_to_number_plans = {}
+        for vid, tree in self.rtv_tree_N_v.items():
+            for N, rtv_keys in tree.items():
+                i_to_N[N] = i_to_N.get(N, 0) + len(rtv_keys)
+                for rtv_key in rtv_keys.keys():
+                    i_to_number_plans[N] = i_to_number_plans.get(N, 0) + len(self.rtv_obj[rtv_key].veh_plans)
+        LOG.info(f"Number of rtv_keys in trees:")
+        for i in sorted(i_to_N.keys()):
+            LOG.info("N {} : {} | plans_ {}".format(i, i_to_N.get(i,0), i_to_number_plans.get(i,0)))
+            
+
+        LOG.debug(f"opt results:")
+        for k, v in self.optimisation_solutions.items():
+            LOG.debug(f"vid {k} -> {v} -> {self.rtv_costs.get(v)}")
+            
+        sum_obj = 0
+        for k, v in self.optimisation_solutions.items():
+            sum_obj += self.rtv_costs[v]
+        LOG.info(f"Objective value at time {sim_time} for AM: {sum_obj}")
+        
+        dyn_out_dict = {
+            "RV_computation_time" : times["rv"],
+            "Solve_assignment_computation_time" : times["opt"],
+        }
+        if self.fleetcontrol is not None:
+            self.fleetcontrol._add_to_dynamic_fleetcontrol_output(sim_time, dyn_out_dict)
+
 
     def add_new_request(self, rid : Any, prq : PlanRequest, consider_for_global_optimisation : bool = True, is_allready_assigned : bool = False):
         """ this function adds a new request to the modules database and set entries that
@@ -374,6 +297,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param is_allready_assigned: if not considered for global optimisation, this flag indicates, if the rid is allready assigned
             in the init solution"""
         if consider_for_global_optimisation:
+            if self.active_requests.get(rid) is not None:
+                self._delRRcons(rid)
             self.new_requests[rid] = 1
             self.requests_to_compute[rid] = 1
         if self.alonso_mora_parallelization_manager is not None:
@@ -516,12 +441,17 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             rtv_key = getRTVkeyFromVehPlan(assigned_plan)
             self.current_assignments[vid] = rtv_key
             LOG.debug(f"assign {vid} -> {rtv_key} | is external? {is_external_vehicle_plan}")
+            LOG.debug(f" -> assigned plan {assigned_plan}")
             if is_external_vehicle_plan and not _is_init_sol:
                 self.external_assignments[vid] = (rtv_key, None)
                 self.rebuild_rtv[vid] = 1
                 self.delete_vehicle_database_entries(vid)
             elif _is_init_sol and not is_external_vehicle_plan:
                 self.external_assignments[vid] = (rtv_key, assigned_plan)
+            elif is_external_vehicle_plan and _is_init_sol: # TODO its strange here, but would not touch it
+                self.external_assignments[vid] = (rtv_key, assigned_plan)
+                self.rebuild_rtv[vid] = 1
+                self.delete_vehicle_database_entries(vid)
 
     def get_current_assignment(self, vid : int) -> VehiclePlan:
         """ returns the vehicle plan assigned to vid currently
@@ -627,8 +557,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param assigned_vid: vehicle id, which is currently assigned to serve customer (none if none assigned)
         :param exceeds_former_time_windows: True: new time window is larger the old one, False otherwise
         """
-        if not exceeds_former_time_windows:
-            LOG.info("exceeds former time window alternative not implemented yet! rebuild!")
+        if not exceeds_former_time_windows: # time constraints are in dictionaries of planstops taht would have to be updated
+            LOG.debug("exceeds former time window alternative not implemented yet! rebuild!")
             exceeds_former_time_windows = True
         if exceeds_former_time_windows:
             v2rbs_2_keep = {}
@@ -665,7 +595,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         rtv_key = getRTVkeyFromVehPlan(vehicle_plan)
         new_rtv_key = deleteRidFromRtv(rid_to_remove, rtv_key)
         if new_rtv_key is None:
-            return None
+            return simple_remove(veh_obj, vehicle_plan, rid_to_remove, sim_time, self.routing_engine, self.objective_function, self.active_requests, self.std_bt, self.add_bt)
         new_v2rb = self.rtv_obj.get(new_rtv_key)
         if new_v2rb is not None:
             return new_v2rb.getBestPlan()
@@ -689,6 +619,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param rid2: (optional) other plan_request_id"""
         if rid2 is not None:
             rr_key = getRRKey(rid, rid2)
+            if self.rr.get(rr_key) is not None:
+                del self.rr[rr_key]
         else:
             for rid2 in self.active_requests.keys():
                 rr_key = getRRKey(rid, rid2)
@@ -801,11 +733,12 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         """ this function computes all rr-connections from self.requests_to_compute with all active_requests
         """
         if not self.alonso_mora_parallelization_manager:
+            LOG.info(f"compute RR for {len(self.requests_to_compute)} and {len(self.rid_to_consider_for_global_optimisation.keys())} requests")
             for rid1 in self.requests_to_compute.keys():
                 rq1 = self.active_requests[rid1]
                 for rid2 in self.rid_to_consider_for_global_optimisation.keys():
                     if rid1 != rid2:
-                        if not self._is_subrid(rid1) or not self._is_subrid(rid2) or self._get_associated_baserid(rid1) != self._get_associated_baserid(rid2):
+                        if not self._is_subrid(rid1) or not self._is_subrid(rid2) or self._get_associated_baserid(rid1) != self._get_associated_baserid(rid2):                                
                             self._getRR(rid1, rid2)
         else:
             self.alonso_mora_parallelization_manager.computeRR(self.fo_id, self.requests_to_compute.keys())
@@ -824,7 +757,30 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         elif comp == -1:
             return None
         else:
-            rr_comp = checkRRcomptibility(self.active_requests[rid1], self.active_requests[rid2], self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt)
+            rq1, rq2 = self.active_requests[rid1], self.active_requests[rid2]
+            if self.r2v_locked.get(rid1) is not None and \
+                rid1 in [rq.get_rid_struct() for rq in self.veh_objs[self.r2v_locked[rid1]].pax]:
+                    #LOG.debug(f"ob rr {rid1} {rid2} ({rid1} ob of {self.r2v_locked[rid1]}")
+                    veh_pos = self.veh_objs[self.r2v_locked[rid1]].pos
+                    #pu_time = rq1.pu_time # sometimes pickups can be delayed with new travel times -> influences drop off constraint (hard to be consistent with abs latest drop off time!)
+                    if self.r2v.get(rid2, {}).get(self.r2v_locked[rid1]) is not None:
+                        rr_comp = checkRRcomptibillityOnBoard(rq1, rq2, veh_pos, self.sim_time, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt)
+                    else:
+                        rr_comp = -1
+                    #LOG.debug(f" -> {rr_comp}")
+            elif self.r2v_locked.get(rid2) is not None and \
+                rid2 in [rq.get_rid_struct() for rq in self.veh_objs[self.r2v_locked[rid2]].pax]:
+                    #LOG.debug(f"ob rr {rid2} {rid1} ({rid2} ob of {self.r2v_locked[rid2]}")
+                    veh_pos = self.veh_objs[self.r2v_locked[rid2]].pos
+                    # pu_time = rq2.pu_time # sometimes pickups can be delayed with new travel times -> influences drop off constraint (hard to be consistent with abs latest drop off time!)
+                    if self.r2v.get(rid1, {}).get(self.r2v_locked[rid2]) is not None:
+                        rr_comp = checkRRcomptibillityOnBoard(rq2, rq1, veh_pos, self.sim_time, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt)
+                    else:
+                        rr_comp = -1
+                    #LOG.debug(f" -> {rr_comp}")
+            else:
+                rr_comp = checkRRcomptibility(rq1, rq2, self.routing_engine, self.std_bt, dynamic_boarding_time=self.add_bt) #TODO definitions of boarding times!
+
             if rr_comp:
                 self.rr[rr_key] = 1
                 return 1
@@ -844,7 +800,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 veh_locations_to_vid[veh_obj.pos] = [vid]
         current_time = self.sim_time
         # # LOG.debug(f"compute RV: veh_locations_to_vid {veh_locations_to_vid}; to compute {self.requests_to_compute}")
-        vid_dict = {}  # vid -> tt
+        #vid_dict = {}  # vid -> tt
         # prepare travel times in parallel processing
         if self.alonso_mora_parallelization_manager:
             rids_to_compute_to_rq = {rid: self.active_requests[rid] for rid in self.requests_to_compute.keys()}
@@ -858,15 +814,19 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             travel_infos = {}
             rids_to_compute_to_rq = {}
         for rid in self.requests_to_compute.keys():
+            vid_dict = {}  # vid -> tt
             prq = self.active_requests[rid]
             if not self.alonso_mora_parallelization_manager:
                 # get routing results in single processing
                 o_pos, _, latest_pu = prq.get_o_stop_info()
                 routing_results = self.routing_engine.return_travel_costs_Xto1(veh_locations_to_vid.keys(), o_pos,
                                                                                max_cost_value=latest_pu - current_time)
-                for veh_loc, tt, _, _ in routing_results:
+                travel_infos = {}
+                for veh_loc, tt, _, dis in routing_results:
+                    travel_infos[(veh_loc, o_pos)] = (tt, tt, dis)
                     for vid in veh_locations_to_vid[veh_loc]:
                         vid_dict[vid] = tt
+                self.routing_engine.add_travel_infos_to_database(travel_infos)
             else:
                 # get prepared routing results in multi processing
                 for vid in new_rv.get(rid, []):
@@ -889,6 +849,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 currently_assigned_veh = self.current_assignments
                 heuristic_adopt_dict = {}
                 rv_vehicles = [self.veh_objs[vid] for vid in vid_dict.keys()]
+                LOG.debug(f"rv for rid {rid} : number vehicles {len(rv_vehicles)}")
                 # x) currently assigned vehicle
                 ca_flag = False
                 if self.fleetcontrol.rid_to_assigned_vid.get(rid) is not None:
@@ -917,7 +878,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 if number_directionality + number_least_load > 0:
                     rv_keep = {veh_obj.vid: 1 for veh_obj in selected_veh}
                 else:
-                    rv_keep = {veh_obj.vid: 1 for veh_obj in rv_vehicles}
+                    rv_keep = {}
                 # c) rr-connections
                 nr_add_rr = self.fleetcontrol.rv_heuristics.get(G_RVH_AM_RR, 0)
                 if nr_add_rr > 0:
@@ -925,6 +886,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     rv_keep, _ = \
                         self._before_opt_rv_nearest_with_rr_heuristic(rid, vid_dict, already_vid_to_keep=rv_keep,
                                                                     prev_plans={}, max_rv_connections=max_rv)
+                LOG.debug(f" -> number to keep after rr heu : {len(rv_keep)} | {nr_add_rr}")
                 # d) testing insertions
                 nr_add_ti = self.fleetcontrol.rv_heuristics.get(G_RVH_AM_TI, 0)
                 if nr_add_ti > 0:
@@ -932,13 +894,27 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     rv_keep, heuristic_adopt_dict = \
                         self._before_opt_rv_best_insertion_heuristic(rid, vid_dict, already_vid_to_keep=rv_keep,
                                                                     prev_plans={}, max_rv_connections=max_rv)
+                LOG.debug(f" -> number to keep after insertion heu : {len(rv_keep)} | {nr_add_ti}")
                 # if heuristics were applied successfully, the number of vehicles in rv_keep is larger than 0
-                if (ca_flag and len(rv_keep) == 1) or (not ca_flag and len(rv_keep) == 0):
+                if len(rv_keep) == 0:
                     to_keep_vids = {vid: 1 for vid in vid_dict.keys()}
                 else:
                     to_keep_vids = rv_keep
             else:
-                to_keep_vids = {vid: 1 for vid in vid_dict.keys()}
+                rv_vehicles = [self.veh_objs[vid] for vid in vid_dict.keys()]
+                LOG.debug(f"rv for rid {rid} : number vehicles {len(rv_vehicles)}")
+                if self.max_rv_connections is not None:
+                    LOG.info("not sure if you want to have this here!")
+                    max_rv = self.max_rv_connections
+                    sorted_vids = sorted(vid_dict.keys(), key=lambda x: vid_dict[x])
+                    rv_keep = {vid: 1 for vid in sorted_vids[:max_rv]}
+                    for vid, rtv_key in self.current_assignments.items():
+                        if rid in getRidsFromRTVKey(rtv_key):
+                            rv_keep[vid] = 1
+                    LOG.debug(f" -> number to keep after random heu : {len(rv_keep)} | {rv_keep}")
+                    to_keep_vids = rv_keep
+                else:
+                    to_keep_vids = {vid: 1 for vid in vid_dict.keys()}
             for vid in to_keep_vids.keys():
                 try:
                     self.r2v[rid][vid] = 1
@@ -948,16 +924,35 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     self.v2r[vid][rid] = 1
                 except:
                     self.v2r[vid] = {rid: 1}
+            
 
     def _computeV2RBdatabase(self):
         """ this function computes the V2RB database for all vehicles """
-        #if self.fleetcontrol is not None:
-            # LOG.debug("alonso computeV2RBDataBase: at {}".format(self.sim_time))
-            # # LOG.debug("rv connections: {}".format(self.v2r))
+        
         if not self.alonso_mora_parallelization_manager:
+            t_update = 0
+            t_build = 0
+            N_v2rbs_before = 0
+            N_v2rbs_after_update = 0
+            N_v2rbs_after_build = 0
             for vid, veh_obj in self.veh_objs.items():
+                N_v2rbs_before += len(self.rtv_v.get(vid, {}))
+                t = time.time()
                 self._updateVehicleDataBase(vid)
+                t_update += time.time() - t
+                N_v2rbs_after_update += len(self.rtv_v.get(vid, {}))
+                t = time.time()
                 self._buildTreeForVid(vid)
+                t_build += time.time() - t
+                N_v2rbs_after_build += len(self.rtv_v.get(vid, {}))
+            if self.fleetcontrol is not None:
+                self.fleetcontrol._add_to_dynamic_fleetcontrol_output(self.sim_time, {
+                    "Update_V2RB_computation_time" : t_update,
+                    "Compute_V2RB_computation_time" : t_build,
+                    "N_V2RBs_at_start" : N_v2rbs_before,
+                    "N_V2RBs_after_update" : N_v2rbs_after_update,
+                    "N_V2RBs_after_build" : N_v2rbs_after_build
+                })
         else:
             new_v2rbs_all = []
             batch_size = max(float(np.floor(len(self.veh_objs)/self.alonso_mora_parallelization_manager.number_cores/5.0)), 1)
@@ -1006,7 +1001,6 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             rids_to_build = [rid for rid in self.requests_to_compute.keys() if self.rid_to_consider_for_global_optimisation.get(rid)]
         else:
             rids_to_build = [rid for rid in self.active_requests.keys() if self.rid_to_consider_for_global_optimisation.get(rid)]
-        LOG.debug(f" ... build tree for vid {vid} with assigned key {assigned_key} for rids {rids_to_build}")
         rids_to_build_with_hierarchy = []
         for rid in rids_to_build:
             if self.r2v_locked.get(self._get_associated_baserid(rid), vid) == vid and self.v2r.get(vid, {}).get(rid):
@@ -1017,7 +1011,36 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 rids_to_build_with_hierarchy.append((rid, h))
         np.random.shuffle(rids_to_build_with_hierarchy)
         rids_to_build_with_hierarchy = sorted(rids_to_build_with_hierarchy, key = lambda x:x[1], reverse = True)
+        LOG.debug(f" ... build tree for vid {vid} with assigned key {assigned_key} and locked {self.v2r_locked.get(vid, {})} for rids {rids_to_build_with_hierarchy}")
+        # assigned tree
+        assigned_rtv_tree_N = {}
+        if assigned_key is not None:
+            N_assigned = len(getRidsFromRTVKey(assigned_key))
+            if N_assigned <= MAX_LENGTH_OF_TREES:
+                # LOG.debug(f"assigned key {assigned_key}"
+                necessary_ob_rids = []
+                for ass_rid in getRidsFromRTVKey(assigned_key):
+                    if self.v2r_locked.get(vid, {}).get( self._get_associated_baserid(ass_rid) ):
+                        necessary_ob_rids.append(ass_rid)
+                assigned_rtv_tree_N = get_full_assigned_tree(assigned_key, necessary_ob_rids)
+            else:
+                assigned_rtv_tree_N = {N_assigned : {assigned_key : 1}}
+            # LOG.debug(f"necessary keys: {list(getNecessaryKeys(assigned_key, necessary_ob_rids))}")
+            # for key in getNecessaryKeys(assigned_key, necessary_ob_rids):
+            #     n = len(getRidsFromRTVKey(key))
+            #     try:
+            #         assigned_rtv_tree_N[n][key] = 1
+            #     except KeyError:
+            #         try:
+            #             assigned_rtv_tree_N[n] = {key : 1}
+            #         except KeyError:
+            #             assigned_rtv_tree_N = {n : {key : 1}}
+            # assigned_rtv_tree_N[len(getRidsFromRTVKey(assigned_key))] = {assigned_key : 1}
+        #
         t_all_vid = time.time()
+        # first build on assigned tree
+        for rid, h in rids_to_build_with_hierarchy:
+            self._buildOnCurrentAssignedTree(vid, rid, assigned_rtv_tree_N)
         #LOG.debug("build tree for vid {} with rids {} | locked {}".format(vid, rids_to_build_with_hierarchy, self.r2v_locked))
         for rid, h in rids_to_build_with_hierarchy:
             t_c = time.time() - t_all_vid
@@ -1025,11 +1048,11 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             if self.veh_tree_build_timeout and h != 1 and t_c > self.veh_tree_build_timeout:
                 # LOG.debug(f"break tree building for vid {vid} after {t_c} s")
                 break
-            self._buildOnCurrentTree(vid, rid)
+            self._buildOnCurrentTree(vid, rid, assigned_rtv_tree_N)
 
         self._checkForNecessaryV2RBsAndComputeMissing(vid)
         
-    def _buildOnCurrentTree(self, vid : int, rid : Any):
+    def _buildOnCurrentTree(self, vid : int, rid : Any, assigned_rtv_tree_N):
         """This method adds rid to all currently available rtv_keys for vehicle
         IF the rid is matching with all on-board requests.
         
@@ -1042,6 +1065,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
 
         :param vid: vehicle_id
         :param rid: plan_request_id
+        :param assigned_rtv_tree_N: dict of rtv_keys with number of requests only for currently assigned rtv-obj
         """
 
         # LOG.verbose(f"build on current tree {rid} -> {vid}")
@@ -1084,9 +1108,12 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         #
         for i in range(max(number_locked_rids,1), MAX_LENGTH_OF_TREES):
             new_v2rb_found = False
-            # # LOG.debug(f"build rid {rid} size {i}")
+            #LOG.debug(f"build rid {rid} size {i}")
             for build_key in self.rtv_tree_N_v[vid].get(i, {}).keys():
-                # # LOG.debug(f"build key {build_key}")
+                LOG.debug(f"build key {build_key}")
+                if assigned_rtv_tree_N.get(i, {}).get(build_key) is not None:
+                    LOG.debug(f" -> already built on assigned tree {build_key}")
+                    continue
                 lower_keys_available = True
                 if build_key == do_not_build_on_rv_key:
                     continue
@@ -1094,7 +1121,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     # # LOG.debug(f"dont build on yourself {build_key}")
                     continue
                 # check if lower key is available, otherwise match will not be possible
-                # # LOG.debug(f"build on {build_key}")
+                #LOG.debug(f"build on {build_key}")
                 list_of_keys_to_test = createListLowerLevelKeys(build_key, rid, do_not_remove_for_lower_keys)
                 
                 for test_existence_rtv_key in list_of_keys_to_test:
@@ -1122,8 +1149,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 if self.rtv_obj.get(new_rtv_key, None) is not None:
                     continue
 
-                # # LOG.debug(f"try building {build_key} | {rid} | ")
-                if max_tour_heuristic:
+                LOG.debug(f"try building {build_key} | {rid} | ")
+                if i > self._max_prqs_exhaustive_DARP and self.max_tour_per_v2rb is not None:
                     test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB_bestPlanHeuristic(vid, rid, build_key)
                 else:
                     test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB(vid, rid, build_key)
@@ -1139,6 +1166,120 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             if self.rtv_obj.get(rtv_key, None) is not None:
                 return
             V2RB_obj = V2RB(self.routing_engine, self.active_requests, self.sim_time, rtv_key, self.veh_objs[vid], self.std_bt, self.add_bt, self.objective_function, new_prq_obj=self.active_requests[rid])
+            if V2RB_obj.isFeasible():
+                self._addRtvKey(rtv_key, V2RB_obj)
+                
+    def _buildOnCurrentAssignedTree(self, vid : int, rid : Any, assigned_rtv_tree_N):
+        """This method adds rid to all currently available rtv_keys which include only assigned requests for vehicle
+        IF the rid is matching with all on-board requests.
+        
+        To minimize the number of feasibility checks the tree is built from small bundles to large bundles with following considerations:
+        1) self.rv_ob[vid] determines the lowest level of requests
+        2) self.rr[vid] is considered for the lowest level
+        3) the existence of lower level keys (including all requests) is necessary for the existence of higher level keys
+        
+        This method creates V2RB objects but does not return anything.
+
+        :param vid: vehicle_id
+        :param rid: plan_request_id
+        :param assigned_rtv_tree_N: dict of rtv_keys with number of requests only for currently assigned rtv-obj
+        """
+
+        LOG.debug(f"build on assigned tree {rid} -> {vid}")
+        LOG.debug(f"assigned tree {assigned_rtv_tree_N}")
+        associated_locked_rids = []
+        for ob_rid in self.v2r_locked.get(vid, {}).keys():
+            other_sub_rids = self._get_all_other_subrids_associated_to_this_subrid(ob_rid)
+            associated_locked_rids.extend(list(other_sub_rids))
+            feasible_found = False
+            for sub_ob_rid in other_sub_rids:
+                if self._getRR(rid, sub_ob_rid):
+                    feasible_found = True
+                    break
+            if not feasible_found:
+                return
+        # check for assigned request not activated for global optimisation
+        assigned_key = self.current_assignments.get(vid)
+        if assigned_key is not None:
+            o_rids = getRidsFromRTVKey(assigned_key)
+            for o_rid in o_rids:
+                if self.rid_to_consider_for_global_optimisation.get(o_rid) is None:
+                    # LOG.verbose("additional rr check of not global opt {} <-> {}".format(rid, o_rid))
+                    rr_comp = self._getRR(rid, o_rid)
+        # check existing elements from lower to higher rid-number
+        number_locked_rids = len(self.v2r_locked.get(vid, {}).keys())
+        do_not_remove_for_lower_keys = [rid]
+        do_not_remove_for_lower_keys.extend(associated_locked_rids)
+        lower_keys_available = True
+        do_not_build_on_rv_key = createRTVKey(vid, [rid])
+        # check of activated heuristic
+        max_tour_heuristic = False
+        if self.applied_heuristics.get("single_plan_per_v2rb"):
+            max_tour_heuristic = True
+        # #
+        for i in range(max(number_locked_rids,1), MAX_LENGTH_OF_TREES):
+            new_v2rb_found = False
+            #LOG.debug(f"build rid {rid} size {i}")
+            for build_key in assigned_rtv_tree_N.get(i, {}).keys():
+                LOG.debug(f"build key assigned {build_key}")
+                lower_keys_available = True
+                if build_key == do_not_build_on_rv_key:
+                    continue
+                if self.rtv_r.get(rid, {}).get(build_key) is not None:
+                    # # LOG.debug(f"dont build on yourself {build_key}")
+                    continue
+                if self.rtv_obj.get(build_key) is None:
+                    continue
+                # check if lower key is available, otherwise match will not be possible
+                #LOG.debug(f"build on {build_key}")
+                list_of_keys_to_test = createListLowerLevelKeys(build_key, rid, do_not_remove_for_lower_keys)
+                
+                for test_existence_rtv_key in list_of_keys_to_test:
+                    if not self.rtv_obj.get(test_existence_rtv_key):
+                        lower_keys_available = False
+                        break
+                if not lower_keys_available:
+                    continue
+                # test for feasibility by building on current V2RB object
+                unsorted_rid_list = list(getRidsFromRTVKey(build_key))
+                #check RR-compatibility! (?)
+                rr_test = True
+                for o_rid in unsorted_rid_list:
+                    rr_test = self._getRR(o_rid, rid)
+                    # # LOG.debug(f"check rr {o_rid} {rid} -> {rr_test}")
+                    if rr_test != 1:
+                        rr_test = False
+                        break
+                if not rr_test:
+                    continue
+                
+                unsorted_rid_list.append(rid)
+                new_rtv_key = createRTVKey(vid, unsorted_rid_list)
+
+                if self.rtv_obj.get(new_rtv_key, None) is not None:
+                    continue
+
+                LOG.debug(f"try building {build_key} | {rid} | ")
+                if i > self._max_prqs_exhaustive_DARP and  self.max_tour_per_v2rb is not None:
+                    test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB_bestPlanHeuristic(vid, rid, build_key)
+                else:
+                    test_new_V2RB = self._checkRTVFeasibilityAndReturnCreateV2RB(vid, rid, build_key)
+
+                if test_new_V2RB:
+                    self._addRtvKey(new_rtv_key, test_new_V2RB)
+                    new_v2rb_found = True
+            if not new_v2rb_found:
+                break
+
+        if number_locked_rids == 0:
+            rtv_key = createRTVKey(vid, [rid])
+            LOG.debug(f"no locked rids for rtv_key {rtv_key}")
+            if self.rtv_obj.get(rtv_key, None) is not None:
+                return
+            V2RB_obj = V2RB(self.routing_engine, self.active_requests, self.sim_time, rtv_key, self.veh_objs[vid], self.std_bt, self.add_bt, self.objective_function, new_prq_obj=self.active_requests[rid])
+            LOG.debug(f"V2RB: {V2RB_obj}")
+            LOG.debug(f"RV: {self.r2v.get(rid)}")
+            LOG.debug(f" -> is feasible {V2RB_obj.isFeasible()}")
             if V2RB_obj.isFeasible():
                 self._addRtvKey(rtv_key, V2RB_obj)
 
@@ -1205,6 +1346,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 if not v2rb_obj.isFeasible():
                     to_del_keys[rtv_key] = 1
                 else:
+                    #LOG.debug(f"updated v2rb {rtv_key} | {v2rb_obj.getBestPlan()}")
                     self._updateV2RBcostInDataBase(rtv_key, v2rb_obj)
                     # # LOG.debug(" -> still feasible")
 
@@ -1223,11 +1365,14 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         for ass_rid in getRidsFromRTVKey(assigned_key):
             if base_ob_rids_dict.get( self._get_associated_baserid(ass_rid) ):
                 necessary_ob_rids.append(ass_rid)
-        necessary_keys = getNecessaryKeys(assigned_key, necessary_ob_rids)
+        if len(assigned_key) > MAX_LENGTH_OF_TREES:
+            necessary_keys = [assigned_key]
+        else:
+            necessary_keys = getNecessaryKeys(assigned_key, necessary_ob_rids)
         assigned_v2rb = self.rtv_obj.get(assigned_key)
         if assigned_v2rb is None:
-            LOG.warning("assigned rtv-key not created after build! {} for vid {}".format(assigned_key, vid))
-            LOG.warning("external assignments: {}".format({x: (str(y[0]), str(y[1])) for x, y in self.external_assignments.items()}))
+            #LOG.warning("assigned rtv-key not created after build! {} for vid {}".format(assigned_key, vid))
+            #LOG.warning("external assignments: {}".format({x: (str(y[0]), str(y[1])) for x, y in self.external_assignments.items()}))
             assigned_plan = self.external_assignments[vid][1]
             # try:
             #     feasible = assigned_plan.update_plan(self.veh_objs[vid], self.sim_time, self.routing_engine, keep_time_infeasible = True)
@@ -1269,7 +1414,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 LOG.debug("create ob v2rb: {} from {} | {} | {}".format(rtv_key, assigned_key, necessary_ob_rids, locked_rids))
                 assigned_v2rb = self.rtv_obj.get(assigned_key)
                 if assigned_v2rb is None:
-                    LOG.warning("assigned rtv-key not here to create OBV2RB! {}".format(assigned_key))
+                    #LOG.warning("assigned rtv-key not here to create OBV2RB! {}".format(assigned_key))
                     assigned_plan = self.external_assignments[vid][1]
                     # try:
                     #     feasible = assigned_plan.update_plan(self.veh_objs[vid], self.sim_time, self.routing_engine, keep_time_infeasible = True)
@@ -1389,7 +1534,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         while not grb_available and delta_t <= RETRY_TIME:
             try:
                 with gurobi.Env(empty=True) as env:
-                    if self.fleetcontrol.log_gurobi:
+                    if self.fleetcontrol is not None and self.fleetcontrol.log_gurobi:
                         import os
                         from src.misc.globals import G_DIR_OUTPUT
                         with open(os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT], "gurobi_log.log"), "a") as f:
@@ -1404,9 +1549,11 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                         env.start()
 
                     m = gurobi.Model(model_name, env = env)
+                    #m.Params.seed = 1992
                     grb_available = True
 
                     m.setParam(gurobi.GRB.param.Threads, self.optimisation_cores)
+                    m.setParam("MIPGap", GUROBI_MIPGAP)
                     if self.optimisation_timeout:
                         m.setParam('TimeLimit', self.optimisation_timeout)
                     variables = {}  # rtv_key -> gurobi variable
@@ -1414,7 +1561,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     expr = gurobi.LinExpr()   # building optimization objective
                     key_to_varnames = {}
                     varnames_to_key = {}
-                    for i, rtv_key in enumerate(self.rtv_costs.keys()):
+                    for i, rtv_key in enumerate(sorted(self.rtv_costs.keys())):
+                        #LOG.debug(f"add variable {rtv_key} -> {i}")
                         rtv_cost = self.rtv_costs[rtv_key]
                         vid = getVidFromRTVKey(rtv_key)
                         rids = getRidsFromRTVKey(rtv_key)
@@ -1492,7 +1640,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                             LOG.warning("current assignment {} not found for setting initial solution".format(rtv_key))
                         else:
                             variables[rtv_key].start = 1
-                        
+                            
                     m.optimize() #optimization
                     LOG.info("=========")
                     LOG.info("OPT TIME {}:".format(self.sim_time))
@@ -1539,6 +1687,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 delta_t = time.time() - t0
                 if not warning_created:
                     print("GUROBI ERROR: License Server not found or License not up to date!")
+                    traceback.print_exc()
                     warning_created = True
         gurobi.disposeDefaultEnv()
 
@@ -1841,6 +1990,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param prev_plans: dummy variable to keep consitency
         :return: dict vid -> for vehicles to consider for rv-connections (maximum set by self.max_rv_connections), empty dict
         """
+        LOG.debug(f"before_opt_rv_nearest_with_rr_heuristic for rid {rid}: {max_rv_connections} | {self.max_rv_connections} | {len(vid_to_travel_time.keys())} | {self.current_assignments} | {len(already_vid_to_keep)}")
         vids_to_keep = already_vid_to_keep.copy()
         if max_rv_connections is None:
             max_rv = self.max_rv_connections
@@ -1848,6 +1998,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             max_rv = max_rv_connections
         #return all
         if len(vid_to_travel_time.keys()) <= max_rv:
+            LOG.debug(f" -> return all")
             return {vid : 1 for vid in vid_to_travel_time.keys()}, prev_plans
         #check for vids and assigned rids sorted by travel time
         for vid, _ in sorted(vid_to_travel_time.items(), key = lambda x:x[1]):
@@ -1865,6 +2016,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     continue
             vids_to_keep[vid] = 1
             if len(vids_to_keep.keys()) >= max_rv:
+                LOG.debug(f" -> all rr found {len(vids_to_keep.keys())}")
                 return vids_to_keep, prev_plans
         # fill if to small just ob rid check
         if len(vids_to_keep.keys()) < max_rv:
@@ -1885,7 +2037,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     vids_to_keep[vid] = 1
                     if len(vids_to_keep.keys()) >= max_rv:
                         break
-
+        LOG.debug(f" -> remaining {len(vids_to_keep.keys())}")
         return vids_to_keep, prev_plans
 
     def _before_opt_rv_best_insertion_heuristic(self, rid, vid_to_travel_time, already_vid_to_keep = {}, prev_plans = {}, max_rv_connections = None):
@@ -1986,27 +2138,16 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         new_rtv_key = createRTVKey(vid, rid_list)
         #new_prq_obj, new_rtv_key, routing_engine, rq_dict, sim_time, veh_obj, std_bt, add_bt
         best_v2rb = low_level_V2RB.addRequestAndCheckFeasibility(self.active_requests[rid], new_rtv_key, self.routing_engine, self.objective_function, self.active_requests, self.sim_time, self.veh_objs[vid], self.std_bt, self.add_bt)
-        # best_cfv = float("inf")
-        # if best_v2rb is not None:
-        #     best_cfv = best_v2rb.cost_function_value
-        # # build other way around
-        # for other_rid in prev_rid_list:
-        #     low_level_rids = rid_list[:]
-        #     low_level_rids.remove(other_rid)
-        #     low_level_V2RB = self.rtv_obj.get(createRTVKey(vid, low_level_rids))
-        #     if not low_level_V2RB:  # usual for grade 1 v2rbs (single rid v2rb is built after tree building, but shouldnt matter for the the permutation of 2 rids)
-        #         continue
-        #     new_v2rb = low_level_V2RB.addRequestAndCheckFeasibility(self.active_requests[other_rid], new_rtv_key, self.routing_engine, self.objective_function, self.active_requests, self.sim_time, self.veh_objs[vid], self.std_bt, self.add_bt)
-        #     if new_v2rb is not None and new_v2rb.cost_function_value < best_cfv:
-        #         best_v2rb = new_v2rb
-        #         best_cfv = new_v2rb.cost_function_value
-        # only keep best plan
+
+        # only keep best x plans
         if best_v2rb is None:
             return None
         else:
-            best_plan = best_v2rb.getBestPlan()
-            best_v2rb.veh_plans = [best_plan]
-            return best_v2rb
+            if len(best_v2rb.veh_plans) <= self.max_tour_per_v2rb:
+                return best_v2rb
+            else:
+                best_v2rb.veh_plans = best_v2rb.veh_plans[:self.max_tour_per_v2rb]
+                return best_v2rb
 
     ###=======================================================================================================###
     ### OTHER STUFF

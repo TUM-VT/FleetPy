@@ -2,6 +2,7 @@ import random
 import numpy as np
 from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 from src.misc.globals import *
+from src.fleetctrl.forecast.AggForecastZoning import AggForecastZoneSystem
 
 # from IPython import embed
 
@@ -45,6 +46,25 @@ class PavoneHailingRepositioningFC(RepositioningBase):
             raise IOError("PavoneHailingRepositioningFC requires two time horizon values (start and end)!"
                           f"Set them in the {G_OP_REPO_TH_DEF} scenario parameter!")
         self.optimisation_timeout = 30 # TODO #
+        self._weight_on_forecast = operator_attributes.get("op_weight_on_fc", None) # to scale the forecast by this factor (i.e. to approximate sharing)
+        
+    def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> AggForecastZoneSystem:
+        """ this method loads the forecast zone system needed for the corresponding repositioning strategy"""
+        fc_type = operator_attributes.get(G_RA_FC_TYPE)
+        if fc_type is not None and fc_type == "perfect":
+            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastZoneSystem
+            LOG.info("load perfect zonesystem")
+            return PerfectForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
+        elif fc_type is not None and fc_type == "perfect_dist": # doesnt make a difference compared to previous one
+            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastDistributionZoneSystem
+            LOG.info("load perfect zonesystem")
+            return PerfectForecastDistributionZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
+        elif fc_type is not None and fc_type == "myopic":
+            from src.fleetctrl.forecast.MyopicForecastZoneSystem import MyopicForecastZoneSystem
+            LOG.info("load myopic zonesystem")
+            return MyopicForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes) 
+        else:
+            return AggForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes) 
 
     def determine_and_create_repositioning_plans(self, sim_time, lock=None):
         """This method determines and creates new repositioning plans. The repositioning plans are directly assigned
@@ -55,6 +75,7 @@ class PavoneHailingRepositioningFC(RepositioningBase):
         :param lock: indicates if vehplans should be locked
         :return: list[vid] of vehicles with changed plans
         """
+        self.zone_system.time_trigger(sim_time)
         self.sim_time = sim_time
         if lock is None:
             lock = self.lock_repo_assignments
@@ -67,6 +88,11 @@ class PavoneHailingRepositioningFC(RepositioningBase):
         list_zones = sorted([zone for zone in list_zones_all if zone != -1])
         demand_fc_dict = self._get_demand_forecasts(t0, t1)
         supply_fc_dict = self._get_historic_arrival_forecasts(t0, t1)
+        if self._weight_on_forecast is not None:
+            demand_fc_dict = {z : v * self._weight_on_forecast for z, v in demand_fc_dict.items()}
+            supply_fc_dict = {z : v * self._weight_on_forecast for z, v in supply_fc_dict.items()}
+        for zone_id in self.zone_system.get_all_zones():
+            self.record_df.loc[(sim_time, zone_id, t0, t1), "tot_fc_supply"] = max([demand_fc_dict.get(zone_id, 0) - supply_fc_dict.get(zone_id, 0), 0])
         # print(demand_fc_dict)
         # print(supply_fc_dict)
         cplan_arrival_idle_dict = self._get_current_veh_plan_arrivals_and_repo_idle_vehicles(t0, t1)
@@ -361,6 +387,7 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         :param lock: indicates if vehplans should be locked
         :return: list[vid] of vehicles with changed plans
         """
+        self.zone_system.time_trigger(sim_time)
         self.sim_time = sim_time
         if lock is None:
             lock = self.lock_repo_assignments
@@ -372,6 +399,11 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         list_zones = self.zone_system.get_all_zones()
         demand_fc_dict = self._get_demand_forecasts(t0, t1)
         supply_fc_dict = self._get_historic_arrival_forecasts(t0, t1)
+        if self._weight_on_forecast is not None:
+            demand_fc_dict = {z : v * self._weight_on_forecast for z, v in demand_fc_dict.items()}
+            supply_fc_dict = {z : v * self._weight_on_forecast for z, v in supply_fc_dict.items()}
+        for zone_id in self.zone_system.get_all_zones():
+            self.record_df.loc[(sim_time, zone_id, t0, t1), "tot_fc_supply"] = max([demand_fc_dict.get(zone_id, 0) - supply_fc_dict.get(zone_id, 0), 0])
         # print(demand_fc_dict)
         # print(supply_fc_dict)
         cplan_arrival_idle_dict = self._get_current_veh_plan_arrivals_and_repo_idle_vehicles(t0, t1)

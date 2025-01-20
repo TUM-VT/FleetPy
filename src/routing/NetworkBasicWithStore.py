@@ -102,8 +102,13 @@ class NetworkBasicWithStore(NetworkBasic):
                 s = R.compute(return_route=False)[0][1]
                 LOG.warning(f"after recalculation of the routes, s={s}")
         else:
-            R = Router(self, origin_node, destination_nodes=[destination_node], mode='bidirectional', customized_section_cost_function=customized_section_cost_function)
-            s = R.compute(return_route=False)[0][1]
+            if self._current_tt_factor is None:
+                R = Router(self, origin_node, destination_nodes=[destination_node], mode='bidirectional', customized_section_cost_function=customized_section_cost_function)
+                s = R.compute(return_route=False)[0][1]
+            else:
+                R = Router(self, origin_node, destination_nodes=[destination_node], mode='bidirectional', customized_section_cost_function=customized_section_cost_function)
+                s = R.compute(return_route=False)[0][1]
+                s = (s[0] * self._current_tt_factor, s[1] * self._current_tt_factor, s[2])
             if customized_section_cost_function is None:
                 self._add_to_database(origin_node, destination_node, s[0], s[1], s[2])
         return (s[0] + origin_overhead[0] + destination_overhead[0], s[1] + origin_overhead[1] + destination_overhead[1], s[2] + origin_overhead[2] + destination_overhead[2])
