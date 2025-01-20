@@ -749,6 +749,7 @@ class ReplayPyPlot(Replay):
 
         sim_time = datetime.datetime(self.dtuple[0], self.dtuple[1], self.dtuple[2], 0,0,0) + \
                    datetime.timedelta(seconds=self.replay_time)
+        #sim_time = str(datetime.timedelta(seconds=self.replay_time))
         # TODO # add dictionary for additional geographic information: key -> list_of_coordinates
         dict_add_coord = {}
         # TODO # add dictionary for additional scalar information: key -> value
