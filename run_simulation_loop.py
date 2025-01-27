@@ -14,9 +14,9 @@ import xml.etree.ElementTree as ET
 
 py_path = pathlib.Path(__file__)
 
-SELECTED_SCENARIOS = [305,309,310,311,314,315,316,317]
+SELECTED_SCENARIOS = list(range(402,403))
 STUDY_NAME = "fleetpy_sumo_coupling_in"
-PROCESS_COUNT = 2
+PROCESS_COUNT = 3
 SIM_NETWORK_NAME = "sumo_in"
 
 def get_current_max_key(FP_path):
@@ -70,10 +70,10 @@ class SimulationRunner:
             sc_df['sumo_fco_vehicles'] = [row['sumo_fco_vehicles']]
             sc_df['op_routing_mode'] = [row['op_routing_mode']]
             sc_df['random_seed'] = [row['random_seed']]
+            sc_df["rerouting_sc"] = [row["rerouting_sc"]]
 
             self.sc_config_file_dict.update({sc_index:sc_df.squeeze()})
             sc_df.to_csv(py_path.parent/"studies"/STUDY_NAME/"scenarios"/f"{scenario_name}.csv", index=False)
-        
     def create_rerouting_xml_files(self):
         rerouting_cfg_path = self.py_path.parent.parent / "fleetpy_coupling"/"Simulation"/self.sim_network_name/"Rerouting" /"rerouting_scenarios.csv"
         with open(rerouting_cfg_path, 'r') as file:
@@ -92,12 +92,22 @@ class SimulationRunner:
 
     def run_fleetpy_sc(self,sc_index):
         SAV_demand_ratio = float(self.sc_config_file_dict[sc_index].get("SAV_demand_ratio"))
+        if self.sc_config_file_dict[sc_index].get("rerouting_sc") == None:
+            sumocfg_path = self.py_path.parent.parent/"fleetpy_coupling"/"Simulation"/self.sim_network_name/f"{self.sim_network_name}_s_{str(self.sc_config_file_dict[sc_index]['random_seed']).zfill(2)}_{round(SAV_demand_ratio,2)}.sumocfg"
+        else:
+            rerouting_sc = self.sc_config_file_dict[sc_index].get("rerouting_sc")
+
+            rerouting_sc = str(int(rerouting_sc))
+            #rerouting_sc = str(int(self.sc_config_file_dict[sc_index].get("rerouting_sc").round()))
+            sumocfg_path = self.py_path.parent.parent/"fleetpy_coupling"/"Simulation"/self.sim_network_name/f"{self.sim_network_name}_s_{str(self.sc_config_file_dict[sc_index]['random_seed']).zfill(2)}_{round(SAV_demand_ratio,2)}_r_{rerouting_sc.zfill(3)}.sumocfg"
+
+        
         command = [
             "python",
             str(self.py_path.parent/"SUMOFleetPyServer.py"),
             str(self.py_path.parent/"studies"/self.study_name/"scenarios"/"constant_config.csv"),
             str(self.py_path.parent/"studies"/self.study_name/"scenarios"/f"{self.sc_config_file_dict[sc_index]['scenario_name']}.csv"),
-            str(self.py_path.parent.parent/"fleetpy_coupling"/"Simulation"/self.sim_network_name/f"{self.sim_network_name}_s_{str(self.sc_config_file_dict[sc_index]['random_seed']).zfill(2)}_{round(SAV_demand_ratio,2)}.sumocfg"),
+            str(sumocfg_path),
             "sumo",
             "info"
         ]

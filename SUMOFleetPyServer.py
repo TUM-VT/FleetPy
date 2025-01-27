@@ -137,8 +137,8 @@ class SUMOFleetPyServer():
         results_path = self.fp_sim_env.dir_names[G_DIR_OUTPUT]
         seed = self.fp_sim_env.scenario_parameters[G_RANDOM_SEED]
         SUMO_start_time = self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME)
-        EdgeDataCfgPath = self._create_EdgeDataCfg_xml()
-       
+        EdgeDataCfgPath = self._create_EdgeDataCfg_xml()       
+
         if not os.path.isdir(os.path.join(results_path, "SumoDumps")):
             os.mkdir(os.path.join(results_path, "SumoDumps"))
 
@@ -152,7 +152,7 @@ class SUMOFleetPyServer():
         sumoCmd = [self.sumo_binary, "-c", self.sumo_config_path ,"--collision.action","warn","--begin",str(SUMO_start_time),
                 "--step-length","1","--tripinfo-output",TripInfoPath,
                 "--vehroute-output",vehRoutePath,"--vehroute-output.exit-times","--vehroute-output.incomplete","--vehroute-output.write-unfinished",
-                "--collision-output",collisionPath,"--statistic-output",statisticsPath,"--start", "--seed", str(seed),"--no-warnings",str(True)]
+                "--collision-output",collisionPath,"--statistic-output",statisticsPath,"--start", "--seed", str(seed),"--no-warnings",str(True)]   
         #"+a",EdgeDataCfgPath, Currently not yet working
         #Trajectoriespath = os.path.join(results_path, "SumoDumps", "Trajectories.xml") 
         #fullOutputPath = os.path.join(results_path, "FullOutput.xml")
