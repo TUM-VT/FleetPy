@@ -126,7 +126,8 @@ class SUMOFleetPyServer():
 
         # Get interval in which new network statistics are gathered and sent to FleetPy to updated network (if not given, no statistics are gathered)
         travel_time_interval = self.fp_sim_env.scenario_parameters.get(G_SUMO_STAT_INT)
-        if travel_time_interval is None or 24*3600:
+
+        if travel_time_interval is None or travel_time_interval == 24*3600:
             self.g_update_fleetsim_traveltimes = False
             self.g_update_travel_statistics_time_step = 10000000000000
         else:
