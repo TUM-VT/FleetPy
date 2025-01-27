@@ -172,7 +172,7 @@ class PlanRequest:
         :param offer: offer object
         """
         self.offer = offer
-        LOG.debug(f"rid {self.get_rid_struct()} recieved offer : {offer}")
+        LOG.debug(f"rid {self.get_rid_struct()} received offer : {offer}")
         if self.status < G_PRQS_INIT_OFFER:
             self.status = G_PRQS_INIT_OFFER
 

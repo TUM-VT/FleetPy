@@ -268,7 +268,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
                     self.vid_with_reserved_rids[prev_vid] = list_reserved_rids
                 else:
                     del self.vid_with_reserved_rids[prev_vid]
-        if prq.get_reservation_flag():
+        if prq is not None and prq.get_reservation_flag():
             self.reservation_module.user_cancels_request(rid, simulation_time)
         try:
             del self.rq_dict[rid]
@@ -367,6 +367,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         :return: utility of vehicle plan
         :rtype: float
         """
+        # utility set in the method calling this method
         return self.vr_ctrl_f(simulation_time, veh_obj, vehicle_plan, self.rq_dict, self.routing_engine)
 
     def assign_vehicle_plan(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, sim_time : int, force_assign : bool=False
