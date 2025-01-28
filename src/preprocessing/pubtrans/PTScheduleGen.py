@@ -159,7 +159,6 @@ class PTScheduleGen:
                 # round up to the nearest 30s
                 route_stop_seq_df.at[i, "arrival_time"] = (int(route_stop_seq_df.at[i, "arrival_time"] / 30) + 1) * 30
         self.route_stop_seq_df = route_stop_seq_df
-
         print("Initialization finished for route {}".format(route_no))
 
     def load_demand(self, demand_csv: str):
@@ -780,13 +779,14 @@ class PTScheduleGen:
 
 if __name__ == "__main__":
     print(os.getcwd())
-    demand_csv = 'data/demand/SoD_demand/sample.csv'
-    GTFS_folder = "data/pubtrans/MVG_GTFS"
-    network_path = "data/networks/osm_route_MVG_road"
+    data_p = r"C:\Users\ge37ser\Documents\Coding\FleetPy\data"
+    demand_csv =  os.path.join(data_p, "demand", "SoD_demand", "sample.csv") #'data/demand/SoD_demand/sample.csv'
+    GTFS_folder = os.path.join(data_p, "pubtrans", "MVG_GTFS") # "data/pubtrans/MVG_GTFS"
+    network_path = os.path.join(data_p, "networks", "osm_route_MVG_road") # "data/networks/osm_route_MVG_road"
 
     route_no = 193
-    to_trip_id = "100.T2.3-193-G-013-1.4.H"
-    shape_ids = ["3-193-G-013-1.4.H"]
+    to_trip_id = "134.T0.3-193-G-015-3.2.H" # "100.T2.3-193-G-013-1.4.H"
+    shape_ids = ["3-193-G-015-3.2.H"] #["3-193-G-013-1.4.H"]
     terminus_stop = "Trudering Bf."
 
     start_time = 75600
@@ -800,9 +800,10 @@ if __name__ == "__main__":
                            shape_ids=shape_ids)
     pt_gen.load_demand(demand_csv)
 
-    output_demand_folder = f"data/demand/route_{route_no}_demand/matched/osm_route_MVG_road"
+    output_demand_folder = os.path.join(data_p, "demand", f"route_{route_no}_demand", "matched", "osm_route_MVG_road") # f"data/demand/route_{route_no}_demand/matched/osm_route_MVG_road"
     if not os.path.exists(output_demand_folder):
-        os.mkdir(output_demand_folder)
+        #os.mkdir(output_demand_folder)
+        os.makedirs(output_demand_folder, exist_ok=True)
 
     hourly_demand = pt_gen.return_hourly_demand(time_range=(start_time, end_time))
     print(f"Route {route_no} hourly demand: {hourly_demand}")
@@ -822,7 +823,7 @@ if __name__ == "__main__":
     veh_size = 20  # veh size (passenger)
 
     pt_gen.load_demand(demand_csv)
-    pt_gen.save_alignment_geojson(f"data/pubtrans/route_{route_no}")
+    pt_gen.save_alignment_geojson(os.path.join(data_p, "pubtrans", f"route_{route_no}"))
 
     hourly_demand = pt_gen.return_hourly_demand(time_range=(start_time, end_time))
     print(f"Route {route_no} hourly demand: {hourly_demand}")
@@ -833,12 +834,12 @@ if __name__ == "__main__":
     route_len = pt_gen.return_route_length()
     print(f"Route {route_no} length: {route_len}")
 
-    pt_gen.output_station(f"data/pubtrans/route_{route_no}")
+    pt_gen.output_station(os.path.join(data_p, "pubtrans", f"route_{route_no}"))
 
     # schedule is now standard instead of dependent on headway and n_veh
     schedule_file_name = f"{route_no}_schedules.csv"
     veh_type = f"veh_{veh_size}"
-    pt_gen.output_schedule(f"data/pubtrans/route_{route_no}",
+    pt_gen.output_schedule(os.path.join(data_p, "pubtrans", f"route_{route_no}"),
                            schedules_file=schedule_file_name, veh_type=veh_type)
     gtfs_name = f"route_{route_no}"
     demand_name = f"route_{route_no}_demand"
@@ -846,7 +847,7 @@ if __name__ == "__main__":
     pt_gen.plot_route_with_demand(
         terminus_stop,
         time_range=(start_time, end_time),
-        html_name=f"data/pubtrans/route_{route_no}/route_{route_no}_demand_sample.html"
+        html_name=os.path.join(data_p, "pubtrans", f"route_{route_no}", f"route_{route_no}_demand_sample.html")
     )
 
     terminus_id = pt_gen.return_terminus_id()

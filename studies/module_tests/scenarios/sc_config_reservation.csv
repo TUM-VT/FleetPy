@@ -1,0 +1,2 @@
+scenario_name,rq_file,op_reservation_module,op_short_term_horizon,sim_env,op_module,user_max_decision_time,op_rh_reservation_max_routes
+mt_res_roll_hor,example_100_res_50.csv,RollingHorizon,180,ImmediateDecisionsSimulation,PoolingIRSAssignmentBatchOptimization,0,3

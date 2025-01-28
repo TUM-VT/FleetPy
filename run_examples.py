@@ -283,7 +283,7 @@ if __name__ == "__main__":
         sc = os.path.join(scs_path, "example_depot_charge.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
         
-        # h) Pooling with multiprocessing
+        # k) Pooling with multiprocessing
         log_level = "info"
         cc = os.path.join(scs_path, "constant_config_depot_charge.csv")
         # no heuristic scenario single core
@@ -305,13 +305,13 @@ if __name__ == "__main__":
         print("Computation with multiprocessing took {}s".format(time.perf_counter() - t0))
         print(" -> multiprocessing only usefull for large vehicle fleets")
         
-        # j) Pooling - multiple operators and broker
+        # l) Pooling - multiple operators and broker
         log_level = "info"
         cc = os.path.join(scs_path, "constant_config_broker.csv")
         sc = os.path.join(scs_path, "example_broker.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
         
-        # h) Ride-Parcel-Pooling example
+        # m) Ride-Parcel-Pooling example
         log_level = "info"
         cc = os.path.join(scs_path, "constant_config_rpp.csv")
         sc = os.path.join(scs_path, "example_rpp.csv")

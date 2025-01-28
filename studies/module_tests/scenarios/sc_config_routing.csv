@@ -1,0 +1,9 @@
+scenario_name,network_type
+mt_nw_basic,NetworkBasic
+#mt_nw_imm_proc,NetworkImmediatePreproc
+mt_nw_withstore,NetworkBasicWithStore
+mt_nw_partproc,NetworkPartialPreprocessed
+mt_nw_basic_cpp,NetworkBasicCpp
+mt_nw_withstore_cpp,NetworkBasicWithStoreCpp
+mt_nw_partproc_cpp,NetworkPartialPreprocessedCpp
+#mt_nw_fullproc,NetworkTTMatrix
