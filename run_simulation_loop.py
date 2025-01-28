@@ -14,9 +14,9 @@ import xml.etree.ElementTree as ET
 
 py_path = pathlib.Path(__file__)
 
-SELECTED_SCENARIOS = list(range(402,403))
+SELECTED_SCENARIOS = [300,301,306,307,312,313,318,319,324,325,330,331,336,337,342,343]
 STUDY_NAME = "fleetpy_sumo_coupling_in"
-PROCESS_COUNT = 3
+PROCESS_COUNT = 4
 SIM_NETWORK_NAME = "sumo_in"
 
 def get_current_max_key(FP_path):
@@ -92,7 +92,7 @@ class SimulationRunner:
 
     def run_fleetpy_sc(self,sc_index):
         SAV_demand_ratio = float(self.sc_config_file_dict[sc_index].get("SAV_demand_ratio"))
-        if self.sc_config_file_dict[sc_index].get("rerouting_sc") == None:
+        if self.sc_config_file_dict[sc_index].get("rerouting_sc") == None or math.isnan(self.sc_config_file_dict[sc_index].get("rerouting_sc")):
             sumocfg_path = self.py_path.parent.parent/"fleetpy_coupling"/"Simulation"/self.sim_network_name/f"{self.sim_network_name}_s_{str(self.sc_config_file_dict[sc_index]['random_seed']).zfill(2)}_{round(SAV_demand_ratio,2)}.sumocfg"
         else:
             rerouting_sc = self.sc_config_file_dict[sc_index].get("rerouting_sc")
