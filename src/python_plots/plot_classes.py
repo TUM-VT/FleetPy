@@ -27,9 +27,21 @@ BOARDER_SIZE = 1000
 
 import matplotlib.colors
 tab20 = plt.cm.get_cmap('Oranges', 20)
-cl = tab20(np.linspace(0, 1, 5))
+cl = tab20(np.linspace(0.2, 1, 5))
 STATUS_COLOR_LIST= ["lightgrey","red","blue","orange","green","dimgrey","purple","beige"]
-OCCUPANCY_COLOR_LIST = ['dodgerblue'] + list(cl) + ['dimgrey']
+OCCUPANCY_COLOR_LIST =  list(cl) + ['dodgerblue'] + ['dimgrey']
+
+# SMALL_SIZE = 8
+# MEDIUM_SIZE = 18
+# BIGGER_SIZE = 20
+
+# plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+# plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+# plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+# plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+# plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+# plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+# plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
 class PyPlot(Process):
@@ -157,13 +169,9 @@ class PyPlot(Process):
             self._key_to_plot_func[self.shared_dict["plot_3"]](2)
             
         if self.shared_dict['map_plot'] == "occupancy" and self.shared_dict['parcels']:
-            possible_status = ['0 (reposition)', '0 (route)','1','2','3','4','idle']
+            possible_status = ['0 (route)','1','2','3','4','0 (reposition)','idle']
             masks = []
             color_list = OCCUPANCY_COLOR_LIST
-            # repo
-            condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "reposition"
-            condition_2 = self.shared_dict["veh_coord_status_df"]["parcels"] == 0
-            masks.append([a and b for a, b in zip(condition_1, condition_2)])
             # route
             condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "route"
             condition_2 = self.shared_dict["veh_coord_status_df"]["parcels"] == 0
@@ -173,15 +181,17 @@ class PyPlot(Process):
                 condition_1 = self.shared_dict["veh_coord_status_df"]["status"] != "idle"
                 condition_2 = self.shared_dict["veh_coord_status_df"]["parcels"] == i
                 masks.append([a and b for a, b in zip(condition_1, condition_2)])
-            masks.append(self.shared_dict["veh_coord_status_df"]["status"] == "idle")
-        elif self.shared_dict['map_plot'] == "occupancy" and self.shared_dict['passengers']:
-            possible_status = ['0 (reposition)', '0 (route)','1','2','3','4','idle']
-            masks = []
-            color_list = OCCUPANCY_COLOR_LIST
+                
             # repo
             condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "reposition"
-            condition_2 = self.shared_dict["veh_coord_status_df"]["passengers"] == 0
+            condition_2 = self.shared_dict["veh_coord_status_df"]["parcels"] == 0
             masks.append([a and b for a, b in zip(condition_1, condition_2)])
+            
+            masks.append(self.shared_dict["veh_coord_status_df"]["status"] == "idle")
+        elif self.shared_dict['map_plot'] == "occupancy" and self.shared_dict['passengers']:
+            possible_status = ['0 (route)','1','2','3','4','0 (reposition)','idle']
+            masks = []
+            color_list = OCCUPANCY_COLOR_LIST
             # route
             condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "route"
             condition_2 = self.shared_dict["veh_coord_status_df"]["passengers"] == 0
@@ -191,17 +201,19 @@ class PyPlot(Process):
                 condition_1 = self.shared_dict["veh_coord_status_df"]["status"] != "idle"
                 condition_2 = self.shared_dict["veh_coord_status_df"]["passengers"] == i
                 masks.append([a and b for a, b in zip(condition_1, condition_2)])
+                
+            # repo
+            condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "reposition"
+            condition_2 = self.shared_dict["veh_coord_status_df"]["parcels"] == 0
+            masks.append([a and b for a, b in zip(condition_1, condition_2)])
+            
             masks.append(self.shared_dict["veh_coord_status_df"]["status"] == "idle")
         elif (self.shared_dict['map_plot'] == "occupancy" 
               and not self.shared_dict['parcels'] 
               and not self.shared_dict['passengers']):
-            possible_status = ['0 (reposition)', '0 (route)','1','2','3','4','idle']
+            possible_status = ['0 (route)','1','2','3','4','0 (reposition)','idle']
             masks = []
             color_list = OCCUPANCY_COLOR_LIST
-            # repo
-            condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "reposition"
-            condition_2 = self.shared_dict["veh_coord_status_df"]["pax"] == 0
-            masks.append([a and b for a, b in zip(condition_1, condition_2)])
             # route
             condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "route"
             condition_2 = self.shared_dict["veh_coord_status_df"]["pax"] == 0
@@ -211,6 +223,11 @@ class PyPlot(Process):
                 condition_1 = self.shared_dict["veh_coord_status_df"]["status"] != "idle"
                 condition_2 = self.shared_dict["veh_coord_status_df"]["pax"] == i
                 masks.append([a and b for a, b in zip(condition_1, condition_2)])
+            # repo
+            condition_1 = self.shared_dict["veh_coord_status_df"]["status"] == "reposition"
+            condition_2 = self.shared_dict["veh_coord_status_df"]["parcels"] == 0
+            masks.append([a and b for a, b in zip(condition_1, condition_2)])
+                
             masks.append(self.shared_dict["veh_coord_status_df"]["status"] == "idle")
         elif self.shared_dict['map_plot'] == "vehicle_status":
             possible_status = self.shared_dict["possible_status"]
@@ -263,8 +280,9 @@ class PyPlot(Process):
             axes[3].scatter(x, y, s=VEHICLE_POINT_SIZE, label=possible_status[i],color = color_list[i])
         axes[3].legend(loc="lower left")
         axes[3].axis('off')
-        rounded_simulation_time = self.shared_dict["simulation_time"]- timedelta(microseconds=self.shared_dict["simulation_time"].microsecond)
-        axes[3].set_title(str(rounded_simulation_time))
+        rounded_simulation_time = self.shared_dict["simulation_time"] - timedelta(microseconds=self.shared_dict["simulation_time"].microsecond)
+        str_simulation_time = "Time: " + rounded_simulation_time.strftime("%H:%M:%S")
+        axes[3].set_title(str_simulation_time)
         
 
     def save_single_plot(self, datetime_stamp: tp.Union[str, datetime]):
@@ -310,16 +328,25 @@ class PyPlot(Process):
     def _create_occ_stack_plot(self, axis_id):
         self.axes[axis_id ].set_title("Occupancy Stack Chart")
         self.axes[axis_id ].set_ylabel("Number Vehicles")
-        # list_list_values = [self._pax_counts[k] for k in ['0 (reposition)', '0 (route)','1','2','3','4','idle']]
-        # print(self._pax_counts)
-        list_list_values = [self._pax_counts[k] for k in list(self.shared_dict["pax_info"].keys())]
+        list_list_values = [self._pax_counts[k] for k in ['0 (route)','1','2','3','4', '0 (reposition)','idle']]
         self.axes[axis_id ].stackplot(self._times, *list_list_values,
                                             colors=OCCUPANCY_COLOR_LIST,
-                                            # labels = [ '0 (reposition)', '0 (route)','1','2','3','4','idle' ]
-                                            labels = list(self.shared_dict["pax_info"].keys())
-                                      )
+                                            labels = ['0 (route)','1','2','3','4','0 (reposition)','idle' ])
         self.axes[axis_id ].legend(loc="upper left")
         self.axes[axis_id ].set_xlabel("Simulation Time [h]")
+        self.axes[axis_id ].tick_params(axis="x", which="both", labelbottom=True)
+        self.axes[axis_id ].tick_params(axis="y", which="both", labelleft=True)
+        
+        # Get the current tick positions
+        xticks = self.axes[axis_id ].get_xticks()
+
+        # Filter out ticks outside the plot limits
+        s, e = self.axes[axis_id ].get_xlim()
+        max_xlim = s + 0.9 * (e - s)
+        filtered_xticks = [tick for tick in xticks if s <= tick <= max_xlim]
+
+        # Set the filtered ticks
+        self.axes[axis_id ].set_xticks(filtered_xticks)
         
     def _create_status_count_plot(self, axis_id):
         self.axes[axis_id ].set_title("Route Status Counts")
@@ -328,22 +355,19 @@ class PyPlot(Process):
                                     color = STATUS_COLOR_LIST)
         self.axes[axis_id ].set_ylim(0,len(self.shared_dict["veh_coord_status_df"]))
         self.axes[axis_id ].set_xticks(list(self.shared_dict["status_counts"].keys()))
-        self.axes[axis_id ].set_xticklabels(self.shared_dict["status_counts"].keys(), rotation=45)
+        xtick_labels = [str(x) if len(str(x)) < 5 else "\n" + str(x) for x in self.shared_dict["status_counts"].keys()]
+        self.axes[axis_id ].set_xticklabels(xtick_labels, rotation=0)
         
     def _create_occ_count_plot(self, axis_id):
         self.axes[axis_id ].set_title("Occupancy Counts")
-        max_pax = len(self.shared_dict["pax_info"])
-        # print(self.shared_dict["pax_info"])
-        # ks = [ '0 (reposition)', '0 (route)','1','2','3','4','idle' ]
-        # ks = [ '0 (reposition)', '0 (route)'] + [str(i) for i in range(max_pax-2)]
-        ks = list(self.shared_dict["pax_info"].keys())
-
+        ks = [ '0 (route)','1','2','3','4', '0 (reposition)','idle' ]
         self.axes[axis_id ].bar(ks, 
                                     [self.shared_dict["pax_info"][k] for k in ks],
                                     color = OCCUPANCY_COLOR_LIST)
         self.axes[axis_id ].set_ylim(0,len(self.shared_dict["veh_coord_status_df"]))
         self.axes[axis_id ].set_xticks(ks)
-        self.axes[axis_id ].set_xticklabels(ks, rotation=45)
+        xtick_labels = [str(x) if len(str(x)) < 5 else "\n" + str(x) for x in ks]
+        self.axes[axis_id ].set_xticklabels(xtick_labels, rotation=0)
         self.axes[axis_id ].set_xlabel("Occupancy")
         self.axes[axis_id ].set_ylabel("Number of Vehicles")
         
@@ -381,3 +405,13 @@ class PyPlot(Process):
                                             labels = ["accepted","rejected"])
         self.axes[axis_id].legend(loc="upper left")
         self.axes[axis_id].set_xlabel("Simulation Time [h]")
+        # Get the current tick positions
+        xticks = self.axes[axis_id ].get_xticks()
+
+        # Filter out ticks outside the plot limits
+        s, e = self.axes[axis_id ].get_xlim()
+        max_xlim = s + 0.9 * (e - s)
+        filtered_xticks = [tick for tick in xticks if s <= tick <= max_xlim]
+
+        # Set the filtered ticks
+        self.axes[axis_id ].set_xticks(filtered_xticks)

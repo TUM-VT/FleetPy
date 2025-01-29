@@ -58,7 +58,7 @@ class RequestBase(metaclass=ABCMeta):
         self.latest_decision_time = rq_row[G_RQ_LDT]
         self.earliest_start_time = self.rq_time
         if rq_row.get(G_RQ_EPT):
-            self.earliest_start_time = rq_row.get(G_RQ_EPT)
+            self.earliest_start_time = rq_row[G_RQ_EPT] - rq_row[G_RQ_EPT] % simulation_time_step
         elif scenario_parameters.get(G_AR_MIN_WT):  # TODO RPP : auslagern in ParcelBase + definieren neuer global variable (parcel_min_wait_time)
             self.earliest_start_time = self.rq_time + scenario_parameters.get(G_AR_MIN_WT)
         self.latest_start_time = None

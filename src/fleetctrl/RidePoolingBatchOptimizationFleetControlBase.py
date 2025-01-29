@@ -47,7 +47,7 @@ INPUT_PARAMETERS_RidePoolingBatchOptimizationFleetControlBase = {
         triggered in the _time_trigger_request_batch() method""",
     "inherit" : "FleetControlBase",
     "input_parameters_mandatory": [G_SLAVE_CPU, G_RA_REOPT_TS],
-    "input_parameters_optional": [
+    "input_parameters_optional": [G_OP_LOCK_VID, G_OP_LOCK_VID_TIME,
         ],
     "mandatory_modules": [G_RA_RP_BATCH_OPT],
     "optional_modules": []
@@ -116,6 +116,9 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         # init dynamic output -> children fleet controls should check correct usage
         self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_RQU)
         self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_RQB)
+        
+        self._lock_to_vid = operator_attributes.get(G_OP_LOCK_VID, False)
+        self._lock_to_vid_time = operator_attributes.get(G_OP_LOCK_VID_TIME, None)
 
     def add_init(self, operator_attributes, scenario_parameters):
         super().add_init(operator_attributes, scenario_parameters)
@@ -206,6 +209,9 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
             self.RPBO_Module.add_new_request(rid_struct, prq, consider_for_global_optimisation=False)
         else:
             self.RPBO_Module.add_new_request(rid_struct, prq)
+            
+        if self.repo and not prq.get_reservation_flag():
+            self.repo.register_user_request(prq, sim_time)
 
         # record cpu time
         dt = round(time.perf_counter() - t0, 5)
@@ -239,6 +245,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
             except KeyError:
                 self.vid_with_reserved_rids[vid] = [rid]
         self.RPBO_Module.set_request_assigned(rid)
+        if self._lock_to_vid:
+            self._lock_vid_rid_pickup(simulation_time, self.rid_to_assigned_vid[rid], rid)
 
     def user_cancels_request(self, rid : Any, simulation_time : int):
         """This method is used to confirm a customer cancellation. This can trigger some database processes.
@@ -394,6 +402,11 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
             self.RPBO_Module.set_assignment(veh_obj.vid, veh_plan_without_rel, is_external_vehicle_plan=True)
         else:
             self.RPBO_Module.set_assignment(veh_obj.vid, vehicle_plan)
+        if self._lock_to_vid_time is not None:
+            for rid, pax_info in vehicle_plan.pax_info.items():
+                if pax_info[0] > sim_time and pax_info[0] - sim_time < self._lock_to_vid_time:
+                    LOG.debug(f"lock rid {rid} to vid {veh_obj.vid} because of time ({pax_info[0]} - {sim_time})")
+                    self._lock_vid_rid_pickup(sim_time, veh_obj.vid, rid)
 
     def _set_new_assignments(self):
         """ this function sets the new assignments computed in the alonso-mora-module
@@ -478,6 +491,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         if new_lpt <= prq.t_pu_latest:
             if new_ept is None or new_ept >= prq.t_pu_earliest:
                 exceed_tw = False
+        LOG.debug(f"new time constraints: {new_lpt} {new_ept} | old time constraints: {prq.t_pu_latest} {prq.t_pu_earliest} | exceed tw: {exceed_tw}")
         prq.set_new_pickup_time_constraint(new_lpt, new_earliest_pu_time=new_ept)
         ass_vid = self.rid_to_assigned_vid.get(rid)
         if ass_vid is not None:
@@ -506,7 +520,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         if assigned_vehicle_plan is not None:
             pu_time, do_time = assigned_vehicle_plan.pax_info.get(prq.get_rid_struct())
             offer = TravellerOffer(prq.get_rid_struct(), self.op_id, pu_time - prq.rq_time, do_time - pu_time,
-                                   self._compute_fare(simulation_time, prq, assigned_vehicle_plan))
+                                   self._compute_fare(simulation_time, prq, assigned_vehicle_plan), 
+                                   additional_parameters={"vid": assigned_vehicle_plan.vid})
             prq.set_service_offered(offer)  # has to be called
         else:
             offer = self._create_rejection(prq, simulation_time)

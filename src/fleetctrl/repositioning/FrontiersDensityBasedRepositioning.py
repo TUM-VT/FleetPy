@@ -8,6 +8,7 @@ from gurobipy import GRB
 from collections import defaultdict
 from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 from src.fleetctrl.planning.VehiclePlan import RoutingTargetPlanStop
+from src.fleetctrl.forecast.AggForecastZoning import AggForecastZoneSystem
 from timeit import default_timer
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
@@ -57,6 +58,10 @@ class DensityRepositioning(RepositioningBase):
         assert self.method in possible_methods, "unknown {} method {} given for repositioning. " \
                                                 "Possible options are {}".format(G_OP_REPO_FRONTIERS_M, self.method,
                                                                                  possible_methods)
+                                                
+    def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> AggForecastZoneSystem:
+        """ this method loads the forecast zone system needed for the corresponding repositioning strategy"""
+        return AggForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
 
     def determine_and_create_repositioning_plans(self, sim_time, lock=None):
         """This method determines and creates new repositioning plans. The repositioning plans are directly assigned
@@ -67,7 +72,7 @@ class DensityRepositioning(RepositioningBase):
         :param lock: indicates if vehplans should be locked
         :return: list[vid] of vehicles with changed plans
         """
-
+        self.zone_system.time_trigger(sim_time)
         self.sim_time = sim_time
         if lock is None:
             lock = self.lock_repo_assignments

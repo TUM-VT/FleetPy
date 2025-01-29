@@ -13,10 +13,10 @@ time_step,60
 route_output_flag,True
 replay_flag,True
 nr_mod_operators,1
-zone_system_name,example_zones
-zone_correlation_file,zone_to_zone_correlations_cbw_500_V2.npz
-fc_type,perfect_trips
-temporal_resolution,900
+op_zone_system,example_zones
+op_zone_correlation_file,zone_to_zone_correlations_cbw_500_V2.npz
+op_fc_type,perfect_trips
+op_temporal_resolution,900
 ##2,FleetControl
 op_module,
 op_fleet_composition,

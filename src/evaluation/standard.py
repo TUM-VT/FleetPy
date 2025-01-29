@@ -14,42 +14,6 @@ EMISSION_CPG = 145 * 100 / 1000**2
 ENERGY_EMISSIONS = 112 # g/kWh from https://www.swm.de/dam/swm/dokumente/geschaeftskunden/broschuere-strom-erdgas-gk.pdf
 PV_G_CO2_KM = 130 # g/km from https://www.ris-muenchen.de/RII/RII/DOK/ANTRAG/2337762.pdf with 60:38 benzin vs diesel
 
-def get_directory_dict(scenario_parameters):
-    """
-    This function provides the correct paths to certain data according to the specified data directory structure.
-    :param scenario_parameters: simulation input (pandas series)
-    :return: dictionary with paths to the respective data directories
-    """
-    study_name = scenario_parameters[G_STUDY_NAME]
-    scenario_name = scenario_parameters[G_SCENARIO_NAME]
-    network_name = scenario_parameters[G_NETWORK_NAME]
-    demand_name = scenario_parameters[G_DEMAND_NAME]
-    zone_name = scenario_parameters.get(G_ZONE_SYSTEM_NAME, None)
-    fc_type = scenario_parameters.get(G_FC_TYPE, None)
-    fc_t_res = scenario_parameters.get(G_FC_TR, None)
-    gtfs_name = scenario_parameters.get(G_GTFS_NAME, None)
-    infra_name = scenario_parameters.get(G_INFRA_NAME, None)
-    parcel_demand_name = scenario_parameters.get(G_PA_DEMAND_NAME, None)
-    #
-    dirs = {}
-    dirs[G_DIR_MAIN] = MAIN_DIR # here is the difference compared to the function in FLeetsimulationBase.py
-    dirs[G_DIR_DATA] = os.path.join(dirs[G_DIR_MAIN], "data")
-    dirs[G_DIR_OUTPUT] = os.path.join(dirs[G_DIR_MAIN], "studies", study_name, "results", scenario_name)
-    dirs[G_DIR_NETWORK] = os.path.join(dirs[G_DIR_DATA], "networks", network_name)
-    dirs[G_DIR_VEH] = os.path.join(dirs[G_DIR_DATA], "vehicles")
-    dirs[G_DIR_FCTRL] = os.path.join(dirs[G_DIR_DATA], "fleetctrl")
-    dirs[G_DIR_DEMAND] = os.path.join(dirs[G_DIR_DATA], "demand", demand_name, "matched", network_name)
-    if zone_name is not None:
-        dirs[G_DIR_ZONES] = os.path.join(dirs[G_DIR_DATA], "zones", zone_name, network_name)
-        if fc_type is not None and fc_t_res is not None:
-            dirs[G_DIR_FC] = os.path.join(dirs[G_DIR_DATA], "demand", demand_name, "aggregated", zone_name, str(fc_t_res))
-    if gtfs_name is not None:
-        dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pubtrans", gtfs_name)
-    if infra_name is not None:
-        dirs[G_DIR_INFRA] = os.path.join(dirs[G_DIR_DATA], "infra", infra_name, network_name)
-    if parcel_demand_name is not None:
-        dirs[G_DIR_PARCEL_DEMAND] = os.path.join(dirs[G_DIR_DATA], "demand", parcel_demand_name, "matched", network_name)
-    return dirs
 
 def read_op_output_file(output_dir, op_id, evaluation_start_time = None, evaluation_end_time = None) -> pd.DataFrame:
     """ this method reads the ouputfile for the operator and returns its dataframe
@@ -209,7 +173,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         raise IOError(f"Could not find result directory {output_dir}!")
     
     scenario_parameters, list_operator_attributes, _ = load_scenario_inputs(output_dir)
-    dir_names = get_directory_dict(scenario_parameters)
+    dir_names = get_directory_dict(scenario_parameters, list_operator_attributes, abs_fleetpy_dir=MAIN_DIR)
     if dir_names_in:
         dir_names = dir_names_in
 

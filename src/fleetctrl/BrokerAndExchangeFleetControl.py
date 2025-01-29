@@ -109,6 +109,9 @@ class BrokerDecisionCtrl(PoolingIRSAssignmentBatchOptimization):
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
         if t_pu_earliest - sim_time > self.opt_horizon:
             prq.set_reservation_flag(True)
+            
+        if self.repo and not prq.get_reservation_flag():
+            self.repo.register_user_request(prq, sim_time)
 
         list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
         if len(list_tuples) > 0:
