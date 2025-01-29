@@ -196,8 +196,6 @@ def run_module_test_simulations(N_PARALLEL_SIM=1):
     cc = os.path.join(scs_path, "constant_config.csv")
     log_level = "info"
     
-    # TODO add parameter tests (e.g. waiting / detour / objective function)
-    
     # Test Simulation Environment Modules
     print("Test Simulation Environment Modules ...")
     sc = os.path.join(scs_path, "sc_config_sim_envs.csv")
@@ -215,6 +213,12 @@ def run_module_test_simulations(N_PARALLEL_SIM=1):
     sc = os.path.join(scs_path, "sc_config_routing.csv")
     run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Routing Modules completed!")
+    
+    # Test Fleetcontrol Parameters
+    print("Test Fleetcontrol Parameters ...")
+    sc = os.path.join(scs_path, "sc_config_fc_params.csv")
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    print(" => Test Fleetcontrol Parameters completed!")
     
     # Test Fleetcontrol Modules
     print("Test RPP Fleetcontrol Modules ...")
