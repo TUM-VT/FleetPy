@@ -42,7 +42,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     # --------------------------------------
     if func_key == "total_distance":
         assignment_reward_per_rq = MAX_DISTANCE
-        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        assignment_reward_per_rq = 10 ** np.ceil(np.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
             """This function evaluates the driven distance according to a vehicle plan.
@@ -67,7 +67,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     elif func_key == "total_system_time":
         ignore_repo_stop_wt = vr_control_func_dict.get("irswt", False)
         assignment_reward_per_rq = MAX_DELAY * 10
-        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        assignment_reward_per_rq = 10 ** np.ceil(np.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         if not ignore_repo_stop_wt:
             def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
@@ -119,7 +119,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
 
     elif func_key == "user_times":
         assignment_reward_per_rq = MAX_DELAY
-        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        assignment_reward_per_rq = 10 ** np.ceil(np.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
@@ -144,7 +144,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
         
     elif func_key == "total_travel_times":
         assignment_reward_per_rq = MAX_DELAY * 10
-        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        assignment_reward_per_rq = 10 ** np.ceil(np.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
@@ -170,7 +170,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     elif func_key == "system_and_user_time":
         user_weight = vr_control_func_dict["uw"]
         assignment_reward_per_rq = MAX_DELAY * 10
-        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        assignment_reward_per_rq = 10 ** np.ceil(np.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
@@ -203,7 +203,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     elif func_key == "distance_and_user_times":
         traveler_vot = vr_control_func_dict["vot"]
         assignment_reward_per_rq = MAX_DISTANCE * MAX_BASE_DISTANCE_COST + MAX_DELAY * traveler_vot
-        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        assignment_reward_per_rq = 10 ** np.ceil(np.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
@@ -241,7 +241,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
         assignment_reward_per_rq = vr_control_func_dict.get("arw", None)
         if assignment_reward_per_rq is None:
             assignment_reward_per_rq = MAX_DISTANCE * distance_cost + MAX_DELAY * traveler_vot
-            assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+            assignment_reward_per_rq = 10 ** np.ceil(np.log10(assignment_reward_per_rq))
         ignore_reservation_stop = vr_control_func_dict.get("irs", True) # ignore travel distance to reservation stop (last in plan; usually far in the future)
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         LOG.info(f" -> ignore_reservation_stop: {ignore_reservation_stop}")
@@ -292,7 +292,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
         distance_cost = vr_control_func_dict["dc"]
         reservation_rq_weight = vr_control_func_dict.get("rrw", 10) # reward factor for assigning not assigned reservation requests
         assignment_reward_per_rq = MAX_DISTANCE * distance_cost + MAX_DELAY * traveler_vot
-        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        assignment_reward_per_rq = 10 ** np.ceil(np.log10(assignment_reward_per_rq))
         ignore_reservation_stop = vr_control_func_dict.get("irs", True) # ignore travel distance to reservation stop (last in plan; usually far in the future)
         ignore_user_cost_horizon = vr_control_func_dict.get("iuch", None) # ignore user cost horizon for reservation requests
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
@@ -393,7 +393,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     elif func_key == "distance_and_user_times_with_walk":
         traveler_vot = vr_control_func_dict["vot"]
         assignment_reward_per_rq = MAX_DISTANCE * MAX_BASE_DISTANCE_COST + MAX_DELAY * traveler_vot
-        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        assignment_reward_per_rq = 10 ** np.ceil(np.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
@@ -430,7 +430,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
         traveler_vot = vr_control_func_dict["vot"]
         traveler_vot = vr_control_func_dict["vot"]
         assignment_reward_per_rq = MAX_DISTANCE * MAX_BASE_DISTANCE_COST + MAX_DELAY * traveler_vot
-        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        assignment_reward_per_rq = 10 ** np.ceil(np.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
@@ -476,7 +476,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     elif func_key == "sys_time_and_detour_time":
         detour_weight = vr_control_func_dict["dtw"]
         assignment_reward_per_rq = MAX_DELAY * 10
-        assignment_reward_per_rq = 10 ** np.math.ceil(np.math.log10(assignment_reward_per_rq))
+        assignment_reward_per_rq = 10 ** np.ceil(np.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
 
         def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:

@@ -749,7 +749,7 @@ class ReplayPyPlot(Replay):
         pax_info['0 (reposition)'] = intra_pax_list[(intra_pax_list[state] == 0) & (intra_pax_list['status'] == 'reposition')].shape[0]
         pax_info['0 (route)'] = intra_pax_list[(intra_pax_list[state] == 0) & (intra_pax_list['status'] == 'route')].shape[0]
         # TODO: load vehicle capacity
-        n_pax_max = 20
+        n_pax_max = 4
 
         # n_pax_max = intra_pax_list[state].dropna().astype(int).max()
         if n_pax_max > 0:

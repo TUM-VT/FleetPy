@@ -319,8 +319,6 @@ class FleetSimulationBase:
         else:
             self.demand = SlaveDemand(self.scenario_parameters, self.user_stat_f)
 
-        if self.zones is not None:
-            self.zones.register_demand_ref(self.demand)
 
     def _load_charging_modules(self):
         """ Loads necessary modules for charging """
@@ -394,7 +392,7 @@ class FleetSimulationBase:
                 list_vehicles = []
                 OpClass = SemiOnDemandBatchAssignmentFleetcontrol(op_id, operator_attributes, list_vehicles,
                                                                   self.routing_engine, self.zones,
-                                                                  self.scenario_parameters, op_dir_names
+                                                                  self.scenario_parameters, op_dir_names,
                                                                   self.charging_operator_dict["op"].get(op_id, None),
                                                                   list(self.charging_operator_dict["pub"].values()))
                 init_vids = OpClass.return_vehicles_to_initialize()

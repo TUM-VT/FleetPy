@@ -241,7 +241,7 @@ class BrokerExChangeCtrl(RidePoolingBatchOptimizationFleetControlBase):
         self.fc_type = None
         n_op = scenario_parameters[G_NR_OPERATORS]
         self.prob_rq_share = scenario_parameters.get(G_MULTIOP_PREF_OP_PROB, [1/n_op for o in range(n_op)])[self.op_id]
-        self.fc_type = scenario_parameters.get(G_FC_TYPE)
+        self.fc_type = scenario_parameters.get(G_RA_FC_TYPE)
         # parameters to evaluate willingness TODO if method useful add to scenario-parameters
         self.evaluate_willing_ness_method = operator_attributes.get(G_MULTIOP_EVAL_METHOD, "")  # "forecast" or "reactive"
 

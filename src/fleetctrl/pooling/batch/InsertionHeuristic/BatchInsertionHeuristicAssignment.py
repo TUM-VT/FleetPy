@@ -72,7 +72,7 @@ class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
                                                                     self.fleetcontrol.const_bt, self.fleetcontrol.add_bt,
                                                                     insert_heuristic_dict=self.fleetcontrol.rv_heuristics)
             if len(r_list) != 0:
-                best_vid, best_plan, _ = min(r_list, key = lambda x:x[2])
+                best_vid, best_plan, best_cost = min(r_list, key = lambda x:x[2])
                 self.fleetcontrol.assign_vehicle_plan(self.fleetcontrol.sim_vehicles[best_vid], best_plan, sim_time, add_arg="IH")
                 # update utility
                 veh_obj = self.fleetcontrol.sim_vehicles[best_vid]
