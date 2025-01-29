@@ -3,3 +3,6 @@ mt_repo_AM,example_zones,zone_to_zone_correlations_cbw_500_V2.npz,perfect_trips,
 mt_repo_Pav,example_zones,zone_to_zone_correlations_cbw_500_V2.npz,perfect_trips,900,imbalanced.csv,300,True,agg_example_200.csv,PavoneFC,0;900,300
 mt_repo_Pav2,example_zones,zone_to_zone_correlations_cbw_500_V2.npz,perfect_trips,900,imbalanced.csv,300,True,agg_example_200.csv,PavoneFCV2,0;900,300
 #mt_repo_frontiers,example_zones,zone_to_zone_correlations_cbw_500_V2.npz,perfect_trips,900,imbalanced.csv,300,True,agg_example_200.csv,DensityFrontiers,0;900,300
+mt_repo_LH,example_zones,zone_to_zone_correlations_cbw_500_V2.npz,perfect_dist,900,imbalanced.csv,300,True,agg_example_200.csv,LinearHailingRebalancing,0;900,300
+mt_repo_Sample,example_zones,zone_to_zone_correlations_cbw_500_V2.npz,perfect_dist,900,imbalanced.csv,300,True,agg_example_200.csv,FullSamplingRidePoolingRebalancingMultiStage,0;900,300
+mt_repo_SampleRes,example_zones,zone_to_zone_correlations_cbw_500_V2.npz,perfect_dist,900,imbalanced.csv,300,True,agg_example_200.csv,FullSamplingRidePoolingRebalancingMultiStageReservation,0;900,300

@@ -116,6 +116,10 @@ def get_src_repositioning_strategies():
     repo_dict["PavoneFCV2"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingV2RepositioningFC")
     repo_dict["DensityFrontiers"] = ("src.fleetctrl.repositioning.FrontiersDensityBasedRepositioning", "DensityRepositioning")
     repo_dict["AlonsoMoraRepositioning"] = ("src.fleetctrl.repositioning.AlonsoMoraRepositioning", "AlonsoMoraRepositioning")
+    repo_dict["LinearHailingRebalancing"] = ("src.fleetctrl.repositioning.LinearHailingRebalancing", "LinearHailingRebalancing")
+    repo_dict["FullSamplingRidePoolingRebalancingMultiStage"] = ("src.fleetctrl.repositioning.FullSamplingRidePoolingRebalancingMultiStage", "FullSamplingRidePoolingRebalancingMultiStage")
+    repo_dict["FullSamplingRidePoolingRebalancingMultiStageReservation"] = ("src.fleetctrl.repositioning.FullSamplingRidePoolingRebalancingMultiStageReservation", "FullSamplingRidePoolingRebalancingMultiStageReservation")
+    repo_dict["PavoneContinuous"] = ("src.fleetctrl.repositioning.PavoneContinuous", "PavoneContinuous")
     # add development content
     if dev_content is not None:
         dev_repo_dict = dev_content.add_repositioning_modules()
@@ -159,6 +163,8 @@ def get_src_reservation_strategies():
     # FleetPy reservation control strategy options
     res_dict = {}  # str -> (module path, class name)
     res_dict["RollingHorizon"] = ("src.fleetctrl.reservation.RollingHorizon", "RollingHorizonReservation")
+    res_dict["RollingHorizonNoGuarantee"] = ("src.fleetctrl.reservation.RollingHorizonNoGuarantee", "RollingHorizonNoGuarantee")
+    res_dict["ContinuousBatchRevelationReservation"] = ("src.fleetctrl.reservation.ContinuousBatchRevelationReservation", "ContinuousBatchRevelationReservation")
     # add development content
     if dev_content is not None:
         dev_res_dict = dev_content.add_reservation_strategy_modules()
@@ -170,6 +176,7 @@ def get_src_ride_pooling_batch_optimizers():
     rbo_dict = {}  # str -> (module path, class name)
     rbo_dict["AlonsoMora"] = ("src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignment", "AlonsoMoraAssignment")
     rbo_dict["InsertionHeuristic"] = ("src.fleetctrl.pooling.batch.InsertionHeuristic.BatchInsertionHeuristicAssignment", "BatchInsertionHeuristicAssignment")
+    rbo_dict["SimonettoAssignment"] = ("src.fleetctrl.pooling.batch.Simonetto.SimonettoAssignment", "SimonettoAssignment")
     rbo_dict["ZonalInsertionHeuristic"] = (
     "src.fleetctrl.pooling.batch.InsertionHeuristic.BatchZonalInsertionHeuristicAssignment",
     "BatchZonalInsertionHeuristicAssignment")
