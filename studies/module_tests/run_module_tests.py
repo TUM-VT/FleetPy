@@ -251,7 +251,7 @@ def run_module_test_simulations(N_PARALLEL_SIM=1):
     sc = os.path.join(scs_path, "sc_config_dyn_fleet_size.csv")
     run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Dynamic Fleet Sizing Modules completed!")
-    
+
     # Test Reservation Modules
     print("Test Reservation Modules ...")
     sc = os.path.join(scs_path, "sc_config_reservation.csv")
