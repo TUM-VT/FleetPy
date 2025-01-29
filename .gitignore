@@ -32,9 +32,8 @@ data/zones/*
 studies/*
 !studies/example_study
 studies/example_study/results/*
-!studies/module_tests
+!studies/module_tests/*
 studies/module_tests/results/*
-studies/module_tests/benchmark_copmarison.csv
 !studies/module_tests/results/benchmark.csv
 
 # system dependent C++ Router files

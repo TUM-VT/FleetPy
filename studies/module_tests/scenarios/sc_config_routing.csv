@@ -1,5 +1,5 @@
 scenario_name,network_type
-mt_nw_basic,NetworkBasic
+#mt_nw_basic,NetworkBasic
 #mt_nw_imm_proc,NetworkImmediatePreproc
 mt_nw_withstore,NetworkBasicWithStore
 mt_nw_partproc,NetworkPartialPreprocessed
