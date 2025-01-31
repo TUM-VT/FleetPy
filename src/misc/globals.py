@@ -365,6 +365,7 @@ G_DIR_FCTRL = "fleetctrl"
 G_DIR_BP = "boardingpoints"
 G_DIR_INFRA = "infra"
 G_DIR_PARCEL_DEMAND = "parceldemand"
+G_DIR_TRAIN = "train"
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # General
@@ -690,6 +691,14 @@ G_FCTRL_CT_DP = "dyn_pricing_strategy"
 G_FCTRL_CT_DFS = "dyn_fleetsizing_strategy"
 G_FCTRL_CT_RES = "reservation_time_trigger"
 
+
+# ML Training Data
+G_TRAIN_RR_FILE = "rr_graph"
+G_TRAIN_RV_FILE = "rv_graph"
+G_TRAIN_ASSIGNMENTS_FILE = "assignments"
+G_TRAIN_INIT_ASSIGNMENTS_FILE = "init_assignments"
+G_TRAIN_NODE_FEATURES_FILE = "node_features"
+G_TRAIN_FEATURE_TRAVEL_TIME = "travel_times"
 #--------------------------------------------------------------------------------------------------------------#
 # Evaluation specific params
 # ####################
