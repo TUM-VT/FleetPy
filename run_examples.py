@@ -193,7 +193,7 @@ if __name__ == "__main__":
     mp.freeze_support()
 
     if len(sys.argv) > 1:
-        run_scenarios(*sys.argv)
+        run_scenarios(*sys.argv[1:])
     else:
         import time
         # touch log file
