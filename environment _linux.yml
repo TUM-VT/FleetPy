@@ -1,4 +1,4 @@
-name: fleetpy
+name: fleetpy_linux
 channels:
   - gurobi
   - conda-forge
