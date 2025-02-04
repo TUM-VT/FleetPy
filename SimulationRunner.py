@@ -36,7 +36,7 @@ class SimulationRunner:
         self.selected_scenarios = selected_scenarios
         self.study_name = study_name
         self.process_count = process_count
-        self.py_path = pathlib.Path(__file__)
+        self.py_path = pathlib.Path(__file__).resolve()
         sc_config = pd.read_csv(self.py_path.parent/"studies"/self.study_name/"simulation_parameters.csv")
         sc_config = sc_config.set_index('simulation_index')
         self.sc_config = sc_config
@@ -81,7 +81,7 @@ class SimulationRunner:
             sc_df.to_csv(py_path.parent/"studies"/STUDY_NAME/"scenarios"/f"{scenario_name}.csv", index=False)
 
     def create_rerouting_xml_files(self):
-        rerouting_cfg_path = self.py_path.parent.parent / "fleetpy_coupling"/"Simulation"/self.sim_network_name/"Rerouting" /"rerouting_scenarios.csv"
+        rerouting_cfg_path = self.py_path.parent.parent / "fleetpy_coupling" / "Simulation" / self.sim_network_name / "Rerouting" / "rerouting_scenarios.csv"
         with open(rerouting_cfg_path, 'r') as file:
             reader = csv.DictReader(file)
             for row in reader:
