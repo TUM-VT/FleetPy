@@ -21,8 +21,6 @@ from src.misc.init_modules import load_simulation_environment
 import src.misc.config as config
 from src.misc.globals import *
 import src.evaluation.standard as eval
-import traci._simulation
-import traci.constants as tc
 from run_examples import run_scenarios
 
 
@@ -228,7 +226,6 @@ class SUMOFleetPyServer():
         self._finalize_setup()
     
     def run_fp_simulation(self):
-        breakpoint()
         run_scenarios(constant_config_file=self.fp_constant_config_path, scenario_file=self.fp_scenario_config_path, n_parallel_sim=1, n_cpu_per_sim=1, evaluate=1, log_level="info", continue_next_after_error=True)
 
     def run_coupled_simulation(self):
@@ -712,6 +709,8 @@ if __name__ == "__main__":
         SUMOFleetPyCoupling.run_fp_simulation()
     else:
         if SUMOFleetPyCoupling.sumo_sim == True:
+            import traci._simulation
+            import traci.constants as tc
             if sumoBinary == "sumo-gui":
                 import traci
             else: 
