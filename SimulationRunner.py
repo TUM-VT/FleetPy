@@ -9,14 +9,17 @@ import shutil
 import os
 import math
 import csv
+import argparse
 import xml.etree.ElementTree as ET
 
 
 py_path = pathlib.Path(__file__)
 
-SELECTED_SCENARIOS = [360,361,366,367,372,373,378,379,384,385]
-SELECTED_SCENARIOS = [326,327,332,333,338,339,344,345,361,362,363,366,367,368,373,374,375,379,380,385,386]
-STUDY_NAME = "fleetpy_sumo_coupling_in"
+#SELECTED_SCENARIOS = [360,361,366,367,372,373,378,379,384,385]
+SELECTED_SCENARIOS = [390,391,392,393,396,397,398,399,402,403,404,405,408,409,410,411]
+SELECTED_SCENARIOS = [438,439,440,444,445,446,450,451,452,456,457,458,462,463,464]
+
+
 PROCESS_COUNT = 3
 SIM_NETWORK_NAME = "sumo_in"
 
@@ -167,7 +170,20 @@ class SimulationRunner:
                 elem.tail = i
 
 if __name__ == "__main__":
-    sim_runner = SimulationRunner(selected_scenarios=SELECTED_SCENARIOS,study_name=STUDY_NAME,process_count=PROCESS_COUNT,sim_network_name=SIM_NETWORK_NAME)
+    parser = argparse.ArgumentParser(description='Run FleetPy-SUMO Coupling.')
+    parser.add_argument("--scenarios", type=lambda s: [int(item) for item in s.split(',')], required=True, help="List of scenario IDs",default=None)    
+    parser.add_argument('--study_name', type=str, default=None, help='Study name')
+    parser.add_argument('--processes', type=int, default=None, help='Number of Processes')
+    parser.add_argument('--processes', type=int, default=None, help='Simulation Network Name')
+    args = parser.parse_args()
+    study_name = STUDY_NAME if args.study_name is None else args.study_name
+    selected_scenarios = SELECTED_SCENARIOS if args.scenarios is None else args.scenarios
+    process_count = PROCESS_COUNT if args.processes is None else args.processes
+    sim_network_name = SIM_NETWORK_NAME if args.sim_network_name is None else args.sim_network_name
+    print(args.scenarios)
+    print(type(args.scenarios))
+    breakpoint()
+    sim_runner = SimulationRunner(selected_scenarios=selected_scenarios,study_name=study_name,process_count=process_count,sim_network_name=SIM_NETWORK_NAME)
     sim_runner.create_sc_config_files()
     sim_runner.create_rerouting_xml_files()
     sim_runner.run_in_parallel()
