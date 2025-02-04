@@ -160,6 +160,8 @@ class NetworkBasicReliability(NetworkBasic):
         if self._tt_infos_from_folder:
             tt_file = os.path.join(f, "edges_td_att.csv")
             tmp_df = pd.read_csv(tt_file)
+            print(tmp_df)
+            breakpoint()
             for from_node, to_node, edge_tt, edge_tt_std in zip(tmp_df[G_EDGE_FROM], tmp_df[G_EDGE_TO], tmp_df['edge_tt'], tmp_df[G_EDGE_TT_STD]):
                 self._set_edge_tt(from_node, to_node, edge_tt,edge_tt_std)
 
