@@ -19,7 +19,7 @@ py_path = pathlib.Path(__file__)
 SELECTED_SCENARIOS = [390,391,392,393,396,397,398,399,402,403,404,405,408,409,410,411]
 SELECTED_SCENARIOS = [438,439,440,444,445,446,450,451,452,456,457,458,462,463,464]
 
-
+STUDY_NAME = "fleetpy_sumo_coupling_in"
 PROCESS_COUNT = 3
 SIM_NETWORK_NAME = "sumo_in"
 
@@ -75,9 +75,11 @@ class SimulationRunner:
             sc_df['op_routing_mode'] = [row['op_routing_mode']]
             sc_df['random_seed'] = [row['random_seed']]
             sc_df["rerouting_sc"] = [row["rerouting_sc"]]
+            sc_df["sumo_sim"] = [bool(row["sumo_sim"])]
 
             self.sc_config_file_dict.update({sc_index:sc_df.squeeze()})
             sc_df.to_csv(py_path.parent/"studies"/STUDY_NAME/"scenarios"/f"{scenario_name}.csv", index=False)
+
     def create_rerouting_xml_files(self):
         rerouting_cfg_path = self.py_path.parent.parent / "fleetpy_coupling"/"Simulation"/self.sim_network_name/"Rerouting" /"rerouting_scenarios.csv"
         with open(rerouting_cfg_path, 'r') as file:
@@ -170,20 +172,19 @@ class SimulationRunner:
                 elem.tail = i
 
 if __name__ == "__main__":
+    # Get Arguments
     parser = argparse.ArgumentParser(description='Run FleetPy-SUMO Coupling.')
-    parser.add_argument("--scenarios", type=lambda s: [int(item) for item in s.split(',')], required=True, help="List of scenario IDs",default=None)    
+    parser.add_argument("--scenarios", "--sc", type=lambda s: [int(item) for item in s.split(',')], required=True, help="List of scenario IDs", default=None)
     parser.add_argument('--study_name', type=str, default=None, help='Study name')
     parser.add_argument('--processes', type=int, default=None, help='Number of Processes')
-    parser.add_argument('--processes', type=int, default=None, help='Simulation Network Name')
+    parser.add_argument('--sim_network_name', type=int, default=None, help='Simulation Network Name')
     args = parser.parse_args()
     study_name = STUDY_NAME if args.study_name is None else args.study_name
     selected_scenarios = SELECTED_SCENARIOS if args.scenarios is None else args.scenarios
     process_count = PROCESS_COUNT if args.processes is None else args.processes
     sim_network_name = SIM_NETWORK_NAME if args.sim_network_name is None else args.sim_network_name
-    print(args.scenarios)
-    print(type(args.scenarios))
-    breakpoint()
-    sim_runner = SimulationRunner(selected_scenarios=selected_scenarios,study_name=study_name,process_count=process_count,sim_network_name=SIM_NETWORK_NAME)
+
+    sim_runner = SimulationRunner(selected_scenarios=selected_scenarios,study_name=study_name,process_count=process_count,sim_network_name=sim_network_name)
     sim_runner.create_sc_config_files()
     sim_runner.create_rerouting_xml_files()
     sim_runner.run_in_parallel()

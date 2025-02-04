@@ -23,6 +23,7 @@ from src.misc.globals import *
 import src.evaluation.standard as eval
 import traci._simulation
 import traci.constants as tc
+from run_examples import run_scenarios
 
 
 """ 
@@ -45,7 +46,7 @@ else:
 t1_start = perf_counter()
 
 class SUMOFleetPyServer():
-    def __init__(self,constant_config, scenario_config, sumo_config, sumoBinary, log_level):
+    def __init__(self,constant_config_path, scenario_config_path, sumo_config, sumoBinary, log_level):
         """
         :param constant_config_file: this file contains all input parameters that remain constant for a study
         :type constant_config_file: str
@@ -67,8 +68,8 @@ class SUMOFleetPyServer():
         :type keep_old: bool
         """
         
-        self.fp_constant_config_path = constant_config
-        self.fp_scenario_config_path = scenario_config
+        self.fp_constant_config_path = constant_config_path
+        self.fp_scenario_config_path = scenario_config_path
         self.fp_log_level = log_level
         self.fp_n_cpu_per_sim=1
         self.fp_evaluate = 1
@@ -77,6 +78,8 @@ class SUMOFleetPyServer():
         self.sumo_binary = sumoBinary
         self.sumo_edgeData_interval = 3600
         self.g_start_time = time.time()
+        scenario_cfgs = config.ScenarioConfig(self.fp_scenario_config_path)
+        self.sumo_sim = scenario_cfgs[0].get("sumo_sim")
 
     def _finalize_setup(self):
         self.g_end_time_setup = time.time()
@@ -223,8 +226,12 @@ class SUMOFleetPyServer():
         self.g_fs_edge_to_len = fs_edge_to_len
         self.g_fs_node_to_sumo_junction =fs_node_to_sumo_junction
         self._finalize_setup()
+    
+    def run_fp_simulation(self):
+        breakpoint()
+        run_scenarios(constant_config_file=self.fp_constant_config_path, scenario_file=self.fp_scenario_config_path, n_parallel_sim=1, n_cpu_per_sim=1, evaluate=1, log_level="info", continue_next_after_error=True)
 
-    def run_simulation(self):
+    def run_coupled_simulation(self):
         vehicle_to_position_dict = {}
         resultsPath = self.fp_sim_env.dir_names[G_DIR_OUTPUT]
         sim_time_offset = self.fp_sim_env.scenario_parameters.get(G_SUMO_SIM_TIME_OFFSET, 0)
@@ -684,8 +691,8 @@ def absolute_to_relative_position(vehID):
 if __name__ == "__main__":
     
     try:
-        constant_config = sys.argv[1]
-        scenario_config = sys.argv[2]
+        constant_config_path = sys.argv[1]
+        scenario_config_path = sys.argv[2]
         sumo_config = sys.argv[3]
         if len(sys.argv) > 4:
             sumoBinary = sys.argv[4]
@@ -698,15 +705,19 @@ if __name__ == "__main__":
     except:
         print("something is wrong with the input given: ", sys.argv)
         exit()
-    if sumoBinary == "sumo-gui":
-        import traci
-    else: 
-        import libsumo as traci
-        print("No GUI Needed. Using libsumo instead of traci for better performance.")
 
-    #setup_and_run_sumo_simulation(constant_config, scenario_config, sumo_config, sumoBinary=sumoBinary, log_level=log_level)
-    SUMOFleetPyCoupling = SUMOFleetPyServer(constant_config=constant_config, scenario_config=scenario_config, sumo_config=sumo_config, sumoBinary=sumoBinary, log_level=log_level)
-    SUMOFleetPyCoupling.setup_fleetsimulation()
-    SUMOFleetPyCoupling.setup_traci()
-    SUMOFleetPyCoupling.setup_network_translation()
-    SUMOFleetPyCoupling.run_simulation()
+
+    SUMOFleetPyCoupling = SUMOFleetPyServer(constant_config_path=constant_config_path, scenario_config_path=scenario_config_path, sumo_config=sumo_config, sumoBinary=sumoBinary, log_level=log_level)
+    if SUMOFleetPyCoupling.sumo_sim == False:
+        SUMOFleetPyCoupling.run_fp_simulation()
+    else:
+        if SUMOFleetPyCoupling.sumo_sim == True:
+            if sumoBinary == "sumo-gui":
+                import traci
+            else: 
+                import libsumo as traci
+                print("No GUI Needed. Using libsumo instead of traci for better performance.")
+        SUMOFleetPyCoupling.setup_fleetsimulation()
+        SUMOFleetPyCoupling.setup_traci()
+        SUMOFleetPyCoupling.setup_network_translation()
+        SUMOFleetPyCoupling.run_coupled_simulation()
