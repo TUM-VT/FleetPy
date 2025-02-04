@@ -55,14 +55,14 @@ cdef class PyNetwork:
         tts = np.zeros((N_targets,), dtype=np.float)
         cdef np.ndarray[double, ndim=1, mode='c'] dis
         dis = np.zeros((N_targets,), dtype=np.float)
-        cdef np.ndarray[double, ndim=1, mode='c'] std
-        std = np.zeros((N_targets,), dtype=np.float)
+        cdef np.ndarray[double, ndim=1, mode='c'] var
+        var = np.zeros((N_targets,), dtype=np.float)
         cdef np.ndarray[double, ndim=1, mode='c'] cfv
         cfv = np.zeros((N_targets,), dtype=np.float)
         #calling c++: results will be stored in tts/dis; returns number of reached targets
         mode =  mode.encode('utf-8')
-        cdef int reached_targets = self.c_net.computeTravelCostsXTo1py(start_node_index, N_targets, &targets[0], &targets[0], &tts[0], &dis[0],&std[0], &cfv[0], mr, mt,mode)
-        return [(targets[i], tts[i], dis[i], std[i],cfv[i]) for i in range(reached_targets)]
+        cdef int reached_targets = self.c_net.computeTravelCostsXTo1py(start_node_index, N_targets, &targets[0], &targets[0], &tts[0], &dis[0],&var[0], &cfv[0], mr, mt,mode)
+        return [(targets[i], tts[i], dis[i], var[i],cfv[i]) for i in range(reached_targets)]
 
     def computeTravelCosts1toX(self, start_node_index, list_target_node_indices, max_time_range = None, max_targets = None):
         """
@@ -99,15 +99,15 @@ cdef class PyNetwork:
         :param start_node_index: int start_node
         :param end_node_index: int end_node
         :return: tuple (tt, dis) / (-1.0, -1.0) if no route found
-        &dis, &std, &cfv
+        &dis, &var, &cfv
         """
         mode =  mode.encode('utf-8')
         cdef double dis = 0.0
         cdef double tt = 0.0
-        cdef double std = 0.0
+        cdef double var = 0.0
         cdef double cfv = 0.0
-        self.c_net.computeTravelCosts1To1py(start_node_index, end_node_index,mode,&tt,&dis, &std, &cfv)
-        return (tt, dis,std,cfv)
+        self.c_net.computeTravelCosts1To1py(start_node_index, end_node_index,mode,&tt,&dis, &var, &cfv)
+        return (tt, dis,var,cfv)
 
     def computeRoute1To1(self, start_node_index, end_node_index,mode):
         mode =  mode.encode('utf-8')

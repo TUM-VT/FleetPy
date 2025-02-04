@@ -136,7 +136,7 @@ class SimulationVehicle:
             for leg in self.assigned_route:
                 leg_end_pos = leg.destination_pos
                 if leg_end_pos != last_pos:
-                    _, tt, _ = self.routing_engine.return_travel_costs_1to1(last_pos, leg_end_pos)
+                    tt, dis, var,cfv = self.routing_engine.return_travel_costs_1to1(last_pos, leg_end_pos)
                     last_pos = leg_end_pos
                     last_time += tt
                 elif leg.duration:
