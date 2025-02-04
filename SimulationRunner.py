@@ -176,7 +176,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run FleetPy-SUMO Coupling.')
     parser.add_argument("--scenarios", "--sc", type=lambda s: [int(item) for item in s.split(',')], required=True, help="List of scenario IDs", default=None)
     parser.add_argument('--study_name', type=str, default=None, help='Study name')
-    parser.add_argument('--processes', type=int, default=None, help='Number of Processes')
+    parser.add_argument('--processes',"--p", type=int, default=None, help='Number of Processes')
     parser.add_argument('--sim_network_name', type=int, default=None, help='Simulation Network Name')
     args = parser.parse_args()
     study_name = STUDY_NAME if args.study_name is None else args.study_name
