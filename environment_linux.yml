@@ -87,6 +87,15 @@ dependencies:
   - llvmlite=0.36.0=py37habb0c8c_0
   - lunr=0.5.8=pyhd8ed1ab_2
   - lz4-c=1.9.3=h8ffe710_0
+  - m2w64-expat=2.1.1=2
+  - m2w64-gcc-libgfortran=5.3.0=6
+  - m2w64-gcc-libs=5.3.0=7
+  - m2w64-gcc-libs-core=5.3.0=7
+  - m2w64-gettext=0.19.7=2
+  - m2w64-gmp=6.1.0=2
+  - m2w64-libiconv=1.14=6
+  - m2w64-libwinpthread-git=5.0.0.4634.697f757=2
+  - m2w64-xz=5.2.2=2
   - markdown=3.3.4=pyhd8ed1ab_0
   - markupsafe=1.1.1=py37hcc03f2d_3
   - matplotlib=3.1.1=py37_2
@@ -96,6 +105,7 @@ dependencies:
   - mkdocs-material=7.1.1=pyhd8ed1ab_0
   - mkdocs-material-extensions=1.0.1=py_0
   - mkl=2020.4=hb70f87d_311
+  - msys2-conda-epoch=20160418=1
   - munch=2.5.0=py_0
   - networkx=2.3=py_0
   - nltk=3.6.1=pyhd8ed1ab_0
@@ -129,6 +139,7 @@ dependencies:
   - python-socketio=4.5.1=pyh9f0ad1d_0
   - python_abi=3.7=1_cp37m
   - pytz=2019.3=py_0
+  - pywin32=300=py37hcc03f2d_0
   - pyyaml=5.4.1=py37hcc03f2d_0
   - pyzmq=22.1.0=py37hcce574b_0
   - qt=5.12.5=h7ef1ec2_0
@@ -151,9 +162,13 @@ dependencies:
   - traitlets=5.0.5=py_0
   - typing_extensions=3.7.4.3=py_0
   - urllib3=1.26.8=pyhd8ed1ab_1
+  - vc=14.2=hb210afc_4
+  - vs2015_runtime=14.28.29325=h5e1d092_4
   - wcwidth=0.2.5=pyh9f0ad1d_2
   - werkzeug=1.0.1=pyh9f0ad1d_0
   - wheel=0.36.2=pyhd3deb0d_0
+  - win_inet_pton=1.1.0=py37h03978a9_3
+  - wincertstore=0.2=py37h03978a9_1006
   - xerces-c=3.2.2=h6538335_1004
   - xyzservices=2022.2.0=pyhd8ed1ab_0
   - xz=5.2.5=h62dcd97_1
