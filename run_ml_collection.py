@@ -201,12 +201,12 @@ if __name__ == "__main__":
             pass
         t0 = time.time()
         
-        scs_path = os.path.join(os.path.dirname(__file__), "studies", "transmoveML", "scenarios")
+        scs_path = os.path.join(os.path.dirname(__file__), "studies", "ml_collection", "scenarios")
         
         log_level = "info"
-        cc = os.path.join(scs_path, "constant_config.csv")
-        sc = os.path.join(scs_path, "scenario_base_config.csv")
-        n_cpu_per_sim = 8
+        cc = os.path.join(scs_path, "constant_hh.csv")
+        sc = os.path.join(scs_path, "scenario_hh_base.csv")
+        n_cpu_per_sim = 1
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=n_cpu_per_sim, n_parallel_sim=1)
         list_results = read_outputs_for_comparison(cc, sc)
         
