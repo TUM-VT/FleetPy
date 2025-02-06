@@ -46,7 +46,7 @@ class SimulationVehicle:
         self.replay_flag = replay_flag
         #
         veh_data_f = os.path.join(vehicle_data_dir, f"{vehicle_type}.csv")
-        veh_data = pd.read_csv(veh_data_f, header=None, index_col=0, squeeze=True)
+        veh_data = pd.read_csv(veh_data_f, header=None, index_col=0).squeeze()
         self.veh_type = veh_data[G_VTYPE_NAME]
         self.max_pax = int(veh_data[G_VTYPE_MAX_PAX])
         self.max_parcels = int(veh_data.get(G_VTYPE_MAX_PARCELS, 0))

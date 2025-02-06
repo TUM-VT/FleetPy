@@ -122,7 +122,7 @@ class ConstantConfig(dict):
         :type file_path: str
         """
         cfg = cls()
-        constant_series = pd.read_csv(file_path, index_col=0, squeeze=True, comment="#")
+        constant_series = pd.read_csv(file_path, index_col=0, comment="#").squeeze()
         for k, v in constant_series.items():
             cfg[k] = decode_config_str(v)
         return cfg

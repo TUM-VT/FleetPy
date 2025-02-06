@@ -123,19 +123,18 @@ def decode_offer_str(offer_str):
     return offer_dict
 
 
-def create_vehicle_type_db(vehicle_data_dir):
-    list_veh_data_f = glob.glob(f"{vehicle_data_dir}/*csv")
-    veh_type_db = {}    # veh_type -> veh_type_data
-    for f in list_veh_data_f:
-        veh_type_name = os.path.basename(f)[:-4]
-        veh_type_data = pd.read_csv(f, index_col=0, squeeze=True)
-        veh_type_db[veh_type_name] = {}
-        for k, v in veh_type_data.items():
-            try:
-                veh_type_db[veh_type_name][k] = float(v)
-            except:
-                veh_type_db[veh_type_name][k] = v
-        veh_type_db[veh_type_name][G_VTYPE_NAME] = veh_type_data.name
+def create_vehicle_type_db(veh_data_dir):
+    veh_type_db = {}
+    for f in glob.glob(os.path.join(veh_data_dir, "*.csv")):
+        veh_type_data = pd.read_csv(f, index_col=0).squeeze()
+        try:
+            key = veh_type_data.get('name', None)
+            if key is None:
+                key = os.path.splitext(os.path.basename(f))[0]
+            veh_type_db[key] = veh_type_data
+        except Exception as e:
+            print(f"Warning: Could not process vehicle type file {f}: {str(e)}")
+            continue
     return veh_type_db
 
 def avg_in_vehicle_distance(op_df):
@@ -486,10 +485,17 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
                 veh_co2 = co2_per_kWh * veh_kWh
                 veh_fix_costs = np.rint(scenario_parameters.get(G_OP_SHARE_FC, 1.0) * vtype_data[G_VTYPE_FIX_COST])
                 veh_var_costs = np.rint(vtype_data[G_VTYPE_DIST_COST] * veh_km)
-                # TODO # after ISTTT: idle times
-                all_vid_dict[vid] = {"type":vtype_data[G_VTYPE_NAME], "total km":veh_km, "total kWh": veh_kWh,
-                                    "total CO2 [g]": veh_co2, "fix costs": veh_fix_costs,
-                                    "total variable costs": veh_var_costs}
+                
+                vtype_name = vtype_data.get(G_VTYPE_NAME, vtype_data.get('name', vid_vtype_row[G_V_TYPE]))
+                
+                all_vid_dict[vid] = {
+                    "type": vtype_name,
+                    "total km": veh_km,
+                    "total kWh": veh_kWh,
+                    "total CO2 [g]": veh_co2,
+                    "fix costs": veh_fix_costs,
+                    "total variable costs": veh_var_costs
+                }
             all_vid_df = pd.DataFrame.from_dict(all_vid_dict, orient="index")
             all_vid_df.to_csv(os.path.join(output_dir, f"standard_mod-{op_id}_veh_eval.csv"))
 
