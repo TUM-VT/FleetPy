@@ -12,14 +12,25 @@ from scipy.sparse import load_npz
 
 # src imports
 # -----------
-from src.fleetctrl.forecast.ForecastZoning import ForecastZoneSystem
+from src.fleetctrl.forecast.ForecastZoneSystemBase import ForecastZoneSystemBase
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
-class AggForecastZoneSystem(ForecastZoneSystem):
+INPUT_PARAMETERS_AggForecastZoneSystem = {
+    "doc" : "this class predicts demand based on a forecast file; this file contains the expected number of origins and destinations per zone " ,
+    "inherit" : "ForecastZoneSystemBase",
+    "input_parameters_mandatory": [G_RA_FC_FNAME],
+    "input_parameters_optional": [
+        G_RA_OP_CORR_M_F
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
+class AggForecastZoneSystem(ForecastZoneSystemBase):
     def __init__(self, zone_network_dir, scenario_parameters, dir_names, operator_attributes):
         super().__init__(zone_network_dir, scenario_parameters, dir_names, operator_attributes)
         # reading zone-correlation matrix if available

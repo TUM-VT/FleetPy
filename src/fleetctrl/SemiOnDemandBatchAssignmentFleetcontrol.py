@@ -39,7 +39,7 @@ def create_stations(columns):
     return PTStation(columns["station_id"], columns["network_node_index"])
 
 
-INPUT_PARAMETERS_RidePoolingBatchAssignmentFleetcontrol = {
+INPUT_PARAMETERS_SemiOnDemandBatchAssignmentFleetcontrol = {
     "doc": """Semi-on-Demand Hybrid Route Batch assignment fleet control (by Max Ng in Dec 2023)
         reference RidePoolingBatchAssignmentFleetcontrol and LinebasedFleetControl
         ride pooling optimisation is called after every optimisation_time_step and offers are created in the 

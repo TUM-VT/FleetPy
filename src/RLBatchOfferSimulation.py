@@ -30,10 +30,10 @@ PROGRESS_LOOP_VEHICLE_STATUS = [VRL_STATES.IDLE, VRL_STATES.CHARGING, VRL_STATES
 # -------------------------------------------------------------------------------------------------------------------- #
 # main
 # ----
-INPUT_PARAMETERS_BatchOfferSimulation = {
+INPUT_PARAMETERS_RLBatchOfferSimulation = {
     "doc": """
-    customers request trips from a single ride-pooling operator continously in time.
-    offers are only created after the optimisation step of the operator and fetched from the time_trigger function.
+    this class wraps the BatchOfferSimulation class for usage in a reinforcement learning environment.
+    compared to the BatchOfferSimulation, information for the reinforcement learning agent is extracted.
     """,
     "inherit": "BatchOfferSimulation",
     "input_parameters_mandatory": [
@@ -48,9 +48,8 @@ INPUT_PARAMETERS_BatchOfferSimulation = {
 
 class RLBatchOfferSimulation(BatchOfferSimulation):
     """
-    customers request trips from a single ride-pooling operator continously in time.
-    offers are only created after the optimisation step of the operator and fetched from the time_trigger function
-    """
+    this class wraps the BatchOfferSimulation class for usage in a reinforcement learning environment.
+    compared to the BatchOfferSimulation, information for the reinforcement learning agent is extracted.    """
 
     def step(self, sim_time: int, rl_action: int | None = None):
         """This method determines the simulation flow in a time step.

@@ -58,7 +58,7 @@ class BatchSchedulingRevelationHorizonBase(RevelationHorizonBase):
 
         self.solver = solver
         self.max_batch_size = int(operator_attributes[G_RA_MAX_BATCH_SIZE])
-        self.N_batch_concat = int(operator_attributes[G_RA_MAX_BATCH_CONCAT])
+        self.N_batch_concat = int(operator_attributes.get(G_RA_MAX_BATCH_CONCAT, 1))
         
         self._use_own_routing_engine = False
         if operator_attributes.get(G_RA_OP_NW_TYPE):

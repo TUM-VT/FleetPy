@@ -20,8 +20,8 @@ INPUT_PARAMETERS_LinearHailingRebalancing = {
     parameter "op_weight_on_fc" weights how many vehicles are needed per forecasted demand per zone -> should be provided / calibrated
     """,
     "inherit" : "RepositioningBase",
-    "input_parameters_mandatory": ["op_rp_rebal_n_samples"],
-    "input_parameters_optional": [G_RA_FC_TYPE, "op_weight_on_fc"],
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [G_OP_REPO_FC_WEIGHT],
     "mandatory_modules": [],
     "optional_modules": []
 }
@@ -48,25 +48,7 @@ class LinearHailingRebalancing(RepositioningBase):
             raise IOError("LinearHailingRebalancingrequires two time horizon values (start and end)!"
                           f"Set them in the {G_OP_REPO_TH_DEF} scenario parameter!")
         self.optimisation_timeout = 30 # TODO #
-        self._weight_on_forecast = operator_attributes.get("op_weight_on_fc", 0.05) # to scale the forecast by this factor (i.e. to approximate sharing)
-        
-    def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> AggForecastZoneSystem:
-        """ this method loads the forecast zone system needed for the corresponding repositioning strategy"""
-        fc_type = operator_attributes.get(G_RA_FC_TYPE)
-        if fc_type is not None and fc_type == "perfect":
-            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastZoneSystem
-            LOG.info("load perfect zonesystem")
-            return PerfectForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
-        elif fc_type is not None and fc_type == "perfect_dist": # doesnt make a difference compared to previous one
-            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastDistributionZoneSystem
-            LOG.info("load perfect zonesystem")
-            return PerfectForecastDistributionZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
-        elif fc_type is not None and fc_type == "myopic":
-            from src.fleetctrl.forecast.MyopicForecastZoneSystem import MyopicForecastZoneSystem
-            LOG.info("load myopic zonesystem")
-            return MyopicForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes) 
-        else:
-            return AggForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes) 
+        self._weight_on_forecast = operator_attributes.get(G_OP_REPO_FC_WEIGHT, 0.05) # to scale the forecast by this factor (i.e. to approximate sharing)
 
     def determine_and_create_repositioning_plans(self, sim_time, lock=None):
         """This method determines and creates new repositioning plans. The repositioning plans are directly assigned

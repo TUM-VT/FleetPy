@@ -7,11 +7,11 @@ from src.FleetSimulationBase import INPUT_PARAMETERS_FleetSimulationBase
 from src.misc.init_modules import *
 from typing import Dict, Tuple
 
-FLEETPY_PATH = os.path.dirname(os.path.abspath(__file__))
+FLEETPY_PATH = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 #read md table into dataframe
-INPUT_PARAMETERS_PATH = os.path.join(os.path.dirname(__file__), "Input_Parameters.md")
-input_parameters = pd.read_table(INPUT_PARAMETERS_PATH, sep="|", header=0, index_col=1, skipinitialspace=True)
+INPUT_PARAMETERS_PATH = os.path.join(FLEETPY_PATH, "Input_Parameters.md")
+input_parameters = pd.read_table(INPUT_PARAMETERS_PATH, sep=r"(?<!\\)\|", engine="python", header=0, index_col=1, skipinitialspace=True)
 input_parameters = input_parameters.dropna(axis=1, how='all')
 input_parameters = input_parameters.iloc[1:]
 input_parameters.columns = input_parameters.columns.str.strip()
@@ -35,11 +35,20 @@ MODULE_PARAM_TO_DICT_LOAD = {
     G_OP_REPO_M : get_src_repositioning_strategies,
     G_OP_DYN_P_M : get_src_dynamic_pricing_strategies,
     G_OP_DYN_FS_M : get_src_dynamic_fleet_sizing_strategies,
-    G_RA_RP_BATCH_OPT: get_src_ride_pooling_batch_optimizers
+    G_RA_RP_BATCH_OPT: get_src_ride_pooling_batch_optimizers,
+    G_RA_FC_TYPE: get_src_forecast_models,
 }
+
+CLASS_NAME_TO_STR_KEY = {}
+for module_name, module_load_fct in MODULE_PARAM_TO_DICT_LOAD.items():
+    module_dict = module_load_fct()
+    for str_key, (module_path, class_name) in module_dict.items():
+        CLASS_NAME_TO_STR_KEY[class_name] = str_key
 
 def load_module_parameters(module_dict, module_str):
     tmp = module_dict.get(module_str)
+    if tmp is None:
+        tmp = module_dict.get(CLASS_NAME_TO_STR_KEY.get(module_str))
     if tmp is not None:
         module_name, class_name = tmp
         module = importlib.import_module(module_name)
@@ -170,6 +179,7 @@ class ScenarioCreator():
         print("")
         print(f"load parameters for module {module_param_value}!")
         module_dict = MODULE_PARAM_TO_DICT_LOAD[module_param]()
+        print(f" -> load {module_param_value} from {module_dict}")
         input_param_dict = load_module_parameters(module_dict, module_param_value)
         
         self._add_new_params_and_modules(input_param_dict)
@@ -177,16 +187,20 @@ class ScenarioCreator():
         inherit_class = input_param_dict["inherit"]    
         while inherit_class is not None:
             if inherit_class.endswith("Base"): # TODO!
-                if not inherit_class.startswith("Request"):
+                if not inherit_class.startswith("Request") and not inherit_class.startswith("ParcelRequest"):
                     base_p = list(module_dict.values())[0][0].split(".")[:-1]
                     base_p.append(inherit_class)
                     base_p = ".".join(base_p)
                     module_dict[inherit_class] = (base_p, inherit_class)
                 else:
                     module_dict[inherit_class] = ("src.demand.TravelerModels", inherit_class)
+            elif inherit_class == "ZoneSystem":
+                module_dict["ZoneSystem"] = ("src.infra.Zoning", "ZoneSystem")
             try:
+                print(f" -> load {inherit_class} from {module_dict}")
                 new_input_param_dict = load_module_parameters(module_dict, inherit_class)
             except ModuleNotFoundError: # TODO
+                print(f"didnt find {inherit_class} in {module_dict[inherit_class][0]}")
                 if inherit_class.endswith("Base") and not inherit_class.startswith("Request"): # TODO!
                     base_p = list(module_dict.values())[0][0].split(".")[:-2]
                     base_p.append(inherit_class)

@@ -11,7 +11,7 @@ import numpy as np
 
 # src imports
 # -----------
-from src.fleetctrl.forecast.ForecastZoning import ForecastZoneSystem
+from src.fleetctrl.forecast.ForecastZoneSystemBase import ForecastZoneSystemBase
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------
@@ -21,8 +21,20 @@ from src.misc.globals import *
 LOG_LEVEL = logging.WARNING
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_PerfectForecastZoneSystem = {
+    "doc" :     """
+    this class can be used like the "basic" ZoneSystem class
+    but instead of getting values from a demand forecast dabase, this class has direct access to the demand file
+    and therefore makes perfect predictions for the corresponding forecast querries """,
+    "inherit" : "ForecastZoneSystemBase",
+    "input_parameters_mandatory": [G_RA_FC_TR],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
-class PerfectForecastZoneSystem(ForecastZoneSystem):
+class PerfectForecastZoneSystem(ForecastZoneSystemBase):
     # this class can be used like the "basic" ZoneSystem class
     # but instead of getting values from a demand forecast dabase, this class has direct access to the demand file
     # and therefore makes perfect predictions for the corresponding forecast querries
@@ -184,6 +196,18 @@ class PerfectForecastZoneSystem(ForecastZoneSystem):
         return return_dict
     
 #########################################################################################################
+
+INPUT_PARAMETERS_PerfectForecastDistributionZoneSystem= {
+    "doc" :     """
+        the only difference to PerfectForecastZoneSystem is that the sampling process does not return the exact future requests but a
+        sample from the forecast distribution """,
+    "inherit" : "PerfectForecastZoneSystem",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
     """ the only difference to PerfectForecastZoneSystem is that the sampling process does not return the exact future requests but a

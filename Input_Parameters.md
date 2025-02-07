@@ -179,3 +179,26 @@
 | op_private_trips_file                        | G_PRIVATE_TRIPS_FILE               |                                                                                                                                                                       |      |                 |                                   |
 | op_private_prime_vehicle_ratio               | G_PRIVATE_PRIME_CUSTOMER_RATIO     |                                                                                                                                                                       |      |                 |                                   |
 | n_cpu_per_sim                                | G_SLAVE_CPU                | number of parallel processes used for simulation (not possible for every module)     |   int      |  1        | AlonsoMoraAssignment
+| op_rp_rebal_n_samples                                | G_OP_REPO_NR_SAMPLES                | number of samples for sampling based repositioning     |   int      |  1        | FullSamplingRidePoolingRebalancingMultiStageReservation, FullSamplingRidePoolingRebalancingMultiStage
+| op_rp_rebal_gamma                                | G_OP_REPO_SAMPLE_GAMMA                | gamma for sampling based repositioning -> weight of future repositioning trips in opt (between 0 and 1)     |   float      |  0.5        | FullSamplingRidePoolingRebalancingMultiStageReservation, FullSamplingRidePoolingRebalancingMultiStage
+| op_res_batch_concat                               | G_RA_MAX_BATCH_CONCAT                | number of batches considered together in batch reservation treatment     |   int      |     1     | BatchSchedulingRevelationHorizonBase
+| op_lock_vid_assignment                               | G_OP_LOCK_VID                | customers are not re-assigned to other vehicles if True     |   bool      |     False     | RidePoolingBatchOptimizationFleetControlBase
+| op_lock_vid_assignment_time     |       G_OP_LOCK_VID_TIME  | time in seconds. if expected pu-time falls below this value, a vehicle is locked to a request | int | None (equals large value) | RidePoolingBatchOptimizationFleetControlBase
+| max_fare | G_RQ_MAX_FARE | maximum fare a customer is willing to pay | float | None | PriceSensitiveIndividualConstraintRequest
+| op_network_type | G_RA_OP_NW_TYPE | if given, the operator loads is own network object for routing | str | None | FleetControlBase
+| op_network_name | G_RA_OP_NW_NAME | if given, the operator loads is own network object for routing | str | None | FleetControlBase
+| op_network_dynamics_file | G_RA_OP_NW_DYN_F | if given, the operator loads is own network object for routing | str | None | FleetControlBase
+| op_fc_type | G_RA_FC_TYPE | forecast type used by operator to predict demand; defines forecast module | str | None | RepositioningBase
+| op_max_exhaustive_darp | G_RA_MAX_EXH_DARP | maximum number of requests per vehicleplan for solving the DARP exhaustively | int | None | BatchAssignmentAlgorithmBase
+| op_precomp_off_sol_file | G_RA_RES_PRE_COMP_SOL_FILE | file containing precomputed solutions for reservation requests | str | None | ReservationBase
+| op_max_tours_per_v2rb | G_RA_MAX_TOUR | maximum number of tours that are stored in a V2RB | int | None | AlonsoMoraAssignment
+| op_weight_on_fc | G_OP_REPO_FC_WEIGHT | weight of forecast in repositioning (number of vehicles per predicted request) | float | 1 | PavoneContinuous,LinearHailingRebalancing
+| op_always_rebuild_tree | G_RA_AM_ALWAYS_REBUILD | if True, the tree is always rebuilt in AlonsoMoraAssignment | bool | False | AlonsoMoraAssignment
+| op_forecast_f | G_RA_FC_FNAME | file name specifying the forecast | str | None | ForecastZoneSystemBase
+| op_res_assign_offplan | G_RA_RES_ASS_OFF_PLAN | bool if reservation offline plan is actual assigned to vehicles | bool | RevelationHorizonBase
+| op_temporal_resolution | G_RA_FC_TR | temporal resolution of demand forecast [s] | int | None | ForecastZoneSystemBase
+| op_zone_system | G_RA_OP_ZONE_SYSTEM | the zone system used by the operator for forecasting | str | None | ForecastZoneSystemBase
+| op_res_reassign_sp | G_RA_RES_REASSIGN_SP | for reservation; True, if supproting points should be reassign after each rp optimization | bool | True | RevelationHorizonBase
+| op_zone_correlation_file | G_RA_OP_CORR_M_F | file that specifies correlations between zones for repositioning | str | None | DensityFrontiers, AggForecastZoneSystem
+| op_repositioning_zone_system | G_RA_OP_REPO_ZONE_SYSTEM |the zone system used by the operator for repositioning (can be different from forecasting) | str | None | 
+

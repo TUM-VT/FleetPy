@@ -21,7 +21,7 @@ from src.fleetctrl.charging.ChargingBase import ChargingBase  # ,VehicleChargeLe
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan, RoutingTargetPlanStop
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
-from src.fleetctrl.pricing.DynamicPricingBase import DynamicPrizingBase
+from src.fleetctrl.pricing.DynamicPricingBase import DynamicPricingBase
 from src.fleetctrl.fleetsizing.DynamicFleetSizingBase import DynamicFleetSizingBase
 from src.fleetctrl.reservation.ReservationBase import ReservationBase
 from src.demand.TravelerModels import RequestBase
@@ -54,7 +54,7 @@ INPUT_PARAMETERS_FleetControlBase = {
         G_OP_CONST_BT, G_OP_ADD_BT, G_OP_INIT_VEH_DIST
         ],
     "mandatory_modules": [],
-    "optional_modules": [G_RA_RES_MOD, G_OP_CH_M, G_OP_REPO_M, G_OP_DYN_P_M, G_OP_DYN_FS_M]
+    "optional_modules": [G_RA_RES_MOD, G_OP_CH_M, G_OP_REPO_M, G_OP_DYN_P_M, G_OP_DYN_FS_M, G_RA_FC_TYPE]
 }
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -264,7 +264,7 @@ class FleetControlBase(metaclass=ABCMeta):
         dyn_pricing_method = operator_attributes.get(G_OP_DYN_P_M)
         if dyn_pricing_method:
             DPS_class = load_dynamic_pricing_strategy(dyn_pricing_method)
-            self.dyn_pricing : DynamicPrizingBase = DPS_class(self, operator_attributes)
+            self.dyn_pricing : DynamicPricingBase = DPS_class(self, operator_attributes)
             prt_strategy_str += f"\t Dynamic Pricing: {self.dyn_pricing.__class__.__name__}\n"
             self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_DP)
         else:

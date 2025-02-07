@@ -21,6 +21,17 @@ from src.misc.globals import *
 LOG_LEVEL = logging.WARNING
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_ZoneSystem = {
+    "doc": """this is the basic class describe a zone systen.
+    it requires input file to match nodes to specific zones.
+    The zones can be either defined on a operator level or a global level.
+    Therefore, different parameters can be seleced to define the zones used.""",
+    "inherit": None,
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [G_RA_OP_ZONE_SYSTEM, G_RA_OP_REPO_ZONE_SYSTEM, G_ZONE_SYSTEM_NAME],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # main class

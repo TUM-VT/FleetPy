@@ -140,7 +140,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                 drop_off_time = boarding_info_list[1]
                 sum_user_times += (drop_off_time - rq_time)
             # utility is negative value of end_time - simulation_time
-            return sum_user_times - simulation_time - assignment_reward
+            return sum_user_times  - assignment_reward
         
     elif func_key == "total_travel_times":
         assignment_reward_per_rq = MAX_DELAY * 10

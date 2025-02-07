@@ -15,7 +15,7 @@ import numpy as np
 
 # src imports
 # -----------
-from src.fleetctrl.forecast.ForecastZoning import ForecastZoneSystem
+from src.fleetctrl.forecast.ForecastZoneSystemBase import ForecastZoneSystemBase
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------
@@ -30,6 +30,19 @@ if tp.TYPE_CHECKING:
 LOG_LEVEL = logging.WARNING
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_PerfectORandomDForecast = {
+    "doc" :     """
+    this class can be used like the "basic" ZoneSystem class
+    but instead of getting values from a demand forecast dabase, this class has direct access to the demand file
+    this class produces forecasts based on the requests from the last time step and projects the same distribution into the future
+    (it looks self.fc_temp_resolution into the past and uses this forecast to produce the forecast) """,
+    "inherit" : "PerfectForecastDistributionZoneSystem",
+    "input_parameters_mandatory": [G_RA_FC_TR],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class PerfectORandomDForecast(PerfectForecastDistributionZoneSystem):
     """

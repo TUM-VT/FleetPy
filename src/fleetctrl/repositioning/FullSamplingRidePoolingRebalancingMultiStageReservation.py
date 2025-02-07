@@ -44,7 +44,7 @@ INPUT_PARAMETERS_FullSamplingRidePoolingRebalancingMultiStageReservation = {
     """,
     "inherit" : "RepositioningBase",
     "input_parameters_mandatory": [],
-    "input_parameters_optional": ["op_rp_rebal_gamma","op_rp_rebal_n_samples", G_RA_FC_TYPE],
+    "input_parameters_optional": [G_OP_REPO_SAMPLE_GAMMA, G_OP_REPO_NR_SAMPLES],
     "mandatory_modules": [],
     "optional_modules": []
 }
@@ -164,11 +164,11 @@ class FullSamplingRidePoolingRebalancingMultiStageReservation(RepositioningBase)
         :param solver: solver for optimization problems
         """
         super().__init__(fleetctrl, operator_attributes, dir_names, solver)
-        self.N_samples = int(operator_attributes.get("op_rp_rebal_n_samples",1)) # number of samples used for repositioning
+        self.N_samples = int(operator_attributes.get(G_OP_REPO_NR_SAMPLES,1)) # number of samples used for repositioning
         #self._exploration_cost_weight = operator_attributes.get("op_rp_rebal_exploration_cost", None)
         #self._exploration_request_per_sample = 1
         self._sampling_ctrl_function = self.fleetctrl.vr_ctrl_f# update_ctrl_function(self.fleetctrl.vr_ctrl_f)
-        self._gamma = operator_attributes.get("op_rp_rebal_gamma", 0.5) # weight of future rewards
+        self._gamma = operator_attributes.get(G_OP_REPO_SAMPLE_GAMMA, 0.5) # weight of future rewards
         self._progress_time_step = operator_attributes.get(G_RA_REOPT_TS, 60)
         self._repo_time_step = fleetctrl.repo_time_step
         if operator_attributes.get(G_RA_OP_REPO_ZONE_SYSTEM):
@@ -180,34 +180,7 @@ class FullSamplingRidePoolingRebalancingMultiStageReservation(RepositioningBase)
         self._prioritize_reservations = operator_attributes.get(G_OP_REPO_RES_PRIORITIZE, True)
         
         self._repo_fallback = FullSamplingRidePoolingRebalancingMultiStage_Fallback(fleetctrl, operator_attributes, dir_names, solver) # TODO this is not awesome
-        
-    def _load_zone_system(self, operator_attributes: dict, dir_names: dict, zone_network_dir=None, fc_type=None):
-        if fc_type is None:
-            fc_type = operator_attributes.get(G_RA_FC_TYPE)
-        if zone_network_dir is None:
-            zone_network_dir = dir_names[G_DIR_ZONES]
-        if fc_type is not None and fc_type == "perfect":
-            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastZoneSystem
-            LOG.info("load perfect zonesystem")
-            return PerfectForecastZoneSystem(zone_network_dir, {}, dir_names, operator_attributes)
-        elif fc_type is not None and fc_type == "perfect_dist":
-            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastDistributionZoneSystem
-            LOG.info("load perfect zonesystem")
-            return PerfectForecastDistributionZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
-        elif fc_type is not None and fc_type == "myopic":
-            from src.fleetctrl.forecast.MyopicForecastZoneSystem import MyopicForecastZoneSystem
-            LOG.info("load myopic zonesystem")
-            return MyopicForecastZoneSystem(zone_network_dir, {}, dir_names, operator_attributes)  
-        elif fc_type is not None and fc_type == "perfect_o_myopic_d":
-            from src.fleetctrl.forecast.PerfectOMyopicDForecast import PerfectOMyopicDForecast
-            LOG.info("load perfect_o_myopic_d zonesystem")
-            return PerfectOMyopicDForecast(zone_network_dir, {}, dir_names, operator_attributes) 
-        elif fc_type is not None and fc_type == "perfect_o_random_d":
-            from src.fleetctrl.forecast.PerfectORandomDForecast import PerfectORandomDForecast
-            LOG.info("load perfect_o_random_d zonesystem")
-            return PerfectORandomDForecast(zone_network_dir, {}, dir_names, operator_attributes) 
-        else:
-            return ODForecastZoneSystem(zone_network_dir, {}, dir_names, operator_attributes)
+
         
     def determine_and_create_repositioning_plans(self, sim_time: int, lock: bool=None) -> List[int]:
         """ computes and assigns new repositioning plans
@@ -1345,48 +1318,15 @@ class FullSamplingRidePoolingRebalancingMultiStageReservation(RepositioningBase)
 class FullSamplingRidePoolingRebalancingMultiStage_Fallback(RepositioningBase):
     def __init__(self, fleetctrl: FleetControlBase, operator_attributes: dict, dir_names: dict, solver: str = "Gurobi"):
         super().__init__(fleetctrl, operator_attributes, dir_names, solver)
-        self.N_samples = int(operator_attributes.get("op_rp_rebal_n_samples", 1)) # number of samples used for repositioning
+        self.N_samples = int(operator_attributes.get(G_OP_REPO_NR_SAMPLES, 1)) # number of samples used for repositioning
         #self._exploration_cost_weight = operator_attributes.get("op_rp_rebal_exploration_cost", None)
         #self._exploration_request_per_sample = 1
         self._sampling_ctrl_function = self.fleetctrl.vr_ctrl_f# update_ctrl_function(self.fleetctrl.vr_ctrl_f)
-        self._gamma = operator_attributes.get("op_rp_rebal_gamma", 0.5) # weight of future rewards
+        self._gamma = operator_attributes.get(G_OP_REPO_SAMPLE_GAMMA, 0.5) # weight of future rewards
         self._progress_time_step = operator_attributes.get(G_RA_REOPT_TS, 60)
         self._repo_time_step = fleetctrl.repo_time_step
-        if operator_attributes.get(G_RA_OP_REPO_ZONE_SYSTEM):
-            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastDistributionZoneSystem
-            self._repo_zone_system = PerfectForecastDistributionZoneSystem(dir_names[G_RA_OP_REPO_ZONE_SYSTEM], {}, dir_names, operator_attributes)
-        else:
-            self._repo_zone_system = self.zone_system
         self.min_reservation_buffer = max(operator_attributes.get(G_OP_REPO_RES_PUF, 3600), self.list_horizons[1])
         self._prioritize_reservations = operator_attributes.get(G_OP_REPO_RES_PRIORITIZE, True)
-        
-    def _load_zone_system(self, operator_attributes: dict, dir_names: dict, zone_network_dir=None, fc_type=None):
-        if fc_type is None:
-            fc_type = operator_attributes.get(G_RA_FC_TYPE)
-        if zone_network_dir is None:
-            zone_network_dir = dir_names[G_DIR_ZONES]
-        if fc_type is not None and fc_type == "perfect":
-            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastZoneSystem
-            LOG.info("load perfect zonesystem")
-            return PerfectForecastZoneSystem(zone_network_dir, {}, dir_names, operator_attributes)
-        elif fc_type is not None and fc_type == "perfect_dist":
-            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastDistributionZoneSystem
-            LOG.info("load perfect zonesystem")
-            return PerfectForecastDistributionZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
-        elif fc_type is not None and fc_type == "myopic":
-            from src.fleetctrl.forecast.MyopicForecastZoneSystem import MyopicForecastZoneSystem
-            LOG.info("load myopic zonesystem")
-            return MyopicForecastZoneSystem(zone_network_dir, {}, dir_names, operator_attributes)  
-        elif fc_type is not None and fc_type == "perfect_o_myopic_d":
-            from src.fleetctrl.forecast.PerfectOMyopicDForecast import PerfectOMyopicDForecast
-            LOG.info("load perfect_o_myopic_d zonesystem")
-            return PerfectOMyopicDForecast(zone_network_dir, {}, dir_names, operator_attributes)         
-        elif fc_type is not None and fc_type == "perfect_o_random_d":
-            from src.fleetctrl.forecast.PerfectORandomDForecast import PerfectORandomDForecast
-            LOG.info("load perfect_o_random_d zonesystem")
-            return PerfectORandomDForecast(zone_network_dir, {}, dir_names, operator_attributes) 
-        else:
-            return ODForecastZoneSystem(zone_network_dir, {}, dir_names, operator_attributes)
         
     def determine_and_create_repositioning_plans(self, sim_time: int, lock: bool=None) -> List[int]:
         """ computes and assigns new repositioning plans

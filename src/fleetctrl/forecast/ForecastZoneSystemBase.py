@@ -20,7 +20,16 @@ from src.infra.Zoning import ZoneSystem
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
-class ForecastZoneSystem(ZoneSystem):
+INPUT_PARAMETERS_ForecastZoneSystemBase = {
+    "doc" : "this class is the base class for providing demand forecasts for the fleet control system",
+    "inherit" : "ZoneSystem",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
+class ForecastZoneSystemBase(ZoneSystem):
     def __init__(self, zone_network_dir, scenario_parameters, dir_names, operator_attributes):
         super().__init__(zone_network_dir, scenario_parameters, dir_names)
         self.fc_temp_resolution = None

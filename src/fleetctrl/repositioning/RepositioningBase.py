@@ -9,11 +9,12 @@ import pandas as pd
 
 from src.fleetctrl.planning.VehiclePlan import RoutingTargetPlanStop
 from src.misc.globals import *
+from src.misc.init_modules import load_forecast_model
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
-    from src.fleetctrl.forecast.ForecastZoning import ForecastZoneSystem
+    from src.fleetctrl.forecast.ForecastZoneSystemBase import ForecastZoneSystemBase
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
 
@@ -95,10 +96,10 @@ class RepositioningBase(ABC):
             lock = self.lock_repo_assignments
         return []
     
-    @abstractmethod
-    def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> ForecastZoneSystem:
+    def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> ForecastZoneSystemBase:
         """ this method loads the forecast zone system needed for the corresponding repositioning strategy"""
-        return ForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
+        FC_Class = load_forecast_model(operator_attributes[G_RA_FC_TYPE])
+        return FC_Class(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
         
     
     def register_rejected_customer(self, planrequest, sim_time):

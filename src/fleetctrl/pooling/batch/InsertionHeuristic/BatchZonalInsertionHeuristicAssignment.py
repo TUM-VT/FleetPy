@@ -18,7 +18,7 @@ LOG = logging.getLogger(__name__)
 INPUT_PARAMETERS_BatchZonalInsertionHeuristicAssignment = {
     "doc": """this class uses a simple insertion heuristic to assign zonal requests in batch that 
     havent been assigned before """,
-    "inherit": "BatchInsertionHeuristicAssignment",
+    "inherit": "InsertionHeuristic",
     "input_parameters_mandatory": [],
     "input_parameters_optional": [
     ],

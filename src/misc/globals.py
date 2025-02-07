@@ -266,6 +266,9 @@ G_OP_REPO_QBT = "op_repo_quadratic_benefit_threshold"
 G_OP_REPO_FRONTIERS_M = "op_repo_frontiers_method"          # Method name for Frontier's approaches
 G_OP_REPO_RES_PUF = "op_repo_res_buffer_time"       # if reservation leg, how long in future to be considered for repo
 G_OP_REPO_RES_PRIORITIZE = "op_repo_res_prio_reservation"   # in true, reservation requests are prioritized in repositioning (in sampling based repositioning)
+G_OP_REPO_NR_SAMPLES = "op_rp_rebal_n_samples"  # number of samples for sampling based repositioning
+G_OP_REPO_SAMPLE_GAMMA = "op_rp_rebal_gamma"    # gamma for sampling based repositioning -> weight of future repositioning trips in opt
+G_OP_REPO_FC_WEIGHT = "op_weight_on_fc"        # weight of forecast in repositioning (number of vehicles per predicted request)
 
 # Dynamic Pricing
 G_OP_DYN_P_M = "op_dyn_pricing_method"

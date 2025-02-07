@@ -10,10 +10,11 @@ if tp.TYPE_CHECKING:
     from src.demand.TravelerModels import RequestBase
     from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
     from src.fleetctrl.charging.ChargingBase import ChargingBase
-    from src.fleetctrl.pricing.DynamicPricingBase import DynamicPrizingBase
+    from src.fleetctrl.pricing.DynamicPricingBase import DynamicPricingBase
     from src.fleetctrl.fleetsizing.DynamicFleetSizingBase import DynamicFleetSizingBase
     from src.fleetctrl.reservation.ReservationBase import ReservationBase
     from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
+    from src.fleetctrl.forecast.ForecastZoneSystemBase import ForecastZoneSystemBase
 
 # possibly load additional content from development content
 try:
@@ -186,6 +187,23 @@ def get_src_ride_pooling_batch_optimizers():
         rbo_dict.update(dev_rbo_dict)
     return rbo_dict
 
+def get_src_forecast_models():
+    # FleetPy forecast strategy options
+    fc_dict = {}  # str -> (module path, class name)
+    fc_dict["perfect"] = ("src.fleetctrl.forecast.PerfectForecastZoning", "PerfectForecastZoneSystem")
+    fc_dict["perfect_dist"] = ("src.fleetctrl.forecast.PerfectForecastZoning", "PerfectForecastDistributionZoneSystem")
+    fc_dict["myopic"] = ("src.fleetctrl.forecast.MyopicForecastZoneSystem", "MyopicForecastZoneSystem")
+    fc_dict["perfect_o_random_d"] = ("src.fleetctrl.forecast.PerfectORandomDForecast", "PerfectORandomDForecast")
+    fc_dict["perfect_o_myopic_d"] = ("src.fleetctrl.forecast.PerfectOMyopicDForecast", "PerfectOMyopicDForecast")
+    fc_dict["aggregate_o_and_d"] = ("src.fleetctrl.forecast.AggForecastZoning", "AggForecastZoneSystem")
+    fc_dict["perfect_trips"] = ("src.fleetctrl.forecast.AggForecastZoning", "AggForecastZoneSystem")
+    fc_dict["aggregate_o_to_d"] = ("src.fleetctrl.forecast.ODForecastZoneSystem", "ODForecastZoneSystem")
+    # add development content
+    if dev_content is not None:
+        dev_fc_dict = dev_content.add_forecast_models()
+        dev_fc_dict.update(dev_fc_dict)
+    return fc_dict
+
 # -------------------------------------------------------------------------------------------------------------------- #
 # functions for the different modules
 def load_simulation_environment(scenario_parameters) -> FleetSimulationBase:
@@ -267,7 +285,7 @@ def load_charging_strategy(op_charging_class_string) -> ChargingBase:
     return load_module(cs_dict, op_charging_class_string, "Charging strategy module")
 
 
-def load_dynamic_pricing_strategy(op_pricing_class_string) -> DynamicPrizingBase:
+def load_dynamic_pricing_strategy(op_pricing_class_string) -> DynamicPricingBase:
     """This function chooses the dynamic pricing strategy module that should be loaded.
 
     :param op_pricing_class_string:  string that determines which strategy will be used
@@ -311,3 +329,13 @@ def load_ride_pooling_batch_optimizer(op_batch_optimizer_string) -> BatchAssignm
     rbo_dict = get_src_ride_pooling_batch_optimizers()
     # get ridepooling batch optimizer class
     return load_module(rbo_dict, op_batch_optimizer_string, "Ridepooling batch optimizer module")
+
+def load_forecast_model(fc_model_string) -> ForecastZoneSystemBase:
+    """ this function loads the demand forecast model used for example within the repositioning moduel
+    :param op_batch_optimizer_string: string determining the optimizer
+    :return: RidePoolingBatchOptimizationClass
+    """
+    # FleetPy ride pooling optimization strategy options
+    fc_dict = get_src_forecast_models()
+    # get ridepooling batch optimizer class
+    return load_module(fc_dict, fc_model_string, "Demand forecast module")

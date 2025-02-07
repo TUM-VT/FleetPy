@@ -23,7 +23,7 @@ MAX_T = 1000000
 TIME_OUT = 30
 WRITE_PROBLEM = False
 
-INPUT_PARAMETERS_BatchAssignmentAlgorithmBase = {
+INPUT_PARAMETERS_SimonettoAssignment = {
     "doc" :  """This class implements the assingment algorithm of Simonetto et al. 2019.
                 it assigns requests in batches. instead of finding optimal assignments, only schedules for new requests are computed. requests in the same batch cannot be assigned to the same vehicle, resulting in a linear assignment problem.
                 Optional parameter : op_max_exhaustive_darp -> maximum number of requests for which the exhaustive DARP is solved. if the number of requests is larger, the requests are inserted into the vehicle plans of the vehicle.  base value: 4 (for speed-up use 1)""",

@@ -13,15 +13,28 @@ from scipy.sparse import load_npz
 
 # src imports
 # -----------
-from src.fleetctrl.forecast.ForecastZoning import ForecastZoneSystem
+from src.fleetctrl.forecast.ForecastZoneSystemBase import ForecastZoneSystemBase
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
-class ODForecastZoneSystem(ForecastZoneSystem):
+INPUT_PARAMETERS_ODForecastZoneSystem = {
+    "doc" :     """
+    this class read OD-specific forecasts from a file and provides methods to access them
+    """,
+    "inherit" : "ForecastZoneSystemBase",
+    "input_parameters_mandatory": [G_RA_FC_FNAME],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
+class ODForecastZoneSystem(ForecastZoneSystemBase):
     def __init__(self, zone_network_dir, scenario_parameters, dir_names, operator_attributes):
+        """this class read OD-specific forecasts from a file and provides methods to access them"""
         super().__init__(zone_network_dir, scenario_parameters, dir_names, operator_attributes)
         # read forecast files
         self.od_forecasts = {}  # time -> o_zone -> d_zone -> counts

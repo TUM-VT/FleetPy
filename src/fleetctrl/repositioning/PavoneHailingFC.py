@@ -48,23 +48,6 @@ class PavoneHailingRepositioningFC(RepositioningBase):
         self.optimisation_timeout = 30 # TODO #
         self._weight_on_forecast = operator_attributes.get("op_weight_on_fc", None) # to scale the forecast by this factor (i.e. to approximate sharing)
         
-    def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> AggForecastZoneSystem:
-        """ this method loads the forecast zone system needed for the corresponding repositioning strategy"""
-        fc_type = operator_attributes.get(G_RA_FC_TYPE)
-        if fc_type is not None and fc_type == "perfect":
-            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastZoneSystem
-            LOG.info("load perfect zonesystem")
-            return PerfectForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
-        elif fc_type is not None and fc_type == "perfect_dist": # doesnt make a difference compared to previous one
-            from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastDistributionZoneSystem
-            LOG.info("load perfect zonesystem")
-            return PerfectForecastDistributionZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
-        elif fc_type is not None and fc_type == "myopic":
-            from src.fleetctrl.forecast.MyopicForecastZoneSystem import MyopicForecastZoneSystem
-            LOG.info("load myopic zonesystem")
-            return MyopicForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes) 
-        else:
-            return AggForecastZoneSystem(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes) 
 
     def determine_and_create_repositioning_plans(self, sim_time, lock=None):
         """This method determines and creates new repositioning plans. The repositioning plans are directly assigned
