@@ -1,0 +1,3 @@
+scenario_name,op_base_fare,op_distance_fare,op_time_fare,op_min_standard_fare,op_dyn_pricing_method,op_dp_eval_interval,rq_type
+demo_1,0,0.1,0,100,DemoDP,900,DemoMoDPTRequest
+demo_2,0,1,0,100,DemoDP,900,DemoMoDPTRequest

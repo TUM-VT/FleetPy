@@ -768,3 +768,70 @@ class SlaveParcelRequest(ParcelRequestBase):
         #LOG.info(f"user boards vehicle: {self.rid} | {self.sub_rid_struct} | {self.offer}")
         self.fare = self.offer[op_id].get(G_OFFER_FARE, 0)
         return super().user_boards_vehicle(simulation_time, op_id, vid, pu_pos, t_access)
+
+# -------------------------------------------------------------------------------------------------------------------- #
+INPUT_PARAMETERS_DemoMoDPTRequest = {
+    "doc" : """This request class can be used to demonstrate how to create a demo for price-sensitive requests. Users choose between MoD and PT. 
+    If the offer price exceeds the predefined maximum price, the offer will be rejected. 
+    If the offer arrival time is later than the PT arrival time, the offer will also be rejected.""",
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [G_RQ_PT_JT],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
+class DemoMoDPTRequest(RequestBase):
+    """This request class can be used to demonstrate how to create a demo for price-sensitive requests. Users choose between MoD and PT.""",
+    type = "DemoMoDPTRequest"
+
+    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
+        # read PT journey time column -> Throw error if it is not available!
+        self.pt_jt = rq_row[G_RQ_PT_JT]
+        # get the constant boarding time
+        self.const_b_t = scenario_parameters.get(G_OP_CONST_BT, 0)
+
+
+    def choose_offer(self, sc_parameters, simulation_time):
+        test_all_decline = super().choose_offer(sc_parameters, simulation_time)
+        if test_all_decline is not None and test_all_decline < 0:  # all operators are declined
+            return -1
+        if len(self.offer) == 0:  # no operators are available
+            return None
+        opts = [offer_id for offer_id, operator_offer in self.offer.items() if
+                operator_offer is not None and not operator_offer.service_declined()]
+        LOG.debug(f"Basic request choose offer: {self.rid} : {offer_str(self.offer)} | {opts}")
+        if len(opts) == 0:  # no operators are available
+            return None
+        elif len(opts) == 1:  # only one operator is available
+            rq_mode = self._demo_demand_model(opts[0])
+            if rq_mode == "PT":
+                return -1
+            else:
+                self.fare = self.offer[opts[0]].get(G_OFFER_FARE, 0)
+                return opts[0]
+        else:  # multiple operators are available
+            LOG.error(f"not implemented {offer_str(self.offer)}")
+            
+    def _demo_demand_model(self, op):
+        """This method is used to create a demo demand model. Users choose between MoD and PT.
+        """
+        # TODO: modify this method based on your demand model
+
+        # define the maximum price
+        max_price = 999999999999
+        
+        # compare the fare of the offer with the predefined maximum price
+        offered_fare = self.offer[op].get(G_OFFER_FARE)
+        if offered_fare is not None and offered_fare > max_price:
+            LOG.debug(f" -> decline. too expensive offer {offered_fare} > {max_price}")
+            return "PT"
+        # compare the journey time of the offer with the PT journey time
+        offered_pu_t = self.rq_time + self.offer[op][G_OFFER_WAIT]
+        offered_d_t = self.offer[op].get(G_OFFER_DRIVE)
+        offered_jt = offered_pu_t + offered_d_t + 2 * self.const_b_t
+        if offered_jt is not None and offered_jt > self.pt_jt:
+            LOG.debug(f" -> decline. too late offer {offered_jt} > {self.pt_jt}")
+            return "PT"
+        return "MoD"

@@ -130,7 +130,11 @@ class NetworkBasicCpp(NetworkBasic):
         if destination_position[1] is not None:
             destination_overhead = self.get_section_overhead(destination_position, from_start=True)
         if len(origin_nodes.keys()) > 0:
-            s = self.cpp_router.computeTravelCostsXto1(destination_node, origin_nodes.keys(), max_time_range = max_cost_value, max_targets = max_routes)
+            if max_cost_value is None:
+                max_cost_value = np.float64('inf')
+            else:
+                max_cost_value = np.float64(max_cost_value)
+            s = self.cpp_router.computeTravelCostsXto1(destination_node, origin_nodes.keys(), max_time_range=max_cost_value, max_targets=max_routes)
             for org_node, tt, dis in s:
                 if tt < -0.0001:
                     continue

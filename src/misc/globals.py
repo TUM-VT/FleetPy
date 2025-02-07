@@ -227,6 +227,7 @@ G_OP_DYN_P_FUNC = "op_dyn_pricing_func_dict"
 G_OP_DYN_MAX_PF = "op_dyn_pricing_max_factor"
 G_OP_DYN_P_LOG_A = "op_dyn_pricing_log_par_a"
 G_OP_DYN_P_LOG_B = "op_dyn_pricing_log_par_b"
+G_OP_DP_EVAL_INT = "op_dp_eval_interval"
 
 # Dynamic Fleet Sizing
 G_OP_DYN_FS_M = "op_dyn_fs_method"
@@ -410,6 +411,7 @@ G_RQ_LPT = "latest_pickup_time"
 G_RQ_LDT = "latest_decision_time"
 G_RQ_MRD = "max_rel_detour"
 G_RQ_MAX_FARE = "max_fare"
+G_RQ_PT_JT = "PuT_jt"
 # parcel
 G_RQ_PA_SIZE = "parcel_size"
 G_RQ_PA_EPT = "parcel_earliest_pickup_time"

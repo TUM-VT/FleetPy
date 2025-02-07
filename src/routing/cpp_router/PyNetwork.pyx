@@ -30,35 +30,35 @@ cdef class PyNetwork:
         """
         self.c_net.updateEdgeTravelTimes(file_path)
 
-    def computeTravelCostsXto1(self, start_node_index, list_target_node_indices, max_time_range = None, max_targets = None):
-        """
-        :param start_node_index: int start node
-        :param list_target_node_indices: list int targets (X)
-        :param max_time_range: float; targets outside of thes range will not be reached
-        :param max_targets: int; only first max_targets will be reached
-        :return: list of (target_node_index, tt, dis)
-        """
+    def computeTravelCostsXto1(self, destination_node, origin_nodes, max_time_range=None, max_targets=None):
+        if max_time_range is None:
+            max_time_range = np.float64('inf')
+        else:
+            max_time_range = np.float64(max_time_range)
+        
+        if max_targets is None:
+            max_targets = len(origin_nodes)
+        
+        cdef int N_targets = len(origin_nodes)
+        cdef np.ndarray[np.float64_t, ndim=1] travel_times = np.zeros(N_targets, dtype=np.float64)
+        cdef np.ndarray[np.float64_t, ndim=1] travel_distances = np.zeros(N_targets, dtype=np.float64)
+        
         #defining ctypes
-        cdef int N_targets = len(list_target_node_indices)
         cdef double mr = -1.0
         if max_time_range is not None:
             mr = max_time_range
         cdef int mt = -1
         if max_targets is not None:
             mt = max_targets
+        
         #defining arrays to pass as reference
-        cdef np.ndarray[int, ndim=1, mode='c'] targets
-        targets = np.zeros((N_targets,), dtype=np.int32)
-        for i, x in enumerate(list_target_node_indices):
+        cdef np.ndarray[int, ndim=1, mode='c'] targets = np.zeros(N_targets, dtype=np.int32)
+        for i, x in enumerate(origin_nodes):
             targets[i] = x
-        #tts and dis will be overwritten with c++ function
-        cdef np.ndarray[double, ndim=1, mode='c'] tts
-        tts = np.zeros((N_targets,), dtype=np.float)
-        cdef np.ndarray[double, ndim=1, mode='c'] dis
-        dis = np.zeros((N_targets,), dtype=np.float)
-        #calling c++: results will be stored in tts/dis; returns number of reached targets
-        cdef int reached_targets = self.c_net.computeTravelCostsXTo1py(start_node_index, N_targets, &targets[0], &targets[0], &tts[0], &dis[0], mr, mt)
-        return [(targets[i], tts[i], dis[i]) for i in range(reached_targets)]
+        
+        #calling c++: results will be stored in travel_times/travel_distances
+        cdef int reached_targets = self.c_net.computeTravelCostsXTo1py(destination_node, N_targets, &targets[0], &targets[0], &travel_times[0], &travel_distances[0], mr, mt)
+        return [(targets[i], travel_times[i], travel_distances[i]) for i in range(reached_targets)]
 
     def computeTravelCosts1toX(self, start_node_index, list_target_node_indices, max_time_range = None, max_targets = None):
         """

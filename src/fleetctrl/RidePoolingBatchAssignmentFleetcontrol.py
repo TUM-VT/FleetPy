@@ -176,7 +176,10 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
                 new_earliest_pu, new_latest_pu = pu_offer_tuple
                 add_offer[G_OFFER_PU_INT_START] = new_earliest_pu
                 add_offer[G_OFFER_PU_INT_END] = new_latest_pu
-            offer = TravellerOffer(rq.get_rid(), self.op_id, pu_time - rq.get_rq_time(), do_time - pu_time, int(rq.init_direct_td * self.dist_fare + self.base_fare),
+            rq_id = rq.get_rid_struct()
+            prq = self.rq_dict[rq_id]
+            fare = self._compute_fare(simulation_time, prq, assigned_vehicle_plan)
+            offer = TravellerOffer(rq_id, self.op_id, pu_time - rq.get_rq_time(), do_time - pu_time, fare,
                     additional_parameters=add_offer)
             rq.set_service_offered(offer)
         else:
