@@ -799,7 +799,12 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                     LOG.debug("only one edge missed: if this is a turn, everything is fine! route: {}".format(r))
                     self.pos = target_pos
                     self.cl_driven_route.append(target_pos[0])
-                    self.cl_driven_route_times.append( self.cl_driven_route_times[-1] )
+                    if self.cl_driven_route_times:
+                        self.cl_driven_route_times.append(self.cl_driven_route_times[-1])
+                    else:
+                        self.cl_driven_route_times.append(0)
+                        print(f"cl_driven_route_times ERROR occurred: {self.cl_driven_route_times}: applying FIX with 0")
+                        LOG.warning(f"cl_driven_route_times ERROR occurred: {self.cl_driven_route_times}: applying FIX with 0 for {self}")
                     self._route_update_needed = False
                 elif self.routing_engine.return_route_infos(r, 0, 0)[0] < 0.1:
                     LOG.debug("more edges but very short edges -> assume reached destination!")
