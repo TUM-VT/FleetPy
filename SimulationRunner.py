@@ -174,13 +174,16 @@ class SimulationRunner:
 if __name__ == "__main__":
     # Get Arguments
     parser = argparse.ArgumentParser(description='Run FleetPy-SUMO Coupling.')
-    parser.add_argument("--scenarios", "--sc", type=lambda s: [int(item) for item in s.split(',')], required=True, help="List of scenario IDs", default=None)
+    parser.add_argument("--scenarios", "--sc", type=lambda s: [int(item) for item in s.split(',')], help="List of scenario IDs", default=None)
     parser.add_argument('--study_name', type=str, default=None, help='Study name')
     parser.add_argument('--processes',"--p", type=int, default=None, help='Number of Processes')
     parser.add_argument('--sim_network_name', type=int, default=None, help='Simulation Network Name')
+    parser.add_argument('--sc_from', type=int, default=None, help='From Scenario...')
+    parser.add_argument('--sc_to', type=int, default=None, help='To Scenario... (including)')
     args = parser.parse_args()
     study_name = STUDY_NAME if args.study_name is None else args.study_name
     selected_scenarios = SELECTED_SCENARIOS if args.scenarios is None else args.scenarios
+    selected_scenarios =list(range(args.sc_from,args.sc_to+1)) if args.sc_from is not None and args.sc_to is not None else SELECTED_SCENARIOS
     process_count = PROCESS_COUNT if args.processes is None else args.processes
     sim_network_name = SIM_NETWORK_NAME if args.sim_network_name is None else args.sim_network_name
 

@@ -226,7 +226,49 @@ class SUMOFleetPyServer():
         self._finalize_setup()
     
     def run_fp_simulation(self):
-        run_scenarios(constant_config_file=self.fp_constant_config_path, scenario_file=self.fp_scenario_config_path, n_parallel_sim=1, n_cpu_per_sim=1, evaluate=1, log_level="info", continue_next_after_error=True)
+        #run_scenarios(constant_config_file=self.fp_constant_config_path, scenario_file=self.fp_scenario_config_path, n_parallel_sim=1, n_cpu_per_sim=1, evaluate=1, log_level="info", continue_next_after_error=True)
+        constant_cfg = config.ConstantConfig(self.fp_constant_config_path)
+        scenario_cfgs = config.ScenarioConfig(self.fp_scenario_config_path)
+
+        # set constant parameters from function arguments
+        # TODO # get study name and check if its a studyname
+        const_abs = os.path.abspath(self.fp_constant_config_path)
+        study_name = os.path.basename(os.path.dirname(os.path.dirname(const_abs)))
+
+        if study_name == "scenarios":
+            print("ERROR! The path of the config files is not longer up to date!")
+            print("See documentation/Data_Directory_Structure.md for the updated directory structure needed as input!")
+            exit()
+        if constant_cfg.get(G_STUDY_NAME) is not None and study_name != constant_cfg.get(G_STUDY_NAME):
+            print("ERROR! {} from constant config is not consistent with study directory: {}".format(constant_cfg[G_STUDY_NAME], study_name))
+            print("{} is now given directly by the folder name !".format(G_STUDY_NAME))
+            exit()
+        constant_cfg[G_STUDY_NAME] = study_name
+        constant_cfg["n_cpu_per_sim"] = 1
+        constant_cfg["evaluate"] = self.fp_evaluate
+        constant_cfg["log_level"] = self.fp_log_level
+
+    # combine constant and scenario parameters into verbose scenario parameters
+        for i, scenario_cfg in enumerate(scenario_cfgs):
+            scenario_cfgs[i] = constant_cfg + scenario_cfg
+        
+        print(scenario_cfgs)
+        SF = load_simulation_environment(scenario_cfgs[0])
+        print(SF)
+        breakpoint()
+        self.fp_sim_env = SF
+        resultsPath = self.fp_sim_env.dir_names[G_DIR_OUTPUT]
+        sim_time_offset = self.fp_sim_env.scenario_parameters.get(G_SUMO_SIM_TIME_OFFSET, 0)
+        end_time = self.fp_sim_env.scenario_parameters[G_SIM_END_TIME]
+        sim_time = self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME, 0)
+        while True:
+            leg_status_dict = self.fp_sim_env.step(sim_time)
+            if sim_time % 120 == 0:
+                print("{}: current simtime: {}/{}".format(self.fp_sim_env.scenario_parameters[G_SCENARIO_NAME], sim_time, end_time)) 
+            sim_time += 1
+            if sim_time > end_time:
+                break
+        self._post_sim_evaluation()
 
     def run_coupled_simulation(self):
         vehicle_to_position_dict = {}
@@ -492,31 +534,107 @@ class SUMOFleetPyServer():
         sim_pos_dict[sim_time] = {}
         # Initialise the first time step
         if self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME, 0) == sim_time:
+            for veh_id in sim_vehicle_id_list:
+                edge = traci.vehicle.getRoadID(veh_id)
+                sim_pos_dict[sim_time].update({veh_id:(edge,sim_time)})
+            
+            
+            return sim_pos_dict ,res_list
+        
+        if sim_pos_dict.get(sim_time-1) == None:
+            raise ValueError(f"Error: sim_pos_dict at time {sim_time-1} is None")
+            
+       ## 1 Vehicles in Simualtion
+        for veh_id in sim_vehicle_id_list:
+            current_edge = traci.vehicle.getRoadID(veh_id)
+
+           # A) Vehicle was not in simulation last time step --> Initialise Count on new edge 
+            if sim_pos_dict[sim_time-1].get(veh_id) == None:
+                sim_pos_dict[sim_time].update({veh_id:(current_edge,sim_time)})
+           
+           
+           #B) Vehicle was in simulation last time step
+            elif sim_pos_dict[sim_time-1].get(veh_id) != None:
+               prev_time_step_edge = sim_pos_dict[sim_time-1].get(veh_id)[0]
+
+               
+               #B-1 Vehicle was in simulation last time step, but on other edge --> Save last edge and time, update current edge and time 
+               if prev_time_step_edge != current_edge:
+                   last_edge = sim_pos_dict[sim_time-1].get(veh_id)[0]
+                   res_list.append((veh_id,last_edge,int(sim_pos_dict[sim_time-1].get(veh_id)[1]),int(sim_time)))
+                   sim_pos_dict[sim_time].update({veh_id:(current_edge,sim_time)})
+                
+                #B-2 Vehicle was in simulation last time step, and ist still on the same edge --> Update time
+               elif prev_time_step_edge == current_edge:
+                   sim_pos_dict[sim_time].update({veh_id:sim_pos_dict[sim_time-1].get(veh_id)})
+
+        ## Vehicles that have reached their destination
+        arrived_vehicle_id_list = traci.simulation.getArrivedIDList()
+        for arr_vehicle in arrived_vehicle_id_list:
+            if sim_pos_dict[sim_time-1].get(veh_id) != None:
+                last_edge = sim_pos_dict[sim_time-1].get(veh_id)[0]
+                res_list.append((veh_id,last_edge,int(sim_pos_dict[sim_time-1].get(veh_id)[1]),int(sim_time)))
+
+        
+        
+        # Delete old entries in sim_pos_dict to save memory
+        if sim_time-2 in sim_pos_dict.keys():
+            if sim_time -2 >= self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME, 0):
+                del sim_pos_dict[sim_time-2]
+
+        return sim_pos_dict,res_list
+        """
         for veh_id in vehicle_id_list: ##TODO: Filter for relevant vehicles
             edge = traci.vehicle.getRoadID(veh_id)
+            # veh_edge_dict = {(veh_id,edge_start_time):count}
             veh_edge_dict.update({(veh_id,sim_time):edge})
             ## A) Vehicle was not in simulation last time step --> Initialise Count on new edge (0)
             if (veh_id,sim_time-1) not in veh_edge_dict.keys(): 
                 veh_edge_start_time_count.update({(veh_id,edge,sim_time):0})
                 veh_start_time_dict.update({veh_id:sim_time})
                     
-            ## B) Vehicle was simulation last time step, but on other edge --> Initialise Count on new edge (0)
+            ## B) Vehicle was in simulation last time step, but on other edge --> Initialise Count on new edge (0)
             elif veh_edge_dict[(veh_id,sim_time-1)] != edge:
                 veh_edge_start_time_count.update({(veh_id,edge,sim_time):0})
                 veh_start_time_dict.update({veh_id:sim_time})
                     
-            ## C) Vehicle was simulation last time step and on same edge --> Update Count on edge (+1)
+            ## C) Vehicle was in simulation last time step and on same edge --> Update Count on edge (+1)
             elif veh_edge_dict[(veh_id,sim_time-1)] == edge:
                 veh_edge_start_time_count[veh_id,edge,veh_start_time_dict[veh_id]] += 1
+            
             
         ### Save Memory and delete entrys in veh_edge_dicts after 2 seconds
         keys_to_delete = [key for key in veh_edge_dict if key[1] == sim_time-2]
         for key in keys_to_delete:
             del veh_edge_dict[key]
-                
+              
         return veh_edge_dict,veh_start_time_dict,veh_edge_start_time_count
+        """
+    def _get_rt_with_historic_estimate(self,tt_df):
+        return tt_df
+    def _process_tt_data(self,res_list):        
+        tt_df = pd.DataFrame(res_list, columns=['veh_id','edge_id', 'starting_time', 'end_time'])
+        if len(tt_df) == 0:
+            return pd.DataFrame(columns=['from_node', 'to_node', 'edge_tt', 'edge_var'])
+        tt_df["edge_tt"] = tt_df["end_time"] - tt_df["starting_time"]
+        tt_df = tt_df[tt_df['edge_tt'] > 1] 
 
-    def _process_tt_data(self,veh_edge_start_time_count,veh_start_time_dict):
+        tt_df = self._filter_by_fco_mode(tt_df)  
+
+        tt_df = tt_df.groupby('edge_id').agg(edge_tt=('edge_tt', 'mean'), edge_var=('edge_tt', 'var'), count=('edge_tt', 'count')).reset_index()
+        tt_df["edge_id"] = tt_df["edge_id"].apply(lambda x: self.g_sumo_edge_id_to_fs_edge.get(x, None))
+
+        if 'edge_id' in tt_df.columns:
+            tt_df = tt_df.dropna(subset=['edge_id'])
+        tt_df["from_node"] = tt_df["edge_id"].apply(lambda x: x[0])
+        tt_df["to_node"] = tt_df["edge_id"].apply(lambda x: x[1])
+        
+        tt_df["edge_tt"]=tt_df['edge_tt'].round(3)
+        tt_df["edge_var"] = tt_df["edge_var"].fillna(0)
+        tt_df["edge_var"]=tt_df['edge_var'].round(3)
+        tt_df = self._get_rt_with_historic_estimate(tt_df)
+        tt_df.drop(columns="edge_id",inplace=True)
+        """
         t_veh_ids =[]
         t_starting_times = []
         t_edges =[]
@@ -531,8 +649,7 @@ class SUMOFleetPyServer():
             t_traveltimes.append(float((value+1)))
         tt_df = pd.DataFrame(data={"veh_id":t_veh_ids,"edge_id":t_edges,"starting_time":t_starting_times,"edge_tt":t_traveltimes})
         tt_df["starting_time"] = tt_df["starting_time"].astype(int)
-        tt_df = self._filter_by_fco_mode(tt_df) 
-        tt_df = tt_df.groupby('edge_id').agg({'edge_tt': ['mean', 'var']}).reset_index()       
+        tt_df = self._filter_by_fco_mode(tt_df)   
         tt_df.columns = ['_'.join(col).strip('_') if isinstance(col, tuple) else col for col in tt_df.columns]
         tt_df = tt_df.rename(columns={f'edge_tt_mean':"edge_tt",f'edge_tt_var':"edge_var"})       
         tt_df["edge_tt"]=tt_df['edge_tt'].round(3)
@@ -546,10 +663,13 @@ class SUMOFleetPyServer():
         tt_df["from_node"] = tt_df["edge_id"].apply(lambda x: x[0])
         tt_df["to_node"] = tt_df["edge_id"].apply(lambda x: x[1])
         tt_df.drop(columns="edge_id",inplace=True)
+        """
         return tt_df 
 
     def _save_tt_to_csv(self,tt_df, sim_time):
         resultsPath = self.fp_sim_env.dir_names[G_DIR_OUTPUT]
+        if 'count' in tt_df.columns:
+            tt_df.drop(columns="count",inplace=True)
         if not os.path.isdir(os.path.join(resultsPath, "EdgeTravelTimes")):
             os.mkdir(os.path.join(resultsPath, "EdgeTravelTimes")) 
         save_path = os.path.join(resultsPath, "EdgeTravelTimes", f"SUMO_travel_times_{sim_time}.csv")
