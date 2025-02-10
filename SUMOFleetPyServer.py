@@ -234,11 +234,16 @@ class SUMOFleetPyServer():
         sim_time_offset = self.fp_sim_env.scenario_parameters.get(G_SUMO_SIM_TIME_OFFSET, 0)
         end_time = self.fp_sim_env.scenario_parameters[G_SIM_END_TIME]
 
-        ##tt-retrieval
+        ##tt-retrieval (old)
         veh_edge_start_time_count = {}  #{(veh_id,edge,start_time):time_counter}
         veh_start_time_dict ={} #{(veh_id,start_time_on_current_edge)}
         veh_edge_dict ={} # {(veh_id,sim_time):edge_id,..}
         
+        ##tt-retrieval (new)
+        sim_pos_dict = {} # {sim_time:{veh_id:(edge,start_time_on_this_edge)}}
+        res_list = [] # [(edge_id, start_time, end_time, veh_id)]
+        
+
         # get vehicle types of the simulation vehicles
         self.fp_opvid_to_veh_type = {op_vid : veh.veh_type for op_vid, veh in self.fp_sim_env.sim_vehicles.items()} # {(op_id,veh_id):"veh_type"}
 
@@ -283,12 +288,11 @@ class SUMOFleetPyServer():
 
             # 4) get current vehicle positions and update travel time statistics (if needed)
             if sim_time%1==0 and self.g_update_fleetsim_traveltimes==True:
-                veh_edge_dict,veh_start_time_dict,veh_edge_start_time_count = self._get_current_edge_tt(sim_time=sim_time,veh_edge_dict=veh_edge_dict,veh_start_time_dict=veh_start_time_dict,veh_edge_start_time_count=veh_edge_start_time_count)
+                sim_pos_dict,res_list = self._get_current_edge_tt(sim_time=sim_time,sim_pos_dict=sim_pos_dict,res_list=res_list)
             
             # 5) send new travel times to fleetsim
             if (sim_time%self.g_update_travel_statistics_time_step==0) and self.g_update_fleetsim_traveltimes==True:
-                time_df = self._process_tt_data(veh_edge_start_time_count,veh_start_time_dict)
-                #time_df = self._filter_by_fco_mode(time_df)
+                time_df = self._process_tt_data(res_list=res_list)
                 time_update_dict = dict(zip(zip(list(time_df["from_node"]),list(time_df["to_node"])),zip(list(time_df["edge_tt"]),list(time_df["edge_var"]))))
                 self._save_tt_to_csv(time_df, sim_time)
                 veh_edge_start_time_count ={}
@@ -312,11 +316,14 @@ class SUMOFleetPyServer():
                 active_pois = self._show_idle_vehicles_gui(active_pois)
 
             step+=1
+        traci.close()
+        self._post_sim_evaluation()
     
+    def _post_sim_evaluation(self):
         t1_stop = perf_counter()
         time_elapsed = []
         time_elapsed.append(t1_stop)
-        timefile = resultsPath+"Computationaltime.csv"
+        timefile = self.fp_sim_env.dir_names[G_DIR_OUTPUT]+"Computationaltime.csv"
 
         with open(timefile, 'w', newline = '') as csvfile:
             my_writer = csv.writer(csvfile, delimiter = ' ')
@@ -325,9 +332,8 @@ class SUMOFleetPyServer():
         evaluation_start_time = self.fp_sim_env.scenario_parameters.get(G_EVAL_INT_START,self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME))
         evaluation_end_time = self.fp_sim_env.scenario_parameters.get(G_EVAL_INT_END,self.fp_sim_env.scenario_parameters.get(G_SIM_END_TIME))
 
-        eval.standard_evaluation(resultsPath, evaluation_start_time =evaluation_start_time, evaluation_end_time =evaluation_end_time, print_comments=True, dir_names_in = {})
-        eval.evaluate_folder(resultsPath,evaluation_start_time = evaluation_start_time, evaluation_end_time = evaluation_end_time, print_comments = False)
-        traci.close()
+        eval.standard_evaluation(self.fp_sim_env.dir_names[G_DIR_OUTPUT], evaluation_start_time =evaluation_start_time, evaluation_end_time =evaluation_end_time, print_comments=True, dir_names_in = {})
+        eval.evaluate_folder(self.fp_sim_env.dir_names[G_DIR_OUTPUT],evaluation_start_time = evaluation_start_time, evaluation_end_time = evaluation_end_time, print_comments = False)
         sys.stdout.flush()
 
     def  _update_routes_and_add_vehicles(self, sim_time):
@@ -481,8 +487,11 @@ class SUMOFleetPyServer():
                 sumoRoute.append(edgeID)
         return sumoRoute
 
-    def _get_current_edge_tt(self,sim_time,veh_edge_dict,veh_start_time_dict,veh_edge_start_time_count):
-        vehicle_id_list = traci.vehicle.getIDList()
+    def _get_current_edge_tt(self,sim_time,sim_pos_dict,res_list):
+        sim_vehicle_id_list = traci.vehicle.getIDList()
+        sim_pos_dict[sim_time] = {}
+        # Initialise the first time step
+        if self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME, 0) == sim_time:
         for veh_id in vehicle_id_list: ##TODO: Filter for relevant vehicles
             edge = traci.vehicle.getRoadID(veh_id)
             veh_edge_dict.update({(veh_id,sim_time):edge})
@@ -499,7 +508,7 @@ class SUMOFleetPyServer():
             ## C) Vehicle was simulation last time step and on same edge --> Update Count on edge (+1)
             elif veh_edge_dict[(veh_id,sim_time-1)] == edge:
                 veh_edge_start_time_count[veh_id,edge,veh_start_time_dict[veh_id]] += 1
-                
+            
         ### Save Memory and delete entrys in veh_edge_dicts after 2 seconds
         keys_to_delete = [key for key in veh_edge_dict if key[1] == sim_time-2]
         for key in keys_to_delete:
