@@ -183,7 +183,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     study_name = STUDY_NAME if args.study_name is None else args.study_name
     selected_scenarios = SELECTED_SCENARIOS if args.scenarios is None else args.scenarios
-    selected_scenarios =list(range(args.sc_from,args.sc_to+1)) if args.sc_from is not None and args.sc_to is not None else SELECTED_SCENARIOS
+    selected_scenarios =list(range(args.sc_from,args.sc_to+1)) if args.sc_from is not None and args.sc_to is not None else selected_scenarios
     process_count = PROCESS_COUNT if args.processes is None else args.processes
     sim_network_name = SIM_NETWORK_NAME if args.sim_network_name is None else args.sim_network_name
 
