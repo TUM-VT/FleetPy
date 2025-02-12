@@ -22,6 +22,7 @@ the setup should create a .pyd-file and a build-folder
 ext = Extension(name="PyNetwork", sources=["PyNetwork.pyx"], build_dir="build",
                                            script_args=['build'], 
                                            options={'build':{'build_lib':'.'}},
-                                            include_dirs=[numpy.get_include()])
+                                            include_dirs=[numpy.get_include()],
+                                            extra_compile_args=['-std=c++11'])
 
 setup(ext_modules=cythonize(ext))

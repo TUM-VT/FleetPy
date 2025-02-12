@@ -53,9 +53,9 @@ cdef class PyNetwork:
             targets[i] = x
         #tts and dis will be overwritten with c++ function
         cdef np.ndarray[double, ndim=1, mode='c'] tts
-        tts = np.zeros((N_targets,), dtype=np.float)
+        tts = np.zeros((N_targets,), dtype=np.float64)
         cdef np.ndarray[double, ndim=1, mode='c'] dis
-        dis = np.zeros((N_targets,), dtype=np.float)
+        dis = np.zeros((N_targets,), dtype=np.float64)
         #calling c++: results will be stored in tts/dis; returns number of reached targets
         cdef int reached_targets = self.c_net.computeTravelCostsXTo1py(start_node_index, N_targets, &targets[0], &targets[0], &tts[0], &dis[0], mr, mt)
         return [(targets[i], tts[i], dis[i]) for i in range(reached_targets)]
@@ -83,9 +83,9 @@ cdef class PyNetwork:
             targets[i] = x
         #tts and dis will be overwritten with c++ function
         cdef np.ndarray[double, ndim=1, mode='c'] tts
-        tts = np.zeros((N_targets,), dtype=np.float)
+        tts = np.zeros((N_targets,), dtype=np.float64)
         cdef np.ndarray[double, ndim=1, mode='c'] dis
-        dis = np.zeros((N_targets,), dtype=np.float)
+        dis = np.zeros((N_targets,), dtype=np.float64)
         #calling c++: results will be stored in tts/dis; returns number of reached targets
         cdef int reached_targets = self.c_net.computeTravelCosts1ToXpy(start_node_index, N_targets, &targets[0], &targets[0], &tts[0], &dis[0], mr, mt)
         return [(targets[i], tts[i], dis[i]) for i in range(reached_targets)]

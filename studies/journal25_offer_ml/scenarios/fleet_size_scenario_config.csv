@@ -1,0 +1,4 @@
+scenario_name,rq_file,op_fleet_composition,nw_dynamic_f
+fs1200,2018-11-14.csv,{default_vehtype: 1200},2018-11-14_tt_factors_hourly.csv
+fs1500,2018-11-14.csv,{default_vehtype: 1500},2018-11-14_tt_factors_hourly.csv
+fs1800,2018-11-14.csv,{default_vehtype: 1800},2018-11-14_tt_factors_hourly.csv

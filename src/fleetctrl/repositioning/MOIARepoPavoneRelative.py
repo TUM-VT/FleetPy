@@ -91,8 +91,8 @@ class MOIARepoPavoneRelative(RepositioningBase):
         o_d_diff_list = []
         omega_dict = {}
         for zone_id in list_zones:
-            o_d_diff = vehicles_repo_to_zone.get(zone_id, 0) + int(np.math.ceil(supply_fc_dict.get(zone_id, 0)))\
-                    - int(np.math.ceil(demand_fc_dict.get(zone_id, 0)))
+            o_d_diff = vehicles_repo_to_zone.get(zone_id, 0) + int(np.ceil(supply_fc_dict.get(zone_id, 0)))\
+                    - int(np.ceil(demand_fc_dict.get(zone_id, 0)))
             o_d_diff_list.append( (zone_id, o_d_diff) )
             number_idle = number_idle_vehicles.get(zone_id, 0)
             v_i_e_dict[zone_id] = max(number_idle + min(o_d_diff, 0), 0)

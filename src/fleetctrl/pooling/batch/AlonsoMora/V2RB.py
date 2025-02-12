@@ -189,4 +189,3 @@ class V2RB():
                 new_plan_list.append(new_ps)
         new_veh_plan = VehiclePlan(self.veh, sim_time, routing_engine, new_plan_list, external_pax_info=base_plan.pax_info.copy())
         return V2RB(routing_engine, rq_dict, sim_time, lower_key, self.veh, std_bt, add_bt, obj_function, orig_veh_plans=[new_veh_plan])
-

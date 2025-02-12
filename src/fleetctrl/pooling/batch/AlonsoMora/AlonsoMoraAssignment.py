@@ -3,6 +3,7 @@ import logging
 
 import time
 import numpy as np
+import pandas as pd
 from functools import cmp_to_key
 from typing import Callable, Dict, List, Any, Tuple, TYPE_CHECKING
 
@@ -281,6 +282,27 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
 
         self.current_best_cfv = 0 #stores the global cost function value from last optimisation
 
+        self.record_v2rb_flag = self.fleetcontrol.record_fleet_state_flag
+        if self.record_v2rb_flag:
+            self.v2rb_df = pd.DataFrame(columns=[
+                'sim_time',
+                'rtv_key',
+                'list_plan_stops',
+                'utility',
+                'optimum'
+            ]).astype({
+                'sim_time': float,
+                'rtv_key': str,
+                'list_plan_stops': str,
+                'utility': float,
+                'optimum': bool
+            })
+
+    def __del__(self):
+        if self.record_v2rb_flag:
+            self.v2rb_df.to_csv(self.fleetcontrol.v2rb_output_f, sep=';', index=False)
+
+
     def register_parallelization_manager(self, alonsomora_parallelization_manager : ParallelizationManager):
         LOG.info("AM register parallelization manager")
         self.alonso_mora_parallelization_manager = alonsomora_parallelization_manager
@@ -363,6 +385,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         time_str = ",".join(["{};{}".format(a, b) for a, b in times.items()])
         LOG.info("OPT TIMES:{}".format(time_str))
         LOG.info("Opt stats at sim time {} : opt duration {} | res cfv {}".format(self.sim_time, t_opt - t_start, self.current_best_cfv))
+
+        self._mark_optimal_v2rb()
 
     def add_new_request(self, rid : Any, prq : PlanRequest, consider_for_global_optimisation : bool = True, is_allready_assigned : bool = False):
         """ this function adds a new request to the modules database and set entries that
@@ -1028,6 +1052,12 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             self._buildOnCurrentTree(vid, rid)
 
         self._checkForNecessaryV2RBsAndComputeMissing(vid)
+
+        if self.record_v2rb_flag:
+            rtv_keys = self.rtv_v.get(vid, {}).keys()
+            for rtv_key in rtv_keys:
+                v2rb = self.rtv_obj.get(rtv_key)
+                self.record_v2rb(rtv_key, v2rb)
         
     def _buildOnCurrentTree(self, vid : int, rid : Any):
         """This method adds rid to all currently available rtv_keys for vehicle
@@ -1468,21 +1498,21 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                         expr = gurobi.LinExpr()
                         for rtv in vids[vid]:
                             expr.add(variables[rtv], 1)
-                        m.addConstr(expr, gurobi.GRB.LESS_EQUAL, 1, "c_{}".format(vid))
+                        m.addConstr(expr <= 1, name="c_{}".format(vid))
                         # TODO # seems to be wrong arguments but working anyway
                     #unassigned requests constraint
                     for rid in unassigned_rids.keys():
                         expr = gurobi.LinExpr()
                         for rtv in unassigned_rids[rid]:
                             expr.add(variables[rtv], 1)
-                        m.addConstr(expr, gurobi.GRB.LESS_EQUAL, 1, "c_u_{}".format(rid))
+                        m.addConstr(expr <= 1, name="c_u_{}".format(rid))
                         # TODO # seems to be wrong arguments but working anyway
                     #assigned requests constraint
                     for rid in assigned_rids.keys():
                         expr = gurobi.LinExpr()
                         for rtv in assigned_rids[rid]:
                             expr.add(variables[rtv], 1)
-                        m.addConstr(expr, gurobi.GRB.EQUAL, 1, "c_a_{}".format(rid))
+                        m.addConstr(expr <= 1, name="c_a_{}".format(rid))
                         # TODO # seems to be wrong arguments but working anyway
                     # set initial solution   # TODO set initial solution?
                     for vid, rtv_key in self.current_assignments.items():
@@ -2177,6 +2207,58 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                         except:
                             pass
 
+    ###=======================================================================================================###
+    ### RECORDING V2RBS
+    ###=======================================================================================================###
+    # def record_v2rb(self, vid):
+    # # Not implemented for Multiprocessing
+    #     rtv_keys = self.rtv_v.get(vid, {}).keys()
+    #     for rtv_key in rtv_keys:
+    #         v2rb = self.rtv_obj.get(rtv_key)
+    #         for veh_plan in v2rb.veh_plans:
+    #             list_plan_stops_info = self._convert_list_plan_stops(veh_plan.list_plan_stops)
+    #             utility = veh_plan.utility
+    #             feasible = veh_plan.feasible
+    #             self.v2rb_output_f.write(f"{self.sim_time};{str(rtv_key)};{str(list_plan_stops_info)};{str(utility)};{str(feasible)}\n")
+
+    def record_v2rb(self, key, v2rb):
+    # Not implemented for Multiprocessing
+        for veh_plan in v2rb.veh_plans:
+            list_plan_stops_info = self._convert_list_plan_stops(veh_plan.list_plan_stops)
+            utility = veh_plan.utility
+            # feasible = veh_plan.feasible
+            new_record = pd.DataFrame([{
+            'sim_time': self.sim_time,
+            'rtv_key': str(key),
+            'list_plan_stops': str(list_plan_stops_info), 
+            'utility': utility,
+            'optimum': False
+            }])
+            
+            self.v2rb_df = pd.concat([self.v2rb_df, new_record], ignore_index=True)
+
+    def _convert_list_plan_stops(self, list_plan_stops):
+        list_plan_stops_info = []
+        for plan_stop in list_plan_stops:
+            plan_stop_pos = plan_stop.pos[0]
+            plan_stop_state = plan_stop.state.value
+            plan_stop_boarding_rid = plan_stop.get_list_boarding_rids()
+            plan_stop_alighting_rid = plan_stop.get_list_alighting_rids()
+            plan_stop_info = (plan_stop_pos, plan_stop_state, plan_stop_boarding_rid, plan_stop_alighting_rid)
+            list_plan_stops_info.append(plan_stop_info)
+        return list_plan_stops_info
+    
+    def _mark_optimal_v2rb(self):
+        # Use get_optimisation_solution? The new v2rb might be accepted because of set_assignment?
+        for vid, assigned_key in self.optimisation_solutions.items():
+            if assigned_key is not None:
+                opt_v2rb = self.rtv_obj[assigned_key]
+                opt_plan = opt_v2rb.getBestPlan()
+                opt_utility = opt_plan.utility
+
+                mask = (self.v2rb_df['rtv_key'] == str(assigned_key)) & (self.v2rb_df['utility'] == opt_utility)
+                self.v2rb_df.loc[mask, 'optimum'] = True
+                
 
 def optimize_boarding_points_of_vid_assigned_v2rb(fleetcontrol, routing_engine, sim_time, operator_attributes, objective_function,
                 veh_obj, assigned_key, mutually_exclusive_cluster_id_to_rids,

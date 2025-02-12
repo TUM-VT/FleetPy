@@ -30,6 +30,10 @@ studies/*
 !studies/example_study
 studies/example_study/results/*
 
+# journal25_offer_ml
+!studies/journal25_offer_ml
+studies/journal25_offer_ml/results/*
+
 # system dependent C++ Router files
 src/routing/cpp_router/*.pyd
 src/routing/cpp_router/build/*

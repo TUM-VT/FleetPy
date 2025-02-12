@@ -361,7 +361,7 @@ int Network::dijkstraForward(int start_node_index, double time_range, int max_ta
                 break;
             }
         }
-        if (current_node.mustStop() & (current_node.getIndex() != start_node_index)) {
+        if (current_node.mustStop() && (current_node.getIndex() != start_node_index)) {
             continue;
         }
         dijkstraStepForward_(pq, current_node, -current_pair.first);
@@ -473,7 +473,7 @@ int Network::dijkstraBackward(int start_node_index, double time_range, int max_t
                 break;
             }
         }
-        if (current_node.mustStop() & (current_node.getIndex() != start_node_index)) {
+        if (current_node.mustStop() && (current_node.getIndex() != start_node_index)) {
             continue;
         }
         //cout << "dijkstra  " << current_node.getStr() << endl;
@@ -553,7 +553,7 @@ pair<double, double> Network::dijkstraBidirectional(int start_node_index, int en
                 continue;
             }
             current_node.setSettledFw(dijkstra_number);
-            if (current_node.mustStop() & (current_node.getIndex() != start_node_index)) {
+            if (current_node.mustStop() && (current_node.getIndex() != start_node_index)) {
                 //cout << "skip a " << current_node.getIndex() << endl;
                 continue;
             }
@@ -578,7 +578,7 @@ pair<double, double> Network::dijkstraBidirectional(int start_node_index, int en
                 continue;
             }
             current_node.setSettledBw(dijkstra_number);
-            if (current_node.mustStop() & (current_node.getIndex() != end_node_index)) {
+            if (current_node.mustStop() && (current_node.getIndex() != end_node_index)) {
                 //cout << "skip b " << current_node.getIndex() << endl;
                 continue;
             }
