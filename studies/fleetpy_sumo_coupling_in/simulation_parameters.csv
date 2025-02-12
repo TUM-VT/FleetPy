@@ -508,4 +508,3 @@ simulation_index,SAV_demand_ratio,vot,vor,fleet_size,network_name,vehtype,object
 901,0.02,1,0,200,sumo_in,default_vehtype,total_system_time,21600,28800,0,18000,32400,PoolingIRSOnly,sumo_in,NetworkBasicReliabilityWithStoreCppSumoCoupling,SUMOcontrolledSim,,,edge_tt,0,0,,,True,
 902,0.02,1,0,200,sumo_in,default_vehtype,total_system_time,21600,28800,0,18000,32400,PoolingIRSOnly,sumo_in,NetworkBasicReliabilityWithStoreCppSumoCoupling,SUMOcontrolledSim,,,edge_tt,0,0,,5,True,
 903,0.02,1,0,200,sumo_in,default_vehtype,total_system_time,21600,28800,0,18000,32400,PoolingIRSOnly,sumo_in,NetworkBasicWithStoreCpp,ImmediateDecisionsSimulation,,,edge_tt,0,0,,,False,
-,,,,,,,,,,,,,,,,,,,,,,,,,
