@@ -1,43 +1,80 @@
-# TODO # merge wasnt easy here!
-# Packages required to run the simulation
-# Non-specific version requirements
-ipython
-numba
-scikit-learn
-
-# Specific version requirements
-# ">=" could be replaced with "~="
+affine==2.4.0
+asttokens==2.4.1
 attrs==19.2.0
-#certifi==2019.9.11
-certifi>=2019.9.11
+certifi==2024.8.30
+charset-normalizer==3.4.0
 click==7.0
 click-plugins==1.1.1
 cligj==0.7.1
+colorama==0.4.4
+contextily==1.1.0
+contourpy==1.3.0
+cycler==0.12.1
+cython==3.0.11
+decorator==5.1.1
 dill==0.3.3
-Fiona
-Flask==1.1.2
-Flask-SocketIO==4.3.2
+dnspython==1.16.0
+eventlet==0.30.0
+exceptiongroup==1.2.2
+executing==2.1.0
+fiona==1.8.22
+flask==1.1.2
+flask-socketio==4.3.2
+fonttools==4.55.0
+geographiclib==2.0
 geopandas==0.7.0
-matplotlib
-numpy==1.19.5
+geopy==2.4.1
+greenlet==3.1.1
+gurobipy==12.0.0
+idna==3.10
+importlib-metadata==8.5.0
+importlib-resources==6.4.5
+ipython==8.18.1
+itsdangerous==2.2.0
+jedi==0.19.2
+jinja2==3.1.4
+joblib==1.4.2
+kiwisolver==1.4.7
+llvmlite==0.43.0
+markupsafe==3.0.2
+matplotlib==3.9.2
+matplotlib-inline==0.1.7
+mercantile==1.2.1
 munch==2.5.0
 networkx==2.3
-pandas==1.2.0
-pyproj
+numba==0.60.0
+numpy==2.0.2
+packaging==24.2
+pandas==2.2.3
+parso==0.8.4
+pexpect==4.9.0
+pillow==11.0.0
+prompt-toolkit==3.0.48
+ptyprocess==0.7.0
+pure-eval==0.2.3
+pygments==2.18.0
+pyparsing==3.2.0
+pyproj==3.6.1
+python-dateutil==2.9.0.post0
 python-engineio==3.14.2
 python-socketio==4.5.1
-pytz==2019.3
-pyyaml>=5.1.2
-rtree>=0.9.3
-scipy>=1.3.1
-Shapely>=1.6.4
-six
+pytz==2024.2
+pyyaml==6.0.2
+rasterio==1.4.2
+requests==2.32.3
+rtree==1.3.0
+scikit-learn==1.5.2
+scipy==1.13.1
+setuptools==75.6.0
+shapely==2.0.6
+six==1.16.0
+stack-data==0.6.3
+threadpoolctl==3.5.0
 tqdm==4.36.1
-contextily==1.1.0
-colorama==0.4.4
-
-## deprecated/separated installation required
-# eventlet==0.30.0
-# gurobipy==9.1.1
-# python-dateutil==2.8.1
-# yaml>=0.1.7
+traitlets==5.14.3
+typing-extensions==4.12.2
+tzdata==2024.2
+urllib3==2.2.3
+wcwidth==0.2.13
+werkzeug==3.1.3
+zipp==3.21.0
