@@ -7,7 +7,7 @@ network_name,Manhattan_2019_corrected
 demand_name,Manhattan_2018_DissRoman
 random_seed,0
 start_time,0
-end_time,86400
+end_time,7200
 time_step,30
 route_output_flag,True
 replay_flag,True
@@ -36,6 +36,7 @@ op_time_fare,0
 op_min_standard_fare,100
 ##2.1,Repositioning
 op_repo_method,AlonsoMoraRepositioning
-op_repo_horizons,900
+op_repo_timestep,900
+op_repo_horizons,0;2700
 ##3,ML
 op_record_fleet_state,True

@@ -165,18 +165,18 @@ class AlonsoMoraRepositioning(RepositioningBase):
                 for var in varlist:
                     expr.add(var, 1)
                 if assign_all_vehicles:
-                    m.addConstr(expr, gurobi.GRB.EQUAL, 1, "c_{}".format(vid))
+                    m.addConstr(expr == 1, name=f"c_{vid}")
                 else:
-                    m.addConstr(expr, gurobi.GRB.LESS_EQUAL, 1, "c_{}".format(vid))
+                    m.addConstr(expr <= 1, name=f"c_{vid}")
                     
             for rej_o, varlist in pos_constr_dict.items():
                 expr = gurobi.LinExpr()
                 for var in varlist:
                     expr.add(var, 1)
                 if assign_all_vehicles:
-                    m.addConstr(expr, gurobi.GRB.LESS_EQUAL, origin_to_counts[rej_o], "c_{}".format(rej_o))
+                    m.addConstr(expr <= origin_to_counts[rej_o], name=f"c_{rej_o}")
                 else:
-                    m.addConstr(expr, gurobi.GRB.EQUAL, origin_to_counts[rej_o], "c_{}".format(rej_o))
+                    m.addConstr(expr == origin_to_counts[rej_o], name=f"c_{rej_o}")
                     
             m.optimize() #optimization
             
