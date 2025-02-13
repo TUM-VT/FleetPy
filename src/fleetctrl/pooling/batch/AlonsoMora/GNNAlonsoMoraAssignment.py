@@ -1,13 +1,13 @@
 import pickle
 import os
-from typing import Dict, List, Callable, Tuple, Any
+from typing import Dict, List, Callable
 from collections import defaultdict
 
 from src.fleetctrl.FleetControlBase import FleetControlBase
 from src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignment import AlonsoMoraAssignment
 from src.misc.globals import G_DIR_TRAIN, G_DIR_OUTPUT, G_TRAIN_RR_FILE, G_TRAIN_VR_FILE, G_TRAIN_ASSIGNMENTS_FILE, \
     G_TRAIN_INIT_ASSIGNMENTS_FILE, G_TRAIN_FEATURE_TRAVEL_TIME, G_TRAIN_REQ_FEATURES_FILE, \
-    G_TRAIN_VEH_FEATURES_FILE, G_TRAIN_FEATURE_TRAVEL_DIST, G_TRAIN_FEATURE_TRAVEL_COST, G_TRAIN_FEATURE_NODE_TYPE, \
+    G_TRAIN_VEH_FEATURES_FILE, G_TRAIN_FEATURE_TRAVEL_DIST, G_TRAIN_FEATURE_TRAVEL_COST, \
     G_TRAIN_FEATURE_O_POS, G_TRAIN_FEATURE_D_POS, G_TRAIN_FEATURE_TW_PE, G_TRAIN_FEATURE_TW_PL, \
     G_TRAIN_FEATURE_DIRECT_TT, G_TRAIN_FEATURE_DIRECT_TD, G_TRAIN_FEATURE_MAX_TRIP_TIME, G_TRAIN_FEATURE_STATUS, \
     G_TRAIN_FEATURE_SOC, G_TRAIN_FEATURE_TYPE, G_TRAIN_FEATURE_V_POS, G_TRAIN_FEATURE_RQ_TIME
@@ -54,15 +54,15 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignment):
         return train_data
 
     def get_veh_features(self):
-        veh_features = {vid: {G_TRAIN_FEATURE_NODE_TYPE: 'vehicle', G_TRAIN_FEATURE_V_POS: vehicle.pos[0],
+        veh_features = {vid: {G_TRAIN_FEATURE_V_POS: vehicle.pos[0],
                               G_TRAIN_FEATURE_TYPE: vehicle.veh_type,
-                              G_TRAIN_FEATURE_STATUS: vehicle.status.display_name, G_TRAIN_FEATURE_SOC: vehicle.soc}
+                              G_TRAIN_FEATURE_STATUS: vehicle.status.value, G_TRAIN_FEATURE_SOC: vehicle.soc}
                         for vid, vehicle in self.veh_objs.items()}
         return veh_features
 
     def get_req_features(self):
         req_features = {
-            rid: {G_TRAIN_FEATURE_NODE_TYPE: 'request', G_TRAIN_FEATURE_O_POS: req.o_pos[0],
+            rid: {G_TRAIN_FEATURE_O_POS: req.o_pos[0],
                   G_TRAIN_FEATURE_D_POS: req.d_pos[0],
                   G_TRAIN_FEATURE_RQ_TIME: req.rq_time,
                   G_TRAIN_FEATURE_TW_PE: req.t_pu_earliest,
