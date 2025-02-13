@@ -10,7 +10,7 @@ from src.misc.globals import G_DIR_TRAIN, G_DIR_OUTPUT, G_TRAIN_RR_FILE, G_TRAIN
     G_TRAIN_VEH_FEATURES_FILE, G_TRAIN_FEATURE_TRAVEL_DIST, G_TRAIN_FEATURE_TRAVEL_COST, G_TRAIN_FEATURE_NODE_TYPE, \
     G_TRAIN_FEATURE_O_POS, G_TRAIN_FEATURE_D_POS, G_TRAIN_FEATURE_TW_PE, G_TRAIN_FEATURE_TW_PL, \
     G_TRAIN_FEATURE_DIRECT_TT, G_TRAIN_FEATURE_DIRECT_TD, G_TRAIN_FEATURE_MAX_TRIP_TIME, G_TRAIN_FEATURE_STATUS, \
-    G_TRAIN_FEATURE_SOC, G_TRAIN_FEATURE_TYPE, G_TRAIN_FEATURE_V_POS
+    G_TRAIN_FEATURE_SOC, G_TRAIN_FEATURE_TYPE, G_TRAIN_FEATURE_V_POS, G_TRAIN_FEATURE_RQ_TIME
 from src.routing.NetworkBase import NetworkBase
 from src.simulation.Legs import VehicleRouteLeg
 from src.simulation.Vehicles import SimulationVehicle
@@ -54,7 +54,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignment):
         return train_data
 
     def get_veh_features(self):
-        veh_features = {vid: {G_TRAIN_FEATURE_NODE_TYPE: 'vehicle', G_TRAIN_FEATURE_V_POS: vehicle.pos,
+        veh_features = {vid: {G_TRAIN_FEATURE_NODE_TYPE: 'vehicle', G_TRAIN_FEATURE_V_POS: vehicle.pos[0],
                               G_TRAIN_FEATURE_TYPE: vehicle.veh_type,
                               G_TRAIN_FEATURE_STATUS: vehicle.status.display_name, G_TRAIN_FEATURE_SOC: vehicle.soc}
                         for vid, vehicle in self.veh_objs.items()}
@@ -64,6 +64,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignment):
         req_features = {
             rid: {G_TRAIN_FEATURE_NODE_TYPE: 'request', G_TRAIN_FEATURE_O_POS: req.o_pos[0],
                   G_TRAIN_FEATURE_D_POS: req.d_pos[0],
+                  G_TRAIN_FEATURE_RQ_TIME: req.rq_time,
                   G_TRAIN_FEATURE_TW_PE: req.t_pu_earliest,
                   G_TRAIN_FEATURE_TW_PL: req.t_pu_latest, G_TRAIN_FEATURE_DIRECT_TT: req.init_direct_tt,
                   G_TRAIN_FEATURE_DIRECT_TD: req.init_direct_td,
