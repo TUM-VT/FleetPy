@@ -6,9 +6,27 @@ from src.misc.globals import *
 
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000
+
+INPUT_PARAMETERS_RidePoolingBatchAssignmentFleetcontrol = {
+    "doc" : """Batch assignment fleet control (i.e. BMW study, ITSC paper 2019)
+        ride pooling optimisation is called after every optimisation_time_step and offers are created in the time_trigger function
+        if "user_max_wait_time_2" is given:
+            if the user couldnt be assigned in the first try, it will be considered again in the next opt-step with this new max_waiting_time constraint
+        if "user_offer_time_window" is given:
+            after accepting an offer the pick-up time is constraint around the expected pick-up time with an interval of the size of this parameter""",
+    "inherit" : "RidePoolingBatchOptimizationFleetControlBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        G_OP_MAX_WT_2, G_OP_OFF_TW
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetControlBase):
-    def __init__(self, op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters, dir_names, charging_management=None):
-        """Batch assignment fleet control for the BMW study
+    def __init__(self, op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
+                 dir_names, op_charge_depot_infra=None, list_pub_charging_infra= []):
+        """Batch assignment fleet control (i.e. BMW study, ITSC paper 2019)
         ride pooling optimisation is called after every optimisation_time_step and offers are created in the time_trigger function
         if "user_max_wait_time_2" is given:
             if the user couldnt be assigned in the first try, it will be considered again in the next opt-step with this new max_waiting_time constraint
@@ -25,8 +43,15 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
         :type routing_engine: Network
         :param scenario_parameters: access to all scenario parameters (if necessary)
         :type scenario_parameters: dict
+        :param dirnames: directories for output and input
+        :type dirnames: dict
+        :param op_charge_depot_infra: reference to a OperatorChargingAndDepotInfrastructure class (optional) (unique for each operator)
+        :type OperatorChargingAndDepotInfrastructure: OperatorChargingAndDepotInfrastructure
+        :param list_pub_charging_infra: list of PublicChargingInfrastructureOperator classes (optional) (accesible for all agents)
+        :type list_pub_charging_infra: list of PublicChargingInfrastructureOperator
         """
-        super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters, dir_names, charging_management=charging_management)
+        super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
+                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra)
         self.max_wait_time_2 = operator_attributes.get(G_OP_MAX_WT_2, None)
         # if np.isnan(self.max_wait_time_2):
         #     self.max_wait_time_2 = None
@@ -38,7 +63,8 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
 
     def user_request(self, rq, sim_time):
         super().user_request(rq, sim_time)
-        self.unassigned_requests_1[rq.get_rid_struct()] = 1
+        if not self.rq_dict[rq.get_rid_struct()].get_reservation_flag():
+            self.unassigned_requests_1[rq.get_rid_struct()] = 1
         return {}
 
     def user_cancels_request(self, rid, simulation_time):
@@ -55,12 +81,12 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
         if assigned_vid is not None:
             veh_obj = self.sim_vehicles[assigned_vid]
             assigned_plan = self.RPBO_Module.get_current_assignment(assigned_vid)
-            new_best_plan = self.RPBO_Module.getVehiclePlanWithoutRid(veh_obj, assigned_plan, rid, simulation_time)
+            new_best_plan = self.RPBO_Module.get_vehicle_plan_without_rid(veh_obj, assigned_plan, rid, simulation_time)
             if new_best_plan is not None:
-                self.assign_vehicle_plan(assigned_vid, new_best_plan, simulation_time, force_assign=True)
+                self.assign_vehicle_plan(veh_obj, new_best_plan, simulation_time, force_assign=True)
             else:
                 assigned_plan = VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])
-                self.assign_vehicle_plan(assigned_vid, assigned_plan, simulation_time, force_assign=True)
+                self.assign_vehicle_plan(veh_obj, assigned_plan, simulation_time, force_assign=True)
         super().user_cancels_request(rid, simulation_time)
 
     def user_confirms_booking(self, rid, simulation_time):
@@ -111,7 +137,7 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
                         _, earliest_pu, _ = prq.get_o_stop_info()
                         new_latest_pu = earliest_pu + self.max_wait_time_2
                         self.change_prq_time_constraints(simulation_time, rid, new_latest_pu)
-                        self.RPBO_Module.addNewRequest(rid, prq)
+                        self.RPBO_Module.add_new_request(rid, prq)
                     else:   # no retry, rid declined
                         self._create_user_offer(prq, simulation_time)
                 else:
@@ -154,7 +180,7 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
                     additional_parameters=add_offer)
             rq.set_service_offered(offer)
         else:
-            offer = TravellerOffer(rq.get_rid(), self.op_id, None, None, None)
+            offer = self._create_rejection(rq, simulation_time)
         return offer
 
     def _get_offered_time_interval(self, rid):

@@ -94,6 +94,8 @@ class Demand:
         tmp_df = pd.read_csv(abs_req_f, dtype={"start": int, "end": int})
         number_rq_0 = tmp_df.shape[0]
         future_requests = tmp_df[(tmp_df[G_RQ_TIME] >= start_time) & (tmp_df[G_RQ_TIME] < end_time)]
+        number_rq_1 = future_requests.shape[0]
+        future_requests = future_requests[(future_requests[G_RQ_ORIGIN] != future_requests[G_RQ_DESTINATION])]
         number_rq = future_requests.shape[0]
         future_requests[G_RQ_TIME] = future_requests[G_RQ_TIME] - np.mod(future_requests[G_RQ_TIME],
                                                                          simulation_time_step)
@@ -112,8 +114,10 @@ class Demand:
                 self.future_requests[rq_time].update(new_rq_dict)
             else:
                 self.future_requests[rq_time] = new_rq_dict
-        LOG.info(f"init(): {number_rq_0 - number_rq}/{number_rq_0}"
+        LOG.info(f"init(): {number_rq_0 - number_rq_1}/{number_rq_0}"
                  f" requests removed ({G_RQ_TIME} not in simulation time)")
+        LOG.info(f"init(): {number_rq_1 - number_rq}/{number_rq_1}"
+                 f" requests removed ({G_RQ_ORIGIN} == {G_RQ_DESTINATION})")
         # LOG.debug(f"self.future_requests = {self.future_requests}")
 
     def load_parcel_demand_file(self, start_time, end_time, parcel_rq_file_dir, parcel_rq_file_name, np_random_seed, parcel_rq_type=None,
@@ -233,7 +237,7 @@ class Demand:
         if self.waiting_rq.get(rid):  # TODO # in case a vehicle arrives before the customer made a decision, simplest solution: customer boards
             del self.waiting_rq[rid]
         else:
-            LOG.warning("wating rq boarding warning : rid {} -> vid {} at {}".format(rid, vid, simulation_time))
+            LOG.warning("waiting rq boarding warning : rid {} -> vid {} at {}".format(rid, vid, simulation_time))
 
     def record_alighting_start(self, rid, vid, op_id, simulation_time, do_pos=None, t_egress=None):
         """
@@ -256,6 +260,11 @@ class Demand:
             del self.rq_db[rid]
         else:
             LOG.warning(f"user_ends_alighting({rid}): user not found in database!")
+            
+    def record_remaining_users(self):
+        for rid in list(self.rq_db.keys()):
+            self.record_user(rid)
+        self.save_user_stats(force=True)
 
     def _get_all_requests(self):
         """Returns a list of (rid, Request) pairs for all requests currently in the Demand object."""

@@ -15,6 +15,15 @@ Definition of Route: [start_node_id, intermediary_node_id1, intermediary_node_id
 """
 from abc import abstractmethod, ABCMeta
 
+INPUT_PARAMETERS_NetworkBase = {
+    "doc" : "this is the base abstract network class",
+    "inherit" : None,
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 
 def customized_section_cost_function(travel_time, travel_distance, current_node_index):
     """computes the customized section cost for routing
@@ -193,6 +202,12 @@ class NetworkBase(metaclass=ABCMeta):
         :rtype: bool
         """
         pass
+    
+    def reset_network(self, simulation_time : float):
+        """ this method is used in case a module changed the travel times to future states for forecasts
+        it resets the network to the travel times a stimulation_time
+        :param simulation_time: current simulation time"""
+        raise NotImplementedError(f"the method reset_network is not implemented for this network class")
 
     @abstractmethod
     def get_number_network_nodes(self):

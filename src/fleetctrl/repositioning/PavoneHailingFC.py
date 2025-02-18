@@ -1,6 +1,6 @@
 import random
 import numpy as np
-from src.fleetctrl.repositioning.RepositioningBase import RepositionBase
+from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 from src.misc.globals import *
 
 # from IPython import embed
@@ -10,8 +10,20 @@ import logging
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_PavoneHailingRepositioningFC = {
+    "doc" : """This class implements an adaption of the real-time rebalancing policy formulated in section 4.3 of
+    Zhang, R.; Pavone, M. (2016): Control of robotic mobility-on-demand systems. A queueing-theoretical perspective.
+    In: The International Journal of Robotics Research 35 (1-3), S. 186–203. DOI: 10.1177/0278364915581863.
 
-class PavoneHailingRepositioningFC(RepositionBase):
+    The adaption is that the supply side is forecast using arrival forecast and excess vehicles cannot be negative.""",
+    "inherit" : "RepositioningBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
+class PavoneHailingRepositioningFC(RepositioningBase):
     """This class implements an adaption of the real-time rebalancing policy formulated in section 4.3 of
     Zhang, R.; Pavone, M. (2016): Control of robotic mobility-on-demand systems. A queueing-theoretical perspective.
     In: The International Journal of Robotics Research 35 (1-3), S. 186–203. DOI: 10.1177/0278364915581863.
@@ -34,7 +46,7 @@ class PavoneHailingRepositioningFC(RepositionBase):
                           f"Set them in the {G_OP_REPO_TH_DEF} scenario parameter!")
         self.optimisation_timeout = 30 # TODO #
 
-    def determine_and_create_repositioning_plans(self, sim_time, lock=True):
+    def determine_and_create_repositioning_plans(self, sim_time, lock=None):
         """This method determines and creates new repositioning plans. The repositioning plans are directly assigned
         to the vehicles. The repositioning algorithm can choose whether the generated respective plan stops are locked.
         In order to allow further database processes, the vids of vehicles with new plans are returned.
@@ -44,6 +56,8 @@ class PavoneHailingRepositioningFC(RepositionBase):
         :return: list[vid] of vehicles with changed plans
         """
         self.sim_time = sim_time
+        if lock is None:
+            lock = self.lock_repo_assignments
         # get forecast values
         # -------------------
         t0 = sim_time + self.list_horizons[0]
@@ -67,6 +81,8 @@ class PavoneHailingRepositioningFC(RepositionBase):
         # print(number_idle_vehicles)
         # print("")
         total_idle_vehicles = sum(number_idle_vehicles.values())
+        if total_idle_vehicles == 0:
+            return []
         nr_regions = len(list_zones)
         v_i_e_dict = {}
         omegas = []
@@ -104,6 +120,12 @@ class PavoneHailingRepositioningFC(RepositionBase):
 
         # optimization problem
         # --------------------
+        LOG.debug("PavoneHailingRepositioningFC input:")
+        LOG.debug("list zones: {}".format(list_zones))
+        LOG.debug("total_excess_vehicles: {}".format(total_excess_vehicles))
+        LOG.debug("v_i_e_dict: {}".format(v_i_e_dict))
+        LOG.debug("v_i_d_dict: {}".format(v_i_d_dict))
+        LOG.debug("idle vehicles: {}".format(number_idle_vehicles))
         if self.solver_key == "Gurobi":
             alpha_od, od_reposition_trips = self._optimization_gurobi(sim_time, list_zones, v_i_e_dict, v_i_d_dict,
                                                                       number_idle_vehicles, zone_dict)
@@ -133,6 +155,8 @@ class PavoneHailingRepositioningFC(RepositionBase):
         #         fhlog.write(
         #             f"{current_time},after,{sigma},{sum_idle_vehicles},{f_abs_1},{f_pos_1},{f_neg_1},{f2_val_1}\n")
         #     fhlog.close()
+        
+        LOG.debug("PavoneHailingRepositioningFC results: {}".format(od_reposition_trips))
 
         list_veh_with_changes = []
         if od_reposition_trips:
@@ -151,11 +175,20 @@ class PavoneHailingRepositioningFC(RepositionBase):
 
     def _optimization_gurobi(self, sim_time, list_zones, v_i_e_dict, v_i_d_dict, number_idle_vehicles, zone_dict):
         import gurobipy
+        model_name = f"PavoneHailingFC: _optimization_gurobi {sim_time}"
         with gurobipy.Env(empty=True) as env:
-            env.setParam('OutputFlag', 0)
-            env.setParam('LogToConsole', 0)
-            env.start()
-            model = gurobipy.Model("PavoneHailingFC", env=env)
+            if self.fleetctrl.log_gurobi:
+                with open(os.path.join(self.fleetctrl.dir_names[G_DIR_OUTPUT], "gurobi_log.log"), "a") as f:
+                    f.write(f"\n\n{model_name}\n\n")
+                env.setParam('OutputFlag', 1)
+                env.setParam('LogToConsole', 0)
+                env.setParam('LogFile', os.path.join(self.fleetctrl.dir_names[G_DIR_OUTPUT], "gurobi_log.log") )
+                env.start()
+            else:
+                env.setParam('OutputFlag', 0)
+                env.setParam('LogToConsole', 0)
+                env.start()
+            model = gurobipy.Model(model_name, env=env)
             model.setParam(gurobipy.GRB.param.Threads, self.fleetctrl.n_cpu)
             model.setObjective(gurobipy.GRB.MINIMIZE)
             # if self.optimisation_timeout:
@@ -226,6 +259,11 @@ class PavoneHailingRepositioningFC(RepositionBase):
                 model.write(model_f)
                 LOG.warning(f"Operator {self.fleetctrl.op_id}: No Optimal Solution! status {model.status}"
                             f" -> no repositioning")
+                LOG.info(f"list zones: {list_zones}")
+                LOG.info(f"number vehicles: {number_idle_vehicles}")
+                LOG.info(f"vie dict: {len(v_i_e_dict.keys())} | {v_i_e_dict}")
+                LOG.info(f"vid dict: {len(v_i_d_dict.keys())} | {v_i_d_dict}")
+                LOG.info(f"zone dict: {len(zone_dict.keys())} | {zone_dict}")
         return alpha_od, od_reposition_trips
 
     def _optimization_cplex(self, sim_time, list_zones, v_i_e_dict, v_i_d_dict, number_idle_vehicles, zone_dict):
@@ -291,6 +329,19 @@ class PavoneHailingRepositioningFC(RepositionBase):
                     od_reposition_trips.extend([(o_region, d_region)] * round_solution_integer)
         return alpha_od, od_reposition_trips
 
+INPUT_PARAMETERS_PavoneHailingV2RepositioningFC = {
+    "doc" : """This class implements an adaption of the real-time rebalancing policy formulated in section 4.3 of
+    Zhang, R.; Pavone, M. (2016): Control of robotic mobility-on-demand systems. A queueing-theoretical perspective.
+    In: The International Journal of Robotics Research 35 (1-3), S. 186–203. DOI: 10.1177/0278364915581863.
+
+    The adaption is that the supply side is forecast using arrival forecast. Moreover, the computation of excess
+    vehicles is more complex to allow negative values, but consistent solution during global vehicle shortage.""",
+    "inherit" : "RepositioningBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
     """This class implements an adaption of the real-time rebalancing policy formulated in section 4.3 of
@@ -301,7 +352,7 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
     vehicles is more complex to allow negative values, but consistent solution during global vehicle shortage.
     """
 
-    def determine_and_create_repositioning_plans(self, sim_time, lock=True):
+    def determine_and_create_repositioning_plans(self, sim_time, lock=None):
         """This method determines and creates new repositioning plans. The repositioning plans are directly assigned
         to the vehicles. The repositioning algorithm can choose whether the generated respective plan stops are locked.
         In order to allow further database processes, the vids of vehicles with new plans are returned.
@@ -311,6 +362,8 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         :return: list[vid] of vehicles with changed plans
         """
         self.sim_time = sim_time
+        if lock is None:
+            lock = self.lock_repo_assignments
         # get forecast values
         # -------------------
         t0 = sim_time + self.list_horizons[0]
@@ -333,6 +386,9 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         # print(number_idle_vehicles)
         # print("")
         total_idle_vehicles = sum(number_idle_vehicles.values())
+        if total_idle_vehicles == 0:
+            return []
+        #LOG.info(f"total_idle_vehicles {total_idle_vehicles}")
         nr_regions_with_demand = 0
         v_i_e_dict = {} # can also contain negative values now!
         omegas = []
@@ -352,12 +408,14 @@ class PavoneHailingV2RepositioningFC(PavoneHailingRepositioningFC):
         # 1) the number of total excess vehicles (positive or negative!) has to be smaller than the total number of
         #       idle vehicles!
         total_excess_vehicles = sum(list(v_i_e_dict.values()))
+        #LOG.info(f"total_excess_vehicles {total_excess_vehicles}")
         if abs(total_excess_vehicles) > total_idle_vehicles:
             for zone_id, old_v_i_e in v_i_e_dict.items():
-                v_i_e_dict[zone_id] = old_v_i_e / total_idle_vehicles
+                v_i_e_dict[zone_id] = old_v_i_e / total_excess_vehicles * total_idle_vehicles
         # rebalancing policy -> divide excess vehicles evenly among all zones
         v_i_d_dict = {}
         total_excess_vehicles = sum(list(v_i_e_dict.values()))
+        #LOG.info(f"total_excess_vehicles {total_excess_vehicles}")
         try:
             avg_excess_vehicles_per_zone = int(total_excess_vehicles / zone_counter)
         except ZeroDivisionError:

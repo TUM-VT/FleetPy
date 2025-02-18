@@ -1,5 +1,5 @@
 from src.fleetctrl.FleetControlBase import FleetControlBase
-from src.fleetctrl.planning.VehiclePlan import BoardingPlanStop, VehiclePlan
+from src.fleetctrl.planning.VehiclePlan import BoardingPlanStop, PlanStop, VehiclePlan
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.simulation.Vehicles import SimulationVehicle
 from src.routing.NetworkBase import NetworkBase
@@ -73,7 +73,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
             
             next_o_plan.list_plan_stops[i] = BoardingPlanStop(prq_o_stop_pos, boarding_dict=new_boarding_dict, max_trip_time_dict=mtt_dict.copy(),
                                                               latest_arrival_time_dict=lat_dict.copy(), earliest_pickup_time_dict=new_earliest_pickup_time_dict,
-                                                              latest_pickup_time_dict=new_latest_pickup_time_dict, change_nr_pax=change_nr_pax,duration=stop_duration)
+                                                              latest_pickup_time_dict=new_latest_pickup_time_dict, change_nr_pax=change_nr_pax,duration=stop_duration, change_nr_parcels=old_pstop.get_change_nr_parcels())
             #LOG.debug(f"test first if boarding: {next_o_plan}")
             is_feasible = next_o_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
             if is_feasible:
@@ -147,7 +147,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                 
                 next_d_plan.list_plan_stops[j] = BoardingPlanStop(d_stop_pos, boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
                                                                   latest_arrival_time_dict=lat_dict.copy(), earliest_pickup_time_dict=ept_dict.copy(),
-                                                                  latest_pickup_time_dict=lpt_dict.copy(), change_nr_pax=change_nr_pax,
+                                                                  latest_pickup_time_dict=lpt_dict.copy(), change_nr_pax=change_nr_pax, change_nr_parcels=old_pstop.get_change_nr_parcels(),
                                                                   duration=stop_duration)
 
                 is_feasible = next_d_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, init_plan_state)
@@ -241,11 +241,14 @@ def simple_remove(veh_obj : SimulationVehicle, veh_plan : VehiclePlan, remove_ri
             else:
                 rid_found_in_plan_flag = True
                 change_nr_pax += rq_dict[rid].nr_pax
-        if len(new_boarding_dict.keys()) > 0:
+        if len(new_boarding_dict.keys()) > 0 or ps.is_locked() or ps.is_locked_end():
             dur, _ = ps.get_duration_and_earliest_departure()
-            new_ps = BoardingPlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
+            # new_ps = BoardingPlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
+            #                           earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
+            #                           change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked())
+            new_ps = PlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
                                       earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
-                                      change_nr_pax=change_nr_pax, duration=dur)
+                                      change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked(), locked_end=ps.is_locked_end())
             new_plan_list.append(new_ps)
     #LOG.info("simple remove: {}".format([str(x) for x in new_plan_list]))
     external_pax_info = veh_plan.pax_info.copy()
@@ -571,7 +574,10 @@ def insert_prq_in_selected_veh_list(selected_veh_obj_list : List[SimulationVehic
     insertion_return_list = []
     for veh_obj in selected_veh_obj_list:
         veh_plan = vid_to_vehplan_assignments[veh_obj.vid]
-        current_vehplan_utility = veh_plan.utility
+        current_vehplan_utility = veh_plan.get_utility()
+        if current_vehplan_utility is None:
+            current_vehplan_utility = obj_function(sim_time, veh_obj, veh_plan, rq_dict, routing_engine)
+            veh_plan.set_utility(current_vehplan_utility)
         # use (vid, vehplan, delta_cfv) tuple format from here on
         keep_plans = []
         if force_feasible_assignment:
