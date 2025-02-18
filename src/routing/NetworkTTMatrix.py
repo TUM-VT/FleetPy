@@ -3,6 +3,7 @@
 # -----------------------------
 import os
 import logging
+import pathlib
 
 # additional module imports (> requirements)
 # ------------------------------------------
@@ -81,6 +82,18 @@ class Node:
 # -------------------------------------------------------------------------------------------------------------------- #
 # module class
 # ------------
+INPUT_PARAMETERS_NetworkTTMatrix = {
+    "doc" : """
+        Routing based on a preprocessed TT-Matrix. For changing travel-times, tt-scaling factors can be read from a file.
+        see: src/preprocessing/networks/create_travel_time_tables.py for creating the numpy tables.
+        """,
+    "inherit" : "NetworkBase",
+    "input_parameters_mandatory": [G_NETWORK_NAME],
+    "input_parameters_optional": [G_NW_DYNAMIC_F],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 class NetworkTTMatrix(NetworkBase):
     """Routing based on TT Matrix, tt-scaling factor is read from file."""
     def __init__(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
@@ -99,7 +112,7 @@ class NetworkTTMatrix(NetworkBase):
         self.zones = None
         self.tt_factor = 1.0
         self.network_name_dir = network_name_dir
-        with open(self.network_name_dir + "\\base\\crs.info", "r") as f:
+        with open(os.path.join(self.network_name_dir, "base", "crs.info"), "r") as f:
             self.crs = f.read()
         # load network structure: nodes
         nodes_f = os.path.join(network_name_dir, "base", "nodes.csv")
@@ -122,27 +135,61 @@ class NetworkTTMatrix(NetworkBase):
         # load TT and TD matrices
         print(f"\t ... loading network travel time/distance tables ...")
         tt_table_f = os.path.join(self.network_name_dir, "ff", "tables", "nn_fastest_tt.npy")
-        self.tt = pd.DataFrame(np.load(tt_table_f))
+        self.tt_numpy = np.load(tt_table_f)
+        self.tt = self.tt_numpy.tolist()
         distance_table_f = os.path.join(self.network_name_dir, "ff", "tables", "nn_fastest_distance.npy")
-        self.td = pd.DataFrame(np.load(distance_table_f))
+        self.td = np.load(distance_table_f).tolist()
         # load travel times
         self.current_tt_factor_index = 0
         self.sorted_tt_factor_times = []
         self.update_tt_factors = {}
+        self._precalculated_tt_paths = {}
+        self._current_tt_path = None
         self.load_tt_file(None)
         self.sim_time = 0
-        if network_dynamics_file_name is not None:
-            tt_info_f = os.path.join(self.network_name_dir, network_dynamics_file_name)
-            if not os.path.isfile(tt_info_f):
-                raise IOError(f"Did not find network dynamics file {tt_info_f}")
-            nw_dynamics_df = pd.read_csv(tt_info_f)
-            nw_dynamics_df.set_index("simulation_time", inplace=True)
-            for sim_time, tt_factor in nw_dynamics_df["travel_time_factor"].items():
-                self.update_tt_factors[int(sim_time)] = tt_factor
-            self.sorted_tt_factor_times = sorted(self.update_tt_factors.keys())
-            LOG.info(f"Loaded travel time scaling factors from {tt_info_f}")
+        self._load_dynamic_network(network_dynamics_file_name)
+
+    def _load_dynamic_network(self, file_or_folder):
+        """ Prepares the network for the dynamic travel times using time-dependent scaling factor or travel time
+        matrices. If both scaling factor file and the folder (with precalculated travel time matrices) exist, the
+        preference is given to the scaling factor file. """
+
+        if file_or_folder is not None:
+            path = pathlib.Path(self.network_name_dir, file_or_folder)
+            # First check if its scaling factor file
+            if path.is_file():
+                path = pathlib.Path(self.network_name_dir, file_or_folder)
+                nw_dynamics_df = pd.read_csv(str(path))
+                nw_dynamics_df.set_index("simulation_time", inplace=True)
+                if "travel_time_factor" in nw_dynamics_df.columns:
+                    for sim_time, tt_factor in nw_dynamics_df["travel_time_factor"].items():
+                        self.update_tt_factors[int(sim_time)] = tt_factor
+                    self.sorted_tt_factor_times = sorted(self.update_tt_factors.keys())
+                    LOG.info(f"Loaded travel time scaling factors from {str(path)}")
+                elif "travel_time_folder" in nw_dynamics_df.columns:
+                    for sim_time, tt_folder_path in nw_dynamics_df["travel_time_folder"].items():
+                        self._precalculated_tt_paths[int(sim_time)] = pathlib.Path(self.network_name_dir, tt_folder_path)
+                    self.sorted_tt_factor_times = sorted(self._precalculated_tt_paths.keys())
+                    LOG.info(f"Loaded travel time folders from {str(path)}")
+                # elif "travel_time_folder" in nw_dynamics_df.columns:
+                #     for sim_time, tt_folder in nw_dynamics_df["travel_time_folder"].items():
+                #         self._precalculated_tt_paths[sim_time] = path.parent.joinpath(tt_folder)
+                #     self.sorted_tt_factor_times = sorted(self._precalculated_tt_paths.keys())
+                else:
+                    raise IOError(f"The file {str(path)} does not contain travel_time_factor or travel_time_folder "
+                                  f"column")
+            elif path.is_dir():
+                if len(list(path.iterdir())) == 0:
+                    raise IOError(f"Did not find any folder for the precalculated travel time matrices for dynamic "
+                                  f"travel times within {str(path)}")
+                for folder in path.iterdir():
+                    self._precalculated_tt_paths[int(folder.name)] = folder
+                self.sorted_tt_factor_times = sorted(self._precalculated_tt_paths.keys())
+            else:
+                raise IOError(f"Did not find network dynamics scaling factor file or precalculated travel time "
+                              f"matrices folder in {file_or_folder}")
         else:
-            LOG.info("No travel time scaling factor file given.")
+            LOG.info("No travel time scaling factor file or precalculated dynamic travel time folder given.")
 
     def load_tt_file(self, scenario_time):
         pass
@@ -162,23 +209,42 @@ class NetworkTTMatrix(NetworkBase):
         self.sim_time = simulation_time
         tt_updated = False
         if self.sorted_tt_factor_times:
-            last_i = self.current_tt_factor_index - 1  # TODO # Check logic
-            while True:
-                next_i = last_i + 1
-                if next_i < len(self.sorted_tt_factor_times):
-                    next_time = self.sorted_tt_factor_times[next_i]
-                    if next_time <= simulation_time:
-                        last_i = next_i
-                        self.current_tt_factor_index = last_i
+            for inx, next_time in enumerate(self.sorted_tt_factor_times[self.current_tt_factor_index:],
+                                            self.current_tt_factor_index):
+                if next_time <= simulation_time:
+                    self.current_tt_factor_index = inx
+                    if self.update_tt_factors:
                         new_tt_factor = self.update_tt_factors[next_time]
                         if self.tt_factor != new_tt_factor:
                             self.tt_factor = new_tt_factor
                             tt_updated = True
-                    else:
-                        break # TODO # needed, otherwise eternal loop, right?
-                else:
-                    break
+                    elif self._precalculated_tt_paths:
+                        path = self._precalculated_tt_paths[next_time]
+                        if self._current_tt_path != path:
+                            self.tt_numpy = np.load(path.joinpath("tt_matrix.npy"))
+                            self.tt = self.tt_numpy.tolist()
+                            self._current_tt_path = path
+                            tt_updated = True
+                    if tt_updated is True:
+                        LOG.info("update network at {}".format(simulation_time))
+                        break
         return tt_updated
+    
+    def reset_network(self, simulation_time: float):
+        """ this method is used in case a module changed the travel times to future states for forecasts
+        it resets the network to the travel times a stimulation_time
+        :param simulation_time: current simulation time"""
+        LOG.debug("reset network at {}".format(simulation_time))
+        if self.sorted_tt_factor_times:
+            self.current_tt_factor_index = 0
+            if len(self.sorted_tt_factor_times) > 2:
+                for i in range(len(self.sorted_tt_factor_times) - 1):
+                    if self.sorted_tt_factor_times[i] <= simulation_time and self.sorted_tt_factor_times[i+1] > simulation_time:
+                        self.update_network(self.sorted_tt_factor_times[i], update_state=True)
+                        return
+                if self.sorted_tt_factor_times[-1] <= simulation_time:
+                    self.update_network(self.sorted_tt_factor_times[-1], update_state=True)
+                    return
 
     def get_number_network_nodes(self):
         """This method returns a list of all street network node indices.
@@ -225,10 +291,10 @@ class NetworkTTMatrix(NetworkBase):
         :return: (travel time, distance); if no section between nodes (None, None)
         :rtype: list
         """
-        tt = self.tt.loc[start_node_index, end_node_index]
+        tt = self.tt[start_node_index][end_node_index]
         scaled_tt = tt * self.tt_factor
         if tt not in [None, np.nan, np.inf]:
-            return scaled_tt, self.td.loc[start_node_index, end_node_index]
+            return scaled_tt, self.td[start_node_index][end_node_index]
         else:
             return None, None
 
@@ -278,8 +344,8 @@ class NetworkTTMatrix(NetworkBase):
     def move_along_route(self, route, last_position, time_step, sim_vid_id=None, new_sim_time=None,
                          record_node_times=False):
         if new_sim_time is not None:
-            end_time = new_sim_time
-            last_time = new_sim_time - time_step
+            end_time = new_sim_time + time_step
+            last_time = new_sim_time
         else:
             end_time = self.sim_time + time_step
             last_time = self.sim_time
@@ -296,9 +362,9 @@ class NetworkTTMatrix(NetworkBase):
             if c_pos[2] is None:
                 c_pos = (c_pos[0], route[i], 0)
             rel_factor = (1 - c_pos[2])
-            # c_edge_tt = rel_factor * self.tt_factor * self.tt.loc[c_pos[0], c_pos[1]]
+            # c_edge_tt = rel_factor * self.tt_factor * self.tt[c_pos[0]][c_pos[1]]
             # next_node_time = last_time + c_edge_tt
-            c_edge_tt = self.tt_factor * self.tt.loc[c_pos[0], c_pos[1]]
+            c_edge_tt = self.tt_factor * self.tt[c_pos[0]][c_pos[1]]
             next_node_time = last_time + rel_factor * c_edge_tt
             end_time = np.round(end_time, 2)
             next_node_time = np.round(next_node_time, 2)  # TODO # raw value leads to 1.00000002 being recognized as > 1
@@ -306,13 +372,13 @@ class NetworkTTMatrix(NetworkBase):
             if next_node_time > end_time:
                 # move vehicle to final position of current edge
                 end_rel_factor = c_pos[2] + (end_time - last_time) / c_edge_tt
-                driven_distance += (end_rel_factor - c_pos[2]) * self.td.loc[c_pos[0], c_pos[1]]
+                driven_distance += (end_rel_factor - c_pos[2]) * self.td[c_pos[0]][c_pos[1]]
                 c_pos = (c_pos[0], c_pos[1], end_rel_factor)
                 arrival_in_time_step = -1
                 break
             else:
                 # move vehicle to next node/edge and record data
-                driven_distance += rel_factor * self.td.loc[c_pos[0], c_pos[1]]
+                driven_distance += rel_factor * self.td[c_pos[0]][c_pos[1]]
                 next_node = route[i]
                 list_passed_nodes.append(next_node)
                 if record_node_times:
@@ -338,23 +404,9 @@ class NetworkTTMatrix(NetworkBase):
         """
         origin_node, destination_node, add_tt, add_dist = self._get_od_nodes_and_section_overheads(origin_position,
                                                                                                    destination_position)
-        """
-        if origin_node == destination_node:
-            # if destination_position[1] is None:
-            if origin_position[1] is None:
-=======
-        if origin_node == destination_node:
-            if destination_position[1] is None:
->>>>>>> 0f006f9af0815905e8b62bc5bd0c6295632fe453
-                return 0, 0, 0
-            else:
-                scaled_add_tt = self.tt_factor * add_tt
-                return scaled_add_tt, scaled_add_tt, add_dist
-<<<<<<< HEAD
-            """
         # matrix lookup
-        tt = self.tt.loc[origin_node.node_index, destination_node.node_index]
-        dist = self.td.loc[origin_node.node_index, destination_node.node_index]
+        tt = self.tt[origin_node.node_index][destination_node.node_index]
+        dist = self.td[origin_node.node_index][destination_node.node_index]
         # scaling
         scaled_tt = (add_tt + tt) * self.tt_factor
         return scaled_tt, scaled_tt, dist + add_dist
@@ -598,8 +650,8 @@ class NetworkTTMatrix(NetworkBase):
             return (0.0, 0.0)
         o_node_index = position[0]
         d_node_index = position[1]
-        all_travel_time = self.tt.loc[o_node_index, d_node_index]
-        all_travel_distance = self.td.loc[o_node_index, d_node_index]
+        all_travel_time = self.tt[o_node_index][d_node_index]
+        all_travel_distance = self.td[o_node_index][d_node_index]
         overhead_fraction = position[2]
         if not traveled_from_start:
             overhead_fraction = 1.0 - overhead_fraction
@@ -648,7 +700,7 @@ class NetworkTTMatrix(NetworkBase):
         node_list = [current_node.node_index]
         route_tt = 0.0
         scaled_route_tt = 0.0
-        total_tt = self.tt.loc[origin_node.node_index, destination_node.node_index]
+        total_tt = self.tt[origin_node.node_index][destination_node.node_index]
         if total_tt in [None, np.nan, np.inf]:
             prt_str = f"There is no route from {origin_node} to {destination_node}"
             raise AssertionError(prt_str)
@@ -659,8 +711,8 @@ class NetworkTTMatrix(NetworkBase):
                 # A->B + B->C = A->C
                 if next_node_obj.is_stop_only and next_node_obj != destination_node:
                     continue
-                next_tt = self.tt.loc[current_node.node_index, next_node_id]
-                from_next_tt = self.tt.loc[next_node_id, destination_node.node_index]
+                next_tt = self.tt[current_node.node_index][next_node_id]
+                from_next_tt = self.tt[next_node_id][destination_node.node_index]
                 if route_tt + next_tt + from_next_tt - total_tt < EPS:
                     found_next_node = True
                     node_list.append(next_node_id)
@@ -683,8 +735,7 @@ class NetworkTTMatrix(NetworkBase):
         :return: set of origin_node_indices that are close enough to reach destination node within max_time_value
         """
         d_node_index = destination_node.node_index
-        tmp_df = self.tt[self.tt[d_node_index] <= max_time_value]
-        d_surround = set(tmp_df.index.to_list())
+        d_surround = set(np.argwhere(self.tt_numpy[:, d_node_index] <= max_time_value).flatten())
         destination_node.surround_prev[max_time_value] = d_surround
         return d_surround
 
@@ -698,9 +749,7 @@ class NetworkTTMatrix(NetworkBase):
         :return: set of destination_node_indices that are close enough to be reached from origin within max_time_value
         """
         o_node_index = origin_node.node_index
-        tmp_series = self.tt.loc[o_node_index]
-        tmp_df = tmp_series[tmp_series <= max_time_value]
-        o_surround = set(tmp_df.index.to_list())
+        o_surround = set(np.argwhere(self.tt_numpy[o_node_index, :] <= max_time_value).flatten())
         if save:
             origin_node.surround_next[max_time_value] = o_surround
         return o_surround

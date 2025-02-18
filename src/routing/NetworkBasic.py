@@ -36,6 +36,15 @@ LOG = logging.getLogger(__name__)
 # import pandas as pd
 # import imports.Router as Router
 
+INPUT_PARAMETERS_NetworkBasic = {
+    "doc" : "this routing class does all routing computations based on dijkstras algorithm",
+    "inherit" : "NetworkBase",
+    "input_parameters_mandatory": [G_NETWORK_NAME],
+    "input_parameters_optional": [G_NW_DYNAMIC_F],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 
 def read_node_line(columns):
     return Node(int(columns["node_index"]), int(columns["is_stop_only"]), float(columns["pos_x"]), float(columns["pos_y"]))
@@ -172,16 +181,13 @@ class NetworkBasic(NetworkBase):
         #
         edges_f = os.path.join(network_name_dir, "base", "edges.csv")
         print(f"Loading edges from {edges_f} ...")
-        with open(edges_f) as fhin:
-            header = fhin.readline()
-            for line in fhin:
-                lc = line.strip().split(",")
-                o_node = self.nodes[int(lc[0])]
-                d_node = self.nodes[int(lc[1])]
-                # for the table approach, int values are used (to avoid rounding mistakes!)
-                tmp_edge = Edge((o_node, d_node), float(lc[2]), float(lc[3]))
-                o_node.add_next_edge_to(d_node, tmp_edge)
-                d_node.add_prev_edge_from(o_node, tmp_edge)
+        edges_df = pd.read_csv(edges_f)
+        for _, row in edges_df.iterrows():
+            o_node = self.nodes[row[G_EDGE_FROM]]
+            d_node = self.nodes[row[G_EDGE_TO]]
+            tmp_edge = Edge((o_node, d_node), row[G_EDGE_DIST], row[G_EDGE_TT])
+            o_node.add_next_edge_to(d_node, tmp_edge)
+            d_node.add_prev_edge_from(o_node, tmp_edge)
         print("... {} nodes loaded!".format(len(self.nodes)))
         if scenario_time is not None:
             latest_tt = None
@@ -230,6 +236,20 @@ class NetworkBasic(NetworkBase):
                 self.load_tt_file(simulation_time)
                 return True
         return False
+    
+    def reset_network(self, simulation_time: float):
+        """ this method is used in case a module changed the travel times to future states for forecasts
+        it resets the network to the travel times a stimulation_time
+        :param simulation_time: current simulation time"""
+        sorted_tts = sorted(self.travel_time_file_folders.keys())
+        if len(sorted_tts) > 2:
+            for i in range(len(sorted_tts) - 1):
+                if sorted_tts[i] <= simulation_time and sorted_tts[i+1] > simulation_time:
+                    self.update_network(sorted_tts[i])
+                    return
+            if sorted_tts[-1] <= simulation_time:
+                self.update_network(sorted_tts[-1])
+                return
 
     def load_tt_file(self, scenario_time):
         """
@@ -238,7 +258,8 @@ class NetworkBasic(NetworkBase):
         self._reset_internal_attributes_after_travel_time_update()
         f = self.travel_time_file_folders[scenario_time]
         tt_file = os.path.join(f, "edges_td_att.csv")
-        tmp_df = pd.read_csv(tt_file, index_col=[0,1])
+        tmp_df = pd.read_csv(tt_file)
+        tmp_df.set_index(["from_node","to_node"], inplace=True)
         for edge_index_tuple, new_tt in tmp_df["edge_tt"].iteritems():
             self._set_edge_tt(edge_index_tuple[0], edge_index_tuple[1], new_tt)
 
@@ -787,7 +808,6 @@ class NetworkBasic(NetworkBase):
                 v) list_passed_node_times: list of checkpoint times at the respective passed nodes
         """
         if new_sim_time is not None:
-            # TODO # end_time = new_sime_time | last_time = new_sim_time - time_step
             end_time = new_sim_time + time_step
             last_time = new_sim_time
         else:

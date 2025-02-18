@@ -10,6 +10,20 @@ from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000
 
+INPUT_PARAMETERS_PoolingIRSAssignmentBatchOptimization = {
+    "doc" : """Pooling class that combines an immediate response and batch optimization:
+        - requests enter system continuously
+        - offer has to be created immediately by an insertion heuristic
+        - request replies immediately
+            -> there can never be 2 requests at the same time waiting for an offer!
+        - re-optimization of solution after certain time interval""",
+    "inherit" : "RidePoolingBatchOptimizationFleetControlBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetControlBase):
     """Pooling class that combines an immediate response and batch optimization:
@@ -24,7 +38,7 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
     """
 
     def __init__(self, op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                 dir_names, charging_management=None):
+                 dir_names, op_charge_depot_infra=None, list_pub_charging_infra= []):
         """Initialization of FleetControlClass
 
         :param op_id: operator id
@@ -39,9 +53,13 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
         :type scenario_parameters: dict
         :param dirnames: directories for output and input
         :type dirnames: dict
+        :param op_charge_depot_infra: reference to a OperatorChargingAndDepotInfrastructure class (optional) (unique for each operator)
+        :type OperatorChargingAndDepotInfrastructure: OperatorChargingAndDepotInfrastructure
+        :param list_pub_charging_infra: list of PublicChargingInfrastructureOperator classes (optional) (accesible for all agents)
+        :type list_pub_charging_infra: list of PublicChargingInfrastructureOperator
         """
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                         dir_names=dir_names, charging_management=charging_management)
+                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra)
         self.tmp_assignment = {}  # rid -> possible veh_plan
 
     def user_request(self, rq, sim_time):
@@ -83,7 +101,7 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
         if t_pu_earliest - sim_time > self.opt_horizon:
             self.reservation_module.add_reservation_request(prq, sim_time)
-            offer = self.reservation_module.return_reservation_offer(prq.get_rid_struct(), sim_time)
+            offer = self.reservation_module.return_immediate_reservation_offer(prq.get_rid_struct(), sim_time)
             LOG.debug(f"reservation offer for rid {rid_struct} : {offer}")
             prq.set_reservation_flag(True)
             self.RPBO_Module.add_new_request(rid_struct, prq, consider_for_global_optimisation=False)
@@ -91,7 +109,7 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
             self.RPBO_Module.add_new_request(rid_struct, prq)
             list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
             if len(list_tuples) > 0:
-                (vid, vehplan, delta_cfv) = list_tuples[0]
+                (vid, vehplan, delta_cfv) = min(list_tuples, key=lambda x:x[2])
                 LOG.debug(f"before insertion: {vid} | {self.veh_plans[vid]}")
                 LOG.debug(f"after insertion: {vid} | {vehplan}")
                 self.tmp_assignment[rid_struct] = vehplan

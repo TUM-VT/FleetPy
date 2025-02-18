@@ -8,6 +8,19 @@ from src.fleetctrl.pooling.immediate.insertion import reservation_insertion_with
 import logging
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_RollingHorizonReservation = {
+    "doc" :  """ this reservation class treats reservation requests with a naive rolling horizon approach:
+            innitially reservation requests are assigned to vehicles by an insertion heuristic;
+            this assignment is kept until the simulation time approches the earliest pickup time within the rolling horizon;
+            then requests are revealed to the global optimisation and removed from the reservation class
+            """,
+    "inherit" : "ReservationBase",
+    "input_parameters_mandatory": [G_RA_OPT_HOR],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 class RollingHorizonReservation(ReservationBase):
     """ this reservation class treats reservation requests with a naive rolling horizon approach:
     innitially reservation requests are assigned to vehicles by an insertion heuristic;
@@ -52,7 +65,7 @@ class RollingHorizonReservation(ReservationBase):
         :return: list of (position, latest arrival time)"""
         return []
 
-    def return_reservation_offer(self, rid, sim_time):
+    def return_immediate_reservation_offer(self, rid, sim_time):
         """ this function returns an offer if possible for an reservation request which has been added to the reservation module before 
         in this implementation, an offer is always returned discribed by the earliest and latest pick up time
         :param rid: request id

@@ -195,16 +195,18 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         run_scenarios(*sys.argv)
     else:
+        import time
         # touch log file
         with open(LOG_F, "w") as _:
             pass
 
+        scs_path = os.path.join(os.path.dirname(__file__), "studies", "example_study", "scenarios")
         # Base Examples IRS only
         # ----------------------
         # a) Pooling in ImmediateOfferEnvironment
         log_level = "info"
-        cc = r"studies/example_study/scenarios/constant_config_ir.csv"
-        sc = r"studies/example_study/scenarios/example_ir_only.csv"
+        cc = os.path.join(scs_path, "constant_config_ir.csv")
+        sc = os.path.join(scs_path, "example_ir_only.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
         list_results = read_outputs_for_comparison(cc, sc)
         all_scenario_assert_dict = {0: {"number users": 88}}
@@ -214,8 +216,8 @@ if __name__ == "__main__":
         # ----------------------------------------------------------
         # b) Pooling in BatchOffer environment
         log_level = "info"
-        cc = r"studies/example_study/scenarios/constant_config_pool.csv"
-        sc = r"studies/example_study/scenarios/example_pool.csv"
+        cc = os.path.join(scs_path, "constant_config_pool.csv")
+        sc = os.path.join(scs_path, "example_pool.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
         list_results = read_outputs_for_comparison(cc, sc)
         all_scenario_assert_dict = {0: {"number users": 91}}
@@ -223,27 +225,26 @@ if __name__ == "__main__":
 
         # c) Pooling in ImmediateOfferEnvironment
         log_level = "info"
-        cc = r"studies/example_study/scenarios/constant_config_ir.csv"
-        sc = r"studies/example_study/scenarios/example_ir_batch.csv"
+        cc = os.path.join(scs_path, "constant_config_ir.csv")
+        sc = os.path.join(scs_path, "example_ir_batch.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
         list_results = read_outputs_for_comparison(cc, sc)
         all_scenario_assert_dict = {0: {"number users": 90}}
         check_assertions(list_results, all_scenario_assert_dict)
 
         # d) Pooling with RV heuristics in ImmediateOfferEnvironment (with doubled demand)
-        import time
         log_level = "info"
-        cc = r"studies/example_study/scenarios/constant_config_ir.csv"
+        cc = os.path.join(scs_path, "constant_config_ir.csv")
         t0 = time.perf_counter()
         # no heuristic scenario
-        sc = r"studies/example_study/scenarios/example_pool_noheuristics.csv"
+        sc = os.path.join(scs_path, "example_pool_noheuristics.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
         list_results = read_outputs_for_comparison(cc, sc)
         all_scenario_assert_dict = {0: {"number users": 199}}
         check_assertions(list_results, all_scenario_assert_dict)
         # with heuristic scenarios
         t1 = time.perf_counter()
-        sc = r"studies/example_study/scenarios/example_pool_heuristics.csv"
+        sc = os.path.join(scs_path, "example_pool_heuristics.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
         list_results = read_outputs_for_comparison(cc, sc)
         t2 = time.perf_counter()
@@ -257,9 +258,61 @@ if __name__ == "__main__":
         # g) Pooling with RV heuristic and Repositioning in ImmediateOfferEnvironment (with doubled demand and
         #       bad initial vehicle distribution)
         log_level = "info"
-        cc = r"studies/example_study/scenarios/constant_config_ir_repo.csv"
-        sc = r"studies/example_study/scenarios/example_ir_heuristics_repositioning.csv"
+        cc = os.path.join(scs_path, "constant_config_ir_repo.csv")
+        sc = os.path.join(scs_path, "example_ir_heuristics_repositioning.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
         list_results = read_outputs_for_comparison(cc, sc)
         all_scenario_assert_dict = {0: {"number users": 198}}
         check_assertions(list_results, all_scenario_assert_dict)
+        
+        # h) Pooling with public charging infrastructure (low range vehicles)
+        log_level = "info"
+        cc = os.path.join(scs_path, "constant_config_charge.csv")
+        sc = os.path.join(scs_path, "example_charge.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
+        
+        # i) Pooling and active vehicle fleet size is controlled externally (time and utilization based)
+        log_level = "info"
+        cc = os.path.join(scs_path, "constant_config_depot.csv")
+        sc = os.path.join(scs_path, "example_depot.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
+        
+        # j) Pooling with public charging and fleet size control (low range vehicles)
+        log_level = "info"
+        cc = os.path.join(scs_path, "constant_config_depot_charge.csv")
+        sc = os.path.join(scs_path, "example_depot_charge.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
+        
+        # h) Pooling with multiprocessing
+        log_level = "info"
+        cc = os.path.join(scs_path, "constant_config_depot_charge.csv")
+        # no heuristic scenario single core
+        t0 = time.perf_counter()
+        sc = os.path.join(scs_path, "example_depot_charge.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
+        list_results = read_outputs_for_comparison(cc, sc)
+        all_scenario_assert_dict = {0: {"number users": 199}}
+        check_assertions(list_results, all_scenario_assert_dict)
+        print("Computation without multiprocessing took {}s".format(time.perf_counter() - t0))
+        # no heuristic scenario multiple cores
+        cores = 2
+        t0 = time.perf_counter()
+        sc = os.path.join(scs_path, "example_depot_charge.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=cores, n_parallel_sim=1)
+        list_results = read_outputs_for_comparison(cc, sc)
+        all_scenario_assert_dict = {0: {"number users": 199}}
+        check_assertions(list_results, all_scenario_assert_dict)
+        print("Computation with multiprocessing took {}s".format(time.perf_counter() - t0))
+        print(" -> multiprocessing only usefull for large vehicle fleets")
+        
+        # j) Pooling - multiple operators and broker
+        log_level = "info"
+        cc = os.path.join(scs_path, "constant_config_broker.csv")
+        sc = os.path.join(scs_path, "example_broker.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
+        
+        # h) Ride-Parcel-Pooling example
+        log_level = "info"
+        cc = os.path.join(scs_path, "constant_config_rpp.csv")
+        sc = os.path.join(scs_path, "example_rpp.csv")
+        run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)

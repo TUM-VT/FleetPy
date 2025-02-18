@@ -39,7 +39,7 @@ def aggregate_demand_for_perfect_forecast(demand_f, node_zone_f, temporal_agg=15
     demand_f_name = os.path.basename(demand_f)
     network_name = os.path.basename(os.path.dirname(demand_f))
     network_name_dir = os.path.join(BASEPATH, "data", "networks", network_name)
-    if use_nw is not None and isinstance(use_nw, NetworkBasicWithStoreCpp):
+    if use_nw is not None:
         nw = use_nw
     else:
         nw = NetworkBasicWithStoreCpp(network_name_dir)
@@ -58,8 +58,8 @@ def aggregate_demand_for_perfect_forecast(demand_f, node_zone_f, temporal_agg=15
         counter += 1
         if counter % 10000 == 0:
             print(f"\t\t ... {counter}/{counter_end}")
-        o_pos = nw.return_node_position(row[G_RQ_ORIGIN])
-        d_pos = nw.return_node_position(row[G_RQ_DESTINATION])
+        o_pos = nw.return_node_position(int(row[G_RQ_ORIGIN]))
+        d_pos = nw.return_node_position(int(row[G_RQ_DESTINATION]))
         _, tt, _ = nw.return_travel_costs_1to1(o_pos, d_pos)
         ept = row.get(G_RQ_EPT, row[G_RQ_TIME])
         estimated_arrival_time = ept + tt
@@ -70,6 +70,7 @@ def aggregate_demand_for_perfect_forecast(demand_f, node_zone_f, temporal_agg=15
     demand_df[["o_zone", "d_zone", "o_time", "d_time"]] = demand_df.apply(return_od_zones,
                                                                           args=(node_zone_dict, temporal_agg),
                                                                           axis=1, result_type="expand")
+    demand_df = demand_df.notna()
     for col in ["o_zone", "d_zone", "o_time", "d_time"]:
         demand_df[col] = demand_df[col].astype(np.int64)
     # aggregate origin
@@ -94,7 +95,7 @@ def aggregate_demand_for_perfect_forecast(demand_f, node_zone_f, temporal_agg=15
     return forecast_df
 
 
-def create_demand_dir_perfect_and_file_mean_forecasts(demand_network_dir, node_zone_f, temp_agg=15*60, glob_str=None):
+def create_demand_dir_perfect_and_file_mean_forecasts(demand_network_dir, node_zone_f, temp_agg=15*60, glob_str=None, use_nw=None):
     """This function calls aggregate_demand_for_perfect_forecast() to create perfect forecasts (i.e. perfect accuracy
     for given precision) for a set of request files and creates an additional forecast file for the mean, which can be
     used as an imperfect forecast.
@@ -103,6 +104,7 @@ def create_demand_dir_perfect_and_file_mean_forecasts(demand_network_dir, node_z
     :param node_zone_f: node-zone relation file
     :param temp_agg: temporal aggregation in seconds
     :param glob_str: string for globbing if subset of all request files should be used
+    :param use_nw: routing engine instance that is used for creating the files
     :return: None
     """
     if glob_str is not None:
@@ -115,7 +117,10 @@ def create_demand_dir_perfect_and_file_mean_forecasts(demand_network_dir, node_z
     zone_system_name = os.path.basename(os.path.dirname(os.path.dirname(node_zone_f)))
     network_name = os.path.basename(demand_network_dir)
     network_name_dir = os.path.join(BASEPATH, "data", "networks", network_name)
-    keep_nw = NetworkBasicWithStoreCpp(network_name_dir)
+    if not use_nw:
+        keep_nw = NetworkBasicWithStoreCpp(network_name_dir)
+    else:
+        keep_nw = use_nw
     #
     fc_type_list_series = {}
     fc_types = ["in perfect_trips", "in perfect_pax", "out perfect_trips", "out perfect_pax"]

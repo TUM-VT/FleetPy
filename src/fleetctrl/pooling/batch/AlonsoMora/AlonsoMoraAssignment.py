@@ -10,16 +10,16 @@ from src.fleetctrl.planning.VehiclePlan import VehiclePlan
 from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase, SimulationVehicleStruct
 from src.fleetctrl.pooling.GeneralPoolingFunctions import checkRRcomptibility
 from src.fleetctrl.pooling.batch.AlonsoMora.V2RB import V2RB
-from src.fleetctrl.pooling.immediate.insertion import single_insertion
+from src.fleetctrl.pooling.immediate.insertion import simple_remove, single_insertion
 from src.fleetctrl.pooling.immediate.SelectRV import filter_directionality, filter_least_number_tasks
 from src.misc.globals import *
+from src.simulation.Legs import VehicleRouteLeg
 if TYPE_CHECKING:
     from src.routing.NetworkBase import NetworkBase
     from src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraParallelization import ParallelizationManager
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.fleetctrl.planning.PlanRequest import PlanRequest
     from src.simulation.Vehicles import SimulationVehicle
-    from src.simulation.Legs import VehicleRouteLeg
 
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000
@@ -186,6 +186,19 @@ def getRTVkeyFromVehPlan(veh_plan : VehiclePlan) -> tuple:
         return None
     return createRTVKey(vid, rids.keys())
 
+INPUT_PARAMETERS_AlonsoMoraAssignment = {
+    "doc" :  """This algorithm is a variant of the publication
+                On-demand high-capacity ride-sharing via dynamic trip-vehicle assignment; Alonso-Mora, Javier; Samaranayake, Samitha; Wallar, Alex; Frazzoli, Emilio; Rus, Daniela (2017)
+                the differences are described in
+                Speed-up Heuristic for an On-Demand Ride-Pooling Algorithm; Engelhardt, Roman; Dandl, Florian; Bogenberger, Klaus (2020) https://arxiv.org/pdf/2007.14877 """,
+    "inherit" : "BatchAssignmentAlgorithmBase",
+    "input_parameters_mandatory": [G_RA_SOLVER],
+    "input_parameters_optional": [
+        G_RA_TB_TO_PER_VEH, G_RA_MAX_VR, G_RA_OPT_TO, G_RA_HEU, G_RVH_B_DIR, G_RVH_DIR, G_RVH_B_LWL, G_RVH_LWL, G_RVH_AM_RR, G_RVH_AM_TI
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
     def __init__(self, fleetcontrol: FleetControlBase, routing_engine : NetworkBase, sim_time : int, obj_function : Callable, operator_attributes : dict, 
@@ -290,7 +303,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     ext_veh_plan = self.fleetcontrol.veh_plans[vid]
                     rtv_key = getRTVkeyFromVehPlan(ext_veh_plan)
                     self.external_assignments[vid] = (rtv_key, ext_veh_plan)
-            LOG.debug(f"external assignments : {self.external_assignments}")
+            LOG.debug("external assignments : {}".format({x: (str(y[0]), str(y[1])) for x, y in self.external_assignments.items()}) )
         self.veh_objs = {}
         if len(veh_objs_to_build.keys()) == 0:
             for veh_obj in self.fleetcontrol.sim_vehicles:
@@ -489,21 +502,26 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             veh_plan = self.rtv_obj[key].getBestPlan()
             return veh_plan.copy()
 
-    def set_assignment(self, vid : int, assigned_plan : VehiclePlan, is_external_vehicle_plan : bool = False):
+    def set_assignment(self, vid : int, assigned_plan : VehiclePlan, is_external_vehicle_plan : bool = False, _is_init_sol: bool = False):
         """ sets the vehicleplan as assigned in the algorithm database; if the plan is not computed within the this algorithm, the is_external_vehicle_plan flag should be set to true
         :param vid: vehicle id
         :param assigned_plan: vehicle plan object that has been assigned
         :param is_external_vehicle_plan: should be set to True, if the assigned_plan has not been computed within this algorithm
+        :param _is_init_sol: used within the code, if the init solution creater set this solution 
         """
+        super().set_assignment(vid, assigned_plan, is_external_vehicle_plan=is_external_vehicle_plan)
         if assigned_plan is None:
             self.current_assignments[vid] = None
         else:
             rtv_key = getRTVkeyFromVehPlan(assigned_plan)
             self.current_assignments[vid] = rtv_key
-            # LOG.debug(f"assign {vid} -> {rtv_key} | is external? {is_external_vehicle_plan}")
-            if is_external_vehicle_plan:
+            LOG.debug(f"assign {vid} -> {rtv_key} | is external? {is_external_vehicle_plan}")
+            if is_external_vehicle_plan and not _is_init_sol:
                 self.external_assignments[vid] = (rtv_key, None)
                 self.rebuild_rtv[vid] = 1
+                self.delete_vehicle_database_entries(vid)
+            elif _is_init_sol and not is_external_vehicle_plan:
+                self.external_assignments[vid] = (rtv_key, assigned_plan)
 
     def get_current_assignment(self, vid : int) -> VehiclePlan:
         """ returns the vehicle plan assigned to vid currently
@@ -512,7 +530,11 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         """
         currently_assigned_key = self.current_assignments.get(vid)
         if currently_assigned_key is not None:
-            return self.rtv_obj[currently_assigned_key].getBestPlan()
+            assigned_rtv_obj = self.rtv_obj.get(currently_assigned_key)
+            if assigned_rtv_obj is not None:
+                return assigned_rtv_obj.getBestPlan()
+            else:
+                return self.fleetcontrol.veh_plans[vid]
         else:
             return None
 
@@ -630,8 +652,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             for key, v2rb in v2rbs_2_keep.items():
                 self._addRtvKey(key, v2rb)
             self.requests_to_compute[rid] = 1
-            self.active_requests[rid] = prq
-            
+            self.active_requests[rid] = prq         
 
     def get_vehicle_plan_without_rid(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, rid_to_remove : Any, sim_time : int) -> VehiclePlan:
         """this function returns the best vehicle plan by removing the rid_to_remove from the vehicle plan
@@ -650,12 +671,15 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
             return new_v2rb.getBestPlan()
         else:
             LOG.warning(f"lower V2RB {new_rtv_key} by removing {rid_to_remove} not found -> build lower v2rb from {rtv_key}")
-            old_v2rb = self.rtv_obj[rtv_key]
-            vid = getVidFromRTVKey(rtv_key)
-            new_v2rb = old_v2rb.createLowerV2RB(new_rtv_key, self.sim_time, self.routing_engine, self.objective_function, self.active_requests, self.std_bt, self.add_bt)
-            self._addRtvKey(new_rtv_key, new_v2rb)
-            return new_v2rb.getBestPlan()
-
+            old_v2rb = self.rtv_obj.get(rtv_key)
+            if old_v2rb is not None:
+                vid = getVidFromRTVKey(rtv_key)
+                new_v2rb = old_v2rb.createLowerV2RB(new_rtv_key, self.sim_time, self.routing_engine, self.objective_function, self.active_requests, self.std_bt, self.add_bt)
+                self._addRtvKey(new_rtv_key, new_v2rb)
+                return new_v2rb.getBestPlan()
+            else:
+                new_veh_plan = simple_remove(veh_obj, vehicle_plan, rid_to_remove, sim_time, self.routing_engine, self.objective_function, self.active_requests, self.std_bt, self.add_bt)
+                return new_veh_plan
 
     def _delRRcons(self, rid : Any, rid2 : Any = None):
         """ this function deletes rr-connections from the database
@@ -681,7 +705,11 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         return None
         """
         self.sim_time = sim_time
-        self.vid_to_list_passed_VRLs = vid_to_list_passed_VRLs
+        self.vid_to_list_passed_VRLs = {}
+        for vid, passed_VRLs in vid_to_list_passed_VRLs.items(): # remove stationary process
+            new_passed_VRLs = [VehicleRouteLeg(x.status, x.destination_pos, x.rq_dict, power=x.power, duration = x.duration, route=x.route, locked=x.locked, earliest_start_time=x.earliest_start_time)
+                               for x in passed_VRLs]
+            self.vid_to_list_passed_VRLs[vid] = new_passed_VRLs
         if new_travel_times:
             self.rebuild_rtv = {vid : 1 for vid in self.veh_objs.keys()}
 
@@ -703,8 +731,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         param rtv_obj : rtv_obj/V2RB (look V2RB.py)
         return : None
         """
-        ## LOG.debug(f"add rtv key {rtv_key}")
-        #TODO check if complete
+        LOG.debug(f"add rtv key {rtv_key} | {rtv_obj}")
         self.rtv_obj[rtv_key] = rtv_obj
         self.rtv_costs[rtv_key] = rtv_obj.cost_function_value
         list_rids = getRidsFromRTVKey(rtv_key)
@@ -1181,7 +1208,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         assigned_v2rb = self.rtv_obj.get(assigned_key)
         if assigned_v2rb is None:
             LOG.warning("assigned rtv-key not created after build! {} for vid {}".format(assigned_key, vid))
-            LOG.warning("external assignments: {}".format(self.external_assignments))
+            LOG.warning("external assignments: {}".format({x: (str(y[0]), str(y[1])) for x, y in self.external_assignments.items()}))
             assigned_plan = self.external_assignments[vid][1]
             # try:
             #     feasible = assigned_plan.update_plan(self.veh_objs[vid], self.sim_time, self.routing_engine, keep_time_infeasible = True)
@@ -1220,7 +1247,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     necessary_ob_rids.append(ass_rid)
             rtv_key = createRTVKey(vid, necessary_ob_rids)
             if self.rtv_obj.get(rtv_key, None) is None:
-                LOG.debug("create ob v2rb: {} from {} | {}".format(rtv_key, assigned_key, necessary_ob_rids))
+                LOG.debug("create ob v2rb: {} from {} | {} | {}".format(rtv_key, assigned_key, necessary_ob_rids, locked_rids))
                 assigned_v2rb = self.rtv_obj.get(assigned_key)
                 if assigned_v2rb is None:
                     LOG.warning("assigned rtv-key not here to create OBV2RB! {}".format(assigned_key))
@@ -1235,9 +1262,9 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     #     assigned_plan.update_plan(self.veh_objs[vid], self.sim_time, self.routing_engine, list_passed_VRLs=self.vid_to_list_passed_VRLs.get(vid, []), keep_time_infeasible = True)
                     assigned_v2rb = V2RB(self.routing_engine, self.active_requests, self.sim_time, assigned_key, self.veh_objs[vid], self.std_bt, self.add_bt, self.objective_function, orig_veh_plans=[assigned_plan])
                     self._addRtvKey(assigned_key, assigned_v2rb)
-                # LOG.debug("assigned_v2rb: {}".format(assigned_v2rb))
-                ob_v2rb = assigned_v2rb.createLowerV2RB(rtv_key, self.sim_time, self.routing_engine, self.objective_function, self.active_requests, self.std_bt, self.add_bt)
-                self._addRtvKey(rtv_key, ob_v2rb)
+                if rtv_key is not None:
+                    ob_v2rb = assigned_v2rb.createLowerV2RB(rtv_key, self.sim_time, self.routing_engine, self.objective_function, self.active_requests, self.std_bt, self.add_bt)
+                    self._addRtvKey(rtv_key, ob_v2rb)
         # test for feasible v2rbs of inactive rids
         assigned_key = self.current_assignments.get(vid)
         if assigned_key is not None:
@@ -1310,7 +1337,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
 
         for vid, plan in current_insertion_solutions.items():
             # LOG.debug("set init sol: {} -> {}".format(vid, plan))
-            self.set_assignment(vid, plan, is_external_vehicle_plan=True)
+            self.set_assignment(vid, plan, _is_init_sol=True)
 
 
 
@@ -1329,6 +1356,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         """
         import gurobipy as gurobi
         
+        model_name = f"AlonsoMoraAssignment: assignment {self.sim_time}"
+        
         vids = {}   #vid -> rtv_keys
         unassigned_rids = {}  #unassigned rid (or cluster_id) -> rtv_keys
         assigned_rids = {}  #assigned rid (or cluster_id) -> rtv_keys
@@ -1341,11 +1370,21 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         while not grb_available and delta_t <= RETRY_TIME:
             try:
                 with gurobi.Env(empty=True) as env:
-                    env.setParam('OutputFlag', 0)
-                    env.setParam('LogToConsole', 0)
-                    env.start()
+                    if self.fleetcontrol.log_gurobi:
+                        import os
+                        from src.misc.globals import G_DIR_OUTPUT
+                        with open(os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT], "gurobi_log.log"), "a") as f:
+                            f.write(f"\n\n{model_name}\n\n")
+                        env.setParam('OutputFlag', 1)
+                        env.setParam('LogToConsole', 0)
+                        env.setParam('LogFile', os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT], "gurobi_log.log") )
+                        env.start()
+                    else:
+                        env.setParam('OutputFlag', 0)
+                        env.setParam('LogToConsole', 0)
+                        env.start()
 
-                    m = gurobi.Model("assignment", env = env)
+                    m = gurobi.Model(model_name, env = env)
                     grb_available = True
 
                     m.setParam(gurobi.GRB.param.Threads, self.optimisation_cores)

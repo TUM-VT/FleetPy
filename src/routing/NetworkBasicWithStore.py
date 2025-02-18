@@ -31,6 +31,17 @@ from src.routing.routing_imports.Router import Router
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_NetworkBasicWithStore = {
+    "doc" : """
+        This routing class does all routing computations based on Dijkstra's algorithm. 
+        Compared to NetworkBasic.py, this class stores already computed travel infos in a dictionary and returns the values from this dictionary if queried again.
+        """,
+    "inherit" : "NetworkBasic",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
 class NetworkBasicWithStore(NetworkBasic):
     def __init__(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):

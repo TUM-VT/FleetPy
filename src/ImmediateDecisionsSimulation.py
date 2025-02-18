@@ -21,6 +21,15 @@ from src.FleetSimulationBase import FleetSimulationBase
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_ImmediateDecisionsSimulation = {
+    "doc" : "in this simulation each request immediatly decides for or against an offer",
+    "inherit" : "FleetSimulationBase",
+    "input_parameters_mandatory": [],   # TODO requires G_AR_MAX_DEC_T == 0 (specify somehow?)
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # functions
@@ -60,6 +69,7 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
             # 3) sequential processes for each undecided request: request -> offer -> user-decision
             # 4) periodically for waiting requests: run decision process -> possibly leave system (cancellation)
             # 5) periodically operator: call ride pooling optimization, repositioning, charging management
+            # 6) trigger charging infra 
 
         :param sim_time: new simulation time
         :return: None
@@ -92,6 +102,10 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         # 5)
         for op in self.operators:
             op.time_trigger(sim_time)
+        # 6)
+        for ch_op_dict in self.charging_operator_dict.values():
+            for ch_op in ch_op_dict.values():
+                ch_op.time_trigger(sim_time)
         # record at the end of each time step
         self.record_stats()
 

@@ -4,18 +4,26 @@ run_private*.py
 # data directories except for example
 data/demand/*
 !data/demand/example_demand
+!data/demand/example_parcel_demand
 data/fleetctrl/initial_vehicle_distribution/*
 data/fleetctrl/elastic_pricing/*
 data/fleetctrl/elastic_fleet_size/*
 !data/fleetctrl/initial_vehicle_distribution/example_network
+!data/fleetctrl/elastic_fleet_size/example_active_fleetsize.csv
 data/infra/*
 data/networks/*
 !data/networks/example_network
+data/networks/example_network/ff/*
+data/networks/example_network/ch_graph/*
+data/networks/example_network/base/*.graph
 data/pubtrans/*
 data/vehicles/*
 !data/vehicles/default_vehtype.csv
+!data/vehicles/low_range_vehtype.csv
+!data/vehicles/default_parcel_veh.csv
 data/zones/*
 !data/zones/example_zones
+!data/infra/example_infra
 
 # study directories except for example
 studies/*
@@ -31,6 +39,7 @@ src/routing/extractors/cache/*
 # IDE-related files
 *.idea
 .vscode/*
+src/routing/cpp_router/.vs/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

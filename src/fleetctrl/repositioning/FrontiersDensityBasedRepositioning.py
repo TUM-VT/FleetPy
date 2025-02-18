@@ -6,7 +6,7 @@ import logging
 import gurobipy as gp
 from gurobipy import GRB
 from collections import defaultdict
-from src.fleetctrl.repositioning.RepositioningBase import RepositionBase
+from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 from src.fleetctrl.planning.VehiclePlan import RoutingTargetPlanStop
 from timeit import default_timer
 from src.misc.globals import *
@@ -28,8 +28,17 @@ def set_var_value(np_entry):
 
 np_set_gurobi_var_value = np.vectorize(set_var_value)
 
+INPUT_PARAMETERS_DensityRepositioning = {
+    "doc" : "This class implements Density Based Repositioning Algorithm from Frontiers paper of Arslan and Florian",
+    "inherit" : "RepositioningBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [G_OP_REPO_GAMMA, G_OP_REPO_FRONTIERS_M],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
 
-class DensityRepositioning(RepositionBase):
+
+class DensityRepositioning(RepositioningBase):
     """This class implements Density Based Repositioning Algorithm from Frontiers paper of Arslan and Florian """
     def __init__(self, fleetctrl, operator_attributes, dir_names):
         """Initialization of repositioning class.

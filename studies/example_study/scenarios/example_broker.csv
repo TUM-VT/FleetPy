@@ -1,0 +1,4 @@
+sim_env,op_module,scenario_name,rq_file,op_rp_batch_optimizer,op_multiop_preferred_operator_probabilities,rq_type
+PreferredOperatorSimulation,BrokerBaseCtrl;BrokerBaseCtrl,example_broker_independent_sc_1,example_100.csv,AlonsoMora,0.5;0.5,PreferredOperatorRequest
+BrokerDecision,BrokerDecisionCtrl;BrokerDecisionCtrl,example_broker_broker_sc_1,example_100.csv,AlonsoMora,0.5;0.5,BrokerDecisionRequest
+UserDecisionSimulation,BrokerBaseCtrl;BrokerBaseCtrl,example_broker_user_sc_1,example_100.csv,AlonsoMora,0.5;0.5,UserDecisionRequest

@@ -39,8 +39,10 @@ class SimulationVehicleStruct():
         self.range = simulation_vehicle.range
         self.soc_per_m = simulation_vehicle.soc_per_m
 
-        # assigned route = list of assigned vehicle legs
-        self.assigned_route = simulation_vehicle.assigned_route
+        # assigned route = list of assigned vehicle legs (copy and remove stationary process (TODO?))
+        self.assigned_route = [VehicleRouteLeg(x.status, x.destination_pos, x.rq_dict, power=x.power, duration=x.duration, route=x.route, locked=x.locked, earliest_start_time=x.earliest_start_time)
+                               for x in simulation_vehicle.assigned_route]
+
         self.locked_planstops = VehiclePlan(self, sim_time, routing_engine, [])
         self.set_locked_vehplan(assigned_veh_plan, sim_time, routing_engine)
 
@@ -118,9 +120,19 @@ class SimulationVehicleStruct():
         else:
             return sum([rq.nr_pax for rq in self.pax if rq.is_parcel])
 
+INPUT_PARAMETERS_BatchAssignmentAlgorithmBase = {
+    "doc" :  """This class is used to compute new vehicle assignments with an algorithm
+        this class should be initialized when the corresponding fleet controller is initialized """,
+    "inherit" : None,
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
 
-    @abstractmethod
     def __init__(self, fleetcontrol : FleetControlBase, routing_engine : NetworkBase, sim_time : int, obj_function : Callable,
                  operator_attributes : dict, optimisation_cores : int=1, seed :int = 6061992, veh_objs_to_build : Dict[int, SimulationVehicleStruct]={}):
         """This class is used to compute new vehicle assignments with an algorithm
@@ -139,8 +151,8 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
             self.solver = fleetcontrol.solver
         self.routing_engine = routing_engine
         self.sim_time = sim_time
-        self.std_bt = operator_attributes[G_OP_CONST_BT]
-        self.add_bt = operator_attributes[G_OP_ADD_BT]
+        self.std_bt = operator_attributes.get(G_OP_CONST_BT, 0)
+        self.add_bt = operator_attributes.get(G_OP_ADD_BT, 0)
         self.objective_function = obj_function
         self.optimisation_cores = optimisation_cores
         self.operator_attributes = operator_attributes
@@ -208,6 +220,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         """ this function marks a request as assigned. its assignment is therefor treatet as hard constraint in the optimization problem formulation
         also all requests with the same mutually_exclusive_cluster_id are set as assigned
         :param rid: plan_request_id """
+        LOG.debug(f"set request {rid} as assigned!")
         try:
             del self.unassigned_requests[rid]
         except:
@@ -259,7 +272,9 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         :param assigned_plan: vehicle plan object that has been assigned
         :param is_external_vehicle_plan: should be set to True, if the assigned_plan has not been computed within this algorithm
         """
-        pass
+        if assigned_plan is not None:
+            for rid in assigned_plan.get_involved_request_ids():
+                self.set_request_assigned(rid)
 
     @abstractmethod
     def get_current_assignment(self, vid : int) -> VehiclePlan: # TODO same as get_optimisation_solution (delete?)
@@ -383,4 +398,8 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
                     del self.mutually_exclusive_cluster_id_to_rids[mut_cluster_id]
                 except:
                     pass
+                
+    def delete_vehicle_database_entries(self, vid):
+        """ triggered when all database entries of vehicle vid should be deleted"""
+        pass
 

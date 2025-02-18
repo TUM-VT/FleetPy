@@ -1,0 +1,3 @@
+op_module,scenario_name,rq_file,op_fleet_composition,op_act_fs_file,op_dyn_fs_method
+#PoolingIRSOnly,example_depot_ch_time_pool_irsonly_sc_1,example_100.csv,low_range_vehtype:5,example_active_fleetsize.csv,TimeBasedFS
+PoolingIRSAssignmentBatchOptimization,example_depot_ch_time_pool_irsopt_sc_1,example_100.csv,low_range_vehtype:5,example_active_fleetsize.csv,TimeBasedFS
