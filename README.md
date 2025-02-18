@@ -82,7 +82,7 @@ Everything is set up! :thumbsup: Now you could run your first simulation!
 
 ### C++ Router
 We recommend to use the C++ router unless your network is small enough to preprocess the complete travel time matrix.
-If you want to use the C++ router, you need to have a C++ compiler and Cython set up on your computer.
+If you want to use the C++ router, you need to have a C++ compiler and Cython set up on your computer (you can find more info in [cpp_router/setup.py](https://github.com/TUM-VT/FleetPy/blob/main/src/routing/cpp_router/setup.py)).
 
 Moreover, you need to compile the module on your system. Please go to 
 
@@ -165,10 +165,10 @@ if __name__ == '__main__'
 If you want to see a visualization of an already simulated scenario, you can call
 
 ```
-python3 replay_pyplot.py scenario_result_directory sim_seconds_per_real_second
+python3 replay_pyplot.py scenario_result_directory <sim_seconds_per_real_second>
 ```
 
-The start time of the replay can be given as an additional optional input parameter.
+The start time of the replay can be given as an additional optional input parameter. _sim_seconds_per_real_second_ is a numeric value that the user can choose.
 
 <!-- waiting for GUI Scenario Creator for further information -->
 
