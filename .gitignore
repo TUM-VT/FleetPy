@@ -25,6 +25,7 @@ data/vehicles/*
 !data/vehicles/default_vehtype.csv
 !data/vehicles/low_range_vehtype.csv
 !data/vehicles/default_parcel_veh.csv
+!data/vehicles/veh_20.csv
 data/zones/*
 !data/zones/example_zones
 !data/infra/example_infra
