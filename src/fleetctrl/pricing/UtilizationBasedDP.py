@@ -2,7 +2,7 @@ import os
 import logging
 import numpy as np
 import pandas as pd
-from src.fleetctrl.pricing.DynamicPricingBase import DynamicPrizingBase
+from src.fleetctrl.pricing.DynamicPricingBase import DynamicPricingBase
 from src.misc.functions import load_function
 
 from src.misc.globals import *
@@ -12,14 +12,14 @@ INPUT_PARAMETERS_UtilizationBasedDP = {
     "doc" : """This is a utilization dependent pricing scheme, which adjusts the general fare factor.
             After certain simulation intervals, the current fleet utilization is measured.
             If the utilization over-(under-)shoots a certain threshold, fares are in-(de-)creased.""",
-    "inherit" : "DynamicPrizingBase",
+    "inherit" : "DynamicPricingBase",
     "input_parameters_mandatory": [G_OP_DYN_P_FUNC, G_OP_UTIL_EVAL_INT],
     "input_parameters_optional": [],
     "mandatory_modules": [],
     "optional_modules": []
 }
 
-class UtilizationBasedDP(DynamicPrizingBase):
+class UtilizationBasedDP(DynamicPricingBase):
     """This is a utilization dependent pricing scheme, which adjusts the general fare factor.
     After certain simulation intervals, the current fleet utilization is measured.
     If the utilization over-(under-)shoots a certain threshold, fares are in-(de-)creased."""

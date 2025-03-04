@@ -103,11 +103,9 @@ python setup.py build_ext --inplace
 * Gurobi:
 Set gurobi channel on top of your channel list by twice calling
 ```
-conda config --add channels http://conda.anaconda.org/gurobi
-```
 Install gurobi package by
 ```
-conda install gurobi
+python -m pip install gurobipy==12.0.1
 ```
 Free academic licenses of Gurobi can be acquired. See https://www.gurobi.com/academia/academic-program-and-licenses/ for more details in installation instructions.
 
@@ -135,7 +133,7 @@ In general, you can save your data and study definitions in the mentioned direct
 You can test the example scenarios provided in the github repository by calling
 
 ```
-python3 run_examples.py
+python run_examples.py
 ```
 
 You should now have a directory containing several simulated scenarios. In each of the scenario directories, you will have a summary of the configuration, a simulation log file and several output files.

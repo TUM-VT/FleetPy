@@ -1,0 +1,3 @@
+scenario_name,op_dyn_pricing_method,op_dyn_pricing_func_dict,op_util_eval_interval
+mt_dyn_price_util,UtilizationBasedDP,func_key:pcw_lf;0:0;100:2000,300
+#mt_dyn_price_time,TimeBasedDP,,

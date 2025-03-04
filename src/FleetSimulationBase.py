@@ -42,7 +42,7 @@ PROGRESS_LOOP_VEHICLE_STATUS = [VRL_STATES.IDLE,VRL_STATES.CHARGING,VRL_STATES.R
 # check for computation on LRZ cluster
 if os.environ.get('SLURM_PROCID'):
     PROGRESS_LOOP = "off"
-    
+
 INPUT_PARAMETERS_FleetSimulationBase = {
     "doc" : "this is the base simulation class used for all simulations within FleetPy",
     "inherit" : None,
@@ -52,11 +52,11 @@ INPUT_PARAMETERS_FleetSimulationBase = {
     ],
     "input_parameters_optional": [
         G_SIM_TIME_STEP, G_NR_CH_OPERATORS, G_SIM_REALTIME_PLOT_FLAG, "log_level", G_SIM_ROUTE_OUT_FLAG, G_SIM_REPLAY_FLAG, G_INIT_STATE_SCENARIO,
-        G_FC_TYPE, G_ZONE_SYSTEM_NAME, G_FC_TR, G_FC_FNAME, G_INFRA_NAME
+        G_ZONE_SYSTEM_NAME, G_INFRA_NAME
     ],
     "mandatory_modules": [
         G_SIM_ENV, G_NETWORK_TYPE, G_RQ_TYP1, G_OP_MODULE
-    ], 
+    ],
     "optional_modules": []
 }
 
@@ -126,7 +126,21 @@ class FleetSimulationBase:
         self.scenario_name = scenario_parameters[G_SCENARIO_NAME]
         print("-"*80 + f"\nSimulation of scenario {self.scenario_name}")
         LOG.info(f"General initialization of scenario {self.scenario_name}...")
-        self.dir_names = self.get_directory_dict(scenario_parameters)
+        
+        if scenario_parameters.get("show_progress_bar", True) == False:
+            global PROGRESS_LOOP
+            PROGRESS_LOOP = "off"
+        
+        self.n_op = scenario_parameters[G_NR_OPERATORS]
+        self.n_ch_op = scenario_parameters.get(G_NR_CH_OPERATORS, 0)
+        
+        # build list of operator dictionaries  # TODO: this could be eliminated with a new YAML-based config system
+        self.list_op_dicts: tp.Dict[str,str] = build_operator_attribute_dicts(scenario_parameters, self.n_op,
+                                                                              prefix="op_")
+        self.list_ch_op_dicts: tp.Dict[str,str] = build_operator_attribute_dicts(scenario_parameters, self.n_ch_op,
+                                                                                 prefix="ch_op_")
+        
+        self.dir_names = self.get_directory_dict(scenario_parameters, self.list_op_dicts)
         self.scenario_parameters: dict = scenario_parameters
 
         # check whether simulation already has been conducted -> use final_state.csv to check
@@ -146,62 +160,59 @@ class FleetSimulationBase:
         self.end_time = self.scenario_parameters[G_SIM_END_TIME]
         self.time_step = self.scenario_parameters.get(G_SIM_TIME_STEP, 1)
         self.check_sim_env_spec_inputs(self.scenario_parameters)
-        self.n_op = self.scenario_parameters[G_NR_OPERATORS]
-        self.n_ch_op = self.scenario_parameters.get(G_NR_CH_OPERATORS, 0)
         self._manager: tp.Optional[Manager] = None
         self._shared_dict: dict = {}
         self._plot_class_instance: tp.Optional[PyPlot] = None
         self.realtime_plot_flag = self.scenario_parameters.get(G_SIM_REALTIME_PLOT_FLAG, 0)
-
-        # build list of operator dictionaries  # TODO: this could be eliminated with a new YAML-based config system
-        self.list_op_dicts: tp.Dict[str,str] = build_operator_attribute_dicts(scenario_parameters, self.n_op,
-                                                                              prefix="op_")
-        self.list_ch_op_dicts: tp.Dict[str,str] = build_operator_attribute_dicts(scenario_parameters, self.n_ch_op,
-                                                                                 prefix="ch_op_")
+        self.skip_output = True if scenario_parameters.get(G_SKIP_OUTPUT, 0) > 0 else False
 
         # take care of random seeds at beginning of simulations
         random.seed(self.scenario_parameters[G_RANDOM_SEED])
         np.random.seed(self.scenario_parameters[G_RANDOM_SEED])
 
         # empty output directory
-        create_or_empty_dir(self.dir_names[G_DIR_OUTPUT])
+        if not self.skip_output:
+            create_or_empty_dir(self.dir_names[G_DIR_OUTPUT])
 
         # write scenario config file in output directory
         self.save_scenario_inputs()
 
-        # remove old log handlers (otherwise sequential simulations only log to first simulation)
-        for handler in logging.root.handlers[:]:
-            logging.root.removeHandler(handler)
-        # start new log file
-        logging.VERBOSE = 5
-        logging.addLevelName(logging.VERBOSE, "VERBOSE")
-        logging.Logger.verbose = lambda inst, msg, *args, **kwargs: inst.log(logging.VERBOSE, msg, *args, **kwargs)
-        logging.LoggerAdapter.verbose = lambda inst, msg, *args, **kwargs: inst.log(logging.VERBOSE, msg, *args, **kwargs)
-        logging.verbose = lambda msg, *args, **kwargs: logging.log(logging.VERBOSE, msg, *args, **kwargs)
-        if self.scenario_parameters.get("log_level", "info"):
-            level_str = self.scenario_parameters["log_level"]
-            if level_str == "verbose":
-                log_level = logging.VERBOSE
-            elif level_str == "debug":
-                log_level = logging.DEBUG
-            elif level_str == "info":
-                log_level = logging.INFO
-            elif level_str == "warning":
-                log_level = logging.WARNING
+        if self.skip_output:
+            LOG.disabled = True
+        else:
+            # remove old log handlers (otherwise sequential simulations only log to first simulation)
+            for handler in logging.root.handlers[:]:
+                logging.root.removeHandler(handler)
+            # start new log file
+            logging.VERBOSE = 5
+            logging.addLevelName(logging.VERBOSE, "VERBOSE")
+            logging.Logger.verbose = lambda inst, msg, *args, **kwargs: inst.log(logging.VERBOSE, msg, *args, **kwargs)
+            logging.LoggerAdapter.verbose = lambda inst, msg, *args, **kwargs: inst.log(logging.VERBOSE, msg, *args, **kwargs)
+            logging.verbose = lambda msg, *args, **kwargs: logging.log(logging.VERBOSE, msg, *args, **kwargs)
+            if self.scenario_parameters.get("log_level", "info"):
+                level_str = self.scenario_parameters["log_level"]
+                if level_str == "verbose":
+                    log_level = logging.VERBOSE
+                elif level_str == "debug":
+                    log_level = logging.DEBUG
+                elif level_str == "info":
+                    log_level = logging.INFO
+                elif level_str == "warning":
+                    log_level = logging.WARNING
+                else:
+                    log_level = DEFAULT_LOG_LEVEL
             else:
                 log_level = DEFAULT_LOG_LEVEL
-        else:
-            log_level = DEFAULT_LOG_LEVEL
-            pd.set_option("mode.chained_assignment", None)
-        self.log_file = os.path.join(self.dir_names[G_DIR_OUTPUT], f"00_simulation.log")
-        if log_level < logging.INFO:
-            streams = [logging.FileHandler(self.log_file), logging.StreamHandler()]
-        else:
-            print("Only minimum output to console -> see log-file")
-            streams = [logging.FileHandler(self.log_file)]
-        # TODO # log of subsequent simulations is saved in first simulation log
-        logging.basicConfig(handlers=streams,
-                            level=log_level, format='%(process)d-%(name)s-%(levelname)s-%(message)s')
+                pd.set_option("mode.chained_assignment", None)
+            self.log_file = os.path.join(self.dir_names[G_DIR_OUTPUT], f"00_simulation.log")
+            if log_level < logging.INFO:
+                streams = [logging.FileHandler(self.log_file), logging.StreamHandler()]
+            else:
+                print("Only minimum output to console -> see log-file")
+                streams = [logging.FileHandler(self.log_file)]
+            # TODO # log of subsequent simulations is saved in first simulation log
+            logging.basicConfig(handlers=streams,
+                                level=log_level, format='%(process)d-%(name)s-%(levelname)s-%(message)s')
 
         # set up output files
         self.user_stat_f = os.path.join(self.dir_names[G_DIR_OUTPUT], f"1_user-stats.csv")
@@ -215,12 +226,15 @@ class FleetSimulationBase:
         # TODO # after ISTTT: bring init of modules in extra function (-> parallel processing)
         self.zones = None
         if self.dir_names.get(G_DIR_ZONES, None) is not None:
-            if self.scenario_parameters.get(G_FC_TYPE) and self.scenario_parameters[G_FC_TYPE] == "perfect":
-                from src.infra.PerfectForecastZoning import PerfectForecastZoneSystem
-                self.zones = PerfectForecastZoneSystem(self.dir_names[G_DIR_ZONES], self.scenario_parameters, self.dir_names)
-            else:
-                from src.infra.Zoning import ZoneSystem
-                self.zones = ZoneSystem(self.dir_names[G_DIR_ZONES], self.scenario_parameters, self.dir_names)
+            from src.infra.NetworkZoning import NetworkZoneSystem
+            LOG.warning(f"ZONE SYSTEM {self.dir_names.get(G_DIR_ZONES, None)} IS LOADED: THIS IS NOT USED FOR REBALANCING ANYMORE!")
+            self.zones = NetworkZoneSystem(self.dir_names[G_DIR_ZONES], self.scenario_parameters, self.dir_names)
+            # if self.scenario_parameters.get(G_FC_TYPE) and self.scenario_parameters[G_FC_TYPE] == "perfect":
+            #     from src.infra.PerfectForecastZoning import PerfectForecastZoneSystem
+            #     self.zones = PerfectForecastZoneSystem(self.dir_names[G_DIR_ZONES], self.scenario_parameters, self.dir_names)
+            # else:
+            #     from src.infra.Zoning import ZoneSystem
+            #     self.zones = ZoneSystem(self.dir_names[G_DIR_ZONES], self.scenario_parameters, self.dir_names)
 
         # routing engine
         LOG.info("Initialization of network and routing engine...")
@@ -305,8 +319,6 @@ class FleetSimulationBase:
         else:
             self.demand = SlaveDemand(self.scenario_parameters, self.user_stat_f)
 
-        if self.zones is not None:
-            self.zones.register_demand_ref(self.demand)
 
     def _load_charging_modules(self):
         """ Loads necessary modules for charging """
@@ -324,7 +336,7 @@ class FleetSimulationBase:
                     depot_f = os.path.join(self.dir_names[G_DIR_INFRA], depot_f_name)
                     op_charge = OperatorChargingAndDepotInfrastructure(op_id, depot_f, op_dict, self.scenario_parameters, self.dir_names, self.routing_engine)
                     self.charging_operator_dict["op"][op_id] = op_charge
-                
+
             # public charging
             if len(self.list_ch_op_dicts) > 0:
                 from src.infra.ChargingInfrastructure import PublicChargingInfrastructureOperator
@@ -351,8 +363,14 @@ class FleetSimulationBase:
         for op_id in range(self.n_op):
             operator_attributes = self.list_op_dicts[op_id]
             operator_module_name = operator_attributes[G_OP_MODULE]
+            op_dir_names = self.dir_names.copy()
+            op_specific_dirs = self.dir_names.get(f"op_{op_id}", {})
+            op_dir_names.update(op_specific_dirs)
             self.op_output[op_id] = []  # shared list among vehicles
-            if not operator_module_name == "LinebasedFleetControl":
+            if not (operator_module_name == "LinebasedFleetControl"
+                    or operator_module_name == "SemiOnDemandBatchAssignmentFleetcontrol"
+                    or operator_module_name == "SoDZonalBatchAssignmentFleetcontrol"
+            ):
                 fleet_composition_dict = operator_attributes[G_OP_FLEET]
                 list_vehicles = []
                 vid = 0
@@ -368,10 +386,50 @@ class FleetSimulationBase:
                         vid += 1
                 OpClass: FleetControlBase = load_fleet_control_module(operator_module_name)
                 self.operators.append(OpClass(op_id, operator_attributes, list_vehicles, self.routing_engine, self.zones,
-                                            self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values())))
-            else:
+                                            self.scenario_parameters, op_dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values())))
+            elif operator_module_name == "SemiOnDemandBatchAssignmentFleetcontrol":  # SemiOnDemandBatchAssignmentFleetcontrol
+                from src.fleetctrl.SemiOnDemandBatchAssignmentFleetcontrol import SemiOnDemandBatchAssignmentFleetcontrol
+                list_vehicles = []
+                OpClass = SemiOnDemandBatchAssignmentFleetcontrol(op_id, operator_attributes, list_vehicles,
+                                                                  self.routing_engine, self.zones,
+                                                                  self.scenario_parameters, op_dir_names,
+                                                                  self.charging_operator_dict["op"].get(op_id, None),
+                                                                  list(self.charging_operator_dict["pub"].values()))
+                init_vids = OpClass.return_vehicles_to_initialize()
+
+                for vid, veh_type in init_vids.items():
+                    tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+                                                        self.routing_engine, self.demand.rq_db,
+                                                        self.op_output[op_id], route_output_flag,
+                                                        replay_flag)
+                    list_vehicles.append(tmp_veh_obj)
+                    veh_type_list.append([op_id, vid, veh_type])
+                    self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
+                OpClass.continue_init(list_vehicles, self.start_time, self.end_time)
+                self.operators.append(OpClass)
+            elif operator_module_name == "SoDZonalBatchAssignmentFleetcontrol":
+                from src.fleetctrl.SoDZonalBatchAssignmentFleetcontrol import SoDZonalBatchAssignmentFleetcontrol
+                list_vehicles = []
+                OpClass = SoDZonalBatchAssignmentFleetcontrol(op_id, operator_attributes, list_vehicles,
+                                                                  self.routing_engine, self.zones,
+                                                                  self.scenario_parameters, op_dir_names,
+                                                                  self.charging_operator_dict["op"].get(op_id, None),
+                                                                  list(self.charging_operator_dict["pub"].values()))
+                init_vids = OpClass.return_vehicles_to_initialize()
+
+                for vid, veh_type in init_vids.items():
+                    tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+                                                        self.routing_engine, self.demand.rq_db,
+                                                        self.op_output[op_id], route_output_flag,
+                                                        replay_flag)
+                    list_vehicles.append(tmp_veh_obj)
+                    veh_type_list.append([op_id, vid, veh_type])
+                    self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
+                OpClass.continue_init(list_vehicles, self.start_time, self.end_time)
+                self.operators.append(OpClass)
+            else: # for LinebasedFleetControl
                 from dev.fleetctrl.LinebasedFleetControl import LinebasedFleetControl
-                OpClass = LinebasedFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()))
+                OpClass = LinebasedFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, op_dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()))
                 init_vids = OpClass.return_vehicles_to_initialize()
                 list_vehicles = []
                 for vid, veh_type in init_vids.items():
@@ -382,23 +440,30 @@ class FleetSimulationBase:
                     list_vehicles.append(tmp_veh_obj)
                     veh_type_list.append([op_id, vid, veh_type])
                     self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
-                OpClass.continue_init(list_vehicles, self.start_time)
+                OpClass.continue_init(list_vehicles, self.start_time, self.end_time)
                 self.operators.append(OpClass)
+            if self.operators[-1].repo is not None and self.operators[-1].repo.zone_system is not None:
+                self.operators[-1].repo.zone_system.register_demand_ref(self.demand)
         veh_type_f = os.path.join(self.dir_names[G_DIR_OUTPUT], "2_vehicle_types.csv")
         veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
-        veh_type_df.to_csv(veh_type_f, index=False)
+        if not self.skip_output:
+            veh_type_df.to_csv(veh_type_f, index=False)
         self.vehicle_update_order: tp.Dict[tp.Tuple[int, int], int] = {vid : 1 for vid in self.sim_vehicles.keys()}
 
     @staticmethod
-    def get_directory_dict(scenario_parameters):
+    def get_directory_dict(scenario_parameters, list_operator_dicts):
         """
         This function provides the correct paths to certain data according to the specified data directory structure.
         :param scenario_parameters: simulation input (pandas series)
+        :param list_operator_dicts: simulation input for each operator (pandas series)
         :return: dictionary with paths to the respective data directories
         """
-        return get_directory_dict(scenario_parameters)
+        return get_directory_dict(scenario_parameters, list_operator_dicts)
 
     def save_scenario_inputs(self):
+        if self.skip_output:
+            return
+
         config_f = os.path.join(self.dir_names[G_DIR_OUTPUT], G_SC_INP_F)
         config = {"scenario_parameters": self.scenario_parameters, "list_operator_attributes": self.list_op_dicts,
                   "directories": self.dir_names}
@@ -514,6 +579,9 @@ class FleetSimulationBase:
         """
         Records the state at the end of the simulation; can be used as initial state for other simulations.
         """
+        if self.skip_output:
+            return
+
         LOG.info("Saving final simulation state.")
         final_state_f = os.path.join(self.dir_names[G_DIR_OUTPUT], "final_state.csv")
         sorted_sim_vehicle_keys = sorted(self.sim_vehicles.keys())
@@ -559,9 +627,12 @@ class FleetSimulationBase:
 
     def record_stats(self, force=True):
         """This method records the stats at the end of the simulation."""
+        if self.skip_output:
+            return
+
         self.demand.save_user_stats(force)
         for op_id in range(self.n_op):
-            current_buffer_size = len(self.op_output[op_id]) 
+            current_buffer_size = len(self.op_output[op_id])
             if (current_buffer_size and force) or current_buffer_size > BUFFER_SIZE:
                 op_output_f = os.path.join(self.dir_names[G_DIR_OUTPUT], f"2-{op_id}_op-stats.csv")
                 if os.path.isfile(op_output_f):
@@ -738,6 +809,9 @@ class FleetSimulationBase:
             self.save_final_state()
             self.record_remaining_assignments()
             self.demand.record_remaining_users()
+        if self.skip_output:
+            return
+
         t_run_end = time.perf_counter()
         # call evaluation
         self.evaluate()

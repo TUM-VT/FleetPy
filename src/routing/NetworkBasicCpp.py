@@ -59,9 +59,10 @@ class NetworkBasicCpp(NetworkBasic):
         loads new travel time files for scenario_time
         """
         super().load_tt_file(scenario_time)
-        f = self.travel_time_file_folders[scenario_time]
-        tt_file = os.path.join(f, "edges_td_att.csv")
-        self.cpp_router.updateEdgeTravelTimes(tt_file.encode())
+        if self._tt_infos_from_folder:
+            f = self.travel_time_file_infos[scenario_time]
+            tt_file = os.path.join(f, "edges_td_att.csv")
+            self.cpp_router.updateEdgeTravelTimes(tt_file.encode())
 
     def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None):
         """
@@ -87,6 +88,8 @@ class NetworkBasicCpp(NetworkBasic):
         if destination_position[1] is not None:
             destination_overhead = self.get_section_overhead(destination_position, from_start=True)
         s = self.cpp_router.computeTravelCosts1To1(origin_node, destination_node)
+        if self._current_tt_factor is not None:
+            s = (s[0] * self._current_tt_factor, s[1])
         if s[0] < -0.001:
             s = (float("inf"), float("inf"))
         res = (s[0] + origin_overhead[0] + destination_overhead[0], s[0] + origin_overhead[1] + destination_overhead[1], s[1] + origin_overhead[2] + destination_overhead[2])
@@ -130,7 +133,15 @@ class NetworkBasicCpp(NetworkBasic):
         if destination_position[1] is not None:
             destination_overhead = self.get_section_overhead(destination_position, from_start=True)
         if len(origin_nodes.keys()) > 0:
-            s = self.cpp_router.computeTravelCostsXto1(destination_node, origin_nodes.keys(), max_time_range = max_cost_value, max_targets = max_routes)
+            if self._current_tt_factor is None:
+                s = self.cpp_router.computeTravelCostsXto1(destination_node, origin_nodes.keys(), max_time_range = max_cost_value, max_targets = max_routes)
+            else:
+                if max_cost_value is not None:
+                    new_max_cost_value = max_cost_value/self._current_tt_factor
+                else:
+                    new_max_cost_value = None
+                s = self.cpp_router.computeTravelCostsXto1(destination_node, origin_nodes.keys(), max_time_range = new_max_cost_value, max_targets = max_routes)
+                s = [(x[0], x[1] * self._current_tt_factor, x[2]) for x in s]
             for org_node, tt, dis in s:
                 if tt < -0.0001:
                     continue
@@ -186,7 +197,15 @@ class NetworkBasicCpp(NetworkBasic):
             origin_node = origin_position[1]
             origin_overhead = self.get_section_overhead(origin_position, from_start=False)
         if len(destination_nodes.keys()) > 0:
-            s = self.cpp_router.computeTravelCosts1toX(origin_node, destination_nodes.keys(), max_time_range = max_cost_value, max_targets = max_routes)
+            if self._current_tt_factor is None:
+                s = self.cpp_router.computeTravelCosts1toX(origin_node, destination_nodes.keys(), max_time_range = max_cost_value, max_targets = max_routes)
+            else:
+                if max_cost_value is not None:
+                    new_max_cost_value = max_cost_value/self._current_tt_factor
+                else:
+                    new_max_cost_value = None
+                s = self.cpp_router.computeTravelCosts1toX(origin_node, destination_nodes.keys(), max_time_range = new_max_cost_value, max_targets = max_routes)
+                s = [(x[0], x[1] * self._current_tt_factor, x[2]) for x in s]
             for dest_node, tt, dis in s:
                 if tt < -0.0001:
                     continue
