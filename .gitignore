@@ -20,6 +20,7 @@ data/networks/example_network/ff/*
 data/networks/example_network/ch_graph/*
 data/networks/example_network/base/*.graph
 data/pubtrans/*
+!data/pubtrans/route_193
 data/vehicles/*
 !data/vehicles/default_vehtype.csv
 !data/vehicles/low_range_vehtype.csv

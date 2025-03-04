@@ -779,9 +779,10 @@ class PTScheduleGen:
 
 if __name__ == "__main__":
     print(os.getcwd())
-    data_p = r"C:\Users\ge37ser\Documents\Coding\FleetPy\data"
+    data_p = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "data")
+
     demand_csv =  os.path.join(data_p, "demand", "SoD_demand", "sample.csv") #'data/demand/SoD_demand/sample.csv'
-    GTFS_folder = os.path.join(data_p, "pubtrans", "MVG_GTFS") # "data/pubtrans/MVG_GTFS"
+    GTFS_folder = os.path.join(data_p, "pubtrans", "MVG_GTFS_2025-03-04") # "data/pubtrans/MVG_GTFS"
     network_path = os.path.join(data_p, "networks", "osm_route_MVG_road") # "data/networks/osm_route_MVG_road"
 
     route_no = 193
