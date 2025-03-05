@@ -102,7 +102,7 @@ python setup.py build_ext --inplace
 
 * Gurobi:
 Set gurobi channel on top of your channel list by twice calling
-```
+
 Install gurobi package by
 ```
 python -m pip install gurobipy==12.0.1
