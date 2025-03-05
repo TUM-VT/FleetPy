@@ -164,3 +164,21 @@ We welcome contributions from the community! 🚀
 ✔ **Windows 10 Pro x64**  
 ✔ **Chrome 79.0.3945**  
 ✔ **Python 3.7**  
+
+---
+
+## Citation
+If you find this framework useful for your work or use it in your project, please consider citing:
+Engelhardt, R., Dandl, F., Syed, A., Zhang, Y., Fehn, F., Wolf, F., Bogenberger, K. (2022). FleetPy: A Modular Open-Source Simulation Tool for Mobility On-Demand Services. Arxiv pre-print
+
+```
+@misc{engelhardt2022fleetpymodularopensourcesimulation,
+      title={FleetPy: A Modular Open-Source Simulation Tool for Mobility On-Demand Services}, 
+      author={Roman Engelhardt and Florian Dandl and Arslan-Ali Syed and Yunfei Zhang and Fabian Fehn and Fynn Wolf and Klaus Bogenberger},
+      year={2022},
+      eprint={2207.14246},
+      archivePrefix={arXiv},
+      primaryClass={cs.MA},
+      url={https://arxiv.org/abs/2207.14246}, 
+}
+```
