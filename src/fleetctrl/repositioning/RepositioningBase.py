@@ -9,10 +9,12 @@ import pandas as pd
 
 from src.fleetctrl.planning.VehiclePlan import RoutingTargetPlanStop
 from src.misc.globals import *
+from src.misc.init_modules import load_forecast_model
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
+    from src.fleetctrl.forecast.ForecastZoneSystemBase import ForecastZoneSystemBase
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
 
@@ -38,7 +40,7 @@ class RepositioningBase(ABC):
         """
         self.fleetctrl = fleetctrl
         self.routing_engine = fleetctrl.routing_engine
-        self.zone_system = fleetctrl.zones
+        self.zone_system = self._load_zone_system(operator_attributes, dir_names)
         self.list_horizons = operator_attributes[G_OP_REPO_TH_DEF]
         self.lock_repo_assignments = operator_attributes.get(G_OP_REPO_LOCK, True)
         self.solver_key = solver
@@ -88,17 +90,32 @@ class RepositioningBase(ABC):
         :param lock: indicates if vehplans should be locked
         :return: list[vid] of vehicles with changed plans
         """
+        self.zone_system.time_trigger(sim_time)
         self.sim_time = sim_time
         if lock is None:
             lock = self.lock_repo_assignments
         return []
+    
+    def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> ForecastZoneSystemBase:
+        """ this method loads the forecast zone system needed for the corresponding repositioning strategy"""
+        FC_Class = load_forecast_model(operator_attributes[G_RA_FC_TYPE])
+        return FC_Class(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
+        
     
     def register_rejected_customer(self, planrequest, sim_time):
         """ this method is used to register and unserved request due to lack of available vehicles. The information can be stored internally
         and used for creating repositioning plans
         :param planrequest: plan request obj that has been rejected
         :param sim_time: simulation time"""
-        pass
+        if self.zone_system is not None:
+            self.zone_system.register_rejected_request(sim_time, planrequest)
+        
+    def register_user_request(self, planrequest, sim_time):
+        """ this method registers a new customer request and can be used to update forecasts with online information
+        :param planrequest: plan request obj
+        :param sim_time: current simulation time"""
+        if self.zone_system is not None:
+            self.zone_system.register_new_request(sim_time, planrequest)
 
     def _get_demand_forecasts(self, t0, t1, aggregation_level=None):
         """This method creates a dictionary, which maps the zones to the expected demand between t0 and t1.
@@ -125,8 +142,6 @@ class RepositioningBase(ABC):
         :rtype: dict
         """
         arrival_forecasts = self.zone_system.get_trip_arrival_forecasts(t0, t1, aggregation_level)
-        for zone_id, val in arrival_forecasts.items():
-            self.record_df.loc[(self.sim_time, zone_id, t0, t1), "tot_fc_demand"] = val
         return arrival_forecasts
 
     def _get_current_veh_plan_arrivals_and_repo_idle_vehicles(self, t0, t1, node_level=False):
@@ -176,6 +191,7 @@ class RepositioningBase(ABC):
                     zone_id = self.zone_system.get_zone_from_pos(last_ps.get_pos())
                     if zone_id >= 0:
                         zone_dict[zone_id][1].append(veh_obj)
+                        zone_dict[zone_id][0] += 1  # TODO this should be here, right?
         # record
         for zone_id, info_list in zone_dict.items():
             nr_normal_incoming = info_list[0]
@@ -244,12 +260,19 @@ class RepositioningBase(ABC):
         veh_plan = self.fleetctrl.veh_plans[veh_obj.vid]
         if destination_node is None:
             destination_node = self.zone_system.get_random_centroid_node(destination_zone_id)
-        elif destination_node < 0:
-            destination_node = self.zone_system.get_random_node(destination_zone_id)
-        LOG.debug("repositioning {} to zone {} with centroid {}".format(veh_obj.vid, destination_zone_id,
-                                                                        destination_node))
+            LOG.debug("repositioning {} to zone {} with centroid {}".format(veh_obj.vid, destination_zone_id,
+                                                                            destination_node))
+            if destination_node < 0:
+                destination_node = self.zone_system.get_random_node(destination_zone_id)
         ps = RoutingTargetPlanStop((destination_node, None, None), locked=lock, planstop_state=G_PLANSTOP_STATES.REPO_TARGET)
-        veh_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
+        if len(veh_plan.list_plan_stops) == 0 or not veh_plan.list_plan_stops[-1].is_locked_end():
+            veh_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
+        else:
+            new_list_plan_stops = veh_plan.list_plan_stops[:-1] + [ps] + veh_plan.list_plan_stops[-1:]
+            veh_plan.list_plan_stops = new_list_plan_stops
+            veh_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
+            if not veh_plan.is_feasible():
+                LOG.warning("veh plan not feasible after assigning repo with reservation! {}".format(veh_plan))
         self.fleetctrl.assign_vehicle_plan(veh_obj, veh_plan, sim_time)
         if lock:
             self.fleetctrl.lock_current_vehicle_plan(veh_obj.vid)

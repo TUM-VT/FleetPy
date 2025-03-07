@@ -46,7 +46,7 @@ class SimulationVehicle:
         self.replay_flag = replay_flag
         #
         veh_data_f = os.path.join(vehicle_data_dir, f"{vehicle_type}.csv")
-        veh_data = pd.read_csv(veh_data_f, header=None, index_col=0, squeeze=True)
+        veh_data = pd.read_csv(veh_data_f, header=None, index_col=0).squeeze("columns")
         self.veh_type = veh_data[G_VTYPE_NAME]
         self.max_pax = int(veh_data[G_VTYPE_MAX_PAX])
         self.max_parcels = int(veh_data.get(G_VTYPE_MAX_PARCELS, 0))
@@ -73,6 +73,8 @@ class SimulationVehicle:
         self.cl_remaining_route = []  # list of remaining nodes to next stop
         self.cl_remaining_time = None
         self.cl_locked = False
+        # cumulative distance
+        self.cumulative_distance = 0.0
         # TODO # check and think about consistent way for large time steps -> will vehicles wait until next update?
         self.start_next_leg_first = False   # flag, if True, a new assignment has been made, which has to be activated first in the next call of update_veh_state
 
@@ -82,6 +84,9 @@ class SimulationVehicle:
     def reset_current_leg(self):
         # current info
         self.status = VRL_STATES.IDLE
+        # add distance to cumulative distance
+        self.cumulative_distance += self.cl_driven_distance
+
         # current leg (cl) info
         self.cl_start_time = None
         self.cl_start_pos = None
@@ -338,8 +343,9 @@ class SimulationVehicle:
             boarding_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(1,[])]
             alighting_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(-1,[])]
             vrl.rq_dict = {1:boarding_list, -1:alighting_list}
-        #LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
-        #LOG.debug(f"  -> current assignment: {self.assigned_route}")
+        LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
+        LOG.debug(f"  -> current assignment: {[str(x) for x in self.assigned_route]}")
+        LOG.debug(f" -> force: {force_ignore_lock}")
         start_flag = True
         if self.assigned_route:
             if not list_route_legs or list_route_legs[0] != self.assigned_route[0]:

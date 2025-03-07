@@ -165,7 +165,9 @@ class NetworkBasic(NetworkBase):
         """
         self.nodes = []     #list of all nodes in network (index == node.node_index)
         self.network_name_dir = network_name_dir
-        self.travel_time_file_folders = self._load_tt_folder_path(network_dynamics_file_name=network_dynamics_file_name)
+        self._tt_infos_from_folder = True
+        self._current_tt_factor = None
+        self.travel_time_file_infos = self._load_tt_folder_path(network_dynamics_file_name=network_dynamics_file_name)
         self.loadNetwork(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
         self.current_dijkstra_number = 1    #used in dijkstra-class
         self.sim_time = 0   # TODO #
@@ -175,12 +177,12 @@ class NetworkBasic(NetworkBase):
 
     def loadNetwork(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
         nodes_f = os.path.join(network_name_dir, "base", "nodes.csv")
-        print(f"Loading nodes from {nodes_f} ...")
+        LOG.info(f"Loading nodes from {nodes_f} ...")
         nodes_df = pd.read_csv(nodes_f)
         self.nodes = nodes_df.apply(read_node_line, axis=1)
         #
         edges_f = os.path.join(network_name_dir, "base", "edges.csv")
-        print(f"Loading edges from {edges_f} ...")
+        LOG.info(f"Loading edges from {edges_f} ...")
         edges_df = pd.read_csv(edges_f)
         for _, row in edges_df.iterrows():
             o_node = self.nodes[row[G_EDGE_FROM]]
@@ -188,11 +190,11 @@ class NetworkBasic(NetworkBase):
             tmp_edge = Edge((o_node, d_node), row[G_EDGE_DIST], row[G_EDGE_TT])
             o_node.add_next_edge_to(d_node, tmp_edge)
             d_node.add_prev_edge_from(o_node, tmp_edge)
-        print("... {} nodes loaded!".format(len(self.nodes)))
+        LOG.info("... {} nodes loaded!".format(len(self.nodes)))
         if scenario_time is not None:
             latest_tt = None
-            if len(self.travel_time_file_folders.keys()) > 0:
-                tts = sorted(list(self.travel_time_file_folders.keys()))
+            if len(self.travel_time_file_infos.keys()) > 0:
+                tts = sorted(list(self.travel_time_file_infos.keys()))
                 for tt in tts:
                     if tt > scenario_time:
                         break
@@ -217,8 +219,17 @@ class NetworkBasic(NetworkBase):
             LOG.info("... load network dynamics file: {}".format(os.path.join(self.network_name_dir, network_dynamics_file_name)))
             nw_dynamics_df = pd.read_csv(os.path.join(self.network_name_dir, network_dynamics_file_name))
             nw_dynamics_df.set_index("simulation_time", inplace=True)
-            for sim_time, tt_folder_name in nw_dynamics_df["travel_time_folder"].items():
-                tt_folders[int(sim_time)] = os.path.join(self.network_name_dir, str(tt_folder_name))
+            if "travel_time_folder" in nw_dynamics_df.columns:
+                LOG.info(f"   ... folder structure found in {network_dynamics_file_name}")
+                for sim_time, tt_folder_name in nw_dynamics_df["travel_time_folder"].items():
+                    tt_folders[int(sim_time)] = os.path.join(self.network_name_dir, str(tt_folder_name))
+            elif "travel_time_factor" in nw_dynamics_df.columns:
+                LOG.info(f"   ... travel time factor found in {network_dynamics_file_name}")
+                self._tt_infos_from_folder = False
+                for sim_time, tt_factor in nw_dynamics_df["travel_time_factor"].items():
+                    tt_folders[int(sim_time)] = tt_factor
+            else:
+                LOG.warning(f" ... neither folder structure nor travel time factor found in {network_dynamics_file_name} -> use free flow travel times")
         return tt_folders
 
     def update_network(self, simulation_time, update_state = True):
@@ -232,7 +243,7 @@ class NetworkBasic(NetworkBase):
         LOG.debug(f"update network {simulation_time}")
         self.sim_time = simulation_time
         if update_state:
-            if self.travel_time_file_folders.get(simulation_time, None) is not None:
+            if self.travel_time_file_infos.get(simulation_time, None) is not None:
                 self.load_tt_file(simulation_time)
                 return True
         return False
@@ -241,7 +252,7 @@ class NetworkBasic(NetworkBase):
         """ this method is used in case a module changed the travel times to future states for forecasts
         it resets the network to the travel times a stimulation_time
         :param simulation_time: current simulation time"""
-        sorted_tts = sorted(self.travel_time_file_folders.keys())
+        sorted_tts = sorted(self.travel_time_file_infos.keys())
         if len(sorted_tts) > 2:
             for i in range(len(sorted_tts) - 1):
                 if sorted_tts[i] <= simulation_time and sorted_tts[i+1] > simulation_time:
@@ -256,12 +267,15 @@ class NetworkBasic(NetworkBase):
         loads new travel time files for scenario_time
         """
         self._reset_internal_attributes_after_travel_time_update()
-        f = self.travel_time_file_folders[scenario_time]
-        tt_file = os.path.join(f, "edges_td_att.csv")
-        tmp_df = pd.read_csv(tt_file)
-        tmp_df.set_index(["from_node","to_node"], inplace=True)
-        for edge_index_tuple, new_tt in tmp_df["edge_tt"].iteritems():
-            self._set_edge_tt(edge_index_tuple[0], edge_index_tuple[1], new_tt)
+        f = self.travel_time_file_infos[scenario_time]
+        if self._tt_infos_from_folder:
+            tt_file = os.path.join(f, "edges_td_att.csv")
+            tmp_df = pd.read_csv(tt_file)
+            tmp_df.set_index(["from_node","to_node"], inplace=True)
+            for edge_index_tuple, new_tt in tmp_df["edge_tt"].iteritems():
+                self._set_edge_tt(edge_index_tuple[0], edge_index_tuple[1], new_tt)
+        else:
+            self._current_tt_factor = f
 
     def _set_edge_tt(self, o_node_index, d_node_index, new_travel_time):
         o_node = self.nodes[o_node_index]
@@ -331,7 +345,11 @@ class NetworkBasic(NetworkBase):
         :param end_node_index: index of end_node of section
         :return: (travel time, distance); if no section between nodes (None, None)
         """
-        return self.nodes[start_node_index].get_travel_infos_to(end_node_index)
+        if self._current_tt_factor is None:
+            return self.nodes[start_node_index].get_travel_infos_to(end_node_index)
+        else:
+            tt, dis = self.nodes[start_node_index].get_travel_infos_to(end_node_index)
+            return tt * self._current_tt_factor, dis
 
     def return_route_infos(self, route, rel_start_edge_position, start_time):
         """
@@ -376,7 +394,7 @@ class NetworkBasic(NetworkBase):
         """
         if position[1] is None:
             return 0.0, 0.0, 0.0
-        all_travel_time, all_travel_distance = self.nodes[position[0]].get_travel_infos_to(position[1])
+        all_travel_time, all_travel_distance = self.get_section_infos(position[0], position[1])
         overhead_fraction = position[2]
         if not from_start:
             overhead_fraction = 1.0 - overhead_fraction
@@ -406,8 +424,13 @@ class NetworkBasic(NetworkBase):
         destination_overhead = (0.0, 0.0, 0.0)
         if destination_position[1] is not None:
             destination_overhead = self.get_section_overhead(destination_position, from_start=True)
-        R = Router(self, origin_node, destination_nodes=[destination_node], mode='bidirectional', customized_section_cost_function=customized_section_cost_function)
-        s = R.compute(return_route=False)[0][1]
+        if self._current_tt_factor is None:
+            R = Router(self, origin_node, destination_nodes=[destination_node], mode='bidirectional', customized_section_cost_function=customized_section_cost_function)
+            s = R.compute(return_route=False)[0][1]
+        else:
+            R = Router(self, origin_node, destination_nodes=[destination_node], mode='bidirectional', customized_section_cost_function=customized_section_cost_function)
+            s = R.compute(return_route=False)[0][1]
+            s = (s[0] * self._current_tt_factor, s[1] * self._current_tt_factor, s[2])
         res = (s[0] + origin_overhead[0] + destination_overhead[0], s[1] + origin_overhead[1] + destination_overhead[1], s[2] + origin_overhead[2] + destination_overhead[2])
         if customized_section_cost_function is None:
             self._add_to_database(origin_node, destination_node, s[0], s[1], s[2])
@@ -447,8 +470,17 @@ class NetworkBasic(NetworkBase):
         if destination_position[1] is not None:
             destination_overhead = self.get_section_overhead(destination_position, from_start=True)
         if len(origin_nodes.keys()) > 0:
-            R = Router(self, destination_node, destination_nodes=origin_nodes.keys(), time_radius = max_cost_value, max_settled_targets = max_routes, forward_flag = False, customized_section_cost_function=customized_section_cost_function)
-            s = R.compute(return_route=False)
+            if self._current_tt_factor is None:
+                R = Router(self, destination_node, destination_nodes=origin_nodes.keys(), time_radius = max_cost_value, max_settled_targets = max_routes, forward_flag = False, customized_section_cost_function=customized_section_cost_function)
+                s = R.compute(return_route=False)
+            else:
+                if max_cost_value is not None:
+                    new_max_cost_value = max_cost_value/self._current_tt_factor
+                else:
+                    new_max_cost_value = None
+                R = Router(self, destination_node, destination_nodes=origin_nodes.keys(), time_radius = new_max_cost_value, max_settled_targets = max_routes, forward_flag = False, customized_section_cost_function=customized_section_cost_function)
+                s = R.compute(return_route=False)
+                s = [(entry[0], (entry[1][0] * self._current_tt_factor, entry[1][1] * self._current_tt_factor, entry[1][2])) for entry in s]
             for entry in s:
                 cfv, tt, dis = entry[1]
                 if cfv < 0 or cfv == float("inf"):
@@ -507,8 +539,17 @@ class NetworkBasic(NetworkBase):
             origin_node = origin_position[1]
             origin_overhead = self.get_section_overhead(origin_position, from_start=False)
         if len(destination_nodes.keys()) > 0:
-            R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = max_cost_value, max_settled_targets = max_routes, forward_flag = True, customized_section_cost_function=customized_section_cost_function)
-            s = R.compute(return_route=False)
+            if self._current_tt_factor is None:
+                R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = max_cost_value, max_settled_targets = max_routes, forward_flag = True, customized_section_cost_function=customized_section_cost_function)
+                s = R.compute(return_route=False)
+            else:
+                if max_cost_value is not None:
+                    new_max_cost_value = max_cost_value/self._current_tt_factor
+                else:
+                    new_max_cost_value = None
+                R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = new_max_cost_value, max_settled_targets = max_routes, forward_flag = True, customized_section_cost_function=customized_section_cost_function)
+                s = R.compute(return_route=False)
+                s = [(entry[0], (entry[1][0] * self._current_tt_factor, entry[1][1] * self._current_tt_factor, entry[1][2])) for entry in s]
             for entry in s:
                 cfv, tt, dis = entry[1]
                 if tt < 0 or cfv == float("inf"):
@@ -604,8 +645,17 @@ class NetworkBasic(NetworkBase):
             destination_overhead = (0.0, 0.0, 0.0)
             if destination_position[1] is not None:
                 destination_overhead = self.get_section_overhead(destination_position, from_start=True)
-            R = Router(self, destination_node, destination_nodes=origin_nodes.keys(), time_radius = max_cost_value, forward_flag = False, customized_section_cost_function=customized_section_cost_function)
-            s = R.compute(return_route=True)
+            if self._current_tt_factor is None:
+                R = Router(self, destination_node, destination_nodes=origin_nodes.keys(), time_radius = max_cost_value, forward_flag = False, customized_section_cost_function=customized_section_cost_function)
+                s = R.compute(return_route=True)
+            else:
+                if max_cost_value is not None:
+                    new_max_cost_value = max_cost_value/self._current_tt_factor
+                else:
+                    new_max_cost_value = None
+                R = Router(self, destination_node, destination_nodes=origin_nodes.keys(), time_radius = new_max_cost_value, forward_flag = False, customized_section_cost_function=customized_section_cost_function)
+                s = R.compute(return_route=True)
+                s = [(entry[0], (entry[1][0] * self._current_tt_factor, entry[1][1] * self._current_tt_factor, entry[1][2])) for entry in s]
             for entry in s:
                 cfv, tt, dis = entry[1]
                 if tt < 0:
@@ -687,8 +737,17 @@ class NetworkBasic(NetworkBase):
             origin_node = origin_position[1]
             origin_overhead = self.get_section_overhead(origin_position, from_start=False)
         if len(destination_nodes.keys()) > 0:
-            R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = max_cost_value, forward_flag = True)
-            s = R.compute(return_route=True)
+            if self._current_tt_factor is None:
+                R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = max_cost_value, forward_flag = True)
+                s = R.compute(return_route=True)
+            else:
+                if max_cost_value is not None:
+                    new_max_cost_value = max_cost_value/self._current_tt_factor
+                else:
+                    new_max_cost_value = None
+                R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = new_max_cost_value, forward_flag = True, customized_section_cost_function=customized_section_cost_function)
+                s = R.compute(return_route=True)
+                s = [(entry[0], (entry[1][0] * self._current_tt_factor, entry[1][1] * self._current_tt_factor, entry[1][2])) for entry in s]
             for entry in s:
                 cfv, tt, dis = entry[1]
                 if tt < 0:
@@ -830,7 +889,7 @@ class NetworkBasic(NetworkBase):
             if c_pos[2] is None:
                 c_pos = (c_pos[0], route[i], 0)
             rel_factor = (1 - c_pos[2])
-            tt, td = self.nodes[c_pos[0]].get_travel_infos_to(c_pos[1])
+            tt, td = self.get_section_infos(c_pos[0], c_pos[1])
             if tt > 86400:
                 LOG.warning(f"move_along_route: very large travel time on edge ({c_pos[0]} -> {c_pos[1]} for vid {sim_vid_id} at time {new_sim_time}) (blocked after tt update?) -> vehicle jumps this edge")
                 tt = 0

@@ -1,5 +1,7 @@
 # FleetPy
-Simulation framework to model and control the tasks of vehicle fleets (routing, user-assignment, charging, ...)
+**FleetPy** is a simulation framework to model and control the tasks of vehicle fleets (routing, user-assignment, charging, ...)
+
+This README file just serves as a short description. Please check a more detailed explanation at our [Wiki](https://github.com/TUM-VT/FleetPy/wiki).
 
 ## Features
 
@@ -58,31 +60,19 @@ conda config --describe channel_priority
 ```
 
 #### Create the virtual environment
-Create a new virtual environment in an *Anaconda Prompt* with a Python version 3.7.X.
+Create a new virtual environment in an *Anaconda Prompt* with all the packages listed in `environment.yml`. The default name of the environment is called `fleetpy`, which you could also change in the first line of `environment.yml` by changing the `name` variable.
 
 ```
-conda create -n <new_env> python=3.7
+conda env create -f environment.yml
 ```
 
-Checkout to the created virtual environment
+Check out the created virtual environment.
 
 ```
 conda activate <new_env>
 ```
 
-Check the default packages in your new and clean virtual environment :smile:
-
-```
-conda list
-```
-
-Install packages direcly using *Conda*:
-
-```
-conda install --file requirements.txt
-```
-
-It works! Looks like every package is successfully installed! Now check the installed packages again :wink:
+Now check the installed packages :wink:
 
 ```
 conda list
@@ -92,7 +82,7 @@ Everything is set up! :thumbsup: Now you could run your first simulation!
 
 ### C++ Router
 We recommend to use the C++ router unless your network is small enough to preprocess the complete travel time matrix.
-If you want to use the C++ router, you need to have a C++ compiler and Cython set up on your computer.
+If you want to use the C++ router, you need to have a C++ compiler and Cython set up on your computer (you can find more info in [cpp_router/setup.py](https://github.com/TUM-VT/FleetPy/blob/main/src/routing/cpp_router/setup.py)).
 
 Moreover, you need to compile the module on your system. Please go to 
 
@@ -113,11 +103,9 @@ python setup.py build_ext --inplace
 * Gurobi:
 Set gurobi channel on top of your channel list by twice calling
 ```
-conda config --add channels http://conda.anaconda.org/gurobi
-```
 Install gurobi package by
 ```
-conda install gurobi
+python -m pip install gurobipy==12.0.1
 ```
 Free academic licenses of Gurobi can be acquired. See https://www.gurobi.com/academia/academic-program-and-licenses/ for more details in installation instructions.
 
@@ -145,7 +133,7 @@ In general, you can save your data and study definitions in the mentioned direct
 You can test the example scenarios provided in the github repository by calling
 
 ```
-python3 run_examples.py
+python run_examples.py
 ```
 
 You should now have a directory containing several simulated scenarios. In each of the scenario directories, you will have a summary of the configuration, a simulation log file and several output files.
@@ -175,10 +163,10 @@ if __name__ == '__main__'
 If you want to see a visualization of an already simulated scenario, you can call
 
 ```
-python3 replay_pyplot.py scenario_result_directory sim_seconds_per_real_second
+python3 replay_pyplot.py scenario_result_directory <sim_seconds_per_real_second>
 ```
 
-The start time of the replay can be given as an additional optional input parameter.
+The start time of the replay can be given as an additional optional input parameter. _sim_seconds_per_real_second_ is a numeric value that the user can choose.
 
 <!-- waiting for GUI Scenario Creator for further information -->
 

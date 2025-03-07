@@ -13,7 +13,7 @@ from src.misc.distributions import draw_from_distribution_dict
 if TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
     
-INPUT_PARAMETERS_DynamicFleetSizingBase = {
+INPUT_PARAMETERS_TimeBasedFS = {
 "doc" :  """information about the timedependent fleetsize has to be given with the file "op_act_fs_file"
         according to the active fleetsize curve this strategy activates and deactivates vehicles to fit this curve
         inactive vehicles in depots are selected to charge if a charging station is present

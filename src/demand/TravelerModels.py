@@ -58,7 +58,7 @@ class RequestBase(metaclass=ABCMeta):
         self.latest_decision_time = rq_row[G_RQ_LDT]
         self.earliest_start_time = self.rq_time
         if rq_row.get(G_RQ_EPT):
-            self.earliest_start_time = rq_row.get(G_RQ_EPT)
+            self.earliest_start_time = rq_row[G_RQ_EPT] - rq_row[G_RQ_EPT] % simulation_time_step
         elif scenario_parameters.get(G_AR_MIN_WT):  # TODO RPP : auslagern in ParcelBase + definieren neuer global variable (parcel_min_wait_time)
             self.earliest_start_time = self.rq_time + scenario_parameters.get(G_AR_MIN_WT)
         self.latest_start_time = None
@@ -70,7 +70,7 @@ class RequestBase(metaclass=ABCMeta):
         self.d_node = int(rq_row[G_RQ_DESTINATION])
         self.d_pos = routing_engine.return_node_position(self.d_node)
         # store miscellaneous custom values from demand file
-        for param, value in rq_row.drop([G_RQ_TIME, G_RQ_ID, G_RQ_ORIGIN, G_RQ_DESTINATION]).iteritems():
+        for param, value in rq_row.drop([G_RQ_TIME, G_RQ_ID, G_RQ_ORIGIN, G_RQ_DESTINATION]).items():
             setattr(self, str(param), value)
             if param == G_AR_LIST_OPERATORS:
                 if type(value) == str:

@@ -11,6 +11,7 @@ data/fleetctrl/elastic_fleet_size/*
 data/fleetctrl/freelancer_drivers/*
 !data/fleetctrl/freelancer_drivers/example_network
 data/fleetctrl/repositioning/*
+data/fleetctrl/offline_reservation_solution/*
 !data/fleetctrl/initial_vehicle_distribution/example_network
 !data/fleetctrl/elastic_fleet_size/example_active_fleetsize.csv
 data/infra/*
@@ -33,6 +34,9 @@ data/fleetctrl/offline_reservation_solution/*
 studies/*
 !studies/example_study
 studies/example_study/results/*
+!studies/module_tests/*
+studies/module_tests/results/*
+!studies/module_tests/results/benchmark.csv
 
 # system dependent C++ Router files
 src/routing/cpp_router/*.pyd

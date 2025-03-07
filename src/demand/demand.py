@@ -65,6 +65,7 @@ class Demand:
         self.zone_definition = zone_system
         self.routing_engine = routing_engine
         # TODO # init user output parameters for correct treatment of output?
+        self.skip_output = True if scenario_parameters.get(G_SKIP_OUTPUT, 0) > 0 else False
 
     def load_demand_file(self, start_time, end_time, rq_file_dir, rq_file_name, np_random_seed, rq_type=None,
                          rq_type_distr={}, rq_od_zone_distr={}, simulation_time_step=1):
@@ -175,6 +176,9 @@ class Demand:
         # LOG.debug(f"self.future_requests = {self.future_requests}")
 
     def save_user_stats(self, force=True):
+        if self.skip_output:
+            return
+
         current_buffer_size = len(self.user_stat_buffer)
         if (current_buffer_size and force) or current_buffer_size >= BUFFER_SIZE:
             if os.path.isfile(self.output_f):
@@ -241,7 +245,8 @@ class Demand:
         if self.waiting_rq.get(rid):  # TODO # in case a vehicle arrives before the customer made a decision, simplest solution: customer boards
             del self.waiting_rq[rid]
         else:
-            LOG.warning("waiting rq boarding warning : rid {} -> vid {} at {}".format(rid, vid, simulation_time))
+            if not self.skip_output:
+                LOG.warning("waiting rq boarding warning : rid {} -> vid {} at {}".format(rid, vid, simulation_time))
 
     def record_alighting_start(self, rid, vid, op_id, simulation_time, do_pos=None, t_egress=None):
         """

@@ -1,0 +1,3 @@
+scenario_name,sim_env,op_module,user_max_decision_time
+mt_sim_env_imm_dec,ImmediateDecisionsSimulation,PoolingIRSAssignmentBatchOptimization,0
+mt_sim_env_batch_off,BatchOfferSimulation,RidePoolingBatchAssignmentFleetcontrol,60

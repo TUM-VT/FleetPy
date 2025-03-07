@@ -55,6 +55,8 @@ G_INIT_STATE_F = "init_state_file"
 G_UNPROCESSED_NETWORK_NAME = "unprocessed_network"  # network path with original exported data and source_ids
 G_MAX_IM_OF_PROC = "max_im_offer_process"
 
+# output behavior
+G_SKIP_OUTPUT = "skip_file_writing"
 
 # network general attributes
 G_NETWORK_TYPE = "network_type"
@@ -68,12 +70,6 @@ G_NW_DYNAMIC_F = "nw_dynamic_f"
 # zone specific attributes
 G_PARK_COST_SCALE = "park_cost_scale"
 G_TOLL_COST_SCALE = "toll_cost_scale"
-G_ZONE_CORR_M_F = "zone_correlation_file"
-
-# forecast attributes
-G_FC_TYPE = "fc_type"
-G_FC_TR = "temporal_resolution"
-G_FC_FNAME = "forecast_f"
 
 # public transport specific attributes
 G_PT_TYPE = "pt_type"
@@ -82,6 +78,35 @@ G_PT_SCHEDULE_F = "schedule_file"
 G_PT_FRQ_SCALE = "pt_freq_scale"
 G_PT_FRQ_HOURS = "pt_freq_scale_hours"
 G_PT_FARE_B = "pt_base_fare"
+G_PT_FIXED_LENGTH = "pt_fixed_length"
+G_PT_FLEX_DETOUR = "pt_flex_detour"
+G_PT_STATION_F = "station_file"
+G_PT_ALIGNMENT_F = "alignment_file"
+G_PT_TERMINUS_ID = "terminus_id"
+G_PT_DEMAND_DIST = "demand_dist_file"
+# G_PT_REG_VEH = "pt_regular_veh"
+G_PT_N_ZONES = "pt_n_zones"
+G_PT_N_VEH = "pt_n_veh"
+G_PT_ZONE_MIN_DETOUR_TIME = "pt_zone_min_detour_time"
+G_PT_ZONE_MAX_DETOUR_TIME = "pt_zone_max_detour_time"
+G_PT_REG_HEADWAY = "pt_regular_headway"
+# G_PT_ZONAL_HEADWAY = "pt_zonal_headway"
+G_PT_RL_REWARD_TIME_WINDOW = "pt_rl_reward_time_window"
+G_PT_RL_REWARD_SAT_DEMAND = "pt_rl_reward_satisfied_demand"
+G_PT_RL_REWARD_WAIT_TIME = "pt_rl_reward_wait_time"
+G_PT_RL_REWARD_RIDE_TIME = "pt_rl_reward_ride_time"
+G_PT_RL_REWARD_VEH_DIST = "pt_rl_reward_veh_dist"
+G_PT_RL_TRAIN_ITER = "pt_rl_train_iter"
+G_PT_ZONE_N_REG_VEH = "pt_zonal_n_reg_veh"
+G_PT_DISPATCH_DELAY = "pt_dispatch_delay"
+G_PT_ROUTE_ID = "pt_route_id"
+G_PT_WALK_LOGIT_BETA = "pt_walk_logit_beta"
+G_PT_X_TOL = 0.01
+
+# zonal control reward attributes
+G_PT_ZC_RID_SIM_TIME = 0
+G_PT_ZC_RID_WAIT_TIME = 1
+G_PT_ZC_RID_RIDE_TIME = 2
 
 # traveler general attributes
 G_RQ_FILE = "rq_file"
@@ -114,6 +139,7 @@ G_MC_C_D_PV = "private_vehicle_full_costs_per_m"
 
 # traveler specific attributes
 G_WALKING_SPEED = "walking_speed"
+G_MAX_WALKING_DIST = "max_walking_dist"
 
 # -> inter-modal travellers
 G_IM_MIN_MOD_DISTANCE = "min_IM_MOD_distance"
@@ -132,6 +158,8 @@ G_OP_MIN_WT = "op_min_wait_time"
 G_OP_MAX_WT = "op_max_wait_time"
 G_OP_MAX_WT_2 = "op_max_wait_time_2"  # for linear decline in acceptence probability (BMW RP study)
 G_OP_OFF_TW = "op_offer_time_window"  # for fixing time window after accepting the amod offer (BMW RP study)
+G_OP_LOCK_VID = "op_lock_vid_assignment" # no re-assignment to other vehicle if false
+G_OP_LOCK_VID_TIME = "op_lock_vid_assignment_time" # time in seconds. if expected pu-time falls below this value, a vehicle is locked to a request
 G_OP_MAX_DTF = "op_max_detour_time_factor"
 G_OP_ADD_CDT = "op_add_constant_detour_time"
 G_OP_MAX_CDT = "op_max_constant_detour_time"
@@ -159,6 +187,8 @@ G_OP_PA_LDT = "op_parcel_latest_dropoff_time"
 G_OP_PA_CONST_BT = "op_parcel_const_boarding_time"
 G_OP_PA_ADD_BT = "op_parcel_add_boarding_time"
 
+G_OP_REC_ADD_ASS = "op_record_additional_assignment"
+
 # operator specific attributes
 G_RA_SOLVER = "op_solver"   # currently "Gurobi" or "CPLEX"
 G_RA_RP_BATCH_OPT = "op_rp_batch_optimizer"
@@ -171,9 +201,19 @@ G_RA_TW_HARD = "op_time_window_hardness"    # 1 -> soft | 2 -> hard # TODO # thi
 G_RA_TW_LENGTH = "op_time_window_length"
 G_RA_LOCK_RID_VID = "op_lock_rid_vid_assignment" # no re-assignment if false
 
-G_RA_OP_NW_TYPE = "op_network_type"    # if given, operator loads a different network for its usage (currently only for reservation)
-G_RA_OP_NW_NAME = "op_network_name"     # if given, operator loads a different network for its usage (currently only for reservation)
-G_RA_OP_NW_DYN_F = "op_network_dynamics_file" # if given, operator loads a different network for its usage (currently only for reservation)
+G_RA_AM_ALWAYS_REBUILD = "op_always_rebuild_tree"   # if true, AM algorithm always rebuilds tree
+
+G_RA_OP_NW_TYPE = "op_network_type"    # if given, operator loads a different network for its usage
+G_RA_OP_NW_NAME = "op_network_name"     # if given, operator loads a different network for its usage
+G_RA_OP_NW_DYN_F = "op_network_dynamics_file" # if given, operator loads a different network for its usage
+
+# forecast attributes
+G_RA_OP_ZONE_SYSTEM = "op_zone_system"  # the zone system used by the operator for forecasting
+G_RA_FC_TYPE = "op_fc_type"
+G_RA_FC_TR = "op_temporal_resolution"
+G_RA_FC_FNAME = "op_forecast_f"
+G_RA_OP_CORR_M_F = "op_zone_correlation_file"   # this file be read by the operator for rebalancing
+G_RA_OP_REPO_ZONE_SYSTEM = "op_repositioning_zone_system"  # the zone system used by the operator for repositioning (i.e. defines repo centroids / currently only feasible for samplingbased repositioning)
 
 # reservation
 G_RA_RES_MOD = "op_reservation_module"
@@ -186,10 +226,15 @@ G_RA_RES_BOPT_TS = "op_res_opt_timestep"    # time interval of reservation modul
 G_RA_RES_LG_MAX_DEPTH = "op_res_loc_graph_max_depth"    # for GraphContractionTSP -> depth of local graph for evalutating new sol
 G_RA_RES_LG_MAX_CUT = "op_res_loc_graph_max_cut_time"   # for GraphContractionTSP -> only add edges wtih this max time horizon and cut rest
 G_RA_RES_APP_BUF_TIME = "op_res_approach_buffer_time"   # time buffer before vehicle starts driving to the position of an assigned VRL with reservation in future
+G_RA_RES_PRE_COMP_FOLDER = "op_precomp_off_sol_folder"
+G_RA_RES_PRE_COMP_SOL_FILE = "op_precomp_off_sol_file"  # file storing a precompute offline solution to load
+G_RA_RES_ASS_OFF_PLAN = "op_res_assign_offplan" # bool if reservation offline plan is actual assigned to vehicles
 
 # RV heuristics
 G_RA_MAX_VR = "op_max_VR_con"
 G_RA_MAX_RP = "op_max_request_plans"
+G_RA_MAX_TOUR = "op_max_tours_per_v2rb"
+G_RA_MAX_EXH_DARP = "op_max_exhaustive_darp"
 G_RH_I_NWS = "op_rh_immediate_max_routes"
 G_RH_R_NWS = "op_rh_reservation_max_routes"
 G_RH_R_ZSM = "op_rh_reservation_zone_search"
@@ -221,6 +266,10 @@ G_OP_REPO_SR_F = "op_repo_sharing_rate_file"
 G_OP_REPO_QBT = "op_repo_quadratic_benefit_threshold"
 G_OP_REPO_FRONTIERS_M = "op_repo_frontiers_method"          # Method name for Frontier's approaches
 G_OP_REPO_RES_PUF = "op_repo_res_buffer_time"       # if reservation leg, how long in future to be considered for repo
+G_OP_REPO_RES_PRIORITIZE = "op_repo_res_prio_reservation"   # in true, reservation requests are prioritized in repositioning (in sampling based repositioning)
+G_OP_REPO_NR_SAMPLES = "op_rp_rebal_n_samples"  # number of samples for sampling based repositioning
+G_OP_REPO_SAMPLE_GAMMA = "op_rp_rebal_gamma"    # gamma for sampling based repositioning -> weight of future repositioning trips in opt
+G_OP_REPO_FC_WEIGHT = "op_weight_on_fc"        # weight of forecast in repositioning (number of vehicles per predicted request)
 
 # Dynamic Pricing
 G_OP_DYN_P_M = "op_dyn_pricing_method"
@@ -379,6 +428,7 @@ G_ZONE_ZID = "zone_id"
 G_ZONE_NAME = "zone_name"
 G_ZONE_NID = "node_index"
 G_ZONE_CEN = "is_centroid"
+G_ZONE_BOARD = "is_boarding_node"
 G_ZONE_FLM = "offer_first_last_mile"
 G_ZONE_PC = "park_cost_scale_factor"
 G_ZONE_TC = "toll_cost_scale_factor"
@@ -498,6 +548,12 @@ G_OFFER_IS_VALID = "is_valid"   # indicates if offer is still valid at time of c
 G_OFFER_ADD_VMT = "add_fleet_vmt"   # for easyride broker
 G_OFFER_BROKER_FLAG = "chosen_by_broker"    # for easyride broker
 
+G_OFFER_WALKING_DISTANCE_ORIGIN = "walking_distance_origin"
+G_OFFER_WALKING_DISTANCE_DESTINATION = "walking_distance_destination"
+
+G_OFFER_ZONAL_ORIGIN_ZONE = "origin_zone"
+G_OFFER_ZONAL_DESTINATION_ZONE = "destination_zone"
+
 # additional parameters for intermodal solutions
 # ----------------------------------------------
 G_IM_OFFER_PT_START = "im_pt_t_start"
@@ -555,7 +611,7 @@ class VRL_STATES(Enum):
         return {status.value: status.display_name for status in VRL_STATES}
 
 G_DRIVING_STATUS = [VRL_STATES.ROUTE, VRL_STATES.REPOSITION, VRL_STATES.TO_CHARGE, VRL_STATES.TO_DEPOT, VRL_STATES.TO_RESERVATION] # [10,11,12,13]
-G_REVENUE_STATUS = [VRL_STATES.BOARDING, VRL_STATES.WAITING, VRL_STATES.ROUTE, VRL_STATES.REPOSITION] # [1, 4, 10, 11]
+G_REVENUE_STATUS = [VRL_STATES.BOARDING, VRL_STATES.ROUTE] # [1, 4, 10, 11]
 G_LAZY_STATUS = [VRL_STATES.WAITING] # [4]     # VRLs not actively planned and dont do anything (i.e. waiting)
 G_LOCK_DURATION_STATUS = [VRL_STATES.BLOCKED_INIT, VRL_STATES.BOARDING, VRL_STATES.BOARDING_WITH_CHARGING] # [-1, 1, 3]
 G_INACTIVE_STATUS = [VRL_STATES.OUT_OF_SERVICE, VRL_STATES.TO_DEPOT, VRL_STATES.CHARGING, VRL_STATES.TO_CHARGE]
@@ -666,11 +722,12 @@ def load_scenario_inputs(output_dir):
     dir_names = tmp["directories"]
     return scenario_parameters, list_operator_attributes, dir_names
 
-
-def get_directory_dict(scenario_parameters):
+def get_directory_dict(scenario_parameters, list_operator_dicts, abs_fleetpy_dir = None):
     """
     This function provides the correct paths to certain data according to the specified data directory structure.
     :param scenario_parameters: simulation input (pandas series)
+    :param list_operator_dicts: simulation input for each operator (pandas series)
+    :param abs_fleetpy_dir: if given, this base fleetpy-path is used to create all the data subdirectores
     :return: dictionary with paths to the respective data directories
     """
     study_name = scenario_parameters[G_STUDY_NAME]
@@ -678,14 +735,15 @@ def get_directory_dict(scenario_parameters):
     network_name = scenario_parameters[G_NETWORK_NAME]
     demand_name = scenario_parameters[G_DEMAND_NAME]
     zone_name = scenario_parameters.get(G_ZONE_SYSTEM_NAME, None)
-    fc_type = scenario_parameters.get(G_FC_TYPE, None)
-    fc_t_res = scenario_parameters.get(G_FC_TR, None)
     gtfs_name = scenario_parameters.get(G_GTFS_NAME, None)
     infra_name = scenario_parameters.get(G_INFRA_NAME, None)
     parcel_demand_name = scenario_parameters.get(G_PA_DEMAND_NAME, None)
     #
     dirs = {}
-    dirs[G_DIR_MAIN] = os.path.abspath(os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir))
+    if abs_fleetpy_dir is None:
+        dirs[G_DIR_MAIN] = os.path.abspath(os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir))
+    else:
+        dirs[G_DIR_MAIN] = abs_fleetpy_dir
     dirs[G_DIR_DATA] = os.path.join(dirs[G_DIR_MAIN], "data")
     dirs[G_DIR_OUTPUT] = os.path.join(dirs[G_DIR_MAIN], "studies", study_name, "results", scenario_name)
     dirs[G_DIR_NETWORK] = os.path.join(dirs[G_DIR_DATA], "networks", network_name)
@@ -694,12 +752,40 @@ def get_directory_dict(scenario_parameters):
     dirs[G_DIR_DEMAND] = os.path.join(dirs[G_DIR_DATA], "demand", demand_name, "matched", network_name)
     if zone_name is not None:
         dirs[G_DIR_ZONES] = os.path.join(dirs[G_DIR_DATA], "zones", zone_name, network_name)
-        if fc_type is not None and fc_t_res is not None:
-            dirs[G_DIR_FC] = os.path.join(dirs[G_DIR_DATA], "demand", demand_name, "aggregated", zone_name, str(fc_t_res))
     if gtfs_name is not None:
         dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pubtrans", gtfs_name)
     if infra_name is not None:
         dirs[G_DIR_INFRA] = os.path.join(dirs[G_DIR_DATA], "infra", infra_name, network_name)
     if parcel_demand_name is not None:
         dirs[G_DIR_PARCEL_DEMAND] = os.path.join(dirs[G_DIR_DATA], "demand", parcel_demand_name, "matched", network_name)
+    for i, op_dict in enumerate(list_operator_dicts):
+        op_key = f"op_{i}"
+        op_nw_name = network_name
+        if op_dict.get(G_RA_OP_NW_NAME):
+            op_nw_name = op_dict[G_RA_OP_NW_NAME]
+            if dirs.get(op_key) is None:
+                dirs[op_key] = {}
+            dirs[op_key][G_DIR_NETWORK] = os.path.join(dirs[G_DIR_DATA], "networks", op_nw_name)
+        if op_dict.get(G_RA_OP_ZONE_SYSTEM):
+            if dirs.get(op_key) is None:
+                dirs[op_key] = {}
+            op_zone_name = op_dict[G_RA_OP_ZONE_SYSTEM]
+            dirs[op_key][G_DIR_ZONES] = os.path.join(dirs[G_DIR_DATA], "zones", op_zone_name, op_nw_name)
+            fc_type = scenario_parameters.get(G_RA_FC_TYPE, None)
+            fc_t_res = scenario_parameters.get(G_RA_FC_TR, None)
+            if fc_type is not None and fc_t_res is not None:
+                dirs[op_key][G_DIR_FC] = os.path.join(dirs[G_DIR_DATA], "demand", demand_name, "aggregated", op_zone_name, str(fc_t_res))
+        if op_dict.get(G_RA_OP_REPO_ZONE_SYSTEM):
+            if dirs.get(op_key) is None:
+                dirs[op_key] = {}
+            op_zone_name = op_dict[G_RA_OP_REPO_ZONE_SYSTEM]
+            dirs[op_key][G_RA_OP_REPO_ZONE_SYSTEM] = os.path.join(dirs[G_DIR_DATA], "zones", op_zone_name, op_nw_name)
+        if op_dict.get(G_RA_RES_PRE_COMP_FOLDER):
+            rq_f = scenario_parameters[G_RQ_FILE]
+            rq_f_basename = rq_f.split(".")[0]
+            if "resoff" in rq_f_basename:
+                rq_f_basename = rq_f_basename.split("_resoff")[0]
+            if dirs.get(op_key) is None:
+                dirs[op_key] = {}
+            dirs[op_key][G_RA_RES_PRE_COMP_FOLDER] = os.path.join(dirs[G_DIR_FCTRL], "offline_reservation_solution", op_dict.get(G_RA_RES_PRE_COMP_FOLDER), rq_f_basename)
     return dirs
