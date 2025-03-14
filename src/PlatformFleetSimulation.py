@@ -188,6 +188,9 @@ class PlatformFleetSimulation(FleetSimulationBase):
             freelancer_attributes[G_OP_REPO_M] = fl_repo_m
             freelancer_attributes[G_OP_REPO_TS] = 3600
             freelancer_attributes[G_OP_REPO_TH_DEF] = f"0;{self.scenario_parameters[G_SIM_END_TIME]}"
+            freelancer_attributes[G_RA_FC_TYPE] = self.scenario_parameters.get("op_fc_type")
+            freelancer_attributes[G_RA_FC_FNAME] = self.scenario_parameters.get("op_forecast_f")
+            freelancer_attributes[G_RA_FC_TR] = self.scenario_parameters.get("op_temporal_resolution")
         #
         freelancer_op = FreelancerFleetControl(freelancer_op_id, freelancer_attributes, list_vehicles, self.routing_engine, self.zones,
                                     self.scenario_parameters, self.dir_names, self.charging_operator_dict["op"].get(freelancer_op_id, None), list(self.charging_operator_dict["pub"].values()))

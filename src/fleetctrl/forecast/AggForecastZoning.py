@@ -49,7 +49,7 @@ class AggForecastZoneSystem(ForecastZoneSystemBase):
         # read forecast files
         if operator_attributes.get(G_RA_FC_FNAME) and operator_attributes.get(G_RA_FC_TYPE):
             fc_dir = dir_names.get(G_DIR_FC)
-            self.fc_temp_resolution = int(os.path.basename(fc_dir))
+            self.fc_temp_resolution = operator_attributes.get(G_RA_FC_TR)
             forecast_f = os.path.join(fc_dir, operator_attributes.get(G_RA_FC_FNAME))
             if os.path.isfile(forecast_f):
                 fc_type = operator_attributes.get(G_RA_FC_TYPE)
