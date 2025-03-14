@@ -128,7 +128,7 @@ def create_vehicle_type_db(vehicle_data_dir):
     veh_type_db = {}    # veh_type -> veh_type_data
     for f in list_veh_data_f:
         veh_type_name = os.path.basename(f)[:-4]
-        veh_type_data = pd.read_csv(f, index_col=0, squeeze=True)
+        veh_type_data = pd.read_csv(f, index_col=0).squeeze("columns")
         veh_type_db[veh_type_name] = {}
         for k, v in veh_type_data.items():
             try:

@@ -1450,21 +1450,21 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                         expr = gurobi.LinExpr()
                         for rtv in vids[vid]:
                             expr.add(variables[rtv], 1)
-                        m.addConstr(expr, gurobi.GRB.LESS_EQUAL, 1, "c_{}".format(vid))
+                        m.addConstr(expr <= 1, "c_{}".format(vid))
                         # TODO # seems to be wrong arguments but working anyway
                     #unassigned requests constraint
                     for rid in unassigned_rids.keys():
                         expr = gurobi.LinExpr()
                         for rtv in unassigned_rids[rid]:
                             expr.add(variables[rtv], 1)
-                        m.addConstr(expr, gurobi.GRB.LESS_EQUAL, 1, "c_u_{}".format(rid))
+                        m.addConstr(expr <= 1, "c_u_{}".format(rid))
                         # TODO # seems to be wrong arguments but working anyway
                     #assigned requests constraint
                     for rid in assigned_rids.keys():
                         expr = gurobi.LinExpr()
                         for rtv in assigned_rids[rid]:
                             expr.add(variables[rtv], 1)
-                        m.addConstr(expr, gurobi.GRB.EQUAL, 1, "c_a_{}".format(rid))
+                        m.addConstr(expr == 1, "c_a_{}".format(rid))
                         # TODO # seems to be wrong arguments but working anyway
                     # set initial solution   # TODO set initial solution?
                     for vid, rtv_key in self.current_assignments.items():

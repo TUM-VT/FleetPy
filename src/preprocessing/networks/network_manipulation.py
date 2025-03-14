@@ -304,7 +304,7 @@ class FullNetwork():
         """
         tt_file = os.path.join(tt_folder, "edges_td_att.csv")
         tmp_df = pd.read_csv(tt_file, index_col=[0,1])
-        for edge_index_tuple, new_tt in tmp_df["edge_tt"].iteritems():
+        for edge_index_tuple, new_tt in tmp_df["edge_tt"].items():
             o_node = self.nodes[edge_index_tuple[0]]
             d_node = self.nodes[edge_index_tuple[1]]
             try:
