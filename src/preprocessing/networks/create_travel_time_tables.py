@@ -3,15 +3,13 @@ import os
 import time
 import numpy as np
 import pandas as pd
-from numba import njit, prange
+import subprocess
 
-LARGE = np.Inf
-
+LARGE = np.inf
 
 def addEdgeToAdjacencyMatrix(column, A, B):
     A[int(column["from_node"]), int(column["to_node"])] = column["use_tt"]
     B[int(column["from_node"]), int(column["to_node"])] = column["distance"]
-
 
 def createAdjacencyMatrix(nw_dir, scenario_time=None):
     print("\t ... creating adjacency matrix A ...")
@@ -44,30 +42,39 @@ def createAdjacencyMatrix(nw_dir, scenario_time=None):
         B[i,i] = 0.0
     return A, B, number_nodes, set_stop_nodes
 
+def run_fw_lvl23_in_env(env_name, A, B, number_nodes, set_stop_nodes):
+    # Save the matrices and parameters to temporary files
+    np.save('A.npy', A)
+    np.save('B.npy', B)
+    np.save('set_stop_nodes.npy', list(set_stop_nodes))
+    with open('params.txt', 'w') as f:
+        f.write(f"{number_nodes}\n")
 
-# computation time test: hardly difference between parallel=False and parallel=True
-@njit(parallel=True)
-def fw_lvl23(k, A, B, number_nodes):
-    for i in prange(number_nodes):
-        for j in range(number_nodes):
-            tmp = A[i,k]+A[k,j]
-            if tmp < A[i,j]:
-                A[i,j] = tmp
-                B[i,j] = B[i,k]+B[k,j]
+    # Construct the command to run the numba-dependent script in the specified environment
+    command = f"conda run -n {env_name} python run_fw_lvl23.py"
+    
+    # Run the command
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    
+    # Print the output and error (if any)
+    print(result.stdout)
+    if result.stderr:
+        print(result.stderr, file=sys.stderr)
 
+    # Load the modified matrices
+    A = np.load('A.npy')
+    B = np.load('B.npy')
+    return A, B
 
 def create_travel_time_table(nw_dir, scenario_time=None, save_npy=True, save_csv=False):
     (A, B, number_nodes, set_stop_nodes) = createAdjacencyMatrix(nw_dir, scenario_time)
     print("Running Floyd Warshall (travel time and distance of fastest route) in mp numba mode ...")
     t0 = time.perf_counter()
-    for k in range(number_nodes):
-        # do not route through stop nodes!
-        if k in set_stop_nodes:
-            print(f"Skipping intermediary routing via stop node {k}")
-            continue
-        if k%250 == 0:
-            print(f"\t ... loop {k}/{number_nodes}")
-        fw_lvl23(k, A, B, number_nodes)
+    
+    # Run the numba-dependent part in the separate environment
+    env_name = "numba_env"
+    A, B = run_fw_lvl23_in_env(env_name, A, B, number_nodes, set_stop_nodes)
+    
     cpu_time = round(time.perf_counter() - t0, 3)
     print(f"\t ... finished in {cpu_time} seconds")
     #
@@ -98,7 +105,6 @@ def create_travel_time_table(nw_dir, scenario_time=None, save_npy=True, save_csv
         df.to_csv(dist_f_csv)
     #
     return cpu_time
-
 
 if __name__ == "__main__":
     network_name_dir = sys.argv[1]
