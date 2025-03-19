@@ -515,11 +515,9 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
             if G_RQ_DO in op_users.columns and G_RQ_PU in op_users.columns:
                 op_user_sum_travel_time = op_users[G_RQ_DO].sum() - op_users[G_RQ_PU].sum()
             # avg travel time
-            if not np.isnan(op_user_sum_travel_time):
-                try:
-                    op_avg_travel_time = op_user_sum_travel_time / op_number_users
-                except ZeroDivisionError:
-                    op_avg_travel_time = 0
+            if not np.isnan(op_user_sum_travel_time) and op_number_users != 0:
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    op_avg_travel_time = np.nan_to_num(op_user_sum_travel_time / op_number_users, nan=0.0, posinf=0.0, neginf=0.0)
             # sum fare
             if G_RQ_FARE in op_users.columns:
                 op_revenue = op_users[G_RQ_FARE].sum() * operator_attributes.get(G_OP_PLAT_COMMISION, 0.0)
@@ -530,26 +528,19 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
                 op_med_wait_time = op_users["wait time"].median()
                 op_90perquant_wait_time = op_users["wait time"].quantile(q=0.9)
             # avg waiting time from earliest pickup time
-            if G_RQ_PU in op_users.columns and G_RQ_EPT in op_users.columns:
-                try:
-                    op_avg_wait_from_ept = (op_users[G_RQ_PU].sum() - op_users[G_RQ_EPT].sum()) / op_number_users
-                except ZeroDivisionError:
-                    op_avg_wait_from_ept = 0
+            if G_RQ_PU in op_users.columns and G_RQ_EPT in op_users.columns and op_number_users != 0:
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    op_avg_wait_from_ept = np.nan_to_num((op_users[G_RQ_PU].sum() - op_users[G_RQ_EPT].sum()) / op_number_users, nan=0.0, posinf=0.0, neginf=0.0)
             # avg abs detour time
-            if not np.isnan(op_user_sum_travel_time) and G_RQ_DRT in op_users.columns:
-                try:
-                    op_avg_detour_time = (op_user_sum_travel_time - op_users[G_RQ_DRT].sum())/op_number_users - \
-                                        boarding_time
-                except ZeroDivisionError:
-                    op_avg_detour_time = 0
+            if not np.isnan(op_user_sum_travel_time) and G_RQ_DRT in op_users.columns and op_number_users != 0:
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    op_avg_detour_time = np.nan_to_num((op_user_sum_travel_time - op_users[G_RQ_DRT].sum()) / op_number_users - boarding_time, nan=0.0, posinf=0.0, neginf=0.0)
             # avg rel detour time
-            if not np.isnan(op_user_sum_travel_time) and G_RQ_DRT in op_users.columns:
+            if not np.isnan(op_user_sum_travel_time) and G_RQ_DRT in op_users.columns and op_number_users != 0:
                 rel_det_series = (op_users[G_RQ_DO] - op_users[G_RQ_PU] - boarding_time -
                                   op_users[G_RQ_DRT])/op_users[G_RQ_DRT]
-                try:
-                    op_avg_rel_detour = rel_det_series.sum()/op_number_users * 100.0
-                except ZeroDivisionError:
-                    op_avg_rel_detour = 0
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    op_avg_rel_detour = np.nan_to_num(rel_det_series.sum() / op_number_users * 100.0, nan=0.0, posinf=0.0, neginf=0.0)
             # direct travel time and distance
             if G_RQ_DRD in op_users.columns:
                 op_sum_direct_travel_distance = op_users[G_RQ_DRD].sum() / 1000.0
@@ -573,9 +564,15 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
                 unutilized_time = unutilized_veh_df["VRL_end_sim_end_time"].sum() - unutilized_veh_df["VRL_start_sim_end_time"].sum()
                 rev_df = op_stats[op_stats["status"].isin([x.display_name for x in G_REVENUE_STATUS])]
                 op_vehicle_revenue_hours = (rev_df["VRL_end_sim_end_time"].sum() - rev_df["VRL_start_sim_end_time"].sum())/3600.0
-                op_ride_per_veh_rev_hours = op_number_pax/op_vehicle_revenue_hours
-                op_ride_per_veh_rev_hours_rq = op_number_users/op_vehicle_revenue_hours
-                op_fleet_utilization = 100 * (utilization_time/(n_vehicles * simulation_time - unutilized_time))
+                if op_vehicle_revenue_hours != 0:
+                    with np.errstate(divide='ignore', invalid='ignore'):
+                        op_ride_per_veh_rev_hours = np.nan_to_num(op_number_pax / op_vehicle_revenue_hours, nan=0.0, posinf=0.0, neginf=0.0)
+                        op_ride_per_veh_rev_hours_rq = np.nan_to_num(op_number_users / op_vehicle_revenue_hours, nan=0.0, posinf=0.0, neginf=0.0)
+                        op_fleet_utilization = np.nan_to_num(100 * (utilization_time / (n_vehicles * simulation_time - unutilized_time)), nan=0.0, posinf=0.0, neginf=0.0)
+                else:
+                    op_ride_per_veh_rev_hours = 0.0
+                    op_ride_per_veh_rev_hours_rq = 0.0
+                    op_fleet_utilization = 0.0
             except ZeroDivisionError:
                 pass
             op_total_km = op_stats[G_VR_LEG_DISTANCE].sum()/1000.0
@@ -598,10 +595,11 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
                 op_stats["weighted_ob_pax"] = op_stats.apply(weight_ob_pax, axis=1)
                 #op_stats["weighted_ob_rq"] = op_stats.apply(weight_ob_rq, axis=1)
                 #op_distance_avg_rq = op_stats["weighted_ob_rq"].sum() / op_stats[G_VR_LEG_DISTANCE].sum()
-                op_distance_avg_occupancy = op_stats["weighted_ob_pax"].sum() / op_stats[G_VR_LEG_DISTANCE].sum()
-                empty_df = op_stats[op_stats[G_VR_OB_RID].isnull()]
-                op_empty_vkm = empty_df[G_VR_LEG_DISTANCE].sum()/1000.0/op_total_km*100.0
-                op_repositioning_vkm = empty_df[empty_df[G_VR_STATUS] == "reposition"][G_VR_LEG_DISTANCE].sum()/op_total_km*100.0/1000.0
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    op_distance_avg_occupancy = np.nan_to_num(op_stats["weighted_ob_pax"].sum() / op_stats[G_VR_LEG_DISTANCE].sum(), nan=0.0, posinf=0.0, neginf=0.0)
+                    empty_df = op_stats[op_stats[G_VR_OB_RID].isnull()]
+                    op_empty_vkm = np.nan_to_num(empty_df[G_VR_LEG_DISTANCE].sum() / 1000.0 / op_total_km * 100.0, nan=0.0, posinf=0.0, neginf=0.0)
+                    op_repositioning_vkm = np.nan_to_num(empty_df[empty_df[G_VR_STATUS] == "reposition"][G_VR_LEG_DISTANCE].sum() / op_total_km * 100.0 / 1000.0, nan=0.0, posinf=0.0, neginf=0.0)
                 if G_VR_TOLL in op_stats.columns:
                     op_toll = op_stats[G_VR_TOLL].sum()
             except ZeroDivisionError:
@@ -623,24 +621,19 @@ def eval_platform_scenario(output_dir, evaluation_start_time = None, evaluation_
                 op_ride_distance_per_vehicle_distance_no_rel = bp_sum_direct_distance / (op_total_km * (1.0 - op_repositioning_vkm/100.0))
             elif not np.isnan(op_total_km) and not np.isnan(op_sum_direct_travel_distance):
                 trip_direct_distance = op_sum_direct_travel_distance
-                try:
-                    op_saved_distance = (op_sum_direct_travel_distance - op_total_km)/op_sum_direct_travel_distance * 100.0
-                    op_ride_distance_per_vehicle_distance = op_sum_direct_travel_distance / op_total_km
-                    op_ride_distance_per_vehicle_distance_no_rel = op_sum_direct_travel_distance / (op_total_km * (1.0 - op_repositioning_vkm/100.0))
-                except ZeroDivisionError:
-                    op_saved_distance = 0
-                    op_ride_distance_per_vehicle_distance = 0
-                    op_ride_distance_per_vehicle_distance_no_rel = 0
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    op_saved_distance = np.nan_to_num((op_sum_direct_travel_distance - op_total_km) / op_sum_direct_travel_distance * 100.0, nan=0.0, posinf=0.0, neginf=0.0)
+                    op_ride_distance_per_vehicle_distance = np.nan_to_num(op_sum_direct_travel_distance / op_total_km, nan=0.0, posinf=0.0, neginf=0.0)
+                    op_ride_distance_per_vehicle_distance_no_rel = np.nan_to_num(op_sum_direct_travel_distance / (op_total_km * (1.0 - op_repositioning_vkm / 100.0)), nan=0.0, posinf=0.0, neginf=0.0)
             # speed
             driving = op_stats[op_stats["status"].isin([i.display_name for i in G_DRIVING_STATUS])]
             driving_time = driving["end_time"].sum() - driving["start_time"].sum()
-            try:
-                op_avg_velocity = op_total_km/driving_time*3600.0
-            except ZeroDivisionError:
+            if op_user_sum_travel_time != 0:
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    op_avg_velocity = np.nan_to_num(op_total_km / driving_time * 3600.0, nan=0.0, posinf=0.0, neginf=0.0)
+                    op_trip_velocity = np.nan_to_num(trip_direct_distance / op_user_sum_travel_time * 3.6, nan=0.0, posinf=0.0, neginf=0.0)
+            else:
                 op_avg_velocity = 0
-            try:
-                op_trip_velocity = trip_direct_distance/op_user_sum_travel_time*3.6
-            except ZeroDivisionError:
                 op_trip_velocity = 0
 
             # by vehicle stats
