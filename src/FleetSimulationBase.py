@@ -294,7 +294,7 @@ class FleetSimulationBase:
         LOG.info(f"Initialization of scenario {self.scenario_name} successful.")
 
         # Broker
-        self.broker = BrokerBase()
+        self.broker = BrokerBase(self.n_op, self.operators)
 
         # self.routing_engine.checkNetwork()
 
@@ -674,8 +674,8 @@ class FleetSimulationBase:
                 boarding_time, boarding_pos = boarding_time_and_pos
                 LOG.debug(f"rid {rid} boarding at {boarding_time} at pos {boarding_pos}")
                 self.demand.record_boarding(rid, vid, op_id, boarding_time, pu_pos=boarding_pos)
-                # TODO: Call the broker to acknowledge the boarding
-                self.operators[op_id].acknowledge_boarding(rid, vid, boarding_time)
+                # Call the broker to acknowledge the boarding
+                self.broker.acknowledge_user_boarding(op_id, rid, vid, boarding_time)
             for rid, alighting_start_time_and_pos in dict_start_alighting.items():
                 # record user stats at beginning of alighting process
                 alighting_start_time, alighting_pos = alighting_start_time_and_pos
@@ -684,15 +684,15 @@ class FleetSimulationBase:
             for rid, alighting_end_time in alighting_requests.items():
                 # # record user stats at end of alighting process
                 self.demand.user_ends_alighting(rid, vid, op_id, alighting_end_time)
-                # TODO: Call the broker to acknowledge the alighting
-                self.operators[op_id].acknowledge_alighting(rid, vid, alighting_end_time)
+                # Call the broker to acknowledge the alighting
+                self.broker.acknowledge_user_alighting(op_id, rid, vid, alighting_end_time)
             # send update to operator
             if len(boarding_requests) > 0 or len(dict_start_alighting) > 0:
-                # TODO: Call the broker to receive the status update
-                self.operators[op_id].receive_status_update(vid, next_time, passed_VRL, True)
+                # Call the broker to receive the status update
+                self.broker.receive_status_update(op_id, vid, next_time, passed_VRL, True)
             else:
-                # TODO: Call the broker to receive the status update
-                self.operators[op_id].receive_status_update(vid, next_time, passed_VRL, force_update_plan)
+                # Call the broker to receive the status update
+                self.broker.receive_status_update(op_id, vid, next_time, passed_VRL, force_update_plan)
         # TODO # after ISTTT: live visualization: send vehicle states (self.live_visualization_flag==True)
 
     def update_vehicle_routes(self, sim_time):
@@ -710,7 +710,7 @@ class FleetSimulationBase:
         :param sim_time: current simulation time
         :return: chosen operator
         """
-        # TODO: The op_id/chosen_operator should be clearly defined
+        # The op_id/chosen_operator should be clearly defined: 0-n are Mod operators, -1 is the rejection, -2 is the PT operator, None is undecided
         chosen_operator = rq_obj.choose_offer(self.scenario_parameters, sim_time)
         LOG.debug(f" -> chosen operator: {chosen_operator}")
         # TODO: If the broker has a return, the subrequest should be created and stored in the demand class
@@ -719,17 +719,13 @@ class FleetSimulationBase:
                 self._user_leaves_system(rid, rq_obj, sim_time)
             else:
                 self.demand.undecided_rq[rid] = rq_obj
-        # -1 should be the rejection
-        elif chosen_operator < 0:
+        elif chosen_operator == -1:
             self._user_leaves_system(rid, rq_obj, sim_time)
         else:
             # TODO: Call the broker and check its return value, if the return value is not empty, the sub-requests should be created and stored in the demand class
-            for i, operator in enumerate(self.operators):
-                if i != chosen_operator:
-                    operator.user_cancels_request(rid, sim_time)
-                else:
-                    operator.user_confirms_booking(rid, sim_time)
-                    self.demand.waiting_rq[rid] = rq_obj
+            amode_confirmed_rids = self.broker.inform_user_booking(rid, rq_obj, sim_time, chosen_operator)
+            for rid, rq_obj in amode_confirmed_rids:
+                self.demand.waiting_rq[rid] = rq_obj
             try:
                 del self.demand.undecided_rq[rid]
             except KeyError:
@@ -743,9 +739,8 @@ class FleetSimulationBase:
         :param sim_time: current simulation time
         :return: True/False
         """
-        # TODO: Call the broker to inform the operators about the user decision
-        for i, operator in enumerate(self.operators):
-            operator.user_cancels_request(rid, sim_time)
+        # Call the broker to inform the operators about the user decision
+        self.broker.inform_user_leaving_system(rid, sim_time)
         self.demand.record_user(rid)
         del self.demand.rq_db[rid]
         try:
@@ -765,8 +760,8 @@ class FleetSimulationBase:
             chosen_operator = rq_obj.get_chosen_operator()
             in_vehicle = rq_obj.get_service_vehicle()
             if in_vehicle is None and chosen_operator is not None and rq_obj.cancels_booking(sim_time):
-                # TODO: Call the broker to inform the operators about the waiting request cancellations
-                self.operators[chosen_operator].user_cancels_request(rid, sim_time)
+                # Call the broker to inform the operators about the waiting request cancellations
+                self.broker.inform_waiting_request_cancellations(chosen_operator, rid, sim_time)
                 self.demand.record_user(rid)
                 del self.demand.rq_db[rid]
                 del self.demand.waiting_rq[rid]

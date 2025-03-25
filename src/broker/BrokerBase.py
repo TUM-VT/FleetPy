@@ -3,6 +3,7 @@
 # -----------------------------
 import logging
 import time
+import typing as tp
 from abc import abstractmethod, ABCMeta
 
 # additional module imports (> requirements)
@@ -11,7 +12,10 @@ from abc import abstractmethod, ABCMeta
 
 # src imports
 # -----------
-
+if tp.TYPE_CHECKING:
+    from src.fleetctrl.FleetControlBase import FleetControlBase
+    from src.pt.PTControlBase import PTControlBase
+    from src.demand.TravelerModels import RequestBase
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -35,74 +39,78 @@ INPUT_PARAMETERS_BrokerBase = {
 # main
 # ----
 class BrokerBase():
-    def __init__(self):
+    def __init__(self, n_amod_op: int, amod_operators: tp.List['FleetControlBase'], pt_operator: tp.Optional['PTControlBase']):
         # TODO: The status update of the vehicles is not yet considered in the broker
-        pass
-    
+        self.n_amod_op = n_amod_op
+        self.amod_operators = amod_operators
+        self.pt_operator = pt_operator
+
     def inform_network_travel_time_update(self, sim_time):
         """This method informs the broker that the network travel times have been updated.
         This information is forwarded to the operators.
         """
-        for op_id in range(self.n_op):
-            self.operators[op_id].inform_network_travel_time_update(sim_time)
+        for op_id in range(self.n_amod_op):
+            self.amod_operators[op_id].inform_network_travel_time_update(sim_time)
     
     def inform_request(self, rid, rq_obj, sim_time):
         """This method informs the broker that a new request has been made.
         This information is forwarded to the operators.
         """
-        for op_id in range(self.n_op):
+        for op_id in range(self.n_amod_op):
             LOG.debug(f"Request {rid}: To operator {op_id} ...")
-            self.operators[op_id].user_request(rq_obj, sim_time)    
+            self.amod_operators[op_id].user_request(rq_obj, sim_time)    
 
     def collect_offers(self, rid, rq_obj, sim_time):
         """This method collects the offers from the operators.
+        The return value is a list of tuples, where each tuple contains the operator id, the offer, and the simulation time.
         """
         amod_offers = []
-        for op_id in range(self.n_op):
-                amod_offer = self.operators[op_id].get_current_offer(rid)
-                LOG.debug(f"amod offer {amod_offer}")
-                if amod_offer is not None:
-                    amod_offers.append((op_id, amod_offer, sim_time))
+        for op_id in range(self.n_amod_op):
+            amod_offer = self.amod_operators[op_id].get_current_offer(rid)
+            LOG.debug(f"amod offer {amod_offer}")
+            if amod_offer is not None:
+                amod_offers.append((op_id, amod_offer, sim_time))
         return amod_offers
 
-    def inform_user_booking(self, rid, rq_obj, sim_time, chosen_operator) -> list[str]:
+    def inform_user_booking(self, rid, rq_obj, sim_time, chosen_operator) -> list[tuple[any, RequestBase]]:
         """This method informs the broker that the user has booked a trip.
         The return value can inform the FleetSimulationBase class about whether the sub request should be created and stored in the demand class
         """
-        for i, operator in enumerate(self.operators):
+        amod_confirmed_rids = []
+        # amode_op_id: 0-n
+        for i, operator in enumerate(self.amod_operators):
             if i != chosen_operator:
                 operator.user_cancels_request(rid, sim_time)
             else:
                 operator.user_confirms_booking(rid, sim_time)
-                # TODO: the line below should be in the FleetSimulationBase class
-                self.demand.waiting_rq[rid] = rq_obj
-        return []
+                amod_confirmed_rids.append((rid, rq_obj))
+        return amod_confirmed_rids
 
-    def inform_user_leaving_system(self, rid, rq_obj, sim_time):
+    def inform_user_leaving_system(self, rid, sim_time):
         """This method informs the broker that the user is leaving the system.
         """
-        for i, operator in enumerate(self.operators):
+        for _, operator in enumerate(self.amod_operators):
             operator.user_cancels_request(rid, sim_time)
 
     def inform_waiting_request_cancellations(self, chosen_operator, rid, sim_time):
         """This method informs the operators that the waiting requests have been cancelled.
         """
-        self.operators[chosen_operator].user_cancels_request(rid, sim_time)
+        self.amod_operators[chosen_operator].user_cancels_request(rid, sim_time)
     
-    def acknowledge_user_boarding(self, rid, vid, op_id, boarding_time):
+    def acknowledge_user_boarding(self, op_id, rid, vid, boarding_time):
         """This method acknowledges the user boarding.
         """
-        self.operators[op_id].acknowledge_boarding(rid, vid, boarding_time)
+        self.amod_operators[op_id].acknowledge_boarding(rid, vid, boarding_time)
 
-    def acknowledge_user_alighting(self, rid, vid, op_id, alighting_time):
+    def acknowledge_user_alighting(self, op_id, rid, vid, alighting_time):
         """This method acknowledges the user alighting.
         """
-        self.operators[op_id].acknowledge_alighting(rid, vid, alighting_time)
+        self.amod_operators[op_id].acknowledge_alighting(rid, vid, alighting_time)
 
-    def receive_status_update(self, vid, op_id, sim_time, passed_VRL, force_update_plan):
+    def receive_status_update(self, op_id, vid, sim_time, passed_VRL, force_update_plan):
         """This method receives the status update of the vehicles.
         """
-        self.operators[op_id].receive_status_update(vid, sim_time, passed_VRL, force_update_plan)
+        self.amod_operators[op_id].receive_status_update(vid, sim_time, passed_VRL, force_update_plan)
 
 
 # TODO: Be careful with the request id in all methods
