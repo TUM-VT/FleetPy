@@ -24,6 +24,7 @@ import numpy as np
 from src.misc.init_modules import load_fleet_control_module, load_routing_engine
 from src.demand.demand import Demand, SlaveDemand
 from src.simulation.Vehicles import SimulationVehicle
+from src.broker.BrokerBase import BrokerBase
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.routing.NetworkBase import NetworkBase
@@ -291,6 +292,9 @@ class FleetSimulationBase:
         np.random.seed(self.scenario_parameters[G_RANDOM_SEED])
         self.load_initial_state()
         LOG.info(f"Initialization of scenario {self.scenario_name} successful.")
+
+        # Broker
+        self.broker = BrokerBase()
 
         # self.routing_engine.checkNetwork()
 
@@ -670,6 +674,7 @@ class FleetSimulationBase:
                 boarding_time, boarding_pos = boarding_time_and_pos
                 LOG.debug(f"rid {rid} boarding at {boarding_time} at pos {boarding_pos}")
                 self.demand.record_boarding(rid, vid, op_id, boarding_time, pu_pos=boarding_pos)
+                # TODO: Call the broker to acknowledge the boarding
                 self.operators[op_id].acknowledge_boarding(rid, vid, boarding_time)
             for rid, alighting_start_time_and_pos in dict_start_alighting.items():
                 # record user stats at beginning of alighting process
@@ -679,11 +684,14 @@ class FleetSimulationBase:
             for rid, alighting_end_time in alighting_requests.items():
                 # # record user stats at end of alighting process
                 self.demand.user_ends_alighting(rid, vid, op_id, alighting_end_time)
+                # TODO: Call the broker to acknowledge the alighting
                 self.operators[op_id].acknowledge_alighting(rid, vid, alighting_end_time)
             # send update to operator
             if len(boarding_requests) > 0 or len(dict_start_alighting) > 0:
+                # TODO: Call the broker to receive the status update
                 self.operators[op_id].receive_status_update(vid, next_time, passed_VRL, True)
             else:
+                # TODO: Call the broker to receive the status update
                 self.operators[op_id].receive_status_update(vid, next_time, passed_VRL, force_update_plan)
         # TODO # after ISTTT: live visualization: send vehicle states (self.live_visualization_flag==True)
 
@@ -702,45 +710,20 @@ class FleetSimulationBase:
         :param sim_time: current simulation time
         :return: chosen operator
         """
+        # TODO: The op_id/chosen_operator should be clearly defined
         chosen_operator = rq_obj.choose_offer(self.scenario_parameters, sim_time)
         LOG.debug(f" -> chosen operator: {chosen_operator}")
+        # TODO: If the broker has a return, the subrequest should be created and stored in the demand class
         if chosen_operator is None: # undecided
             if rq_obj.leaves_system(sim_time):
-                for i, operator in enumerate(self.operators):
-                    operator.user_cancels_request(rid, sim_time)
-                self.demand.record_user(rid)
-                del self.demand.rq_db[rid]
-                try:
-                    del self.demand.undecided_rq[rid]
-                except KeyError:
-                    # raises KeyError if request decided right away
-                    pass
+                self._user_leaves_system(rid, rq_obj, sim_time)
             else:
                 self.demand.undecided_rq[rid] = rq_obj
+        # -1 should be the rejection
         elif chosen_operator < 0:
-            # if chosen_operator == G_MC_DEC_PV:
-            #     # TODO # self.routing_engine.assign_route_to_network(rq_obj, sim_time)
-            #     # TODO # computation of route only when necessary
-            #     self.routing_engine.assign_route_to_network(rq_obj, sim_time)
-            #     # TODO # check if following method is necessary
-            #     self.demand.user_chooses_PV(rid, sim_time)
-            # elif chosen_operator == G_MC_DEC_PT:
-            #     pt_offer = rq_obj.return_offer(G_MC_DEC_PT)
-            #     pt_start_time = sim_time + pt_offer.get(G_OFFER_ACCESS_W, 0) + pt_offer.get(G_OFFER_WAIT, 0)
-            #     pt_end_time = pt_start_time + pt_offer.get(G_OFFER_DRIVE, 0)
-            #     self.pt.assign_to_pt_network(pt_start_time, pt_end_time)
-            #     # TODO # check if following method is necessary
-            #     self.demand.user_chooses_PT(rid, sim_time)
-            for i, operator in enumerate(self.operators):
-                operator.user_cancels_request(rid, sim_time)
-            self.demand.record_user(rid)
-            del self.demand.rq_db[rid]
-            try:
-                del self.demand.undecided_rq[rid]
-            except KeyError:
-                # raises KeyError if request decided right away
-                pass
+            self._user_leaves_system(rid, rq_obj, sim_time)
         else:
+            # TODO: Call the broker and check its return value, if the return value is not empty, the sub-requests should be created and stored in the demand class
             for i, operator in enumerate(self.operators):
                 if i != chosen_operator:
                     operator.user_cancels_request(rid, sim_time)
@@ -753,6 +736,23 @@ class FleetSimulationBase:
                 # raises KeyError if request decided right away
                 pass
         return chosen_operator
+    
+    def _user_leaves_system(self, rid, rq_obj, sim_time):
+        """This method can be used to model customers waiting for offers and request retries etc.
+
+        :param sim_time: current simulation time
+        :return: True/False
+        """
+        # TODO: Call the broker to inform the operators about the user decision
+        for i, operator in enumerate(self.operators):
+            operator.user_cancels_request(rid, sim_time)
+        self.demand.record_user(rid)
+        del self.demand.rq_db[rid]
+        try:
+            del self.demand.undecided_rq[rid]
+        except KeyError:
+            # raises KeyError if request decided right away
+            pass
 
     def _check_waiting_request_cancellations(self, sim_time):
         """This method builds the interface for traveler models, where users can cancel their booking after selecting
@@ -765,6 +765,7 @@ class FleetSimulationBase:
             chosen_operator = rq_obj.get_chosen_operator()
             in_vehicle = rq_obj.get_service_vehicle()
             if in_vehicle is None and chosen_operator is not None and rq_obj.cancels_booking(sim_time):
+                # TODO: Call the broker to inform the operators about the waiting request cancellations
                 self.operators[chosen_operator].user_cancels_request(rid, sim_time)
                 self.demand.record_user(rid)
                 del self.demand.rq_db[rid]

@@ -55,19 +55,19 @@ class PTControlBase(metaclass=ABCMeta):
         """
         pass
 
-    @abstractmethod
-    def return_pt_travel_costs_Xto1(self):
-        """This method will return the pt travel costs between a list of possible pt origin stops
-        and a certain pt destination stop.
-        """
-        pass
+    # @abstractmethod
+    # def return_pt_travel_costs_Xto1(self):
+    #     """This method will return the pt travel costs between a list of possible pt origin stops
+    #     and a certain pt destination stop.
+    #     """
+    #     pass
 
-    @abstractmethod
-    def return_pt_travel_costs_1toX(self):
-        """This method will return the pt travel costs between a certain pt origin stop 
-        and a list of possible pt destination stops.
-        """
-        pass
+    # @abstractmethod
+    # def return_pt_travel_costs_1toX(self):
+    #     """This method will return the pt travel costs between a certain pt origin stop 
+    #     and a list of possible pt destination stops.
+    #     """
+    #     pass
 
     @abstractmethod
     def return_best_pt_journey_1to1(self):
@@ -75,17 +75,17 @@ class PTControlBase(metaclass=ABCMeta):
         """
         pass
 
-    @abstractmethod
-    def return_best_pt_journey_Xto1(self):
-        """This method will return the best pt journey between a list of possible pt origin stops and a certain pt destination stop.
-        """
-        pass
+    # @abstractmethod
+    # def return_best_pt_journey_Xto1(self):
+    #     """This method will return the best pt journey between a list of possible pt origin stops and a certain pt destination stop.
+    #     """
+    #     pass
 
-    @abstractmethod
-    def return_best_pt_journey_1toX(self):
-        """This method will return the best pt journey between a certain pt origin stop and a list of possible pt destination stops.
-        """
-        pass
+    # @abstractmethod
+    # def return_best_pt_journey_1toX(self):
+    #     """This method will return the best pt journey between a certain pt origin stop and a list of possible pt destination stops.
+    #     """
+    #     pass
 
     @abstractmethod
     def _preprocess_transfers(self):

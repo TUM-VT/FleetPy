@@ -171,6 +171,18 @@ class Demand:
                  f" requests removed ({G_RQ_TIME} not in simulation time)")
         # LOG.debug(f"self.future_requests = {self.future_requests}")
 
+    def create_sub_requests(self, rq_obj, sim_time, new_sub_rids: list[str]):
+        """This method creates the sub-requests for the given request.
+        The new sub-request ids are created by the broker class for the intermodal request.
+        """
+        # TODO: Implement this method
+        # TODO: The new sub-request ids should be added to the self.rq_db
+        # TODO: Check if the new sub-request ids should be added to the self.undecided_rq or somewhere else
+        # TODO: Use the create_SubTripRequest method to store the sub-requests
+        # TODO: Whether the addRequest method in class SlaveDemand(Demand) should be used
+        # TODO: Check wether the broker should directly call the addRequest method or if the SlaveDemand class should be used
+        pass
+
     def save_user_stats(self, force=True):
         if self.skip_output:
             return
