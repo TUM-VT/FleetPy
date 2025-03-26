@@ -28,7 +28,7 @@ BUFFER_SIZE = 100
 
 INPUT_PARAMETERS_BasicBroker = {
     "doc" : "this broker class will be used when no other broker is specified",
-    "inherit" : None,
+    "inherit" : BrokerBase,
     "input_parameters_mandatory": [],
     "input_parameters_optional": [],
     "mandatory_modules": [],
@@ -38,6 +38,6 @@ INPUT_PARAMETERS_BasicBroker = {
 # -------------------------------------------------------------------------------------------------------------------- #
 # main
 # ----
-class BasicBroker(BrokerBase):
+class BrokerBasic(BrokerBase):
     def __init__(self, n_amod_op: int, amod_operators: tp.List['FleetControlBase'], pt_operator: tp.Optional['PTControlBase'] = None):
         super().__init__(n_amod_op, amod_operators, pt_operator)

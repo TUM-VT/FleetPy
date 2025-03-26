@@ -16,46 +16,46 @@
 #include "Parser.h"
 
 Parser::Parser(std::string directory) : inputDirectory(std::move(directory)) {
-  // Record the start time
-  auto start_time = std::chrono::high_resolution_clock::now();
+  // // Record the start time
+  // auto start_time = std::chrono::high_resolution_clock::now();
 
-  std::cout << "Parsing GTFS data from " << inputDirectory << "..." << std::endl;
+  // std::cout << "Parsing GTFS data from " << inputDirectory << "..." << std::endl;
   parseData();
 
-  std::cout << "Associating data..." << std::endl;
+  // std::cout << "Associating data..." << std::endl;
   associateData();
 
-  // Record the end time
-  auto end_time = std::chrono::high_resolution_clock::now();
+  // // Record the end time
+  // auto end_time = std::chrono::high_resolution_clock::now();
 
-  // Calculate the duration
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+  // // Calculate the duration
+  // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
-  std::cout << std::fixed << std::setprecision(2) 
-            << "Parsing completed in " << (duration.count() / 1000.0) << " seconds." << std::endl;
+  // std::cout << std::fixed << std::setprecision(2) 
+  //           << "Parsing completed in " << (duration.count() / 1000.0) << " seconds." << std::endl;
 }
 
 void Parser::parseData() {
   //The order of parsing is important due
-  std::cout << "Parsing agencies..." << std::endl;
+  // std::cout << "Parsing agencies..." << std::endl;
   parseAgencies();
 
-  std::cout << "Parsing calendars and calendar dates..." << std::endl;
+  // std::cout << "Parsing calendars and calendar dates..." << std::endl;
   parseServices();
 
-  std::cout << "Parsing stop times..." << std::endl;
+  // std::cout << "Parsing stop times..." << std::endl;
   parseStopTimes();
 
-  std::cout << "Parsing trips..." << std::endl;
+  // std::cout << "Parsing trips..." << std::endl;
   parseTrips();
 
-  std::cout << "Parsing routes..." << std::endl;
+  // std::cout << "Parsing routes..." << std::endl;
   parseRoutes();
 
-  std::cout << "Parsing stops..." << std::endl;
+  // std::cout << "Parsing stops..." << std::endl;
   parseStops();
 
-  std::cout << "Parsing transfers..." << std::endl;
+  // std::cout << "Parsing transfers..." << std::endl;
   parseTransfers();
 }
 

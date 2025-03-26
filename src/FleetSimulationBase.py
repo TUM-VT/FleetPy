@@ -459,8 +459,8 @@ class FleetSimulationBase:
         """ Loads the broker """
 
         if self.scenario_parameters.get(G_BROKER_TYPE) is None:
-            LOG.debug("No broker type specified, using default broker: BasicBroker.")
-            op_broker_class_string = "BasicBroker"
+            LOG.debug("No broker type specified, using default broker: BrokerBasic.")
+            op_broker_class_string = "BrokerBasic"
             BrokerClass = load_broker_module(op_broker_class_string)
             self.broker = BrokerClass(self.n_op, self.operators)
         else:

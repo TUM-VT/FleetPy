@@ -10,27 +10,24 @@ import datetime
 cdef class PyPTRouter:
     cdef Raptor* raptor_ptr  # Hold a pointer to the C++ instance which we're wrapping
 
-    def __cinit__(self, list input_directories):
+    def __cinit__(self, str input_directory):
         """Initialize the RAPTOR router
         
         This is a Cython-specific constructor that is called first during object creation.
-        It initializes the C++ RAPTOR router by loading and processing all input data.
+        It initializes the C++ RAPTOR router by loading and processing input data.
 
         Args:
-            input_directories (list): List of directory paths containing GTFS data.
-                                    Each directory should contain necessary GTFS files
-                                    (e.g., stops.txt, routes.txt, etc.)
+            input_directory (str): Directory path containing GTFS data.
+                                 The directory should contain necessary GTFS files
+                                 (e.g., stops.txt, routes.txt, etc.)
 
         Notes:
             - This method is automatically called during object creation
             - If raptor_ptr already exists, it will be deleted before creating a new instance
-            - All input paths will be converted to UTF-8 encoded C++ strings
-            - Data from all directories will be merged into a single dataset
+            - The input path will be converted to UTF-8 encoded C++ string
         """
-        # Create C++ string vector from Python list of directories
-        cdef vector[string] cpp_directories 
-        for directory in input_directories:
-            cpp_directories.push_back(directory.encode('utf-8'))
+        # Convert Python string to C++ string
+        cdef string cpp_directory = input_directory.encode('utf-8')
 
         # Initialize data containers for GTFS data
         cdef unordered_map[string, Agency] agencies
@@ -39,33 +36,22 @@ cdef class PyPTRouter:
         cdef unordered_map[pair[string, string], Route, pair_hash] routes
         cdef unordered_map[string, Stop] stops
 
-        # Process each directory and merge data
-        cdef Parser* parser
-        for directory in cpp_directories:
-            parser = new Parser(directory)
-            
-            dir_agencies = parser.getAgencies()
-            agencies.insert(dir_agencies.begin(), dir_agencies.end())
-            
-            dir_services = parser.getServices()
-            services.insert(dir_services.begin(), dir_services.end())
-            
-            dir_trips = parser.getTrips()
-            trips.insert(dir_trips.begin(), dir_trips.end())
-            
-            dir_routes = parser.getRoutes()
-            routes.insert(dir_routes.begin(), dir_routes.end())
-            
-            dir_stops = parser.getStops()
-            stops.insert(dir_stops.begin(), dir_stops.end())
+        # Process directory
+        cdef Parser* parser = new Parser(cpp_directory)
+        
+        agencies = parser.getAgencies()
+        services = parser.getServices()
+        trips = parser.getTrips()
+        routes = parser.getRoutes()
+        stops = parser.getStops()
 
-            del parser
+        del parser
 
         # Clean up existing instance if any
         if self.raptor_ptr != NULL:
             del self.raptor_ptr
             
-        # Create new RAPTOR instance with merged data
+        # Create new RAPTOR instance with data
         self.raptor_ptr = new Raptor(agencies, services, stops, routes, trips)
 
     def __dealloc__(self):
@@ -231,6 +217,48 @@ cdef class PyPTRouter:
         journey_dict = self._convert_journey_to_dict(journey)
         
         return journey_dict
+
+    def return_best_pt_costs_1to1(
+        self,
+        int year, int month, int day, int hours, int minutes, int seconds,
+        list included_sources, list included_targets, int max_transfers=-1,
+    ):
+        """Find the costs of the best public transport journey from source to target
+
+        Args:
+            year (int): Departure year (e.g., 2024)
+            month (int): Departure month (1-12)
+            day (int): Departure day (1-31)
+            hours (int): Departure hour (0-23)
+            minutes (int): Departure minutes (0-59)
+            seconds (int): Departure seconds (0-59)
+            included_sources (list): List of source stop IDs and their station stop transfer times
+            included_targets (list): List of target stop IDs and their station stop transfer times
+            max_transfers (int): Maximum number of transfers allowed (-1 for unlimited)
+
+        Returns:
+            journey costs in seconds: (duration, departure_secs, arrival_secs), or None if no journey is found.
+        """
+        if self.raptor_ptr == NULL:
+            raise RuntimeError("RAPTOR router not initialized. Please initialize first.")      
+        
+        query = self.construct_query(
+            year, month, day, hours, minutes, seconds,
+            included_sources, included_targets, max_transfers,
+        )
+        
+        # Set query and find journeys
+        self.raptor_ptr.setQuery(query)
+        cdef optional[Journey] journey_opt = self.raptor_ptr.findOptimalJourney()
+
+        # Check if journey was found
+        if not journey_opt.has_value():
+            return None
+
+        # Get the actual journey from optional
+        cdef Journey journey = journey_opt.value()
+        
+        return (journey.duration, journey.departure_secs, journey.arrival_secs,)
 
     cdef _convert_journey_to_dict(self, Journey journey):
         """Convert a Journey object to a Python dictionary

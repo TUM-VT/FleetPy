@@ -24,7 +24,8 @@ Raptor::Raptor(const std::unordered_map<std::string, Agency> &agencies,
   k = 1;
 
   // TODO: Remove this part
-  std::cout << "Raptor initialized with "
+  std::cout << "CPP PT Router: "
+            << "Raptor initialized with "
             << agencies_.size() << " agencies, "
             << services_.size() << " services, "
             << stops.size() << " stops, "
@@ -136,7 +137,7 @@ std::vector<Journey> Raptor::findJourneys() {
   initializeAlgorithm();
 
   while (true) {
-    std::cout << std::endl << "Round " << k << std::endl;
+    // std::cout << std::endl << "Round " << k << std::endl;
 
     // Use the minimum arrival time from the previous round as the base for the current round
     setUpperBound();
@@ -146,15 +147,15 @@ std::vector<Journey> Raptor::findJourneys() {
 
     // Accumulate routes serving marked stops from previous round --> routes_stops_set: ((route_id, direction_id), stop_id)
     std::unordered_set<std::pair<std::pair<std::string, std::string>, std::string>, nested_pair_hash> routes_stops_set = accumulateRoutesServingStops();
-    std::cout << "Accumulated " << routes_stops_set.size() << " routes serving stops." << std::endl;
+    // std::cout << "Accumulated " << routes_stops_set.size() << " routes serving stops." << std::endl;
 
     // Traverse each route --> find earliest trip on each route --> traverse trip --> update arrival times
     traverseRoutes(routes_stops_set);
-    std::cout << "Traversed routes. " << marked_stops.size() << " stop(s) improved." << std::endl;
+    // std::cout << "Traversed routes. " << marked_stops.size() << " stop(s) improved." << std::endl;
 
     // Look for footpaths --> find possible walking connections of marked stops --> update arrival times
     handleFootpaths();
-    std::cout << "Handled footpaths. " << marked_stops.size() << " stop(s) improved." << std::endl;
+    // std::cout << "Handled footpaths. " << marked_stops.size() << " stop(s) improved." << std::endl;
 
     // Stopping criterion: if no stops are marked, then stop
     if (marked_stops.empty()) break;   
@@ -172,7 +173,7 @@ std::vector<Journey> Raptor::findJourneys() {
 
     // Check if the maximum number of transfers is reached
     if (k > max_transfers_) {
-      std::cout << "Reached maximum number of transfers (" << max_transfers_ << "). Stopping searching." << std::endl;
+      // std::cout << "Reached maximum number of transfers (" << max_transfers_ << "). Stopping searching." << std::endl;
       break;
     }
 
@@ -188,7 +189,7 @@ std::optional<Journey> Raptor::findOptimalJourney() {
   initializeAlgorithm();
 
   while (true) {
-    std::cout << std::endl << "Round " << k << std::endl;
+    // std::cout << std::endl << "Round " << k << std::endl;
 
     // Use the minimum arrival time from the previous round as the base for the current round
     setUpperBound();
@@ -198,15 +199,15 @@ std::optional<Journey> Raptor::findOptimalJourney() {
 
     // Accumulate routes serving marked stops from previous round --> routes_stops_set: ((route_id, direction_id), stop_id)
     std::unordered_set<std::pair<std::pair<std::string, std::string>, std::string>, nested_pair_hash> routes_stops_set = accumulateRoutesServingStops();
-    std::cout << "Accumulated " << routes_stops_set.size() << " routes serving stops." << std::endl;
+    // std::cout << "Accumulated " << routes_stops_set.size() << " routes serving stops." << std::endl;
 
     // Traverse each route --> find earliest trip on each route --> traverse trip --> update arrival times
     traverseRoutes(routes_stops_set);
-    std::cout << "Traversed routes. " << marked_stops.size() << " stop(s) improved." << std::endl;
+    // std::cout << "Traversed routes. " << marked_stops.size() << " stop(s) improved." << std::endl;
 
     // Look for footpaths --> find possible walking connections of marked stops --> update arrival times
     handleFootpaths();
-    std::cout << "Handled footpaths. " << marked_stops.size() << " stop(s) improved." << std::endl;
+    // std::cout << "Handled footpaths. " << marked_stops.size() << " stop(s) improved." << std::endl;
 
     // Stopping criterion: if no stops are marked, then stop
     if (marked_stops.empty()) break;   
@@ -226,7 +227,7 @@ std::optional<Journey> Raptor::findOptimalJourney() {
 
     // Check if the maximum number of transfers is reached
     if (k > max_transfers_) {
-      std::cout << "Reached maximum number of transfers (" << max_transfers_ << "). Stopping searching." << std::endl;
+      // std::cout << "Reached maximum number of transfers (" << max_transfers_ << "). Stopping searching." << std::endl;
       break;
     }
 
@@ -436,7 +437,7 @@ Journey Raptor::reconstructJourney(
   try {
     while (true) {
       const std::optional<std::string> parent_trip_id_opt = arrivals_[current_stop_id][k].parent_trip_id;
-      // TODO: Remove it
+      // TODO: add agency info into journey step
       const std::optional<std::string> parent_agency_name_opt = std::nullopt;
 
       const std::optional<std::string> parent_stop_id_opt = arrivals_[current_stop_id][k].parent_stop_id;
