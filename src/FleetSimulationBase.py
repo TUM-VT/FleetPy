@@ -21,7 +21,7 @@ import numpy as np
 
 # src imports
 # -----------
-from src.misc.init_modules import load_fleet_control_module, load_routing_engine
+from src.misc.init_modules import load_fleet_control_module, load_routing_engine, load_broker_module
 from src.demand.demand import Demand, SlaveDemand
 from src.simulation.Vehicles import SimulationVehicle
 from src.broker.BrokerBase import BrokerBase
@@ -293,8 +293,10 @@ class FleetSimulationBase:
         self.load_initial_state()
         LOG.info(f"Initialization of scenario {self.scenario_name} successful.")
 
-        # Broker
-        self.broker = BrokerBase(self.n_op, self.operators)
+        # broker
+        LOG.info("Loading broker...")
+        self.broker = None
+        self._load_broker()
 
         # self.routing_engine.checkNetwork()
 
@@ -322,7 +324,6 @@ class FleetSimulationBase:
                                             simulation_time_step=self.time_step)
         else:
             self.demand = SlaveDemand(self.scenario_parameters, self.user_stat_f)
-
 
     def _load_charging_modules(self):
         """ Loads necessary modules for charging """
@@ -453,6 +454,19 @@ class FleetSimulationBase:
         if not self.skip_output:
             veh_type_df.to_csv(veh_type_f, index=False)
         self.vehicle_update_order: tp.Dict[tp.Tuple[int, int], int] = {vid : 1 for vid in self.sim_vehicles.keys()}
+
+    def _load_broker(self):
+        """ Loads the broker """
+
+        if self.scenario_parameters.get(G_BROKER_TYPE) is None:
+            LOG.debug("No broker type specified, using default broker: BasicBroker.")
+            op_broker_class_string = "BasicBroker"
+            BrokerClass = load_broker_module(op_broker_class_string)
+            self.broker = BrokerClass(self.n_op, self.operators)
+        else:
+            op_broker_class_string = self.scenario_parameters.get(G_BROKER_TYPE)
+            BrokerClass = load_broker_module(op_broker_class_string)
+            self.broker = BrokerClass(self.n_op, self.operators)
 
     @staticmethod
     def get_directory_dict(scenario_parameters, list_operator_dicts):

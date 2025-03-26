@@ -71,10 +71,9 @@ class BatchOfferSimulation(FleetSimulationBase):
         # 1)
         self.update_sim_state_fleets(sim_time - self.time_step, sim_time)
         new_travel_times = self.routing_engine.update_network(sim_time)
-        # TODO:Call the broker to inform the operators about the new travel times
+        # Call the broker to inform the operators about the new travel times
         if new_travel_times:
-            for op_id in range(self.n_op):
-                self.operators[op_id].inform_network_travel_time_update(sim_time)
+            self.broker.inform_network_travel_time_update(sim_time)
         # 2)
         last_time = sim_time - self.time_step
         if last_time < self.start_time:
@@ -83,10 +82,8 @@ class BatchOfferSimulation(FleetSimulationBase):
 
         # 3)
         for rid, rq_obj in list_new_traveler_rid_obj:
-            # TODO:Call the broker to inform the operators about the new request
-            for op_id in range(self.n_op):
-                LOG.debug(f"Request {rid}: To operator {op_id} ...")
-                self.operators[op_id].user_request(rq_obj, sim_time)
+            # Call the broker to inform the operators about the new request
+            self.broker.inform_request(rid, rq_obj, sim_time)
 
         # 4)
         self._check_waiting_request_cancellations(sim_time)
@@ -98,9 +95,9 @@ class BatchOfferSimulation(FleetSimulationBase):
 
         # 6)
         for rid, rq_obj in self.demand.get_undecided_travelers(sim_time):
-            # TODO:Call the broker to collect the offers
-            amod_offers = self.broker.collect_offers(rid, rq_obj, sim_time)
-            for op_id, amod_offer, sim_time in amod_offers:
+            # Call the broker to collect the offers
+            amod_offers = self.broker.collect_offers(rid, rq_obj)
+            for op_id, amod_offer in amod_offers:
                 rq_obj.receive_offer(op_id, amod_offer, sim_time)
             self._rid_chooses_offer(rid, rq_obj, sim_time)
             

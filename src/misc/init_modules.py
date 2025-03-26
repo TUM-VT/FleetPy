@@ -7,6 +7,7 @@ if tp.TYPE_CHECKING:
     from src.FleetSimulationBase import FleetSimulationBase
     from src.routing.NetworkBase import NetworkBase
     from src.fleetctrl.FleetControlBase import FleetControlBase
+    from src.broker.BrokerBase import BrokerBase
     from src.demand.TravelerModels import RequestBase
     from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
     from src.fleetctrl.charging.ChargingBase import ChargingBase
@@ -109,6 +110,16 @@ def get_src_fleet_control_modules():
         dev_op_dict = dev_content.add_fleet_control_modules()
         op_dict.update(dev_op_dict)
     return op_dict
+
+def get_src_broker_modules():
+    # FleetPy broker options
+    broker_dict = {}  # str -> (module path, class name)
+    broker_dict["BasicBroker"] = ("src.broker.BasicBroker", "BasicBroker")
+    # add development content
+    if dev_content is not None: 
+        dev_broker_dict = dev_content.add_broker_modules()
+        broker_dict.update(dev_broker_dict)
+    return broker_dict
 
 def get_src_repositioning_strategies():
     # FleetPy repositioning options
@@ -260,6 +271,17 @@ def load_fleet_control_module(op_fleet_control_class_string) -> FleetControlBase
     # get fleet control class
     return load_module(op_dict, op_fleet_control_class_string, "Fleet control module")
 
+
+def load_broker_module(op_broker_class_string) -> BrokerBase:
+    """This function chooses the broker module that should be loaded.
+
+    :param op_broker_class_string: string that determines which broker strategy will be used
+    :return: Broker class
+    """
+    # FleetPy broker options
+    broker_dict = get_src_broker_modules()
+    # get broker class
+    return load_module(broker_dict, op_broker_class_string, "Broker module")
 
 def load_repositioning_strategy(op_repo_class_string) -> RepositioningBase:
     """This function chooses the repositioning module that should be loaded.

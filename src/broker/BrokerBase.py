@@ -39,8 +39,9 @@ INPUT_PARAMETERS_BrokerBase = {
 # main
 # ----
 class BrokerBase():
-    def __init__(self, n_amod_op: int, amod_operators: tp.List['FleetControlBase'], pt_operator: tp.Optional['PTControlBase']):
+    def __init__(self, n_amod_op: int, amod_operators: tp.List['FleetControlBase'], pt_operator: tp.Optional['PTControlBase'] = None):
         # TODO: The status update of the vehicles is not yet considered in the broker
+        # TODO: The PT 
         self.n_amod_op = n_amod_op
         self.amod_operators = amod_operators
         self.pt_operator = pt_operator
@@ -60,7 +61,7 @@ class BrokerBase():
             LOG.debug(f"Request {rid}: To operator {op_id} ...")
             self.amod_operators[op_id].user_request(rq_obj, sim_time)    
 
-    def collect_offers(self, rid, rq_obj, sim_time):
+    def collect_offers(self, rid, rq_obj):
         """This method collects the offers from the operators.
         The return value is a list of tuples, where each tuple contains the operator id, the offer, and the simulation time.
         """
@@ -69,10 +70,10 @@ class BrokerBase():
             amod_offer = self.amod_operators[op_id].get_current_offer(rid)
             LOG.debug(f"amod offer {amod_offer}")
             if amod_offer is not None:
-                amod_offers.append((op_id, amod_offer, sim_time))
+                amod_offers.append((op_id, amod_offer))
         return amod_offers
 
-    def inform_user_booking(self, rid, rq_obj, sim_time, chosen_operator) -> list[tuple[any, RequestBase]]:
+    def inform_user_booking(self, rid, rq_obj, sim_time, chosen_operator) -> tp.List[tuple[any, 'RequestBase']]:
         """This method informs the broker that the user has booked a trip.
         The return value can inform the FleetSimulationBase class about whether the sub request should be created and stored in the demand class
         """
@@ -114,4 +115,4 @@ class BrokerBase():
 
 
 # TODO: Be careful with the request id in all methods
-# TODO: Only the communication between the broker and the operators should be defined here, the rest should be in the FleetSimulationBase class
+# TODO: Only the communication between the broker and the operators should be defined here, the rest should be in the FleetSimulationBase classs

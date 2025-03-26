@@ -90,8 +90,8 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         for rid, rq_obj in list_undecided_travelers + list_new_traveler_rid_obj:
             # Create offers for the request
             self.broker.inform_request(rid, rq_obj, sim_time)
-            amod_offers = self.broker.collect_offers(rid, rq_obj, sim_time)
-            for op_id, amod_offer, sim_time in amod_offers:
+            amod_offers = self.broker.collect_offers(rid, rq_obj)
+            for op_id, amod_offer in amod_offers:
                 rq_obj.receive_offer(op_id, amod_offer, sim_time)
             self._rid_chooses_offer(rid, rq_obj, sim_time)
         # 4)

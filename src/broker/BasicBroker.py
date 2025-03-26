@@ -3,6 +3,7 @@
 # -----------------------------
 import logging
 import time
+import typing as tp
 from abc import abstractmethod, ABCMeta
 
 # additional module imports (> requirements)
@@ -12,6 +13,9 @@ from abc import abstractmethod, ABCMeta
 # src imports
 # -----------
 from src.broker.BrokerBase import BrokerBase
+if tp.TYPE_CHECKING:
+    from src.fleetctrl.FleetControlBase import FleetControlBase
+    from src.pt.PTControlBase import PTControlBase
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -22,9 +26,9 @@ LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
 BUFFER_SIZE = 100
 
-INPUT_PARAMETERS_PlatformBroker = {
-    "doc" : "this class is the base class representing a regulatory platform",
-    "inherit" : BrokerBase,
+INPUT_PARAMETERS_BasicBroker = {
+    "doc" : "this broker class will be used when no other broker is specified",
+    "inherit" : None,
     "input_parameters_mandatory": [],
     "input_parameters_optional": [],
     "mandatory_modules": [],
@@ -34,14 +38,6 @@ INPUT_PARAMETERS_PlatformBroker = {
 # -------------------------------------------------------------------------------------------------------------------- #
 # main
 # ----
-class PlatformBroker(BrokerBase):
-    @abstractmethod
-    def __init__(self):
-        pass
-
-    def collect_offers(self, rid, rq_obj, sim_time):
-        """This method collects the offers from the operators.
-        """
-        amod_offers = super().collect_offers(rid, rq_obj, sim_time)
-        # TODO: Functions for calculating the subsidies
-        return amod_offers
+class BasicBroker(BrokerBase):
+    def __init__(self, n_amod_op: int, amod_operators: tp.List['FleetControlBase'], pt_operator: tp.Optional['PTControlBase'] = None):
+        super().__init__(n_amod_op, amod_operators, pt_operator)

@@ -134,8 +134,8 @@ class BrokerDecisionSimulation(FleetSimulationBase):
                 self.operators[op_id].user_request(rq_obj, sim_time)
             # get offers and choose best option (broker criteria)
             operator_offers = {}
-            amod_offers = self.broker.collect_offers(rid, rq_obj, sim_time)
-            for op_id, amod_offer, sim_time in amod_offers:
+            amod_offers = self.broker.collect_offers(rid, rq_obj)
+            for op_id, amod_offer in amod_offers:
                 rq_obj.receive_offer(op_id, amod_offer, sim_time)
                 operator_offers[op_id] = amod_offer
             operator_offers = self._broker_decision(rq_obj, operator_offers)
