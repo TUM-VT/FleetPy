@@ -49,9 +49,10 @@ def run_fw_lvl23_in_env(env_name, A, B, number_nodes, set_stop_nodes):
     np.save('set_stop_nodes.npy', list(set_stop_nodes))
     with open('params.txt', 'w') as f:
         f.write(f"{number_nodes}\n")
-
+    
     # Construct the command to run the numba-dependent script in the specified environment
-    command = f"conda run -n {env_name} python run_fw_lvl23.py"
+    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'run_fw_lvl123.py')
+    command = f"conda run -n {env_name} python {script_path}"
     
     # Run the command
     result = subprocess.run(command, shell=True, capture_output=True, text=True)
