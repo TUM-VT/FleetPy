@@ -571,9 +571,11 @@ class SUMOFleetPyServer():
                elif prev_time_step_edge == current_edge:
                    sim_pos_dict[sim_time].update({veh_id:sim_pos_dict[sim_time-1].get(veh_id)})
 
-        ## Vehicles that have reached their destination
+        ## 2  Vehicles that have reached their destination
         arrived_vehicle_id_list = traci.simulation.getArrivedIDList()
         for arr_vehicle in arrived_vehicle_id_list:
+            if sim_time-1 not in sim_pos_dict.keys():
+                break
             if sim_pos_dict[sim_time-1].get(arr_vehicle) != None:
                 last_edge = sim_pos_dict[sim_time-1].get(veh_id)[0]
                 res_list.append((arr_vehicle,last_edge,int(sim_pos_dict[sim_time-1].get(arr_vehicle)[1]),int(sim_time)))
