@@ -1,5 +1,6 @@
 import setuptools  # important
 import numpy
+import platform
 from distutils.core import Extension, setup
 from Cython.Build import cythonize
 
@@ -25,6 +26,6 @@ ext = Extension(name="PyNetwork",
                 script_args=['build'], 
                 options={'build':{'build_lib':'.'}},
                 include_dirs=[numpy.get_include()],
-                extra_compile_args=['-std=c++20'])
+                extra_compile_args=["-std=c++20"] if platform.system() != "Windows" else ["/std:c++20"])
 
 setup(ext_modules=cythonize(ext))
