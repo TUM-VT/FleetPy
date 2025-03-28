@@ -574,9 +574,9 @@ class SUMOFleetPyServer():
         ## Vehicles that have reached their destination
         arrived_vehicle_id_list = traci.simulation.getArrivedIDList()
         for arr_vehicle in arrived_vehicle_id_list:
-            if sim_pos_dict[sim_time-1].get(veh_id) != None:
+            if sim_pos_dict[sim_time-1].get(arr_vehicle) != None:
                 last_edge = sim_pos_dict[sim_time-1].get(veh_id)[0]
-                res_list.append((veh_id,last_edge,int(sim_pos_dict[sim_time-1].get(veh_id)[1]),int(sim_time)))
+                res_list.append((arr_vehicle,last_edge,int(sim_pos_dict[sim_time-1].get(arr_vehicle)[1]),int(sim_time)))
 
         
         
