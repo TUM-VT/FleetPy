@@ -25,7 +25,7 @@ LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
 BUFFER_SIZE = 100
 
-INPUT_PARAMETERS_PTControlBasicCPP = {
+INPUT_PARAMETERS_PTControlBasicCpp = {
     "doc" : "this class is the basic PT control class using C++ Raptor implementation",
     "inherit" : PTControlBase,
     "input_parameters_mandatory": [],
@@ -37,7 +37,7 @@ INPUT_PARAMETERS_PTControlBasicCPP = {
 # -------------------------------------------------------------------------------------------------------------------- #
 # main
 # ----
-class PTControlBasicCPP(PTControlBase):
+class PTControlBasicCpp(PTControlBase):
     def __init__(self, fp_gtfs_dir: str):
         super().__init__()
 
@@ -123,6 +123,7 @@ class PTControlBasicCPP(PTControlBase):
     def _get_included_stops_and_transfer_times(self, station_id: str) -> tp.Tuple[tp.List[str], tp.List[int]]:
         """This method will return the included stops and transfer times for a given station.
         """
+        # TODO: the street transfer times are not included yet
         included_ids_str = self.stations_fp_df[self.stations_fp_df["station_id"] == station_id]["stops_included"].tolist()
         included_ids = ast.literal_eval(included_ids_str[0])
         transfer_times_str = self.stations_fp_df[self.stations_fp_df["station_id"] == station_id]["station_stop_transfer_times"].tolist()
