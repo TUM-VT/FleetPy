@@ -275,6 +275,7 @@ class SUMOFleetPyServer():
         resultsPath = self.fp_sim_env.dir_names[G_DIR_OUTPUT]
         sim_time_offset = self.fp_sim_env.scenario_parameters.get(G_SUMO_SIM_TIME_OFFSET, 0)
         end_time = self.fp_sim_env.scenario_parameters[G_SIM_END_TIME]
+        fp_time_step = self.fp_sim_env.scenario_parameters.get(G_SIM_TIME_STEP, 1)
 
         ##tt-retrieval (old)
         veh_edge_start_time_count = {}  #{(veh_id,edge,start_time):time_counter}
@@ -299,17 +300,19 @@ class SUMOFleetPyServer():
         last_time = -1
         while True:
             # 1) fleetpy time step  
-            sim_time = int(traci.simulation.getTime()) # sumo time in milliseconds
+            sim_time = int(traci.simulation.getTime()) # sumo time in seconds
             sim_time += sim_time_offset
             if sim_time > end_time:
                 break
-            if sim_time != last_time: # avoid same time step again due to rounding
-                LOG.info(f"---- FleetPy Step ----- {sim_time}")
-                leg_status_dict = self.fp_sim_env.step(sim_time) # fleetpy timestep and computing new routes TODO: Implement Different step Sizes for SUMO and FP
+            sim_time_ms = traci.simulation.getCurrentTime()
+            if sim_time_ms/1000 % float(fp_time_step) == 0: # sumo time in seconds
+                if sim_time != last_time: # avoid same time step again due to rounding
+                    LOG.info(f"---- FleetPy Step ----- {sim_time_ms}")
+                    leg_status_dict = self.fp_sim_env.step(sim_time) # fleetpy timestep and computing new routes TODO: Implement Different step Sizes for SUMO and FP
+                    
+                    #print(f"---- FleetPy Step ----- {sim_time}")
+                    last_time = sim_time
                 
-                #print(f"---- FleetPy Step ----- {sim_time}")
-                last_time = sim_time
-            
             if sim_time % 120 == 0:
                 print("{}: current simtime: {}/{}".format(self.fp_sim_env.scenario_parameters[G_SCENARIO_NAME], sim_time, end_time))
 
@@ -536,7 +539,7 @@ class SUMOFleetPyServer():
         if self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME, 0) == sim_time:
             for veh_id in sim_vehicle_id_list:
                 edge = traci.vehicle.getRoadID(veh_id)
-                sim_pos_dict[sim_time].update({veh_id:(edge,sim_time)})
+                sim_pos_dict[sim_time].update({veh_id:(edge,sim_time)})    ##sim_pos_dict: {sim_time:{veh_id:(edge,start_time_on_this_edge)}}
             
             
             return sim_pos_dict ,res_list
@@ -548,7 +551,7 @@ class SUMOFleetPyServer():
         for veh_id in sim_vehicle_id_list:
             current_edge = traci.vehicle.getRoadID(veh_id)
 
-           # A) Vehicle was not in simulation last time step --> Initialise Count on new edge 
+           # A) Vehicle was not in simulation last time step --> Initialise on new edge 
             if sim_pos_dict[sim_time-1].get(veh_id) == None:
                 sim_pos_dict[sim_time].update({veh_id:(current_edge,sim_time)})
            
@@ -564,7 +567,7 @@ class SUMOFleetPyServer():
                    res_list.append((veh_id,last_edge,int(sim_pos_dict[sim_time-1].get(veh_id)[1]),int(sim_time)))
                    sim_pos_dict[sim_time].update({veh_id:(current_edge,sim_time)})
                 
-                #B-2 Vehicle was in simulation last time step, and ist still on the same edge --> Update time
+                #B-2 Vehicle was in simulation last time step, and ist still on the same edge --> Update time and copy edge-id and start time
                elif prev_time_step_edge == current_edge:
                    sim_pos_dict[sim_time].update({veh_id:sim_pos_dict[sim_time-1].get(veh_id)})
 
@@ -616,7 +619,7 @@ class SUMOFleetPyServer():
         tt_df = pd.DataFrame(res_list, columns=['veh_id','edge_id', 'starting_time', 'end_time'])
         if len(tt_df) == 0:
             return pd.DataFrame(columns=['from_node', 'to_node', 'edge_tt', 'edge_var'])
-        tt_df["edge_tt"] = tt_df["end_time"] - tt_df["starting_time"]
+        tt_df["edge_tt"] = tt_df["end_time"] - tt_df["starting_time"] +1 ## TODO: Check if +1 is needed
         tt_df = tt_df[tt_df['edge_tt'] > 1] 
 
         tt_df = self._filter_by_fco_mode(tt_df)  
