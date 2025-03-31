@@ -226,6 +226,7 @@ class Demand:
                 self.rq_db[rid] = rq
                 self.undecided_rq[rid] = rq
                 list_new_traveler_rid_obj.append((rid, rq))
+                self.create_sub_requests(rq, t)
         LOG.debug(f"{len(list_new_traveler_rid_obj)} new travelers join the simulation at time {simulation_time}.")
         return list_new_traveler_rid_obj
 
@@ -304,7 +305,7 @@ class SlaveDemand(Demand):
     """This class can be used when request are added from an external demand module."""
     rq_class = load_request_module("SlaveRequest")
     rq_parcel_class = load_request_module("SlaveParcelRequest")
-    def add_request(self, rq_info_dict, offer_id, routing_engine, sim_time, modal_state = G_RQ_STATE_MONOMODAL):
+    def add_request(self, rq_info_dict, offer_id, routing_engine, sim_time, modal_state = RQ_MODAL_STATE.MONOMODAL):
         """ this function is used to add a new (person) request to the demand class
         :param rq_info_dict: dictionary with all information regarding the request input
         :param offer_id: used if there are different subrequests (TODO make optional? needed for moia)
@@ -316,7 +317,7 @@ class SlaveDemand(Demand):
         rq_info_dict[G_RQ_TIME] = sim_time
         if rq_info_dict.get(G_RQ_LDT) is None:
             rq_info_dict[G_RQ_LDT] = 0
-        if modal_state == G_RQ_STATE_MONOMODAL:
+        if modal_state == RQ_MODAL_STATE.MONOMODAL:
             # original request
             rq_obj = self.rq_class(rq_info_dict, routing_engine, 1, self.scenario_parameters)
             rq_obj.set_direct_route_travel_infos(routing_engine)

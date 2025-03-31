@@ -21,7 +21,7 @@ import numpy as np
 
 # src imports
 # -----------
-from src.misc.init_modules import load_fleet_control_module, load_routing_engine, load_broker_module
+from src.misc.init_modules import load_fleet_control_module, load_routing_engine, load_broker_module, load_pt_module
 from src.demand.demand import Demand, SlaveDemand
 from src.simulation.Vehicles import SimulationVehicle
 from src.broker.BrokerBase import BrokerBase
@@ -251,21 +251,23 @@ class FleetSimulationBase:
                                               self.network_stat_f)
         # public transportation module
         LOG.info("Initialization of line-based public transportation...")
-        pt_type = self.scenario_parameters.get(G_PT_TYPE)
-        self.gtfs_data_dir = self.dir_names.get(G_DIR_PT)
-        if pt_type is None or self.gtfs_data_dir is None:
-            self.pt = None
-        elif pt_type == "PTMatrixCrowding":
-            pt_module = importlib.import_module("src.pubtrans.PtTTMatrixCrowding")
-            self.pt = pt_module.PublicTransportTravelTimeMatrixWithCrowding(self.gtfs_data_dir, self.pt_stat_f,
-                                                                            self.scenario_parameters,
-                                                                            self.routing_engine, self.zones)
-        elif pt_type == "PtCrowding":
-            pt_module = importlib.import_module("src.pubtrans.PtCrowding")
-            self.pt = pt_module.PublicTransportWithCrowding(self.gtfs_data_dir, self.pt_stat_f, self.scenario_parameters,
-                                                            self.routing_engine, self.zones)
-        else:
-            raise IOError(f"Public transport module {pt_type} not defined for current simulation environment.")
+        # pt_type = self.scenario_parameters.get(G_PT_TYPE)
+        # self.gtfs_data_dir = self.dir_names.get(G_DIR_PT)
+        # if pt_type is None or self.gtfs_data_dir is None:
+        #     self.pt = None
+        # elif pt_type == "PTMatrixCrowding":
+        #     pt_module = importlib.import_module("src.pubtrans.PtTTMatrixCrowding")
+        #     self.pt = pt_module.PublicTransportTravelTimeMatrixWithCrowding(self.gtfs_data_dir, self.pt_stat_f,
+        #                                                                     self.scenario_parameters,
+        #                                                                     self.routing_engine, self.zones)
+        # elif pt_type == "PtCrowding":
+        #     pt_module = importlib.import_module("src.pubtrans.PtCrowding")
+        #     self.pt = pt_module.PublicTransportWithCrowding(self.gtfs_data_dir, self.pt_stat_f, self.scenario_parameters,
+        #                                                     self.routing_engine, self.zones)
+        # else:
+        #     raise IOError(f"Public transport module {pt_type} not defined for current simulation environment.")
+        self.pt_operator = None
+        self._load_pt_operator()
 
         # attribute for demand, charging and zone module
         self.demand = None
@@ -302,7 +304,6 @@ class FleetSimulationBase:
 
     def _load_demand_module(self):
         """ Loads some demand modules """
-
         # demand module
         LOG.info("Initialization of travelers...")
         if self.scenario_parameters[G_SIM_ENV] != "MobiTopp":
@@ -359,7 +360,6 @@ class FleetSimulationBase:
 
     def _load_fleetctr_vehicles(self):
         """ Loads the fleet controller and vehicles """
-
         # simulation vehicles and fleet control modules
         LOG.info("Initialization of MoD fleets...")
         route_output_flag = self.scenario_parameters.get(G_SIM_ROUTE_OUT_FLAG, True)
@@ -457,16 +457,29 @@ class FleetSimulationBase:
 
     def _load_broker(self):
         """ Loads the broker """
-
         if self.scenario_parameters.get(G_BROKER_TYPE) is None:
             LOG.debug("No broker type specified, using default broker: BrokerBasic.")
             op_broker_class_string = "BrokerBasic"
             BrokerClass = load_broker_module(op_broker_class_string)
             self.broker = BrokerClass(self.n_op, self.operators)
+        elif self.scenario_parameters.get(G_BROKER_TYPE) == "PTBroker":
+            LOG.debug("Loading PT broker...")
+            if self.pt_operator is None:
+                raise ValueError("PT operator not loaded.")
+            BrokerClass = load_broker_module(self.scenario_parameters.get(G_BROKER_TYPE))
+            self.broker = BrokerClass(self.n_op, self.operators, self.pt_operator)
         else:
-            op_broker_class_string = self.scenario_parameters.get(G_BROKER_TYPE)
-            BrokerClass = load_broker_module(op_broker_class_string)
+            BrokerClass = load_broker_module(self.scenario_parameters.get(G_BROKER_TYPE))
             self.broker = BrokerClass(self.n_op, self.operators)
+
+    def _load_pt_operator(self):
+        """ Loads the PT operator """
+        if self.scenario_parameters.get(G_PT_MODULE) is None:
+            LOG.debug("No PT operator type specified.")
+            return
+        else:
+            PTClass = load_pt_module(self.scenario_parameters.get(G_PT_MODULE))
+            self.pt_operator = PTClass(self.dir_names[G_DIR_PT])
 
     @staticmethod
     def get_directory_dict(scenario_parameters, list_operator_dicts):

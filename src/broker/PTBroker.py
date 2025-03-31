@@ -3,6 +3,7 @@
 # -----------------------------
 import logging
 import time
+import typing as tp
 from abc import abstractmethod, ABCMeta
 
 # additional module imports (> requirements)
@@ -17,12 +18,16 @@ from src.broker.BrokerBase import BrokerBase
 # global variables
 # ----------------
 from src.misc.globals import *
+if tp.TYPE_CHECKING:
+    from src.fleetctrl.FleetControlBase import FleetControlBase
+    from src.pt.PTControlBase import PTControlBase
+    from src.demand.TravelerModels import RequestBase
 
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
 BUFFER_SIZE = 100
 
-INPUT_PARAMETERS_BrokerBase = {
+INPUT_PARAMETERS_PTBroker = {
     "doc" : "this class is the base class representing an pt broker platform",
     "inherit" : BrokerBase,
     "input_parameters_mandatory": [],
@@ -34,10 +39,11 @@ INPUT_PARAMETERS_BrokerBase = {
 # -------------------------------------------------------------------------------------------------------------------- #
 # main
 # ----
-class PTBrocker(BrokerBase):
-    def __init__(self):
+class PTBroker(BrokerBase):
+    def __init__(self, n_amod_op: int, amod_operators: tp.List['FleetControlBase'], pt_operator: 'PTControlBase'):
         # TODO: Test the intermodal request id and original request id
-        pass
+        super().__init__(n_amod_op, amod_operators)
+        self.pt_operator = pt_operator
     
     def inform_user_decision(self, rid, rq_obj, sim_time, chosen_operator):
         # TODO: Implement this method with PT specific logic

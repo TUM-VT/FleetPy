@@ -8,6 +8,7 @@ if tp.TYPE_CHECKING:
     from src.routing.NetworkBase import NetworkBase
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.broker.BrokerBase import BrokerBase
+    from src.pt.PTControlBase import PTControlBase
     from src.demand.TravelerModels import RequestBase
     from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
     from src.fleetctrl.charging.ChargingBase import ChargingBase
@@ -115,11 +116,22 @@ def get_src_broker_modules():
     # FleetPy broker options
     broker_dict = {}  # str -> (module path, class name)
     broker_dict["BrokerBasic"] = ("src.broker.BrokerBasic", "BrokerBasic")
+    broker_dict["PTBroker"] = ("src.broker.PTBroker", "PTBroker")
     # add development content
     if dev_content is not None: 
         dev_broker_dict = dev_content.add_broker_modules()
         broker_dict.update(dev_broker_dict)
     return broker_dict
+
+def get_src_pt_modules():
+    # FleetPy PT options
+    pt_dict = {}  # str -> (module path, class name)
+    pt_dict["PTControlBasicCpp"] = ("src.pt.PTControlBasicCpp", "PTControlBasicCpp")
+    # add development content
+    if dev_content is not None:
+        dev_pt_dict = dev_content.add_pt_modules()
+        pt_dict.update(dev_pt_dict)
+    return pt_dict
 
 def get_src_repositioning_strategies():
     # FleetPy repositioning options
@@ -282,6 +294,16 @@ def load_broker_module(op_broker_class_string) -> BrokerBase:
     broker_dict = get_src_broker_modules()
     # get broker class
     return load_module(broker_dict, op_broker_class_string, "Broker module")
+
+def load_pt_module(op_pt_class_string) -> PTControlBase:
+    """This function chooses the PT module that should be loaded.
+
+    :param op_pt_class_string: string that determines which PT strategy will be used
+    :return: PT class
+    """
+    pt_dict = get_src_pt_modules()
+    # get pt class
+    return load_module(pt_dict, op_pt_class_string, "PT module")
 
 def load_repositioning_strategy(op_repo_class_string) -> RepositioningBase:
     """This function chooses the repositioning module that should be loaded.

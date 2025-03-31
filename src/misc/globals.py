@@ -75,6 +75,7 @@ G_TOLL_COST_SCALE = "toll_cost_scale"
 G_BROKER_TYPE = "broker_type"
 
 # public transport specific attributes
+G_PT_MODULE = "pt_module"
 G_PT_TYPE = "pt_type"
 G_GTFS_NAME = "gtfs_name"
 G_PT_SCHEDULE_F = "schedule_file"
@@ -463,6 +464,7 @@ G_RQ_LPT = "latest_pickup_time"
 G_RQ_LDT = "latest_decision_time"
 G_RQ_MRD = "max_rel_detour"
 G_RQ_MAX_FARE = "max_fare"
+G_RQ_MULTIMODAL_FLAG = "is_multimodal"
 # parcel
 G_RQ_PA_SIZE = "parcel_size"
 G_RQ_PA_EPT = "parcel_earliest_pickup_time"
@@ -508,10 +510,14 @@ G_RQ_DEC_WT_FAC = "waiting_time_factor"
 G_RQ_DEC_REAC = "reaction_time"
 
 # traveler modal state
-G_RQ_STATE_MONOMODAL = 0
-G_RQ_STATE_FIRSTMILE = 1
-G_RQ_STATE_LASTMILE = 2
-G_RQ_STATE_FIRSTLASTMILE = 3
+class RQ_MODAL_STATE(Enum):
+    """ This enum is used to identify different modal states of a traveler request.
+    """
+    MONOMODAL: int = 0
+    FIRSTMILE: int = 1
+    LASTMILE: int = 2
+    FIRSTLASTMILE: int = 3
+    PT: int = 4
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Mode Choice Model
@@ -748,7 +754,7 @@ def get_directory_dict(scenario_parameters, list_operator_dicts, abs_fleetpy_dir
     if zone_name is not None:
         dirs[G_DIR_ZONES] = os.path.join(dirs[G_DIR_DATA], "zones", zone_name, network_name)
     if gtfs_name is not None:
-        dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pubtrans", gtfs_name)
+        dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pt", network_name, gtfs_name, "matched")
     if infra_name is not None:
         dirs[G_DIR_INFRA] = os.path.join(dirs[G_DIR_DATA], "infra", infra_name, network_name)
     if parcel_demand_name is not None:

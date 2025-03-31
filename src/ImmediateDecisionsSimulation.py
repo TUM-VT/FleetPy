@@ -78,8 +78,7 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         self.update_sim_state_fleets(sim_time - self.time_step, sim_time)
         new_travel_times = self.routing_engine.update_network(sim_time)
         if new_travel_times:
-            for op_id in range(self.n_op):
-                self.operators[op_id].inform_network_travel_time_update(sim_time)
+            self.broker.inform_network_travel_time_update(sim_time)
         # 2)
         list_undecided_travelers = list(self.demand.get_undecided_travelers(sim_time))
         last_time = sim_time - self.time_step

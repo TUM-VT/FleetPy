@@ -89,8 +89,10 @@ class RequestBase(metaclass=ABCMeta):
         # direct_route_infos
         self.direct_route_travel_time = None
         self.direct_route_travel_distance = None
-        # 
-        self.modal_state = G_RQ_STATE_MONOMODAL # mono-modal trip by default 
+        # multimodal
+        self.is_multimodal = rq_row.get(G_RQ_MULTIMODAL_FLAG, False)
+        modal_state_int: int = rq_row.get(G_RQ_MODAL_STATE, RQ_MODAL_STATE.MONOMODAL.value)  # mono-modal trip by default 
+        self.modal_state = RQ_MODAL_STATE(modal_state_int)
 
     def get_rid(self):
         return self.rid
@@ -170,7 +172,7 @@ class RequestBase(metaclass=ABCMeta):
         record_dict[G_RQ_PU] = self.pu_time
         record_dict[G_RQ_DO] = self.do_time
         record_dict[G_RQ_FARE] = self.fare
-        record_dict[G_RQ_MODAL_STATE] = self.modal_state
+        record_dict[G_RQ_MODAL_STATE] = self.modal_state.value
         return self._add_record(record_dict)
 
     def receive_offer(self, operator_id, operator_offer, simulation_time, sc_parameters=None): # TODO remove sc_parameters here
