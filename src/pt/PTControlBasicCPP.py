@@ -46,7 +46,7 @@ class PTControlBasicCpp(PTControlBase):
         self._initialize_pt_router(fp_gtfs_dir)
 
         # load the stations from the gtfs data
-        self.stations = self._load_stations_from_gtfs(fp_gtfs_dir)
+        self.stations_fp_df = self._load_stations_from_gtfs(fp_gtfs_dir)
 
         LOG.debug("PT operator initialized successfully.")
 
@@ -72,7 +72,19 @@ class PTControlBasicCpp(PTControlBase):
     def _load_stations_from_gtfs(self, fp_gtfs_dir: str) -> pd.DataFrame:
         """This method will load the stations from the GTFS data.
         """
-        return pd.read_csv(os.path.join(fp_gtfs_dir, "stations_fp.txt"))
+
+        dtypes = {
+            'station_id': 'str',
+            'station_name': 'str',
+            'station_lat': 'float',
+            'station_lon': 'float',
+            'stops_included': 'str',
+            'station_stop_transfer_times': 'str',
+            'street_node_id': 'int',
+            'street_transfer_time': 'int',
+            'num_stops_included': 'int',
+        }
+        return pd.read_csv(os.path.join(fp_gtfs_dir, "stations_fp.txt"), dtype=dtypes)
 
     def return_pt_travel_costs_1to1(
             self,
@@ -124,8 +136,21 @@ class PTControlBasicCpp(PTControlBase):
         """This method will return the included stops and transfer times for a given station.
         """
         # TODO: the street transfer times are not included yet
-        included_ids_str = self.stations_fp_df[self.stations_fp_df["station_id"] == station_id]["stops_included"].tolist()
-        included_ids = ast.literal_eval(included_ids_str[0])
-        transfer_times_str = self.stations_fp_df[self.stations_fp_df["station_id"] == station_id]["station_stop_transfer_times"].tolist()
-        transfer_times = ast.literal_eval(transfer_times_str[0])
+        station_data = self.stations_fp_df[self.stations_fp_df["station_id"] == station_id]
+        
+        if station_data.empty:
+            raise ValueError(f"Station ID {station_id} not found in the stations data")
+            
+        included_ids_str = station_data["stops_included"].iloc[0]
+        included_ids = ast.literal_eval(included_ids_str)
+        transfer_times_str = station_data["station_stop_transfer_times"].iloc[0]
+        transfer_times = ast.literal_eval(transfer_times_str)
         return [(stop_id, int(transfer_time)) for stop_id, transfer_time in zip(included_ids, transfer_times)]
+    
+
+# if __name__ == "__main__":
+#     # Test the pt control class
+#     example_gtfs_dir = "/Users/dch/projects/fleetpy/github/pt/data/pt/example_network/example_gtfs/matched"
+#     pt_control = PTControlBasicCpp(example_gtfs_dir)
+#     print(pt_control.return_pt_travel_costs_1to1("s7", "s16", 2024, 1, 1, 0, 0, 1, 1))
+#     print(pt_control.return_best_pt_journey_1to1("s7", "s16", 2024, 1, 1, 0, 0, 1, 1))
