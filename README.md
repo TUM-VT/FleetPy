@@ -196,11 +196,14 @@ FleetPy has been applied in various academic and applied research projects acros
 ### Ongoing Projects
 
 * **[CONDUCTOR](https://conductor-project.eu/?show=consortium)** – Development of an integrated ride-parcel-pooling service using automated vehicles (CCAM), evaluated via FleetPy-Aimsun coupling *(multi-modal integration, AVs, cooperative routing, traffic control, simulation coupling)*
+* **[metaCCAZE](https://www.metaccaze-project.eu/)** – Scientific support and simulation-based evaluation of Munich’s Living Lab innovations including multimodal logistics hubs, dynamic curbside management, and connected/autonomous last-mile vehicles. FleetPy contributes to monitoring and optimizing operations *(multimodal hubs, curbside management, AV logistics, LL evaluation, policy support)*
 * **[MINGA](https://www.mos.ed.tum.de/en/vt/research/projects/current-projects/minga/)** – Evaluation of AV stop concepts and passenger interactions at TUM’s test field. FleetPy is used alongside MATSim and microscopic traffic simulations to model AV and non-AV traffic, evaluate climate and system-wide impacts, and support accessibility-focused user studies *(AV integration, stop concepts, MATSim coupling, KPI evaluation, accessibility research)*
 * **[STADT:up](https://www.mos.ed.tum.de/en/vt/research/projects/current-projects/stadtup/)** – Simulation of autonomous shuttle bus in different inter-mobility scenarios with dynamic stops *(Operation, traffic evaluation)*
-* **[SUM](https://sum-project.eu/)** – Simulation-based evaluation of operational strategies for automated on-demand fleets in Munich using FleetPy, including integration with public transport, pricing strategies, and transferability to future mobility hubs *(on-demand AV fleets, public transport integration, pricing, living lab scalability)*
+* **[SUM (Seamless Shared Urban Mobility)](https://sum-project.eu/)** – Simulation-based evaluation of operational strategies for automated on-demand fleets in Munich using FleetPy, including integration with public transport, pricing strategies, and transferability to future mobility hubs *(on-demand AV fleets, public transport integration, pricing, living lab scalability)*
 
 ### Completed Projects
+
+* **[MOIA](https://www.mos.ed.tum.de/en/vt/forschung/projekte/abgeschlossene-projekte/moia-accompanying-research-completed-2021/)** – Implementation of algorithms to represent MOIA’s fleet control *(operation, ride-pooling)*
 
 * **[MCube: STEAM](https://mcube-cluster.de/en/projekt/steam/)** – Simulation of semi-flexible bus lines in Munich using FleetPy, integrated with the TUM-OSM decision support system *(agent-based simulation, semi-flexible transit, DSS coupling, urban mobility, evaluation pipeline)*
 
