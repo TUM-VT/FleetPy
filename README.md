@@ -189,6 +189,25 @@ We welcome contributions from the community! 🚀
 
 ---
 
+## 🧪 Research Projects Using FleetPy
+
+FleetPy has been applied in various academic and applied research projects across topics like shared mobility, autonomous vehicle operations, and electrified fleets:
+
+### Ongoing Projects
+
+* **[CONDUCTOR](https://conductor-project.eu/?show=consortium)** – Development of an integrated ride-parcel-pooling service using automated vehicles (CCAM), evaluated via FleetPy-Aimsun coupling *(multi-modal integration, AVs, cooperative routing, traffic control, simulation coupling)*
+* **[MINGA](https://www.mos.ed.tum.de/en/vt/research/projects/current-projects/minga/)** – Evaluation of AV stop concepts and passenger interactions at TUM’s test field. FleetPy is used alongside MATSim and microscopic traffic simulations to model AV and non-AV traffic, evaluate climate and system-wide impacts, and support accessibility-focused user studies *(AV integration, stop concepts, MATSim coupling, KPI evaluation, accessibility research)*
+* **[STADT:up](https://www.mos.ed.tum.de/en/vt/research/projects/current-projects/stadtup/)** – Simulation of autonomous shuttle bus in different inter-mobility scenarios with dynamic stops *(Operation, traffic evaluation)*
+* **[SUM](https://sum-project.eu/)** – Simulation-based evaluation of operational strategies for automated on-demand fleets in Munich using FleetPy, including integration with public transport, pricing strategies, and transferability to future mobility hubs *(on-demand AV fleets, public transport integration, pricing, living lab scalability)*
+
+### Completed Projects
+
+* **[MCube: STEAM](https://mcube-cluster.de/en/projekt/steam/)** – Simulation of semi-flexible bus lines in Munich using FleetPy, integrated with the TUM-OSM decision support system *(agent-based simulation, semi-flexible transit, DSS coupling, urban mobility, evaluation pipeline)*
+
+> 🧠 Do you use FleetPy in your research? [Let us know!](mailto:florian.dandl@tum.de)
+
+---
+
 ## Citation
 
 If you find this framework useful for your work or use it in your project, please consider citing:
