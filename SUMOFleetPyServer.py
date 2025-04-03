@@ -592,7 +592,7 @@ class SUMOFleetPyServer():
         tt_df = pd.DataFrame(res_list, columns=['veh_id','edge_id', 'starting_time', 'end_time'])
         if len(tt_df) == 0:
             return pd.DataFrame(columns=['from_node', 'to_node', 'edge_tt', 'edge_var'])
-        tt_df["edge_tt"] = tt_df["end_time"] - tt_df["starting_time"]  ## TODO: Check if +1 is needed
+        tt_df["edge_tt"] = tt_df["end_time"] - tt_df["starting_time"] + 0.5 ## TODO: Check if +1 is needed
         tt_df = tt_df[tt_df['edge_tt'] > 1] 
 
         tt_df = self._filter_by_fco_mode(tt_df)  
