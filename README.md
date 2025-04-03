@@ -1,14 +1,16 @@
 # 🚖 FleetPy – Open-Source Fleet Simulation Framework  
+
 [![GitHub stars](https://img.shields.io/github/stars/TUM-VT/FleetPy?style=social)](https://github.com/TUM-VT/FleetPy)  
 FleetPy is an open-source **fleet simulation framework** for modeling and controlling vehicle fleets in **ride-sharing, autonomous mobility, and on-demand transport** applications.  
 
 > Whether you're a **researcher**, **transportation engineer**, or **mobility innovator**, FleetPy helps you analyze and optimize **fleet operations, routing strategies, and demand-responsive services**.
 
-📖 **[Read the Wiki](https://github.com/TUM-VT/FleetPy/wiki)** | 🛠 **[Installation Guide](#installation)** | 🚀 **[Quickstart](#quickstart)**  
+📖 **[Read the Wiki](https://github.com/TUM-VT/FleetPy/wiki)** | 🛠 **[Installation Guide](#-installation)** | 🚀 **[Quickstart](#-quickstart)**  
 
 ---
 
 ## 🎯 Key Features  
+
 ✅ **Agent-Based Simulation** – Models individual vehicles, passengers, and operators.  
 ✅ **Flexible User-Operator Interaction** – Supports multiple request-acceptance models.  
 ✅ **Multi-Fleet Management** – Simulates **ride-pooling, dispatching, and EV charging**.  
@@ -19,6 +21,7 @@ FleetPy is an open-source **fleet simulation framework** for modeling and contro
 ---
 
 ## 🚀 Quickstart  
+
 Get up and running in just a few commands!  
 
 ```bash
@@ -44,6 +47,7 @@ python3 replay_pyplot.py scenario_result_directory
 ## 🛠 Installation  
 
 ### 1️⃣ Install with Conda (Recommended)
+
 Ensure you have [Anaconda](https://www.anaconda.com/products/distribution) installed.
 
 ```bash
@@ -57,6 +61,7 @@ conda activate fleetpy
 ```
 
 ### 2️⃣ Install C++ Router (Recommended)
+
 For improved routing efficiency, compile the C++ router:
 ```bash
 cd FleetPy/src/routing/cpp_router
@@ -65,9 +70,11 @@ python setup.py build_ext --inplace
 *(Ensure a C++ compiler and Cython are installed.)*
 
 ### 3️⃣ Install Optimizer (Optional)
+
 For advanced optimization tasks, install the necessary optimizers:
 
 #### 🏆 **Gurobi**
+
 To install Gurobi:
 ```bash
 conda config --add channels http://conda.anaconda.org/gurobi
@@ -76,6 +83,7 @@ conda install gurobi
 You can acquire a **free academic license** from [Gurobi](https://www.gurobi.com/academia/academic-program-and-licenses/). 🎓
 
 #### ⚡ **OR-Tools**
+
 To install Google's OR-Tools:
 ```bash
 pip install ortools
@@ -85,6 +93,7 @@ This is useful for combinatorial optimization and routing problems.
 ---
 
 ## 📂 Data Preparation and Study Setup
+
 For now, you can inspect the data structures and files in the examples provided in GitHub:
 * 📁 `FleetPy/data`
 * 📁 `FleetPy/studies`
@@ -100,6 +109,7 @@ In general, you can **save your data and study definitions** in the mentioned di
 ---
 
 ## 📊 Running a Simulation  
+
 To test an example scenario:  
 ```bash
 python3 run_examples.py
@@ -108,6 +118,7 @@ python3 run_examples.py
 📂 `FleetPy/studies/example_study/results/`  
 
 ### 📊 Output Files:
+
 | File Name            | Description |
 |----------------------|-------------|
 | `1_user_stats.csv`   | User request statistics |
@@ -122,6 +133,7 @@ python3 FleetPy/src/evaluation/temporal.py scenario_result_directory
 ---
 
 ## 🎥 Watch a Replay  
+
 To visualize a **previously simulated scenario**, run:  
 ```bash
 python3 replay_pyplot.py scenario_result_directory <sim_seconds_per_real_second>
@@ -131,6 +143,7 @@ python3 replay_pyplot.py scenario_result_directory <sim_seconds_per_real_second>
 ---
 
 ## 🤝 Contributing  
+
 We welcome contributions from the community! 🚀  
 📌 **How to contribute:**  
 1. Fork the repo & create a feature branch (`git checkout -b new-feature`).  
@@ -146,6 +159,7 @@ We welcome contributions from the community! 🚀
 ---
 
 ## 📢 Get Involved!  
+
 💬 **Join the discussion:** [GitHub Discussions](https://github.com/TUM-VT/FleetPy/discussions)  
 💻 **Contribute:** Open an issue or PR!  
 ⭐ **Support FleetPy:** Give us a **star ⭐** on GitHub!  
@@ -154,6 +168,7 @@ We welcome contributions from the community! 🚀
 ---
 
 ## 📌 Tested on  
+
 ✔ **Windows 10 Pro x64**  
 ✔ **Chrome 79.0.3945**  
 ✔ **Python 3.7**  
@@ -161,6 +176,7 @@ We welcome contributions from the community! 🚀
 ---
 
 ## Citation
+
 If you find this framework useful for your work or use it in your project, please consider citing:
 Engelhardt, R., Dandl, F., Syed, A., Zhang, Y., Fehn, F., Wolf, F., Bogenberger, K. (2022). FleetPy: A Modular Open-Source Simulation Tool for Mobility On-Demand Services. Arxiv pre-print
 
