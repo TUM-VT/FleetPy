@@ -36,8 +36,10 @@ conda activate fleetpy
 # Run an example simulation
 python3 run_examples.py
 ```
+
 ✔ The results will be saved in `FleetPy/studies/example_study/results/`  
 ✔ To visualize the results, run:  
+
 ```bash
 python3 replay_pyplot.py scenario_result_directory
 ```
@@ -63,11 +65,13 @@ conda activate fleetpy
 ### 2️⃣ Install C++ Router (Recommended)
 
 For improved routing efficiency, compile the C++ router:
+
 ```bash
 cd FleetPy/src/routing/cpp_router
 python setup.py build_ext --inplace
 ```
-*(Ensure a C++ compiler and Cython are installed.)*
+
+**Ensure a C++ compiler and Cython are installed.**
 
 ### 3️⃣ Install Optimizer (Optional)
 
@@ -76,18 +80,22 @@ For advanced optimization tasks, install the necessary optimizers:
 #### 🏆 **Gurobi**
 
 To install Gurobi:
+
 ```bash
 conda config --add channels http://conda.anaconda.org/gurobi
 conda install gurobi
 ```
+
 You can acquire a **free academic license** from [Gurobi](https://www.gurobi.com/academia/academic-program-and-licenses/). 🎓
 
 #### ⚡ **OR-Tools**
 
 To install Google's OR-Tools:
+
 ```bash
 pip install ortools
 ```
+
 This is useful for combinatorial optimization and routing problems.
 
 ---
@@ -95,6 +103,7 @@ This is useful for combinatorial optimization and routing problems.
 ## 📂 Data Preparation and Study Setup
 
 For now, you can inspect the data structures and files in the examples provided in GitHub:
+
 * 📁 `FleetPy/data`
 * 📁 `FleetPy/studies`
 
@@ -111,13 +120,15 @@ In general, you can **save your data and study definitions** in the mentioned di
 ## 📊 Running a Simulation  
 
 To test an example scenario:  
+
 ```bash
 python3 run_examples.py
 ```
+
 ✔ The output will be stored in:  
 📂 `FleetPy/studies/example_study/results/`  
 
-### 📊 Output Files:
+### 📊 Output Files
 
 | File Name            | Description |
 |----------------------|-------------|
@@ -126,6 +137,7 @@ python3 run_examples.py
 | `standard_eval.csv`  | Aggregated evaluation results |
 
 To analyze trends:
+
 ```bash
 python3 FleetPy/src/evaluation/temporal.py scenario_result_directory
 ```
@@ -135,9 +147,11 @@ python3 FleetPy/src/evaluation/temporal.py scenario_result_directory
 ## 🎥 Watch a Replay  
 
 To visualize a **previously simulated scenario**, run:  
+
 ```bash
 python3 replay_pyplot.py scenario_result_directory <sim_seconds_per_real_second>
 ```
+
 🛑 *(Optional: Specify start time as an additional argument.)*
 
 ---
@@ -146,6 +160,7 @@ python3 replay_pyplot.py scenario_result_directory <sim_seconds_per_real_second>
 
 We welcome contributions from the community! 🚀  
 📌 **How to contribute:**  
+
 1. Fork the repo & create a feature branch (`git checkout -b new-feature`).  
 2. Commit your changes (`git commit -m "Added a cool feature"`).  
 3. Push to your branch (`git push origin new-feature`).  
@@ -155,15 +170,14 @@ We welcome contributions from the community! 🚀
 🔍 Check out [CONTRIBUTING.md](link) for guidelines.  
 -->
 
-
 ---
 
-## 📢 Get Involved!  
+## 📢 Get Involved  
 
 💬 **Join the discussion:** [GitHub Discussions](https://github.com/TUM-VT/FleetPy/discussions)  
 💻 **Contribute:** Open an issue or PR!  
 ⭐ **Support FleetPy:** Give us a **star ⭐** on GitHub!  
-🚀 **Stay updated:** Follow us on [Twitter](#) & [LinkedIn](https://www.linkedin.com/school/tum-chair-of-traffic-engineering-and-control/)  
+🚀 **Stay updated:** Follow us on [Homepage]([#](https://www.mos.ed.tum.de/en/vt/home/)) & [LinkedIn](https://www.linkedin.com/school/tum-chair-of-traffic-engineering-and-control/)  
 
 ---
 
