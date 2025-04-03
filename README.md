@@ -177,7 +177,7 @@ We welcome contributions from the community! 🚀
 💬 **Join the discussion:** [GitHub Discussions](https://github.com/TUM-VT/FleetPy/discussions)  
 💻 **Contribute:** Open an issue or PR!  
 ⭐ **Support FleetPy:** Give us a **star ⭐** on GitHub!  
-🚀 **Stay updated:** Follow us on [Homepage]([#](https://www.mos.ed.tum.de/en/vt/home/)) & [LinkedIn](https://www.linkedin.com/school/tum-chair-of-traffic-engineering-and-control/)  
+🚀 **Stay updated:** Follow us on [Homepage](https://www.mos.ed.tum.de/en/vt/home/) & [LinkedIn](https://www.linkedin.com/school/tum-chair-of-traffic-engineering-and-control/)  
 
 ---
 
