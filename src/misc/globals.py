@@ -71,6 +71,9 @@ G_NW_DYNAMIC_F = "nw_dynamic_f"
 G_PARK_COST_SCALE = "park_cost_scale"
 G_TOLL_COST_SCALE = "toll_cost_scale"
 
+# broker specific attributes
+G_BROKER_TYPE = "broker_type"
+
 # public transport specific attributes
 G_PT_TYPE = "pt_type"
 G_GTFS_NAME = "gtfs_name"
