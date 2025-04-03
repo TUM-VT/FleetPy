@@ -75,13 +75,6 @@ conda install gurobi
 ```
 You can acquire a **free academic license** from [Gurobi](https://www.gurobi.com/academia/academic-program-and-licenses/). 🎓
 
-#### 🚀 **CPLEX**
-To install IBM CPLEX:
-```bash
-conda install -c ibmdecisionoptimization cplex
-```
-Check out IBM's [Academic Initiative](https://www.ibm.com/academic) for free access.
-
 #### ⚡ **OR-Tools**
 To install Google's OR-Tools:
 ```bash
