@@ -51,10 +51,17 @@ src/routing/cpp_router/build/*
 src/routing/cpp_router/PyNetwork.cpp
 src/routing/extractors/cache/*
 
+# system dependent C++ PT Router files
+src/pt/cpp_pt_router/*.pyd
+src/pt/cpp_pt_router/build/*
+src/pt/cpp_pt_router/PyPTRouter.cpp
+src/pt/cpp_pt_router/extractors/cache/*
+
 # IDE-related files
 *.idea
 .vscode/*
 src/routing/cpp_router/.vs/*
+src/pt/cpp_pt_router/.vs/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
