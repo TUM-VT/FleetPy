@@ -2,6 +2,7 @@
 run_private*.py
 
 # data directories except for example
+data/README*
 data/demand/*
 !data/demand/example_demand
 !data/demand/example_parcel_demand
@@ -30,13 +31,17 @@ data/zones/*
 !data/zones/example_zones
 !data/infra/example_infra
 
-# study directories except for example
+# study directories except for example and example case studies
 studies/*
 !studies/example_study
 studies/example_study/results/*
 !studies/module_tests/*
 studies/module_tests/results/*
 !studies/module_tests/results/benchmark.csv
+!studies/manhattan_case_study
+studies/manhattan_case_study/results/*
+!studies/chicago_case_study
+studies/chicago_case_study/results/*
 
 # system dependent C++ Router files
 src/routing/cpp_router/*.pyd
