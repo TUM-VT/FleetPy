@@ -7,6 +7,7 @@ if tp.TYPE_CHECKING:
     from src.FleetSimulationBase import FleetSimulationBase
     from src.routing.NetworkBase import NetworkBase
     from src.fleetctrl.FleetControlBase import FleetControlBase
+    from src.broker.BrokerBase import BrokerBase
     from src.demand.TravelerModels import RequestBase
     from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
     from src.fleetctrl.charging.ChargingBase import ChargingBase
@@ -110,8 +111,17 @@ def get_src_fleet_control_modules():
         op_dict.update(dev_op_dict)
     return op_dict
 
+def get_src_broker_modules():
+    # FleetPy broker options
+    broker_dict = {}  # str -> (module path, class name)
+    broker_dict["BrokerBasic"] = ("src.broker.BrokerBasic", "BrokerBasic")
+    # add development content
+    if dev_content is not None:
+        dev_broker_dict = dev_content.add_broker_modules()
+        broker_dict.update(dev_broker_dict)
+    return broker_dict
+
 def get_src_repositioning_strategies():
-    # FleetPy repositioning options
     repo_dict = {}  # str -> (module path, class name)
     repo_dict["PavoneFC"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingRepositioningFC")
     repo_dict["PavoneFCV2"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingV2RepositioningFC")
@@ -260,6 +270,18 @@ def load_fleet_control_module(op_fleet_control_class_string) -> FleetControlBase
     # get fleet control class
     return load_module(op_dict, op_fleet_control_class_string, "Fleet control module")
 
+
+def load_broker_module(broker_type) -> BrokerBase:
+    """This function initiates the required broker module and returns the Broker class, which can be used
+    to generate a broker instance.
+
+    :param broker_type: string that determines which broker should be used
+    :return: Broker class
+    """
+    # FleetPy broker options
+    broker_dict = get_src_broker_modules()
+    # get broker class
+    return load_module(broker_dict, broker_type, "Broker module")
 
 def load_repositioning_strategy(op_repo_class_string) -> RepositioningBase:
     """This function chooses the repositioning module that should be loaded.

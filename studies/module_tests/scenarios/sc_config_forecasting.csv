@@ -1,0 +1,5 @@
+scenario_name,op_zone_system,op_zone_correlation_file,op_fc_type,op_temporal_resolution,op_init_veh_distribution,op_repo_timestep,op_repo_lock,op_forecast_f,op_repo_method,op_repo_horizons,op_repo_timestep
+mt_fc_perf_trips,example_zones,zone_to_zone_correlations_cbw_500_V2.npz,perfect_trips,900,imbalanced.csv,300,True,agg_example_200.csv,PavoneFC,0;900,300
+mt_fc_perf,example_zones,zone_to_zone_correlations_cbw_500_V2.npz,perfect,900,imbalanced.csv,300,True,agg_example_200.csv,PavoneFC,0;900,300
+mt_fc_perf_dist,example_zones,zone_to_zone_correlations_cbw_500_V2.npz,perfect_dist,900,imbalanced.csv,300,True,agg_example_200.csv,PavoneFC,0;900,300
+mt_fc_myopic,example_zones,zone_to_zone_correlations_cbw_500_V2.npz,myopic,900,imbalanced.csv,300,True,agg_example_200.csv,PavoneFC,0;900,300

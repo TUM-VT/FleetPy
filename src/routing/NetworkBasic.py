@@ -272,7 +272,7 @@ class NetworkBasic(NetworkBase):
             tt_file = os.path.join(f, "edges_td_att.csv")
             tmp_df = pd.read_csv(tt_file)
             tmp_df.set_index(["from_node","to_node"], inplace=True)
-            for edge_index_tuple, new_tt in tmp_df["edge_tt"].iteritems():
+            for edge_index_tuple, new_tt in tmp_df["edge_tt"].items():
                 self._set_edge_tt(edge_index_tuple[0], edge_index_tuple[1], new_tt)
         else:
             self._current_tt_factor = f
