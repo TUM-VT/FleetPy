@@ -1,3 +1,0 @@
-# Release Notes
-
-<!-- (Roman & Florian) … -->

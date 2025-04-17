@@ -157,6 +157,16 @@ python replay_pyplot.py scenario_result_directory <sim_seconds_per_real_second>
 
 ---
 
+## Benchmark Data Sets
+
+Input data and corresponding example scenario files are available for large-scale case studies of Manhattan, NY, Chicago, IL, and Munich, Germany. This data can be used as benchmark data sets to test and compare new algorithms or to set up large-scale simulations quickly. The FleetPy input data can be downloaded here and has to be copied into the FleetPy/data folder:
+
+- Manhattan: https://doi.org/10.5281/zenodo.15187906
+- Chicago: https://doi.org/10.5281/zenodo.15189440
+- Munich: https://doi.org/10.5281/zenodo.15195726
+
+---
+
 ## 🤝 Contributing  
 
 We welcome contributions from the community! 🚀  
@@ -165,7 +175,8 @@ We welcome contributions from the community! 🚀
 1. Fork the repo & create a feature branch (`git checkout -b new-feature`).  
 2. Commit your changes (`git commit -m "Added a cool feature"`).  
 3. Push to your branch (`git push origin new-feature`).  
-4. Open a Pull Request!  
+4. Make sure that the module tests are running (`\studies\module_tests\run_module_tests.py`).
+5. Open a Pull Request!  
 
 <!-- ... TODO: contributing.md 
 🔍 Check out [CONTRIBUTING.md](link) for guidelines.  
