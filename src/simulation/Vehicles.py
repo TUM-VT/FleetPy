@@ -23,14 +23,15 @@ LOG = logging.getLogger(__name__)
 # ------------------------
 # > guarantee consistent movements in simulation and output
 class SimulationVehicle:
-    def __init__(self, operator_id : int, vehicle_id : int, vehicle_data_dir : str, vehicle_type : str, routing_engine : NetworkBase, rq_db : tp.Dict[tp.Any, RequestBase], op_output : str,
+    def __init__(self, operator_id : int, vehicle_id : int, veh_attributes_dict : dict, 
+                 routing_engine : NetworkBase, rq_db : tp.Dict[tp.Any, RequestBase], op_output : str,
                  record_route_flag : bool, replay_flag : bool):
         """
         Initialization of vehicle in the simulation environment.
         :param operator_id: id of fleet operator the vehicle belongs to
         :param vehicle_id: id of the vehicle within the operator's fleet
-        :param vehicle_data_dir: vehicle data directory
-        :param vehicle_type: checks vehicle data base for existing model
+        :param vehicle_attributes_dict: dictionary that includes at least values for G_VTYPE_NAME, G_VTYPE_MAX_PAX, G_VTYPE_MAX_PARCELS (optional),
+                G_VTYPE_FIX_COST, G_VTYPE_DIST_COST, G_VTYPE_BATTERY_SIZE, G_VTYPE_RANGE
         :param routing_engine: routing engine for queries
         :param rq_db: simulation request database (for conversion from plan requests)
         :param op_output: output for VRL records
@@ -44,16 +45,14 @@ class SimulationVehicle:
         self.op_output = op_output
         self.record_route_flag = record_route_flag
         self.replay_flag = replay_flag
-        #
-        veh_data_f = os.path.join(vehicle_data_dir, f"{vehicle_type}.csv")
-        veh_data = pd.read_csv(veh_data_f, header=None, index_col=0).squeeze("columns")
-        self.veh_type = veh_data[G_VTYPE_NAME]
-        self.max_pax = int(veh_data[G_VTYPE_MAX_PAX])
-        self.max_parcels = int(veh_data.get(G_VTYPE_MAX_PARCELS, 0))
-        self.daily_fix_cost = float(veh_data[G_VTYPE_FIX_COST])
-        self.distance_cost = float(veh_data[G_VTYPE_DIST_COST])/1000.0
-        self.battery_size = float(veh_data[G_VTYPE_BATTERY_SIZE])
-        self.range = float(veh_data[G_VTYPE_RANGE])
+        ## vehicle attributes
+        self.veh_type = veh_attributes_dict[G_VTYPE_NAME]
+        self.max_pax = int(veh_attributes_dict[G_VTYPE_MAX_PAX])
+        self.max_parcels = int(veh_attributes_dict.get(G_VTYPE_MAX_PARCELS, 0))
+        self.daily_fix_cost = float(veh_attributes_dict[G_VTYPE_FIX_COST])
+        self.distance_cost = float(veh_attributes_dict[G_VTYPE_DIST_COST])/1000.0
+        self.battery_size = float(veh_attributes_dict[G_VTYPE_BATTERY_SIZE])
+        self.range = float(veh_attributes_dict[G_VTYPE_RANGE])
         self.soc_per_m = 1/(self.range*1000)
         # current info
         self.status = VRL_STATES.IDLE

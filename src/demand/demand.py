@@ -292,7 +292,7 @@ class SlaveDemand(Demand):
     """This class can be used when request are added from an external demand module."""
     rq_class = load_request_module("SlaveRequest")
     rq_parcel_class = load_request_module("SlaveParcelRequest")
-    def add_request(self, rq_info_dict, offer_id, routing_engine, sim_time, modal_state = G_RQ_STATE_MONOMODAL):
+    def add_request(self, rq_info_dict, routing_engine, sim_time, modal_state = G_RQ_STATE_MONOMODAL, offer_id=0):
         """ this function is used to add a new (person) request to the demand class
         :param rq_info_dict: dictionary with all information regarding the request input
         :param offer_id: used if there are different subrequests (TODO make optional? needed for moia)
