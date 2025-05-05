@@ -52,6 +52,6 @@ class Trainer:
                 batch = batch.to(self.device)
                 pred = model(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
                 pred_labels = (pred.view(-1) > self.threshold).float()
-                acc = (pred_labels[mask] == batch.y_dict[mask]).float().mean()
-                total_acc += acc.item()
-        return acc / num_batches
+                mean_batch_acc = (pred_labels[mask] == batch.y_dict[mask]).float().mean()
+                total_acc += mean_batch_acc.item()
+        return total_acc / num_batches
