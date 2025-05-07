@@ -1,0 +1,2 @@
+scenario_name,nr_charging_operators,infra_structure_name,ch_op_public_charging_station_f,op_depot_file,op_charging_method,op_min_soc_after_planstop,op_n_charge_station_query,op_n_charge_offer_per_station,op_fleet_composition
+mt_charging,1,example_infra,public_charging_stations.csv,depots.csv,Threshold_PCI,0.5,5,5,low_range_vehtype:8

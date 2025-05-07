@@ -22,6 +22,27 @@ void split(const std::string& str, Container& cont, char delim = ' '){
     }
 }
 
+std::string& trim_right(
+  std::string&       s,
+  const std::string& delimiters = " \f\n\r\t\v" )
+{
+  return s.erase( s.find_last_not_of( delimiters ) + 1 );
+}
+
+std::string& trim_left(
+  std::string&       s,
+  const std::string& delimiters = " \f\n\r\t\v" )
+{
+  return s.erase( 0, s.find_first_not_of( delimiters ) );
+}
+
+std::string& trim(
+  std::string&       s,
+  const std::string& delimiters = " \f\n\r\t\v" )
+{
+  return trim_left( trim_right( s, delimiters ), delimiters );
+}
+
 
 Network::Network(string node_path, string edge_path) {
 
@@ -42,6 +63,7 @@ Network::Network(string node_path, string edge_path) {
         while (!file.eof()) {
             string a;
             getline(file, a);
+            trim( a );
             vector<string> linesplits = {};
             split(a, linesplits, ',');
             int column_counter = 0;
@@ -118,6 +140,7 @@ Network::Network(string node_path, string edge_path) {
         while (!file2.eof()) {
             string a;
             getline(file2, a);
+            trim( a );
             vector<string> linesplits = {};
             split(a, linesplits, ',');
             //from_node,to_node,distance,travel_time,source_edge_id
@@ -194,6 +217,7 @@ void Network::updateEdgeTravelTimes(std::string file_path) {
         while (!file.eof()) {
             string a;
             getline(file, a);
+            trim( a );
             vector<string> linesplits = {};
             split(a, linesplits, ',');
             int column_counter = 0;

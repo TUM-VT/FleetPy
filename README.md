@@ -5,7 +5,9 @@ FleetPy is an open-source **fleet simulation framework** for modeling and contro
 
 > Whether you're a **researcher**, **transportation engineer**, or **mobility innovator**, FleetPy helps you analyze and optimize **fleet operations, routing strategies, and demand-responsive services**.
 
-📖 **[Read the Wiki](https://github.com/TUM-VT/FleetPy/wiki)** | 🛠 **[Installation Guide](#-installation)** | 🚀 **[Quickstart](#-quickstart)**  
+😶‍🌫️ **[Fleetpy for dummies](https://github.com/TUM-VT/FleetPy/wiki](https://github.com/TUM-VT/FleetPy/wiki/0_Fleetpy_for_dummies))** 📖 **[Read the Wiki](https://github.com/TUM-VT/FleetPy/wiki)** | 🛠 **[Installation Guide](#-installation)** | 🚀 **[Quickstart](#-quickstart)**  
+
+<img src="https://github.com/user-attachments/assets/ea839af5-3465-4bd1-8ed4-79c8fe0fd524" alt="Fleetpy Logo" height="400">
 
 ---
 
@@ -34,14 +36,14 @@ conda env create -f environment.yml
 conda activate fleetpy
 
 # Run an example simulation
-python3 run_examples.py
+python run_examples.py
 ```
 
 ✔ The results will be saved in `FleetPy/studies/example_study/results/`  
 ✔ To visualize the results, run:  
 
 ```bash
-python3 replay_pyplot.py scenario_result_directory
+python replay_pyplot.py scenario_result_directory
 ```
 
 ---
@@ -82,8 +84,7 @@ For advanced optimization tasks, install the necessary optimizers:
 To install Gurobi:
 
 ```bash
-conda config --add channels http://conda.anaconda.org/gurobi
-conda install gurobi
+python -m pip install gurobipy==12.0.1
 ```
 
 You can acquire a **free academic license** from [Gurobi](https://www.gurobi.com/academia/academic-program-and-licenses/). 🎓
@@ -122,7 +123,7 @@ In general, you can **save your data and study definitions** in the mentioned di
 To test an example scenario:  
 
 ```bash
-python3 run_examples.py
+python run_examples.py
 ```
 
 ✔ The output will be stored in:  
@@ -139,7 +140,7 @@ python3 run_examples.py
 To analyze trends:
 
 ```bash
-python3 FleetPy/src/evaluation/temporal.py scenario_result_directory
+python FleetPy/src/evaluation/temporal.py scenario_result_directory
 ```
 
 ---
@@ -149,10 +150,20 @@ python3 FleetPy/src/evaluation/temporal.py scenario_result_directory
 To visualize a **previously simulated scenario**, run:  
 
 ```bash
-python3 replay_pyplot.py scenario_result_directory <sim_seconds_per_real_second>
+python replay_pyplot.py scenario_result_directory <sim_seconds_per_real_second>
 ```
 
 🛑 *(Optional: Specify start time as an additional argument.)*
+
+---
+
+## Benchmark Data Sets
+
+Input data and corresponding example scenario files are available for large-scale case studies of Manhattan, NY, Chicago, IL, and Munich, Germany. This data can be used as benchmark data sets to test and compare new algorithms or to set up large-scale simulations quickly. The FleetPy input data can be downloaded here and has to be copied into the FleetPy/data folder:
+
+- Manhattan: https://doi.org/10.5281/zenodo.15187906
+- Chicago: https://doi.org/10.5281/zenodo.15189440
+- Munich: https://doi.org/10.5281/zenodo.15195726
 
 ---
 
@@ -164,7 +175,8 @@ We welcome contributions from the community! 🚀
 1. Fork the repo & create a feature branch (`git checkout -b new-feature`).  
 2. Commit your changes (`git commit -m "Added a cool feature"`).  
 3. Push to your branch (`git push origin new-feature`).  
-4. Open a Pull Request!  
+4. Make sure that the module tests are running (`\studies\module_tests\run_module_tests.py`).
+5. Open a Pull Request!  
 
 <!-- ... TODO: contributing.md 
 🔍 Check out [CONTRIBUTING.md](link) for guidelines.  
@@ -185,7 +197,7 @@ We welcome contributions from the community! 🚀
 
 ✔ **Windows 10 Pro x64**  
 ✔ **Chrome 79.0.3945**  
-✔ **Python 3.7**  
+✔ **Python 3.10**  
 
 ---
 

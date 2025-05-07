@@ -118,6 +118,9 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
             else:
                 LOG.debug(f"rejection for rid {rid_struct}")
                 self._create_rejection(prq, sim_time)
+                
+        if self.repo and not prq.get_reservation_flag():
+            self.repo.register_user_request(prq, sim_time)
 
         # record cpu time
         dt = round(time.perf_counter() - t0, 5)

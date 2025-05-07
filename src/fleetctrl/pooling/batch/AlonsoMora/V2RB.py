@@ -114,6 +114,9 @@ class V2RB():
                         struct_feasible_veh_plans.append(veh_plan)
                     else:
                         LOG.warning("(assigned) vehicle plan became structural infeasible! {}".format(veh_plan))
+                        LOG.warning(f" -> with with veh_obj : {veh_obj}")
+                        LOG.warning(f" -> and assigned route: {[str(x) for x in veh_obj.assigned_route]}")
+                        raise Exception("vehicle plan became structural infeasible!")
                 else:
                     veh_plan.update_plan(veh_obj, sim_time, routing_engine, list_passed_VRLs=list_passed_VRLs,
                                          keep_time_infeasible=False)
@@ -146,6 +149,7 @@ class V2RB():
         keep_rids = AlonsoMoraAssignment.getRidsFromRTVKey(lower_key)
         #only keep best route
         base_plan = self.veh_plans[0]
+        #LOG.debug(f"create lower v2rb {lower_key} from base plan {base_plan}")
         new_plan_list = []
         for ps in base_plan.list_plan_stops:
             if ps.is_locked_end():
@@ -184,9 +188,12 @@ class V2RB():
                                           change_nr_pax=change_nr_pax, duration=ps.get_duration_and_earliest_departure()[0], locked=ps.is_locked(),
                                           charging_power=ps.get_charging_power(), planstop_state=ps.get_state(), charging_task_id=ps.get_charging_task_id(),
                                           change_nr_parcels=ps.get_change_nr_parcels())
+                if ps.get_started_at() is not None:
+                    new_ps.set_started_at( ps.get_started_at() )
                 # new_ps = ps.copy()  
                 # new_ps.boarding_dict = new_boarding_dict
                 new_plan_list.append(new_ps)
         new_veh_plan = VehiclePlan(self.veh, sim_time, routing_engine, new_plan_list, external_pax_info=base_plan.pax_info.copy())
+        new_veh_plan.update_tt_and_check_plan(self.veh, sim_time, routing_engine, keep_feasible=True)
         return V2RB(routing_engine, rq_dict, sim_time, lower_key, self.veh, std_bt, add_bt, obj_function, orig_veh_plans=[new_veh_plan])
 

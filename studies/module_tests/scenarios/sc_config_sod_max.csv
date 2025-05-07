@@ -1,0 +1,8 @@
+scenario_name,pt_route_id,schedule_file,rq_file,pt_fixed_length,pt_regular_headway,pt_n_veh,pt_zone_min_detour_time,pt_zone_max_detour_time,terminus_id,gtfs_name,demand_name,pt_flex_length
+route_193_flex_0.0_demand_2000,193,193_schedules.csv,passenger_demand0.csv,5.7,300,13,0,0,3596,route_193,route_193_demand,0
+route_193_flex_1.0_demand_2000,193,193_schedules.csv,passenger_demand0.csv,4.7,300,13,680,680,3596,route_193,route_193_demand,1
+route_193_flex_2.0_demand_2000,193,193_schedules.csv,passenger_demand0.csv,3.7,300,13,1200,1200,3596,route_193,route_193_demand,2
+route_193_flex_3.0_demand_2000,193,193_schedules.csv,passenger_demand0.csv,2.7,300,13,1680,1680,3596,route_193,route_193_demand,3
+route_193_flex_4.0_demand_2000,193,193_schedules.csv,passenger_demand0.csv,1.7,300,13,2160,2160,3596,route_193,route_193_demand,4
+route_193_flex_5.0_demand_2000,193,193_schedules.csv,passenger_demand0.csv,0.7,300,13,2640,2640,3596,route_193,route_193_demand,5
+route_193_flex_5.6_demand_2000,193,193_schedules.csv,passenger_demand0.csv,0,300,13,2846.709143,2846.709143,3596,route_193,route_193_demand,5.611288095
