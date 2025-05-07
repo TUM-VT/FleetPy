@@ -219,7 +219,7 @@ class PlanStop(PlanStopBase):
     def __init__(self, position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={}, earliest_pickup_time_dict={}, latest_pickup_time_dict={},
                  change_nr_pax=0, change_nr_parcels=0, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None,
                  locked=False, locked_end=False, charging_power=0, planstop_state : G_PLANSTOP_STATES=G_PLANSTOP_STATES.MIXED,
-                 charging_task_id: Tuple[int, str] = None, status: Optional[VRL_STATES] = None):
+                 charging_task_id: Tuple[int, str] = None, status: Optional[VRL_STATES] = None, fixed_stop: bool = False):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param boarding_dict: dictionary with entries +1 -> list of request ids that board the vehicle there; -1 -> list of requests that alight the vehicle there
@@ -247,7 +247,8 @@ class PlanStop(PlanStopBase):
         self.boarding_dict = boarding_dict  # +1: [rids] for boarding | -1: [rids] for alighting
         self.locked = locked
         self.locked_end = locked_end
-        
+        self.fixed_stop = fixed_stop
+
         # charging
         self.charging_power = charging_power
         
@@ -292,7 +293,7 @@ class PlanStop(PlanStopBase):
         self.infeasible_locked = False
 
         self.charging_task_id: Tuple[int, str] = charging_task_id
-        
+
     def get_pos(self) -> tuple:
         """returns network position of this plan stop
         :return: network position tuple """
@@ -325,7 +326,7 @@ class PlanStop(PlanStopBase):
                          latest_pickup_time_dict=self.latest_pickup_time_dict.copy(), change_nr_pax=self.change_nr_pax, change_nr_parcels=self.change_nr_parcels,
                          earliest_start_time=self.direct_earliest_start_time, latest_start_time=self.direct_latest_start_time,
                          duration=self.direct_duration, earliest_end_time=self.direct_earliest_end_time, locked=self.locked, locked_end=self.locked_end,
-                         charging_power=self.charging_power, charging_task_id=self.charging_task_id, planstop_state=self.state)
+                         charging_power=self.charging_power, charging_task_id=self.charging_task_id, planstop_state=self.state, fixed_stop=self.fixed_stop)
         cp_ps._planned_arrival_time = self._planned_arrival_time
         cp_ps._planned_departure_time = self._planned_departure_time
         cp_ps._planned_arrival_soc = self._planned_arrival_soc
@@ -471,10 +472,18 @@ class PlanStop(PlanStopBase):
         else:
             return False
 
+    def is_fixed_stop(self) -> bool:
+        """
+        return whether this is a fixed stop (semi-on-demand)
+        """
+        return self.fixed_stop
+
 class BoardingPlanStop(PlanStop):
     """ this class can be used to generate a plan stop where only boarding processes take place """
     def __init__(self, position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={},
-                 earliest_pickup_time_dict={}, latest_pickup_time_dict={}, change_nr_pax=0, change_nr_parcels=0, duration=None, locked=False):
+                 earliest_pickup_time_dict={}, latest_pickup_time_dict={}, change_nr_pax=0, change_nr_parcels=0,
+                 duration=None, locked=False,
+                 earliest_start_time=None, latest_start_time=None, earliest_end_time=None, fixed_stop=False):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param boarding_dict: dictionary with entries +1 -> list of request ids that board the vehicle there; -1 -> list of requests that alight the vehicle there
@@ -490,14 +499,14 @@ class BoardingPlanStop(PlanStop):
         super().__init__(position, boarding_dict=boarding_dict, max_trip_time_dict=max_trip_time_dict,
                          latest_arrival_time_dict=latest_arrival_time_dict, earliest_pickup_time_dict=earliest_pickup_time_dict,
                          latest_pickup_time_dict=latest_pickup_time_dict, change_nr_pax=change_nr_pax, change_nr_parcels=change_nr_parcels,
-                         earliest_start_time=None, latest_start_time=None,
-                         duration=duration, earliest_end_time=None, locked=locked,
-                         charging_power=0, planstop_state=G_PLANSTOP_STATES.BOARDING)
+                         earliest_start_time=earliest_start_time, latest_start_time=latest_start_time,
+                         duration=duration, earliest_end_time=earliest_end_time, locked=locked,
+                         charging_power=0, planstop_state=G_PLANSTOP_STATES.BOARDING, fixed_stop=fixed_stop)
         
 class RoutingTargetPlanStop(PlanStop):
     """ this plan stop can be used to schedule a routing target for vehicles with the only task to drive there
         i.e repositioning"""
-    def __init__(self, position, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None, locked=False, locked_end=True, planstop_state=G_PLANSTOP_STATES.REPO_TARGET):
+    def __init__(self, position, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None, locked=False, locked_end=False, planstop_state=G_PLANSTOP_STATES.REPO_TARGET):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param earliest_start_time: (float) absolute earliest start time this plan stop is allowed to start
@@ -550,6 +559,7 @@ class VehiclePlan:
         self.list_plan_stops = list_plan_stops
         self.utility = None
         # pax info:
+
         # rid -> [start_boarding, end_alighting] where start_boarding can be in past or planned
         # rid -> [start_boarding_time] in case only boarding is planned
         self.pax_info = external_pax_info
@@ -627,6 +637,29 @@ class VehiclePlan:
         else:
             new_veh_plan.list_plan_stops.insert(position, plan_stop)
         new_veh_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, keep_feasible=True)
+
+        if return_copy:
+            return new_veh_plan
+
+    def delete_plan_stop(self, plan_stop : PlanStopBase, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase, return_copy : bool=False):
+        """This method removes a plan stop from an existing vehicle plan. After that, it updates the plan.
+
+        :param plan_stop: plan stop to remove
+        :param veh_obj: simulation vehicle instance
+        :param sim_time: current simulation time
+        :param routing_engine: routing engine
+        :param return_copy: controls whether the current plan is changed or a changed copy will be returned
+        :return: None (return_copy=False) or VehiclePlan instance (return_copy=True)
+        """
+        if return_copy:
+            new_veh_plan = self.copy()
+        else:
+            new_veh_plan = self
+        new_veh_plan.list_plan_stops.remove(plan_stop)
+        new_veh_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, keep_feasible=True)
+
+        if return_copy:
+            return new_veh_plan
 
     def update_plan(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase, list_passed_VRLs : List[VehicleRouteLeg]=None, keep_time_infeasible : bool=True) -> bool:
         """This method checks whether the simulation vehicle passed some of the planned stops and removes them from the
@@ -726,31 +759,46 @@ class VehiclePlan:
                                                       keep_feasible=keep_time_infeasible)
         return self.feasible
 
-    def return_intermediary_plan_state(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase, stop_index : int) -> dict:
+    def return_intermediary_plan_state(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase, stop_index : int,
+                                       init_plan_state:dict=None) -> dict:
         """ this function evalutes the future vehicle state after it would have performed the next stop_index plan stops of the vehicle plan
         and returns a dictionary specifing the vehicle state
         :param veh_obj: reference the vehicle object
         :param sim_time: simulation time
         :param routing_engine: routing engine reference
         :param stop_index: index of list plan stops of vehicle plan until the state is evaluated
+        :param init_plan_state: {} requires "stop_index" "c_index", "c_pos", "c_soc", "c_time", "c_pax" and "pax_info"
         :return: dictionary specifying the future vehicle state"""
-        c_pos = veh_obj.pos
-        c_soc = veh_obj.soc
-        c_time = sim_time
-        if self.list_plan_stops[0].is_locked():  # set time at start_time of boarding process
-            boarding_startet = self.list_plan_stops[0].get_started_at()
-            if boarding_startet is not None:
-                c_time = boarding_startet
-        key_translator = {sub_rid[0]: sub_rid for sub_rid in self.pax_info.keys() if type(sub_rid) == tuple}
-        c_pax = {key_translator.get(rq.get_rid_struct(), rq.get_rid_struct()): 1 for rq in veh_obj.pax}
-        nr_pax = veh_obj.get_nr_pax_without_currently_boarding()  # sum([rq.nr_pax for rq in veh_obj.pax])
-        nr_parcels = veh_obj.get_nr_parcels_without_currently_boarding()
-        self.pax_info = {}
-        for rq in veh_obj.pax:
-            rid = key_translator.get(rq.get_rid_struct(), rq.get_rid_struct())
-            self.pax_info[rid] = [rq.pu_time]
+        if init_plan_state is not None:
+            start_stop_index = init_plan_state["stop_index"] + 1
+            c_pos = init_plan_state["c_pos"]
+            c_soc = init_plan_state["c_soc"]
+            c_time = init_plan_state["c_time"]
+            c_pax = init_plan_state["c_pax"].copy()
+            nr_pax = init_plan_state["c_nr_pax"]
+            nr_parcels = init_plan_state["c_nr_parcels"]
+            self.pax_info = {}
+            for k, v in init_plan_state["pax_info"].items():
+                self.pax_info[k] = v.copy()
+        else:
+            start_stop_index = 0
+            c_pos = veh_obj.pos
+            c_soc = veh_obj.soc
+            c_time = sim_time
+            if self.list_plan_stops[0].is_locked():  # set time at start_time of boarding process
+                boarding_startet = self.list_plan_stops[0].get_started_at()
+                if boarding_startet is not None:
+                    c_time = boarding_startet
+            key_translator = {sub_rid[0]: sub_rid for sub_rid in self.pax_info.keys() if type(sub_rid) == tuple}
+            c_pax = {key_translator.get(rq.get_rid_struct(), rq.get_rid_struct()): 1 for rq in veh_obj.pax}
+            nr_pax = veh_obj.get_nr_pax_without_currently_boarding()  # sum([rq.nr_pax for rq in veh_obj.pax])
+            nr_parcels = veh_obj.get_nr_parcels_without_currently_boarding()
+            self.pax_info = {}
+            for rq in veh_obj.pax:
+                rid = key_translator.get(rq.get_rid_struct(), rq.get_rid_struct())
+                self.pax_info[rid] = [rq.pu_time]
         # for pstop in self.list_plan_stops[:stop_index + 1]:
-        for i, pstop in enumerate(self.list_plan_stops[:stop_index + 1]):
+        for i, pstop in enumerate(self.list_plan_stops[start_stop_index:stop_index + 1]):
             if c_pos != pstop.get_pos():
                 _, tt, tdist = routing_engine.return_travel_costs_1to1(c_pos, pstop.get_pos())
                 c_pos = pstop.get_pos()
@@ -940,7 +988,7 @@ class VehiclePlan:
         """
         for ps in self.list_plan_stops:
             if prq.get_rid_struct() in ps.get_list_boarding_rids():
-                ps.update_rid_boarding_time_constraints(new_latest_pickup_time=new_lpt, new_earliest_pickup_time=new_ept)
+                ps.update_rid_boarding_time_constraints(prq.get_rid_struct(), new_latest_pickup_time=new_lpt, new_earliest_pickup_time=new_ept)
         return self.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, keep_feasible=keep_feasible)
 
     def copy_and_remove_empty_planstops(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase):
@@ -962,5 +1010,5 @@ class VehiclePlan:
                 rm = True
         if rm:
             new_plan.list_plan_stops = tmp
-            new_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
+            new_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, keep_feasible=True)
         return new_plan

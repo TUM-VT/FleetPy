@@ -1,0 +1,7 @@
+scenario_name,op_max_wait_time,op_max_detour_time_factor,op_add_constant_detour_time,op_const_boarding_time,op_vr_control_func_dict
+mt_rp_param_wt,480,40,,30,func_key:distance_and_user_times_with_walk;vot:0.45
+mt_rp_param_dt,300,60,,30,func_key:distance_and_user_times_with_walk;vot:0.45
+mt_rp_param_adt,300,0,120,30,func_key:distance_and_user_times_with_walk;vot:0.45
+mt_rp_param_bt,300,40,,60,func_key:distance_and_user_times_with_walk;vot:0.45
+mt_rp_param_obj_td,300,40,,30,func_key:total_distance
+mt_rp_param_obj_ut,300,40,,30,func_key:user_times

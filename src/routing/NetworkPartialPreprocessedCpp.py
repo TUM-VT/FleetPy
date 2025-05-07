@@ -86,12 +86,13 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         if scenario_time is None:
             f = "base"
         else:
-            f = str(self.travel_time_file_folders[scenario_time])
+            f = str(self.travel_time_file_infos[scenario_time])
         try:
             self.tt_table = np.load(os.path.join(network_name_dir, f, "tt_matrix.npy"))
             self.dis_table = np.load(os.path.join(network_name_dir, f, "dis_matrix.npy"))
             self.max_preprocessed_index = self.tt_table.shape[0]
             LOG.info(" ... travel time tables loaded until index {}".format(self.max_preprocessed_index))
+            print(" ... travel time tables loaded until index {}".format(self.max_preprocessed_index))
         except FileNotFoundError:
             LOG.warning(" ... no preprocessing files found!")
 
@@ -106,7 +107,7 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         LOG.debug(f"update network {simulation_time} | preproc index {self.max_preprocessed_index}")
         self.sim_time = simulation_time
         if update_state:
-            if self.travel_time_file_folders.get(simulation_time, None) is not None:
+            if self.travel_time_file_infos.get(simulation_time, None) is not None:
                 LOG.info("update travel times in network {}".format(simulation_time))
                 self.load_tt_file(simulation_time)
                 self.travel_time_infos = {}
@@ -118,7 +119,31 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         loads new travel time files for scenario_time
         """
         super().load_tt_file(scenario_time)
-        self._load_travel_info_tables(self.network_name_dir, scenario_time=scenario_time)
+        if self._tt_infos_from_folder:
+            self._load_travel_info_tables(self.network_name_dir, scenario_time=scenario_time)
+            
+    def _return_node_to_node_travel_costs_1to1(self, origin_node, destination_node):
+        s = None
+        if origin_node < self.max_preprocessed_index and destination_node < self.max_preprocessed_index:
+            tt, dis = self.tt_table[origin_node][destination_node], self.dis_table[origin_node][destination_node]
+            if self._current_tt_factor is not None:
+                tt = tt * self._current_tt_factor
+                s = (tt, tt, dis)
+            else:
+                s = (tt, tt, dis)
+        else:
+            s = self.travel_time_infos.get( (origin_node, destination_node) , None)
+        if s is None:
+            s = self.cpp_router.computeTravelCosts1To1(origin_node, destination_node)
+            if self._current_tt_factor is not None:
+                s = (s[0] * self._current_tt_factor, s[1])
+            if s[0] < -0.001:
+                print("no route found? {} -> {} {}".format(origin_node, destination_node, s))
+                s = (float("inf"), float("inf"))
+            s = (s[0], s[0], s[1])
+            self._add_to_database(origin_node, destination_node, s[0], s[1], s[2])
+        return s
+        
 
     def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None):
         """
@@ -131,6 +156,10 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         """
         if customized_section_cost_function is not None:
             return super().return_travel_costs_1to1(origin_position, destination_position, customized_section_cost_function = customized_section_cost_function)
+        
+        if origin_position[1] is None and destination_position[1] is None:
+            return self._return_node_to_node_travel_costs_1to1(origin_position[0], destination_position[0])
+        
         trivial_test = self.test_and_get_trivial_route_tt_and_dis(origin_position, destination_position)
         if trivial_test is not None:
             return trivial_test[1]
@@ -147,20 +176,25 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         #LOG.warning("get1to1: {} -> {} table: {} dict {}".format(origin_node, destination_node, self.max_preprocessed_index, self.travel_time_infos.get( (origin_node, destination_node) , None)))
         if customized_section_cost_function is None:
             if origin_node < self.max_preprocessed_index and destination_node < self.max_preprocessed_index:
-                s = (self.tt_table[origin_node][destination_node], self.tt_table[origin_node][destination_node], self.dis_table[origin_node][destination_node])
+                tt, dis = self.tt_table[origin_node][destination_node], self.dis_table[origin_node][destination_node]
+                if self._current_tt_factor is not None:
+                    tt = tt * self._current_tt_factor
+                    s = (tt, tt, dis)
+                else:
+                    s = (tt, tt, dis)
             else:
                 s = self.travel_time_infos.get( (origin_node, destination_node) , None)
-        if s is not None:
-            return s
-        else:
+        if s is None:
             s = self.cpp_router.computeTravelCosts1To1(origin_node, destination_node)
+            if self._current_tt_factor is not None:
+                s = (s[0] * self._current_tt_factor, s[1])
             if s[0] < -0.001:
                 print("no route found? {} -> {} {}".format(origin_node, destination_node, s))
                 s = (float("inf"), float("inf"))
-            res = (s[0] + origin_overhead[0] + destination_overhead[0], s[0] + origin_overhead[1] + destination_overhead[1], s[1] + origin_overhead[2] + destination_overhead[2])
+            s = (s[0], s[0], s[1])
             if customized_section_cost_function is None:
-                self._add_to_database(origin_node, destination_node, s[0], s[0], s[1])
-            return res
+                self._add_to_database(origin_node, destination_node, s[0], s[1], s[2])
+        return (s[0] + origin_overhead[0] + destination_overhead[0], s[0] + origin_overhead[1] + destination_overhead[1], s[2] + origin_overhead[2] + destination_overhead[2])
 
     def add_travel_infos_to_database(self, travel_info_dict):
         """ this function can be used to include externally computed (e.g. multiprocessing) route travel times
@@ -188,9 +222,10 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
 
     def _reset_internal_attributes_after_travel_time_update(self):
         self.travel_time_infos = {}
-        self.tt_table = None
-        self.dis_table = None
-        self.max_preprocessed_index = -1
+        if self._tt_infos_from_folder:
+            self.tt_table = None
+            self.dis_table = None
+            self.max_preprocessed_index = -1
 
     def _add_to_database(self, o_node, d_node, cfv, tt, dis):
         """ this function is call when new routing results have been computed

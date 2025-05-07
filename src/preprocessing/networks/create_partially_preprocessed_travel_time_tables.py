@@ -32,7 +32,7 @@ def get_travel_times_available(network_path, network_dynamics_file):
     routing_engine = Network(network_path, network_dynamics_file)
     travel_times = []
     folders_found = {}
-    for sim_time, folder in routing_engine.travel_time_file_folders.items():
+    for sim_time, folder in routing_engine.travel_time_file_infos.items():
         if folders_found.get(folder):
             continue
         folders_found[folder] = 1
@@ -101,7 +101,7 @@ def createStopNodeTravelInfoTables(network_path, network_dynamics_file = None, s
     if sim_time is None:
         folder_out = os.path.join(network_path, "base")
     else:
-        folder_out = routing_engine.travel_time_file_folders[sim_time]
+        folder_out = routing_engine.travel_time_file_infos[sim_time]
     np.save(os.path.join(folder_out, "tt_matrix"), tt_matrix)
     np.save(os.path.join(folder_out, "dis_matrix"), dis_matrix)
 

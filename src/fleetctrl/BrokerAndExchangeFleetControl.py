@@ -109,6 +109,9 @@ class BrokerDecisionCtrl(PoolingIRSAssignmentBatchOptimization):
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
         if t_pu_earliest - sim_time > self.opt_horizon:
             prq.set_reservation_flag(True)
+            
+        if self.repo and not prq.get_reservation_flag():
+            self.repo.register_user_request(prq, sim_time)
 
         list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
         if len(list_tuples) > 0:
@@ -238,7 +241,7 @@ class BrokerExChangeCtrl(RidePoolingBatchOptimizationFleetControlBase):
         self.fc_type = None
         n_op = scenario_parameters[G_NR_OPERATORS]
         self.prob_rq_share = scenario_parameters.get(G_MULTIOP_PREF_OP_PROB, [1/n_op for o in range(n_op)])[self.op_id]
-        self.fc_type = scenario_parameters.get(G_FC_TYPE)
+        self.fc_type = scenario_parameters.get(G_RA_FC_TYPE)
         # parameters to evaluate willingness TODO if method useful add to scenario-parameters
         self.evaluate_willing_ness_method = operator_attributes.get(G_MULTIOP_EVAL_METHOD, "")  # "forecast" or "reactive"
 

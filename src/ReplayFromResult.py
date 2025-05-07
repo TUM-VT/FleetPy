@@ -403,7 +403,7 @@ class Replay(VehicleMovementSimulation):
         # ----------------
         print(f"... loading scenario information")
         scenario_parameters, list_operator_attributes, _ = load_scenario_inputs(output_dir)
-        dir_names = get_directory_dict(scenario_parameters)
+        dir_names = get_directory_dict(scenario_parameters, list_operator_attributes)
         replay_mode = scenario_parameters[G_SIM_REPLAY_FLAG]
         if not replay_mode:
             raise AssertionError("Original simulation was not saved in replay mode!")
@@ -624,12 +624,18 @@ class ReplayPyPlot(Replay):
         self.plot_2=plot_2
         self.plot_3=plot_3
         self.plot_args = plot_args
-        self.color_list = color_list 
+        self.color_list = color_list
+        self.output_dir = None
 
     def load_scenario(self, output_dir, start_time_in_seconds = None, end_time_in_seconds = None, plot_extend=None):
-        super().load_scenario(output_dir, start_time_in_seconds=start_time_in_seconds, 
+        self.output_dir = output_dir
+        super().load_scenario(output_dir, start_time_in_seconds=start_time_in_seconds,
                               end_time_in_seconds=end_time_in_seconds,parcels=self.parcels,passengers=self.passengers)
         self.plots_dir = Path(output_dir).joinpath("plots")
+        # check if plots_dir exists and create it if not
+        if not self.plots_dir.exists():
+            self.plots_dir.mkdir()
+
         if plot_extend is None:
             bounds = self.active_nodes_gdf.bounds
             self._map_extent = (bounds.minx.min(), bounds.maxx.max(), bounds.miny.min(), bounds.maxy.max())
@@ -641,10 +647,13 @@ class ReplayPyPlot(Replay):
         if self.live_plot is True:
             self._manager = Manager()
             self._shared_dict = self._manager.dict()
-            self._plot_class_instance = PyPlot(self.nw_dir, self._shared_dict, plot_extent=self._map_extent)
+            # pass output_dir to PyPlot (for PT alignment)
+            self._plot_class_instance = PyPlot(self.nw_dir, self._shared_dict, plot_extent=self._map_extent,
+                                               output_dir=self.output_dir)
             self._plot_class_instance.start()
         else:
-            self._plot_class_instance = PyPlot(self.nw_dir, self._shared_dict, str(self.plots_dir), self._map_extent)
+            self._plot_class_instance = PyPlot(self.nw_dir, self._shared_dict, str(self.plots_dir), self._map_extent,
+                                               output_dir=self.output_dir)
         if not self._started:
             if self._sc_loaded:
                 self._started = True
@@ -685,7 +694,7 @@ class ReplayPyPlot(Replay):
             
             images = []
             for filename in images_p:
-                images.append(imageio.imread(filename))
+                images.append(imageio.v2.imread(filename))
             imageio.mimsave(os.path.join(self.plots_dir, video_name), images)
             print("Video created: {}".format(os.path.join(self.plots_dir, video_name)))
 
@@ -739,8 +748,13 @@ class ReplayPyPlot(Replay):
         #'0 (reposition)', '0 (route)','1','2','3','4','idle'
         pax_info['0 (reposition)'] = intra_pax_list[(intra_pax_list[state] == 0) & (intra_pax_list['status'] == 'reposition')].shape[0]
         pax_info['0 (route)'] = intra_pax_list[(intra_pax_list[state] == 0) & (intra_pax_list['status'] == 'route')].shape[0]
-        for i in range(1, 5): # TODO vehicle capacity!
-            pax_info[str(i)] = intra_pax_list[intra_pax_list[state] == i].shape[0]
+        # TODO: load vehicle capacity
+        n_pax_max = 4
+
+        # n_pax_max = intra_pax_list[state].dropna().astype(int).max()
+        if n_pax_max > 0:
+            for i in range(1, int(n_pax_max)+1): # TODO vehicle capacity!
+                pax_info[str(i)] = intra_pax_list[intra_pax_list[state] == i].shape[0]
             
         counts = {}
         for status in self.poss_veh_states:
@@ -749,6 +763,7 @@ class ReplayPyPlot(Replay):
 
         sim_time = datetime.datetime(self.dtuple[0], self.dtuple[1], self.dtuple[2], 0,0,0) + \
                    datetime.timedelta(seconds=self.replay_time)
+        #sim_time = str(datetime.timedelta(seconds=self.replay_time))
         # TODO # add dictionary for additional geographic information: key -> list_of_coordinates
         dict_add_coord = {}
         # TODO # add dictionary for additional scalar information: key -> value
@@ -788,4 +803,4 @@ class ReplayPyPlot(Replay):
                 self._plot_class_instance.save_single_plot(sim_time)
             if not os.path.isdir(self.plots_dir):
                 os.mkdir(self.plots_dir)
-            list_pos_df.to_csv(os.path.join(self.plots_dir, "data_points_{}.csv".format(self.replay_time)))
+            #list_pos_df.to_csv(os.path.join(self.plots_dir, "data_points_{}.csv".format(self.replay_time)))

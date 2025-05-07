@@ -115,3 +115,31 @@ class RollingHorizonReservation(ReservationBase):
         :param sim_time: simulation time """
         pass
     
+    def get_upcoming_unassigned_reservation_requests(self, t0, t1, with_assigned=False):
+        """ this function returns exact future request attributes of unassigned reservation requests in the intervall  [t0, t1] which can be used for repositioning
+        :param t0: start of forecast time horizon
+        :type t0: float
+        :param t1: end of forecast time horizon
+        :type t1: float
+        :param request_attribute: name of the attribute of the request class. if given, only returns requests with this attribute
+        :type request_attribute: str
+        :param attribute_value: if and request_attribute given: only returns future requests with this attribute value
+        :type attribute_value: type(request_attribute)
+        :param scale: (not for this class) scales forecast distribution by this values
+        :type scale: float
+        :return: list of (time, origin_node, destination_node) of future requests
+        :rtype: list of 3-tuples
+        """
+        rid_list = []
+        for rid, epa in self.sorted_rids_with_epa:
+            if t0 <= epa <= t1:
+                rid_list.append(rid)
+            elif epa > t1:
+                break
+        return_list = []
+        for rid in rid_list:
+            prq = self.active_reservation_requests[rid]
+            return_list.append((prq.get_o_stop_info()[1], prq.get_o_stop_info()[0][0], prq.get_d_stop_info()[0][0]))
+        LOG.debug(f"upcoming unassigned reservation requests in intervall [{t0}, {t1}]: {return_list}")
+        return return_list
+    

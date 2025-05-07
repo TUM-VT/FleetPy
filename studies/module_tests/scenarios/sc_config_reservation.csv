@@ -1,0 +1,4 @@
+scenario_name,rq_file,op_reservation_module,op_short_term_horizon,sim_env,op_module,user_max_decision_time,op_rh_reservation_max_routes,op_res_assignment_horizon,op_vr_control_func_dict,op_res_opt_timestep,op_res_batch_size,op_res_batch_concat
+mt_res_roll_hor,example_100_res_50.csv,RollingHorizon,180,ImmediateDecisionsSimulation,PoolingIRSAssignmentBatchOptimization,0,3,,func_key:distance_and_user_times_man_with_reservation;vot:0.45833;dc:0.0694;rrw:10,300,,
+mt_res_roll_horNoGu,example_100_res_50.csv,RollingHorizonNoGuarantee,180,ImmediateDecisionsSimulation,PoolingIRSAssignmentBatchOptimization,0,3,,func_key:distance_and_user_times_man_with_reservation;vot:0.45833;dc:0.0694;rrw:10,300,,
+mt_res_roll_ContBatch,example_100_res_50.csv,ContinuousBatchRevelationReservation,180,ImmediateDecisionsSimulation,PoolingIRSAssignmentBatchOptimization,0,3,540,func_key:distance_and_user_times_man_with_reservation;vot:0.45833;dc:0.0694;rrw:10,300,5,2

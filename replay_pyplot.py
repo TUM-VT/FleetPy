@@ -65,14 +65,15 @@ if __name__ == "__main__":
                         "status_count,occupancy_count, occupancy_average, occupancy_stack_chart, waiting_time_average, ride_time_average, detour_time_average,service_rate")
     # add argument called status_type that takes two values passenger and parcel
     parser.add_argument('--map_plot', type=str, 
-                        help='determines the type of status to plot Either "occupancy" or "vehicle_status"',default="occupancy")
+                        help='determines the type of status to plot Either "occupancy" or "vehicle_status" or "zone"',default="occupancy")
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--parcels',action='store_true',help='if set, plots parcel data',default=False)
     group.add_argument('--passengers',action='store_true',help='if set, plots passenger data',default=False)
 
+
     args = parser.parse_args()
 
-    if args.map_plot != "occupancy" and args.map_plot != "vehicle_status":
+    if args.map_plot != "occupancy" and args.map_plot != "vehicle_status" and args.map_plot != "zone":
         raise IOError("Incorrect map plot type!")
 
     main(args.output_dir, args.sim_seconds_per_real_second, start_time_in_seconds = args.start_time_in_seconds,

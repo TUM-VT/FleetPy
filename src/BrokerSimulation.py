@@ -118,8 +118,7 @@ class BrokerDecisionSimulation(FleetSimulationBase):
         self.update_sim_state_fleets(sim_time - self.time_step, sim_time)
         new_travel_times = self.routing_engine.update_network(sim_time)
         if new_travel_times:
-            for op_id in range(self.n_op):
-                self.operators[op_id].inform_network_travel_time_update(sim_time)
+            self.broker.inform_network_travel_time_update(sim_time)
         # 2)
         list_undecided_travelers = list(self.demand.get_undecided_travelers(sim_time))
         last_time = sim_time - self.time_step
@@ -129,16 +128,9 @@ class BrokerDecisionSimulation(FleetSimulationBase):
         # 3)
         for rid, rq_obj in list_undecided_travelers + list_new_traveler_rid_obj:
             # send all requests to all operators
-            for op_id in range(self.n_op):
-                LOG.debug(f"Request {rid}: To operator {op_id} ...")
-                self.operators[op_id].user_request(rq_obj, sim_time)
+            self.broker.inform_request(rid, rq_obj, sim_time)
             # get offers and choose best option (broker criteria)
-            operator_offers = {}
-            for op_id in range(self.n_op):
-                amod_offer = self.operators[op_id].get_current_offer(rid)
-                LOG.debug(f"amod offer {amod_offer}")
-                if amod_offer is not None:
-                    operator_offers[op_id] = amod_offer
+            operator_offers = self.broker.collect_offers(rid)
             operator_offers = self._broker_decision(rq_obj, operator_offers)
             for op_id, amod_offer in operator_offers.items():
                 if amod_offer is not None:
