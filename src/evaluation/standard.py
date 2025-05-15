@@ -1,6 +1,7 @@
 import os
 import sys
 import glob
+import ast
 import numpy as np
 import pandas as pd
 
@@ -66,7 +67,7 @@ def decode_offer_str(offer_str):
         return {}
     for offer_str in offer_strs:
         x = offer_str.split(":")
-        op = int(x[0])
+        op = ast.literal_eval(x[0])
         vals = ":".join(x[1:])
         if len(vals) == 0:
             continue
@@ -221,6 +222,10 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
     number_total_travelers = user_stats[G_RQ_PAX].sum()
 
     for op_id, op_users in user_stats.groupby(G_RQ_OP_ID):
+        if op_id == -2:
+            # skip pt operator
+            continue
+
         op_name = "?"
         
         op_reservation_horizon = list_operator_attributes[int(op_id)].get(G_RA_OPT_HOR,0)

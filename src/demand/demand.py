@@ -2,7 +2,7 @@
 # standard distribution imports
 # -----------------------------
 import logging
-
+import typing as tp
 # additional module imports (> requirements)
 # ------------------------------------------
 import numpy as np
@@ -13,6 +13,9 @@ pd.options.mode.chained_assignment = None
 # -----------
 from src.misc.distributions import draw_from_distribution_dict
 from src.misc.init_modules import load_request_module
+if tp.TYPE_CHECKING:
+    from src.demand.TravelerModels import RequestBase
+    from src.routing.NetworkBase import NetworkBase
 
 # global variables
 # ----------------
@@ -216,6 +219,47 @@ class Demand:
                 list_new_traveler_rid_obj.append((rid, rq))
         LOG.debug(f"{len(list_new_traveler_rid_obj)} new travelers join the simulation at time {simulation_time}.")
         return list_new_traveler_rid_obj
+    
+    def create_sub_requests(
+            self, 
+            rq_obj: 'RequestBase', 
+            subtrip_id: int, 
+            mod_o_node: int,
+            mod_d_node: int,
+            mod_start_time: int,
+            parent_modal_state: RQ_MODAL_STATE,
+        ) -> 'RequestBase':
+        """This method creates the sub-requests for the given request.
+        The new sub-request ids are created by the broker class for the intermodal request.
+
+        Args:
+            rq_obj (RequestBase): the parent request object
+            subtrip_id (int): the subtrip id
+            mod_o_node (int): the origin node of the sub-request
+            mod_d_node (int): the destination node of the sub-request
+            mod_start_time (int): the start time of the sub-request
+            parent_modal_state (RQ_MODAL_STATE): the parent modal state
+        """
+        # TODO: Implement this method
+        # TODO: The new sub-request ids should be added to the self.rq_db
+        # TODO: Check if the new sub-request ids should be added to the self.undecided_rq or somewhere else
+        # TODO: Use the create_SubTripRequest method to store the sub-requests
+        # TODO: Whether the addRequest method in class SlaveDemand(Demand) should be used
+        # TODO: Check wether the broker should directly call the addRequest method or if the SlaveDemand class should be used
+        
+        sub_rq_obj: 'RequestBase' = rq_obj.create_SubTripRequest(
+                                                                subtrip_id,
+                                                                mod_o_node,
+                                                                mod_d_node,
+                                                                mod_start_time,
+                                                                parent_modal_state,
+                                                                self.routing_engine
+                                                                )
+        # Use the sub_rid_struct as the key for the sub-request: rid_struct = rid_parent + "_" + subtrip_id
+        sub_rid_struct: str = sub_rq_obj.get_rid_struct()
+        self.rq_db[sub_rid_struct] = sub_rq_obj
+        LOG.debug(f"Created sub-request {sub_rid_struct} for request {rq_obj.get_rid_struct()}")
+        return sub_rq_obj   
 
     def get_undecided_travelers(self, simulation_time):
         """This method returns the list of currently undecided requests.
@@ -292,7 +336,7 @@ class SlaveDemand(Demand):
     """This class can be used when request are added from an external demand module."""
     rq_class = load_request_module("SlaveRequest")
     rq_parcel_class = load_request_module("SlaveParcelRequest")
-    def add_request(self, rq_info_dict, offer_id, routing_engine, sim_time, modal_state = G_RQ_STATE_MONOMODAL):
+    def add_request(self, rq_info_dict, offer_id, routing_engine, sim_time, modal_state = RQ_MODAL_STATE.MONOMODAL):
         """ this function is used to add a new (person) request to the demand class
         :param rq_info_dict: dictionary with all information regarding the request input
         :param offer_id: used if there are different subrequests (TODO make optional? needed for moia)
@@ -304,7 +348,7 @@ class SlaveDemand(Demand):
         rq_info_dict[G_RQ_TIME] = sim_time
         if rq_info_dict.get(G_RQ_LDT) is None:
             rq_info_dict[G_RQ_LDT] = 0
-        if modal_state == G_RQ_STATE_MONOMODAL:
+        if modal_state == RQ_MODAL_STATE.MONOMODAL:
             # original request
             rq_obj = self.rq_class(rq_info_dict, routing_engine, 1, self.scenario_parameters)
             rq_obj.set_direct_route_travel_infos(routing_engine)
@@ -317,7 +361,7 @@ class SlaveDemand(Demand):
             mod_o_node = rq_info_dict[G_RQ_ORIGIN]
             mod_d_node = rq_info_dict[G_RQ_DESTINATION]
             mod_start_time = rq_info_dict[G_RQ_EPT]
-            rq_obj = parent_request.create_SubTripRequest(offer_id, mod_o_node, mod_d_node, mod_start_time, modal_state = modal_state)
+            rq_obj = parent_request.create_SubTripRequest(offer_id, mod_o_node, mod_d_node, mod_start_time, modal_state = modal_state, routing_engine = routing_engine)
             rq_obj.set_direct_route_travel_infos(routing_engine)
         # use rid-struct as key
         self.rq_db[rq_obj.get_rid_struct()] = rq_obj

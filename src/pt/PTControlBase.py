@@ -2,16 +2,15 @@
 # standard distribution imports
 # -----------------------------
 import logging
-import time
+import typing as tp
 from abc import abstractmethod, ABCMeta
 
 # additional module imports (> requirements)
 # ------------------------------------------
 
-
 # src imports
 # -----------
-
+from src.simulation.Offers import TravellerOffer
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -19,8 +18,6 @@ from abc import abstractmethod, ABCMeta
 from src.misc.globals import *
 
 LOG = logging.getLogger(__name__)
-LARGE_INT = 100000000
-BUFFER_SIZE = 100
 
 INPUT_PARAMETERS_PTControlBase = {
     "doc" : "this class is the base class representing an PT operator",
@@ -46,16 +43,33 @@ class PTControlBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def return_pt_travel_costs_1to1(self):
-        """This method will return the pt travel costs (time) of the fastest journey between two pt stations.
+    def return_fastest_pt_journey_1to1(self):
+        """This method will return the fastest pt journey plan between two pt stations.
         A station may consist of multiple stops.
         """
         pass
 
     @abstractmethod
-    def return_fastest_pt_journey_1to1(self):
-        """This method will return the fastest pt journey plan between two pt stations.
-        A station may consist of multiple stops.
+    def find_closest_pt_station(self):
+        """This method will find the closest pt station to a given street node.
+        """
+        pass
+
+    @abstractmethod
+    def find_closest_street_node(self):
+        """This method will find the closest street node to a given pt station.
+        """
+        pass
+
+    @abstractmethod
+    def record_pt_offer_db(self):
+        """This method will create a TravellerOffer for the pt request and record it in the pt offer database.
+        """
+        pass
+
+    @abstractmethod
+    def get_current_offer(self):
+        """This method will return the current offer for the pt request.
         """
         pass
     

@@ -122,6 +122,7 @@ cdef class PyPTRouter:
         self,
         arrival_datetime,
         list included_sources, list included_targets, int max_transfers=-1,
+        bool detailed=False,
     ):
         """Find the best public transport journey from source to target
 
@@ -133,6 +134,7 @@ cdef class PyPTRouter:
             included_sources (list): List of source stop IDs and their station stop transfer times
             included_targets (list): List of target stop IDs and their station stop transfer times
             max_transfers (int): Maximum number of transfers allowed (-1 for unlimited)
+            detailed (bool): Whether to return the detailed journey plan.
 
         Returns:
             dict: A dictionary containing journey details, or None if no journey is found.
@@ -157,17 +159,18 @@ cdef class PyPTRouter:
         # Convert all journeys to Python list of dictionaries
         journeys_list = []
         for i in range(journeys.size()):
-            journey_dict = self._convert_journey_to_dict(journeys[i])
+            journey_dict = self._convert_journey_to_dict(journeys[i], detailed)
             journeys_list.append(journey_dict)
         
         return journeys_list
 
-    def return_best_pt_journey_1to1(
+    def return_fastest_pt_journey_1to1(
         self,
         arrival_datetime,
         list included_sources, list included_targets, int max_transfers=-1,
+        bool detailed=False,
     ):
-        """Find the best public transport journey from source to target
+        """Find the fastest public transport journey from source to target
 
         This method queries the RAPTOR router to find the optimal journey between two stops
         at a specified departure time.
@@ -177,6 +180,7 @@ cdef class PyPTRouter:
             included_sources (list): List of source stop IDs and their station stop transfer times
             included_targets (list): List of target stop IDs and their station stop transfer times
             max_transfers (int): Maximum number of transfers allowed (-1 for unlimited)
+            detailed (bool): Whether to return the detailed journey plan.
 
         Returns:
             dict: A dictionary containing journey details, or None if no journey is found.
@@ -202,47 +206,11 @@ cdef class PyPTRouter:
         cdef Journey journey = journey_opt.value()
         
         # Convert journey to Python dictionary
-        journey_dict = self._convert_journey_to_dict(journey)
+        journey_dict = self._convert_journey_to_dict(journey, detailed)
         
         return journey_dict
 
-    def return_best_pt_costs_1to1(
-        self,
-        arrival_datetime,
-        list included_sources, list included_targets, int max_transfers=-1,
-    ):
-        """Find the costs of the best public transport journey from source to target
-
-        Args:
-            arrival_datetime (datetime): Arrival datetime at the source station
-            included_sources (list): List of source stop IDs and their station stop transfer times
-            included_targets (list): List of target stop IDs and their station stop transfer times
-            max_transfers (int): Maximum number of transfers allowed (-1 for unlimited)
-
-        Returns:
-            journey costs in seconds: (duration, departure_secs, arrival_secs), or None if no journey is found.
-        """
-        if self.raptor_ptr == NULL:
-            raise RuntimeError("RAPTOR router not initialized. Please initialize first.")      
-        
-        query = self.construct_query(
-            arrival_datetime, included_sources, included_targets, max_transfers,
-        )
-        
-        # Set query and find journeys
-        self.raptor_ptr.setQuery(query)
-        cdef optional[Journey] journey_opt = self.raptor_ptr.findOptimalJourney()
-
-        # Check if journey was found
-        if not journey_opt.has_value():
-            return None
-
-        # Get the actual journey from optional
-        cdef Journey journey = journey_opt.value()
-        
-        return (journey.duration, journey.departure_secs, journey.arrival_secs,)
-
-    cdef _convert_journey_to_dict(self, Journey journey):
+    cdef _convert_journey_to_dict(self, Journey journey, bool detailed):
         """Convert a Journey object to a Python dictionary
         
         This method takes a C++ Journey object and converts it to a Python dictionary
@@ -250,6 +218,7 @@ cdef class PyPTRouter:
         
         Args:
             journey (Journey): The C++ Journey object to convert
+            detailed (bool): Whether to include the detailed journey plan
             
         Returns:
             dict: A dictionary containing journey details
@@ -257,6 +226,9 @@ cdef class PyPTRouter:
         journey_dict = {
             # Overall journey information
             "duration": journey.duration,
+            "waiting_time": journey.waiting_time,
+            "trip_time": journey.trip_time,
+            "num_transfers": journey.num_transfers,
             
             # Departure information
             "departure_time": journey.departure_secs,
@@ -269,6 +241,9 @@ cdef class PyPTRouter:
             # Journey steps
             "steps": []
         }
+
+        if not detailed:
+            return journey_dict
 
         # Convert each journey step
         for i in range(journey.steps.size()):
@@ -312,6 +287,6 @@ cdef class PyPTRouter:
         if step.agency_name.has_value():
             step_dict["agency_name"] = step.agency_name.value().decode('utf-8')
         else:
-            step_dict["agency_name"] = "walking"
+            step_dict["agency_name"] = "Unknown"
             
         return step_dict

@@ -63,10 +63,10 @@ struct JourneyStep {
   Stop *src_stop{};                        ///< Pointer to the source stop.
   Stop *dest_stop{};                       ///< Pointer to the destination stop.
 
-  int departure_secs{};                    ///< Departure time in seconds from midnight.
+  int departure_secs{};                    ///< Departure time in seconds from midnight of the query day.
   Day day{};                               ///< Day of the journey step.
   int duration{};                          ///< Duration of the step in seconds.
-  int arrival_secs{};                      ///< Arrival time in seconds from midnight.
+  int arrival_secs{};                      ///< Arrival time in seconds from midnight of the query day.
 };
 
 /**
@@ -78,13 +78,17 @@ struct JourneyStep {
  */
 struct Journey {
   std::vector<JourneyStep> steps;          ///< Steps making up the journey.
-  int departure_secs;                      ///< Overall departure time in seconds from midnight.
-  Day departure_day;                       ///< Departure day of the journey.
+  int departure_secs;                      ///< Overall departure time in seconds from midnight of the query day at source station.
+  Day departure_day;                       ///< Departure day of the journey at source station.
 
-  int arrival_secs;                        ///< Overall arrival time in seconds from midnight.
-  Day arrival_day;                         ///< Arrival day of the journey.
+  int arrival_secs;                        ///< Overall arrival time in seconds from midnight of the query day at target station.
+  Day arrival_day;                         ///< Arrival day of the journey at target station.
 
   int duration;                            ///< Total duration of the journey in seconds.
+  int waiting_time;                        ///< Waiting time at the source station in seconds.
+  int trip_time;                           ///< Trip time from source station stops to target station in seconds.
+  
+  int num_transfers;                       ///< Number of transfers in the journey.
 };
 
 /**

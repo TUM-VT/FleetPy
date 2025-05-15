@@ -5,8 +5,6 @@
  * This file contains the implementation of the Service class, which represents
  * active days of a service in the GTFS dataset.
  *
- * @note Currently, this file serves as a placeholder for future extensions.
- *
  * @author Chenhao Ding
  * @date 2025-03-21
  */

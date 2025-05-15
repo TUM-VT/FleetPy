@@ -87,6 +87,7 @@ def get_src_request_modules():
     rm_dict["BrokerDecisionRequest"] = ("src.demand.TravelerModels", "BrokerDecisionRequest")
     rm_dict["UserDecisionRequest"] = ("src.demand.TravelerModels", "UserDecisionRequest")
     rm_dict["PreferredOperatorRequest"] = ("src.demand.TravelerModels", "PreferredOperatorRequest")
+    rm_dict["BasicMultimodalRequest"] = ("src.demand.TravelerModels", "BasicMultimodalRequest")
     # add development content
     if dev_content is not None:
         dev_rm_dict = dev_content.add_request_models()
@@ -116,6 +117,7 @@ def get_src_broker_modules():
     # FleetPy broker options
     broker_dict = {}  # str -> (module path, class name)
     broker_dict["BrokerBasic"] = ("src.broker.BrokerBasic", "BrokerBasic")
+    broker_dict["PTBroker"] = ("src.broker.PTBroker", "PTBroker")
     # add development content
     if dev_content is not None:
         dev_broker_dict = dev_content.add_broker_modules()
