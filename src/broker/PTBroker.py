@@ -493,56 +493,6 @@ class PTBroker(BrokerBasic):
         
         else:
             raise ValueError(f"Invalid modal state: {parent_modal_state}")
-        
-    def acknowledge_user_boarding(
-        self,
-        op_id: int,
-        rid: tp.Union[int, str],
-        vid: int,
-        boarding_time: int,
-    ):
-        """This method acknowledges the user boarding.
-        """
-        self.amod_operators[op_id].acknowledge_boarding(rid, vid, boarding_time)
-
-        rq_obj: 'RequestBase' = self.demand[rid]
-        rid_struct: str = rq_obj.get_rid_struct()
-        parent_modal_state: RQ_MODAL_STATE = rq_obj.get_modal_state()
-        parent_rq_id: int = rq_obj.get_rid()
-        parent_rq_obj: 'RequestBase' = self.demand[parent_rq_id]
-
-        if parent_modal_state == RQ_MODAL_STATE.FIRSTMILE:
-            parent_rq_obj.user_boards_vehicle(boarding_time, None, None, None, None)
-        elif parent_modal_state == RQ_MODAL_STATE.LASTMILE:
-            parent_rq_obj.user_boards_vehicle(parent_rq_obj.earliest_start_time, None, None, None, None)
-        elif parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
-            flm_amod_rid_struct_0: str = f"{parent_rq_id}_{RQ_SUB_TRIP_ID.FLM_AMOD_0.value}"
-            if rid_struct == flm_amod_rid_struct_0:
-                parent_rq_obj.user_boards_vehicle(boarding_time, None, None, None, None)
-
-
-    def acknowledge_user_alighting(self, op_id: int, rid: tp.Union[int, str], vid: int, alighting_time: int):
-        """This method acknowledges the user alighting.
-        """
-        rq_obj: 'RequestBase' = self.demand[rid]
-        rid_struct: str = rq_obj.get_rid_struct()
-        parent_modal_state: RQ_MODAL_STATE = rq_obj.get_modal_state()
-        parent_rq_id: int = rq_obj.get_rid()
-        parent_rq_obj: 'RequestBase' = self.demand[parent_rq_id]
-
-        if parent_modal_state == RQ_MODAL_STATE.FIRSTMILE:
-            fm_pt_rid_struct: str = f"{parent_rq_id}_{RQ_SUB_TRIP_ID.FM_PT.value}"
-            parent_rq_obj.user_leaves_vehicle(self.demand[fm_pt_rid_struct].do_time, None, None)
-        elif parent_modal_state == RQ_MODAL_STATE.LASTMILE:
-            start_alighting_time: int = alighting_time - self.amod_operators[op_id].const_bt
-            parent_rq_obj.user_leaves_vehicle(start_alighting_time, None, None)
-        elif parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
-            flm_amod_rid_struct_1: str = f"{parent_rq_id}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}"
-            if rid_struct == flm_amod_rid_struct_1:
-                start_alighting_time: int = alighting_time - self.amod_operators[op_id].const_bt
-                parent_rq_obj.user_leaves_vehicle(start_alighting_time, None, None)
-
-        self.amod_operators[op_id].acknowledge_alighting(rid, vid, alighting_time)
 
     def query_street_node_pt_travel_costs_1to1(
         self, 
