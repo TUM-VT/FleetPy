@@ -1,3 +1,8 @@
+# -------------------------------------------------------------------------------------------------------------------- #
+# standard distribution imports
+# -----------------------------
+import typing as tp
+
 # src imports
 # -----------
 
@@ -136,3 +141,159 @@ class Rejection(TravellerOffer):
     """This class takes minimal input and creates an offer that represents a rejection."""
     def __init__(self, traveler_id, operator_id):
         super().__init__(traveler_id, operator_id, offered_waiting_time=None, offered_driving_time=None, fare=None)
+
+
+class PTOffer(TravellerOffer):
+    """This class represents a public transport offer.
+    
+    A PT offer contains the following information:
+    - traveler_id (str): sub-request id struct of the parent request
+    - operator_id (int): id of PT operator (-2)
+    - source_station_id (str): id of the source station
+    - target_station_id (str): id of the target station
+    - source_station_arrival_time (int): absolute time [s] of the arrival at the source station
+    - offered_waiting_time (int): absolute time [s] from arrival at the source station until departure
+    - offered_trip_time (int): absolute time [s] from departure at the source station until arrival at the target station
+    - fare (int): fare of the offer
+    - source_walking_time (int): absolute time [s] from origin street node to source station
+    - target_walking_time (int): absolute time [s] from target station to destination street node
+    - destination_node_arrival_time (int): absolute time [s] of the arrival at the destination street node
+    - num_transfers (int): number of transfers in the PT journey
+    - pt_journey_duration (int): absolute time [s] from arrival at the origin street node to arrival at the destination street node
+    - detailed_journey_plan (dict): detailed journey plan (only if requested)
+    """
+    def __init__(
+    self, 
+    traveler_id: str,
+    operator_id: int,
+    source_station_id: str,
+    target_station_id: str,
+    source_station_arrival_time: int,
+    offered_waiting_time: int,
+    offered_trip_time: int,
+    fare: int,
+    source_walking_time: int,
+    target_walking_time: int,
+    num_transfers: int,
+    detailed_journey_plan: tp.List[tp.Dict[str, tp.Any]],
+):
+        self.source_station_arrival_time = source_station_arrival_time
+        self.detailed_journey_plan = detailed_journey_plan
+
+        self.target_station_arrival_time = source_station_arrival_time + offered_waiting_time + offered_trip_time
+        self.destination_node_arrival_time = self.target_station_arrival_time + target_walking_time
+
+        additional_parameters = {
+            G_PT_OFFER_SOURCE_STATION: source_station_id,
+            G_PT_OFFER_TARGET_STATION: target_station_id,
+            G_PT_OFFER_SOURCE_WALK: source_walking_time,
+            G_PT_OFFER_TARGET_WALK: target_walking_time,
+            G_PT_OFFER_NUM_TRANSFERS: num_transfers,
+        }
+
+        super().__init__(traveler_id, operator_id, offered_waiting_time, offered_trip_time, fare, additional_parameters=additional_parameters)
+
+
+class MultimodalOffer(TravellerOffer):
+    """This class represents a multimodal offer that consists of multiple segments served by different operators."""
+    def __init__(
+        self, 
+        traveler_id: int, 
+        sub_trip_offers: tp.Dict[int, TravellerOffer], 
+        rq_modal_state: RQ_MODAL_STATE, 
+    ):
+        """Initialize a multimodal offer that can include multiple sub-trips from different operators.
+        
+        :param traveler_id: traveler_id this offer is sent to
+        :type traveler_id: int
+        :param sub_trip_offers: dictionary of sub-trip offers {sub_trip_id: TravellerOffer}
+        :type sub_trip_offers: dict
+        :param rq_modal_state: modal state of the request
+        :type rq_modal_state: RQ_MODAL_STATE
+        :param additional_parameters: dictionary of other offer-attributes
+        :type additional_parameters: dict or None
+        """
+        self.rq_modal_state = rq_modal_state 
+        self.sub_trip_offers: tp.Dict[int, TravellerOffer] = sub_trip_offers
+
+        # merge sub-trip offers
+        aggregated_offer: tp.Dict[str, tp.Any] = self._merge_sub_trip_offers()
+        operator_ids: tp.FrozenSet[tp.Tuple[int, int]] = aggregated_offer[G_MULTI_OFFER_OPERATOR_SUB_TRIP_TUPLE]  # {(operator_id, sub_trip_id)}
+        offered_waiting_time: int = aggregated_offer[G_OFFER_WAIT]
+        offered_driving_time: int = aggregated_offer[G_OFFER_DRIVE]
+        fare: int = aggregated_offer[G_OFFER_FARE]
+
+        additional_parameters = {
+            G_PT_OFFER_SOURCE_WALK: aggregated_offer[G_PT_OFFER_SOURCE_WALK],
+            G_PT_OFFER_WAIT: aggregated_offer[G_PT_OFFER_WAIT],
+            G_PT_OFFER_TRIP: aggregated_offer[G_PT_OFFER_TRIP],
+            G_PT_OFFER_TARGET_WALK: aggregated_offer[G_PT_OFFER_TARGET_WALK],
+            G_PT_OFFER_NUM_TRANSFERS: aggregated_offer[G_PT_OFFER_NUM_TRANSFERS],
+            G_PT_OFFER_SOURCE_STATION: aggregated_offer[G_PT_OFFER_SOURCE_STATION],
+            G_PT_OFFER_TARGET_STATION: aggregated_offer[G_PT_OFFER_TARGET_STATION],
+        }
+
+        if self.rq_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
+            additional_parameters[G_OFFER_WAIT_0] = aggregated_offer[G_OFFER_WAIT_0]
+            additional_parameters[G_OFFER_DRIVE_0] = aggregated_offer[G_OFFER_DRIVE_0]
+            additional_parameters[G_OFFER_WAIT_1] = aggregated_offer[G_OFFER_WAIT_1]
+            additional_parameters[G_OFFER_DRIVE_1] = aggregated_offer[G_OFFER_DRIVE_1]
+
+        super().__init__(traveler_id, operator_ids, offered_waiting_time, offered_driving_time, fare, additional_parameters=additional_parameters)
+
+    def get_sub_trip_offers(self) -> tp.Dict[int, TravellerOffer]:
+        """Get the sub-trip offers for the multimodal offer."""
+        return self.sub_trip_offers
+    
+    def _merge_sub_trip_offers(self) -> tp.Dict[str, tp.Any]:
+        """Merge the sub-trip offers into a single offer."""
+        # Initialize a dictionary to store aggregated values
+        aggregated_offer = {G_MULTI_OFFER_OPERATOR_SUB_TRIP_TUPLE: []}
+        
+        fare = 0
+
+        # Iterate through sub-trip offers and aggregate values
+        for sub_trip_id, sub_trip_offer in self.sub_trip_offers.items():
+            aggregated_offer[G_MULTI_OFFER_OPERATOR_SUB_TRIP_TUPLE].append((sub_trip_offer.operator_id, sub_trip_id))
+            fare += sub_trip_offer.get(G_OFFER_FARE, 0)
+        
+        aggregated_offer[G_MULTI_OFFER_OPERATOR_SUB_TRIP_TUPLE] = tuple(aggregated_offer[G_MULTI_OFFER_OPERATOR_SUB_TRIP_TUPLE])
+        aggregated_offer[G_OFFER_FARE] = fare
+        
+        if self.rq_modal_state == RQ_MODAL_STATE.FIRSTMILE:
+            aggregated_offer[G_OFFER_WAIT] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_AMOD.value].get(G_OFFER_WAIT)
+            aggregated_offer[G_OFFER_DRIVE] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_AMOD.value].get(G_OFFER_DRIVE)
+            aggregated_offer[G_PT_OFFER_WAIT] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value].get(G_OFFER_WAIT)
+            aggregated_offer[G_PT_OFFER_TRIP] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value].get(G_OFFER_DRIVE)
+            aggregated_offer[G_PT_OFFER_SOURCE_WALK] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value].get(G_PT_OFFER_SOURCE_WALK)
+            aggregated_offer[G_PT_OFFER_TARGET_WALK] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value].get(G_PT_OFFER_TARGET_WALK)
+            aggregated_offer[G_PT_OFFER_SOURCE_STATION] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value].get(G_PT_OFFER_SOURCE_STATION)
+            aggregated_offer[G_PT_OFFER_TARGET_STATION] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value].get(G_PT_OFFER_TARGET_STATION)
+            aggregated_offer[G_PT_OFFER_NUM_TRANSFERS] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value].get(G_PT_OFFER_NUM_TRANSFERS)
+        elif self.rq_modal_state == RQ_MODAL_STATE.LASTMILE:
+            aggregated_offer[G_OFFER_WAIT] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_AMOD.value].get(G_OFFER_WAIT)
+            aggregated_offer[G_OFFER_DRIVE] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_AMOD.value].get(G_OFFER_DRIVE)
+            aggregated_offer[G_PT_OFFER_WAIT] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value].get(G_OFFER_WAIT)
+            aggregated_offer[G_PT_OFFER_TRIP] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value].get(G_OFFER_DRIVE)
+            aggregated_offer[G_PT_OFFER_SOURCE_WALK] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value].get(G_PT_OFFER_SOURCE_WALK)
+            aggregated_offer[G_PT_OFFER_TARGET_WALK] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value].get(G_PT_OFFER_TARGET_WALK)
+            aggregated_offer[G_PT_OFFER_SOURCE_STATION] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value].get(G_PT_OFFER_SOURCE_STATION)
+            aggregated_offer[G_PT_OFFER_TARGET_STATION] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value].get(G_PT_OFFER_TARGET_STATION)
+            aggregated_offer[G_PT_OFFER_NUM_TRANSFERS] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value].get(G_PT_OFFER_NUM_TRANSFERS)
+        elif self.rq_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
+            aggregated_offer[G_OFFER_WAIT_0] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_AMOD_0.value].get(G_OFFER_WAIT)
+            aggregated_offer[G_OFFER_WAIT_1] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_AMOD_1.value].get(G_OFFER_WAIT)
+            aggregated_offer[G_OFFER_DRIVE_0] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_AMOD_0.value].get(G_OFFER_DRIVE)
+            aggregated_offer[G_OFFER_DRIVE_1] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_AMOD_1.value].get(G_OFFER_DRIVE)
+            aggregated_offer[G_OFFER_WAIT] = aggregated_offer[G_OFFER_WAIT_0] + aggregated_offer[G_OFFER_WAIT_1]
+            aggregated_offer[G_OFFER_DRIVE] = aggregated_offer[G_OFFER_DRIVE_0] + aggregated_offer[G_OFFER_DRIVE_1]
+            aggregated_offer[G_PT_OFFER_WAIT] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_OFFER_WAIT)
+            aggregated_offer[G_PT_OFFER_TRIP] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_OFFER_DRIVE)
+            aggregated_offer[G_PT_OFFER_SOURCE_WALK] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_PT_OFFER_SOURCE_WALK)
+            aggregated_offer[G_PT_OFFER_TARGET_WALK] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_PT_OFFER_TARGET_WALK)
+            aggregated_offer[G_PT_OFFER_SOURCE_STATION] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_PT_OFFER_SOURCE_STATION)
+            aggregated_offer[G_PT_OFFER_TARGET_STATION] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_PT_OFFER_TARGET_STATION)
+            aggregated_offer[G_PT_OFFER_NUM_TRANSFERS] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_PT_OFFER_NUM_TRANSFERS)
+        return aggregated_offer
+    
+

@@ -503,8 +503,11 @@ Journey Raptor::reconstructJourney(
     journey.arrival_secs = journey.steps.back().arrival_secs + station_stop_transfer_time;
     journey.arrival_day = journey.steps.back().day;
 
-    // Set journey duration
+    // Set journey duration, waiting time, trip time and transfer numbers
     journey.duration = journey.arrival_secs - journey.departure_secs;
+    journey.waiting_time = journey.steps.front().departure_secs - journey.departure_secs;
+    journey.trip_time = journey.duration - journey.waiting_time;
+    journey.num_transfers = journey.steps.size() - 1;
   } catch (const std::exception& e) {
     std::cerr << "Exception in reconstructJourney: " << e.what() << std::endl;
   }

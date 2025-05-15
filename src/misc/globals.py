@@ -74,6 +74,11 @@ G_TOLL_COST_SCALE = "toll_cost_scale"
 # broker specific attributes
 G_BROKER_TYPE = "broker_type"
 
+# public transport router specific attributes
+G_PT_ROUTER_TYPE = "pt_router_type"
+G_SIM_START_DATE = "sim_start_date"  # date of the simulation start in format: YYYYMMDD
+G_PT_TRAVEL_COSTS_SCALING_FACTOR = "pt_travel_costs_scaling_factor"  # factor to scale the pt travel costs from the road network travel times
+
 # public transport specific attributes
 G_PT_TYPE = "pt_type"
 G_GTFS_NAME = "gtfs_name"
@@ -359,7 +364,7 @@ G_DIR_NETWORK = "network"
 G_DIR_DEMAND = "demand"
 G_DIR_ZONES = "zones"
 G_DIR_FC = "forecasts"
-G_DIR_PT = "pubtrans"
+G_DIR_PT = "pt"
 G_DIR_VEH = "vehicles"
 G_DIR_FCTRL = "fleetctrl"
 G_DIR_BP = "boardingpoints"
@@ -469,6 +474,43 @@ G_RQ_PA_EPT = "parcel_earliest_pickup_time"
 G_RQ_PA_LPT = "parcel_latest_pickup_time"
 G_RQ_PA_EDT = "parcel_earliest_dropoff_time"
 G_RQ_PA_LDT = "parcel_latest_dropoff_time"
+# multimodal
+G_RQ_RID_STRUCT = "rid_struct"
+G_RQ_IS_PARENT_REQUEST = "is_parent_request"
+G_RQ_MODAL_STATE = "modal_state"
+G_RQ_MODAL_STATE_VALUE = "modal_state_value"
+G_RQ_TRANSFER_STATION_IDS = "transfer_station_ids"
+G_RQ_MAX_TRANSFERS = "max_transfers"
+G_RQ_SUB_TRIP_ID = "sub_trip_id"
+
+class RQ_MODAL_STATE(Enum):
+    """ This enum is used to identify different modal states of a traveler request.
+    MONOMODAL: only amod is used
+    FIRSTMILE: amod first mile and pt last mile
+    LASTMILE: amod last mile and pt first mile
+    FIRSTLASTMILE: amod first and last miles, pt in between
+    PT: only pt is used
+    ALL_OPTIONS: all options are used
+    """
+    MONOMODAL: int = 0
+    FIRSTMILE: int = 1
+    LASTMILE: int = 2
+    FIRSTLASTMILE: int = 3
+    PT: int = 4
+    ALL_OPTIONS: int = 5
+
+class RQ_SUB_TRIP_ID(Enum):
+    """ This enum is used to identify different sub-trip ids of a traveler request.
+    """
+    AMOD: int = 0
+    FM_AMOD: int = 1
+    FM_PT: int = 2
+    LM_PT: int = 3
+    LM_AMOD: int = 4
+    FLM_AMOD_0: int = 5
+    FLM_PT: int = 6
+    FLM_AMOD_1: int = 7
+    PT: int = 8
 
 # output general
 # --------------
@@ -485,7 +527,6 @@ G_RQ_DOL = "dropoff_location"
 G_RQ_FARE = "fare"
 G_RQ_ACCESS = "access_time"
 G_RQ_EGRESS = "egress_time"
-G_RQ_MODAL_STATE = "modal_state" # (see traveler modal state -> indicates monomodal/intermodal)
 
 # output environment specific
 # ---------------------------
@@ -507,21 +548,16 @@ G_RQ_DEC_GROUP = "decision_group"
 G_RQ_DEC_WT_FAC = "waiting_time_factor"
 G_RQ_DEC_REAC = "reaction_time"
 
-# traveler modal state
-G_RQ_STATE_MONOMODAL = 0
-G_RQ_STATE_FIRSTMILE = 1
-G_RQ_STATE_LASTMILE = 2
-G_RQ_STATE_FIRSTLASTMILE = 3
-
 # -------------------------------------------------------------------------------------------------------------------- #
 # Mode Choice Model
 # -----------------
 
 # non-MoD choices
 # ---------------
-G_MC_DEC_PT = -1
-G_MC_DEC_PV = -2
-G_MC_DEC_IM = -3
+G_MC_NO_AMOD = -1  # no AMoD
+G_MC_DEC_PT = -2  # public transport
+G_MC_DEC_PV = -3  # private vehicle
+G_MC_DEC_IM = -4  # TODO: what is this?
 
 # offer parameters
 # ----------------
@@ -561,6 +597,25 @@ G_IM_OFFER_PT_COST = "im_pt_fare"
 G_IM_OFFER_MOD_DRIVE = "im_mod_t_drive"
 G_IM_OFFER_MOD_COST = "im_mod_fare"
 G_IM_OFFER_MOD_SUB = "im_mod_subsidy"
+
+# additional parameters for multimodal offers
+# ------------------------------------------
+G_MULTI_OFFER_OPERATOR_SUB_TRIP_TUPLE = "multi_operator_sub_trip_tuple"  # tuple of operator ids for each sub-trip: ((operator_id, sub_trip_id),)
+G_OFFER_WAIT_0 = "t_wait_0" # Only used for FM AMoD segment in FLM
+G_OFFER_WAIT_1 = "t_wait_1" # Only used for LM AMoD segment in FLM
+G_OFFER_DRIVE_0 = "t_drive_0" # Only used for FM AMoD segment in FLM
+G_OFFER_DRIVE_1 = "t_drive_1" # Only used for LM AMoD segment in FLM
+
+# additional parameters for pt offers
+# ------------------------------------------
+G_PT_OFFER_SOURCE_STATION = "pt_source_station"
+G_PT_OFFER_TARGET_STATION = "pt_target_station"
+G_PT_OFFER_SOURCE_WALK = "t_source_walk"
+G_PT_OFFER_TARGET_WALK = "t_target_walk"
+G_PT_OFFER_JOURNEY_DURATION = "pt_journey_duration"
+G_PT_OFFER_NUM_TRANSFERS = "pt_journey_transfers"
+G_PT_OFFER_WAIT = "t_pt_wait"
+G_PT_OFFER_TRIP = "t_pt_trip"
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Fleet Simulation Pattern
@@ -748,7 +803,7 @@ def get_directory_dict(scenario_parameters, list_operator_dicts, abs_fleetpy_dir
     if zone_name is not None:
         dirs[G_DIR_ZONES] = os.path.join(dirs[G_DIR_DATA], "zones", zone_name, network_name)
     if gtfs_name is not None:
-        dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pubtrans", gtfs_name)
+        dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pt", network_name, gtfs_name, "matched")
     if infra_name is not None:
         dirs[G_DIR_INFRA] = os.path.join(dirs[G_DIR_DATA], "infra", infra_name, network_name)
     if parcel_demand_name is not None:

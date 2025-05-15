@@ -281,7 +281,7 @@ class FleetControlBase(metaclass=ABCMeta):
             self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_DFS)
         else:
             self.dyn_fleet_sizing = None
-            prt_strategy_str += f"\t Dynamic Fleet Sizing: None\n"
+            prt_strategy_str += f"\t Dynamic Fleet Sizing: None"
 
         # log and print summary of additional strategies
         self.skip_output = True if scenario_parameters.get(G_SKIP_OUTPUT, 0) > 0 else False

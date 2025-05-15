@@ -12,6 +12,7 @@ from tqdm import tqdm
 import typing as tp
 from pathlib import Path
 from multiprocessing import Manager
+from multiprocessing.managers import SyncManager
 
 # additional module imports (> requirements)
 # ------------------------------------------
@@ -21,13 +22,14 @@ import numpy as np
 
 # src imports
 # -----------
-from src.misc.init_modules import load_fleet_control_module, load_routing_engine, load_broker_module
+from src.misc.init_modules import load_fleet_control_module, load_routing_engine, load_broker_module, load_pt_module
 from src.demand.demand import Demand, SlaveDemand
 from src.simulation.Vehicles import SimulationVehicle
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.routing.NetworkBase import NetworkBase
     from src.broker.BrokerBase import BrokerBase
+    from src.pt.PTControlBase import PTControlBase
     from src.python_plots.plot_classes import PyPlot
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -161,7 +163,7 @@ class FleetSimulationBase:
         self.end_time = self.scenario_parameters[G_SIM_END_TIME]
         self.time_step = self.scenario_parameters.get(G_SIM_TIME_STEP, 1)
         self.check_sim_env_spec_inputs(self.scenario_parameters)
-        self._manager: tp.Optional[Manager] = None
+        self._manager: tp.Optional[SyncManager] = None
         self._shared_dict: dict = {}
         self._plot_class_instance: tp.Optional[PyPlot] = None
         self.realtime_plot_flag = self.scenario_parameters.get(G_SIM_REALTIME_PLOT_FLAG, 0)
@@ -251,21 +253,8 @@ class FleetSimulationBase:
                                               self.network_stat_f)
         # public transportation module
         LOG.info("Initialization of line-based public transportation...")
-        pt_type = self.scenario_parameters.get(G_PT_TYPE)
-        self.gtfs_data_dir = self.dir_names.get(G_DIR_PT)
-        if pt_type is None or self.gtfs_data_dir is None:
-            self.pt = None
-        elif pt_type == "PTMatrixCrowding":
-            pt_module = importlib.import_module("src.pubtrans.PtTTMatrixCrowding")
-            self.pt = pt_module.PublicTransportTravelTimeMatrixWithCrowding(self.gtfs_data_dir, self.pt_stat_f,
-                                                                            self.scenario_parameters,
-                                                                            self.routing_engine, self.zones)
-        elif pt_type == "PtCrowding":
-            pt_module = importlib.import_module("src.pubtrans.PtCrowding")
-            self.pt = pt_module.PublicTransportWithCrowding(self.gtfs_data_dir, self.pt_stat_f, self.scenario_parameters,
-                                                            self.routing_engine, self.zones)
-        else:
-            raise IOError(f"Public transport module {pt_type} not defined for current simulation environment.")
+        self.pt_operator: 'PTControlBase' = None
+        self._load_pt_operator()
 
         # attribute for demand, charging and zone module
         self.demand = None
@@ -371,8 +360,7 @@ class FleetSimulationBase:
             op_specific_dirs = self.dir_names.get(f"op_{op_id}", {})
             op_dir_names.update(op_specific_dirs)
             self.op_output[op_id] = []  # shared list among vehicles
-            if not (operator_module_name == "LinebasedFleetControl"
-                    or operator_module_name == "SemiOnDemandBatchAssignmentFleetcontrol"
+            if not (operator_module_name == "SemiOnDemandBatchAssignmentFleetcontrol"
                     or operator_module_name == "SoDZonalBatchAssignmentFleetcontrol"
             ):
                 fleet_composition_dict = operator_attributes[G_OP_FLEET]
@@ -411,7 +399,7 @@ class FleetSimulationBase:
                     self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
                 OpClass.continue_init(list_vehicles, self.start_time, self.end_time)
                 self.operators.append(OpClass)
-            elif operator_module_name == "SoDZonalBatchAssignmentFleetcontrol":
+            else: # "SoDZonalBatchAssignmentFleetcontrol"
                 from src.fleetctrl.SoDZonalBatchAssignmentFleetcontrol import SoDZonalBatchAssignmentFleetcontrol
                 list_vehicles = []
                 OpClass = SoDZonalBatchAssignmentFleetcontrol(op_id, operator_attributes, list_vehicles,
@@ -421,21 +409,6 @@ class FleetSimulationBase:
                                                                   list(self.charging_operator_dict["pub"].values()))
                 init_vids = OpClass.return_vehicles_to_initialize()
 
-                for vid, veh_type in init_vids.items():
-                    tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
-                                                        self.routing_engine, self.demand.rq_db,
-                                                        self.op_output[op_id], route_output_flag,
-                                                        replay_flag)
-                    list_vehicles.append(tmp_veh_obj)
-                    veh_type_list.append([op_id, vid, veh_type])
-                    self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
-                OpClass.continue_init(list_vehicles, self.start_time, self.end_time)
-                self.operators.append(OpClass)
-            else: # for LinebasedFleetControl
-                from dev.fleetctrl.LinebasedFleetControl import LinebasedFleetControl
-                OpClass = LinebasedFleetControl(op_id, self.gtfs_data_dir, self.routing_engine, self.zones, self.scenario_parameters, op_dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()))
-                init_vids = OpClass.return_vehicles_to_initialize()
-                list_vehicles = []
                 for vid, veh_type in init_vids.items():
                     tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
                                                         self.routing_engine, self.demand.rq_db,
@@ -457,16 +430,38 @@ class FleetSimulationBase:
     def _load_broker_module(self):
         """ Loads the broker """
  
-        if self.scenario_parameters.get(G_BROKER_TYPE) is None:
-            LOG.info("No broker type specified, using default broker: BrokerBasic.")
+        broker_type = self.scenario_parameters.get(G_BROKER_TYPE)
+        if broker_type is None:
+            prt_msg: str = "No broker type specified, using default BrokerBasic"
+            LOG.info(prt_msg)
             op_broker_class_string = "BrokerBasic"
             BrokerClass = load_broker_module(op_broker_class_string)
             self.broker = BrokerClass(self.n_op, self.operators)
+        elif broker_type == "PTBroker":
+            prt_msg: str = "PTBroker specified"
+            LOG.info(prt_msg)
+            if self.pt_operator is None:
+                raise ValueError("PT operator should be loaded before loading PTBroker.")
+            BrokerClass = load_broker_module(broker_type)
+            self.broker = BrokerClass(self.n_op, self.operators, self.pt_operator, self.demand, self.routing_engine, self.scenario_parameters)
         else:
-            LOG.info(f"Broker type specified: {self.scenario_parameters.get(G_BROKER_TYPE)}")
-            op_broker_class_string = self.scenario_parameters.get(G_BROKER_TYPE)
-            BrokerClass = load_broker_module(op_broker_class_string)
+            prt_msg: str = f"Broker type specified: {broker_type}"
+            LOG.info(prt_msg)
+            BrokerClass = load_broker_module(broker_type)
             self.broker = BrokerClass(self.n_op, self.operators)
+        print('Broker: ' + prt_msg + '\n')
+
+    def _load_pt_operator(self):
+        """ Loads the public transport operator """
+
+        pt_router_type = self.scenario_parameters.get(G_PT_ROUTER_TYPE)
+        gtfs_data_dir = self.dir_names.get(G_DIR_PT)
+        if pt_router_type is None or gtfs_data_dir is None:
+            return
+        else:
+            LOG.info(f"Public transport router type specified: {pt_router_type}")
+            PTControlClass = load_pt_module(pt_router_type)
+            self.pt_operator = PTControlClass(gtfs_data_dir)
 
     @staticmethod
     def get_directory_dict(scenario_parameters, list_operator_dicts):
