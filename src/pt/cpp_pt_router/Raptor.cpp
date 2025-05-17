@@ -76,8 +76,9 @@ void Raptor::initializeAlgorithm() {
   // Initialize the round 0
   k = 0;
   int departure_time = Utils::timeToSeconds(query_.departure_time);
-  // Mark all included source stops
+  // Mark all included source stops that are in included_source_ids_
   for (const auto &source : query_.included_sources) {
+    if (included_source_ids_.find(source.first) == included_source_ids_.end()) continue;
     int station_stop_transfer_time = source.second;
     int arrival_time = departure_time + station_stop_transfer_time;
     markStop(source.first, arrival_time, std::nullopt, std::nullopt);
@@ -503,9 +504,19 @@ Journey Raptor::reconstructJourney(
     journey.arrival_secs = journey.steps.back().arrival_secs + station_stop_transfer_time;
     journey.arrival_day = journey.steps.back().day;
 
-    // Set journey duration, waiting time, trip time and transfer numbers
+    // Set journey duration, source transfer time, waiting time, trip time and transfer numbers
     journey.duration = journey.arrival_secs - journey.departure_secs;
-    journey.waiting_time = journey.steps.front().departure_secs - journey.departure_secs;
+    
+    // Get station stop transfer time from Query
+    Stop src_stop = *journey.steps.front().src_stop;
+    for (const auto &source : query_.included_sources) {
+      if (source.first == src_stop.getField("stop_id")) {
+        journey.source_transfer_time = source.second;
+        break;
+      }
+    }
+
+    journey.waiting_time = journey.steps.front().departure_secs - journey.departure_secs - journey.source_transfer_time;
     journey.trip_time = journey.duration - journey.waiting_time;
     journey.num_transfers = journey.steps.size() - 1;
   } catch (const std::exception& e) {

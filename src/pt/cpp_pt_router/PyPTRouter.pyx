@@ -226,6 +226,7 @@ cdef class PyPTRouter:
         journey_dict = {
             # Overall journey information
             "duration": journey.duration,
+            "source_transfer_time": journey.source_transfer_time,
             "waiting_time": journey.waiting_time,
             "trip_time": journey.trip_time,
             "num_transfers": journey.num_transfers,

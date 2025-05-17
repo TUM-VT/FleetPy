@@ -231,6 +231,7 @@ class PTControlBasicCpp(PTControlBase):
                                                                                 source_station_id = source_station_id,
                                                                                 target_station_id = target_station_id,
                                                                                 source_station_arrival_time = pt_journey_plan_dict["departure_time"],
+                                                                                source_transfer_time = pt_journey_plan_dict["source_transfer_time"],
                                                                                 offered_waiting_time = pt_journey_plan_dict["waiting_time"],
                                                                                 offered_trip_time = pt_journey_plan_dict["trip_time"],
                                                                                 fare = fare,

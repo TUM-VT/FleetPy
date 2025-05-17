@@ -59,6 +59,7 @@ cdef extern from "NetworkObjects/DataStructures.h":
         int arrival_secs
         Day arrival_day
         int duration
+        int source_transfer_time
         int waiting_time
         int trip_time
         int num_transfers

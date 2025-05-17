@@ -85,6 +85,7 @@ struct Journey {
   Day arrival_day;                         ///< Arrival day of the journey at target station.
 
   int duration;                            ///< Total duration of the journey in seconds.
+  int source_transfer_time;                ///< Transfer time from source station to source station stop in seconds.
   int waiting_time;                        ///< Waiting time at the source station in seconds.
   int trip_time;                           ///< Trip time from source station stops to target station in seconds.
   

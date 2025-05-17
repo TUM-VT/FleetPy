@@ -152,6 +152,7 @@ class PTOffer(TravellerOffer):
     - source_station_id (str): id of the source station
     - target_station_id (str): id of the target station
     - source_station_arrival_time (int): absolute time [s] of the arrival at the source station
+    - source_transfer_time (int): absolute time [s] of the transfer from the source station to the source station stop
     - offered_waiting_time (int): absolute time [s] from arrival at the source station until departure
     - offered_trip_time (int): absolute time [s] from departure at the source station until arrival at the target station
     - fare (int): fare of the offer
@@ -169,6 +170,7 @@ class PTOffer(TravellerOffer):
     source_station_id: str,
     target_station_id: str,
     source_station_arrival_time: int,
+    source_transfer_time: int,
     offered_waiting_time: int,
     offered_trip_time: int,
     fare: int,
@@ -186,6 +188,7 @@ class PTOffer(TravellerOffer):
         additional_parameters = {
             G_PT_OFFER_SOURCE_STATION: source_station_id,
             G_PT_OFFER_TARGET_STATION: target_station_id,
+            G_PT_OFFER_SOURCE_TRANSFER_TIME: source_transfer_time,
             G_PT_OFFER_SOURCE_WALK: source_walking_time,
             G_PT_OFFER_TARGET_WALK: target_walking_time,
             G_PT_OFFER_NUM_TRANSFERS: num_transfers,

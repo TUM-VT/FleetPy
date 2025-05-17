@@ -610,6 +610,7 @@ G_OFFER_DRIVE_1 = "t_drive_1" # Only used for LM AMoD segment in FLM
 # ------------------------------------------
 G_PT_OFFER_SOURCE_STATION = "pt_source_station"
 G_PT_OFFER_TARGET_STATION = "pt_target_station"
+G_PT_OFFER_SOURCE_TRANSFER_TIME = "t_source_transfer"
 G_PT_OFFER_SOURCE_WALK = "t_source_walk"
 G_PT_OFFER_TARGET_WALK = "t_target_walk"
 G_PT_OFFER_JOURNEY_DURATION = "pt_journey_duration"
