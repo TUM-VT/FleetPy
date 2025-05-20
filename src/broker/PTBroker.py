@@ -15,10 +15,11 @@ from src.broker.BrokerBasic import BrokerBasic
 from src.simulation.Offers import MultimodalOffer
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
+    from src.fleetctrl.planning.PlanRequest import PlanRequest
     from src.pt.PTControlBase import PTControlBase
     from src.demand.demand import Demand
     from src.routing.NetworkBase import NetworkBase
-    from src.demand.TravelerModels import RequestBase
+    from src.demand.TravelerModels import RequestBase, BasicMultimodalRequest
     from src.simulation.Legs import VehicleRouteLeg
     from src.simulation.Offers import TravellerOffer
 
@@ -70,14 +71,12 @@ class PTBroker(BrokerBasic):
         
         self.sim_start_datetime: datetime = None
         self._set_sim_start_datetime(scenario_parameters.get(G_SIM_START_DATE))
-
-        self.pt_travel_costs_scaling_factor: float = scenario_parameters.get(G_PT_TRAVEL_COSTS_SCALING_FACTOR, 1.3)
     
     def inform_request(
         self,
         rid: int,
         rq_obj: 'RequestBase',
-        sim_time: int
+        sim_time: int,
     ):
         """This method informs the broker that a new request has been made. 
         Based on the request modal state, the broker will create the appropriate sub-requests 
@@ -100,123 +99,23 @@ class PTBroker(BrokerBasic):
                                             rq_obj.earliest_start_time, 
                                             parent_modal_state,
                                             )
-
-        # 2.1 pure AMoD request, no need to create sub-requests
+        
+        # 2.1 pure AMoD request or PT request
         if parent_modal_state == RQ_MODAL_STATE.MONOMODAL or parent_modal_state == RQ_MODAL_STATE.PT:
-            for op_id in range(self.n_amod_op):
-                LOG.debug(f"AMOD Request {rid} with modal state {parent_modal_state}: To operator {op_id} ...")
-                self.amod_operators[op_id].user_request(rq_obj, sim_time)
+            self._process_inform_monomodal_request(rid, rq_obj, sim_time, parent_modal_state)
         
         # 2.2 AMoD as firstmile request
         elif parent_modal_state == RQ_MODAL_STATE.FIRSTMILE:
-            # get the transfer station id and its closest pt station
-            transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
-            transfer_street_node, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[0])
-            # create sub-request for AMoD
-            for op_id in range(self.n_amod_op):
-                self._inform_amod_sub_request(
-                                            rq_obj, 
-                                            RQ_SUB_TRIP_ID.FM_AMOD.value, 
-                                            rq_obj.get_origin_node(), 
-                                            transfer_street_node, 
-                                            rq_obj.earliest_start_time, 
-                                            parent_modal_state,
-                                            op_id, 
-                                            sim_time,
-                                            )
-            # PT sub-request can be created later when the AMoD operator has accepted the request and predicted the arrival time at the pt station
+            self._process_inform_firstmile_request(rq_obj, sim_time, parent_modal_state)
         
         # 2.3 AMoD as lastmile request
         elif parent_modal_state == RQ_MODAL_STATE.LASTMILE:
-            # get the transfer station id and its closest pt station
-            transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
-            transfer_street_node, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[0])
-            # create sub-request for PT
-            lm_pt_arrival: tp.Optional[int] = self._inform_pt_sub_request(
-                                                                        rq_obj, 
-                                                                        RQ_SUB_TRIP_ID.LM_PT.value, 
-                                                                        rq_obj.get_origin_node(),
-                                                                        transfer_street_node, 
-                                                                        rq_obj.earliest_start_time,
-                                                                        parent_modal_state,
-                                                                        )
-            if lm_pt_arrival is not None:
-                # create sub-request for AMoD
-                for op_id in range(self.n_amod_op):
-                    self._inform_amod_sub_request(
-                                                rq_obj,
-                                                RQ_SUB_TRIP_ID.LM_AMOD.value,
-                                                transfer_street_node,
-                                                rq_obj.get_destination_node(), 
-                                                lm_pt_arrival,
-                                                parent_modal_state,
-                                                op_id,
-                                                sim_time,
-                                                )
-            else:
-                LOG.info(f"PT offer is not available for sub_request {rid}_{RQ_SUB_TRIP_ID.LM_PT.value}")
+            self._process_inform_lastmile_request(rid, rq_obj, sim_time, parent_modal_state)
         
         # 2.4 AMoD as firstlastmile request
         elif parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
-            # get the transfer station ids and their closest pt stations
-            transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
-            transfer_street_node_0, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[0])
-            transfer_street_node_1, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[1])
-            
-            # create sub-request for AMoD
-            for op_id in range(self.n_amod_op):
-                self._inform_amod_sub_request(
-                                            rq_obj,
-                                            RQ_SUB_TRIP_ID.FLM_AMOD_0.value, 
-                                            rq_obj.get_origin_node(),
-                                            transfer_street_node_0, 
-                                            rq_obj.earliest_start_time,
-                                            parent_modal_state,
-                                            op_id,
-                                            sim_time,
-                                            )
-                
-                # create sub-request for PT
-                # estimate the costs of the first amod leg
-                estimated_amod_tt_costs: int = self._estimate_amod_tt_costs(
-                                                                        rq_obj.get_origin_node(), 
-                                                                        transfer_street_node_0, 
-                                                                        self.amod_operators[op_id].min_wait_time,
-                                                                        self.amod_operators[op_id].max_dtf, 
-                                                                        self.amod_operators[op_id].max_cdt,
-                                                                        self.amod_operators[op_id].add_cdt, 
-                                                                        self.amod_operators[op_id].min_dtw,
-                                                                        self.amod_operators[op_id].const_bt,
-                                                                        )
-                # estimate the earliest start time of the pt sub-request
-                flm_est_pt_mod: int = rq_obj.earliest_start_time + estimated_amod_tt_costs
-                # create the pt sub-request
-                flm_pt_arrival: tp.Optional[int] = self._inform_pt_sub_request(
-                                                                            rq_obj,
-                                                                            RQ_SUB_TRIP_ID.FLM_PT.value, 
-                                                                            transfer_street_node_0,
-                                                                            transfer_street_node_1, 
-                                                                            flm_est_pt_mod,
-                                                                            parent_modal_state,
-                                                                            op_id,
-                                                                            )
-                # create sub-request for the same AMoD operator
-                if flm_pt_arrival is None:
-                    LOG.info(f"PT offer is not available for sub_request {rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}, estimating the costs of the pt route")
-                    flm_pt_arrival = self._estimate_pt_tt_costs(
-                                                                transfer_street_node_0, 
-                                                                transfer_street_node_1
-                                                                )
-                self._inform_amod_sub_request(
-                                            rq_obj,
-                                            RQ_SUB_TRIP_ID.FLM_AMOD_1.value, 
-                                            transfer_street_node_1,
-                                            rq_obj.get_destination_node(), 
-                                            flm_pt_arrival,
-                                            parent_modal_state,
-                                            op_id,
-                                            sim_time,
-                                            )
+            self._process_inform_firstlastmile_request(rid, rq_obj, sim_time, parent_modal_state)
+        
         else:
             raise ValueError(f"Invalid modal state: {parent_modal_state}")
 
@@ -235,7 +134,7 @@ class PTBroker(BrokerBasic):
         # get parent request modal state
         parent_rq_obj: 'RequestBase' = self.demand[rid]
         parent_modal_state: RQ_MODAL_STATE = parent_rq_obj.get_modal_state()
-        offers = {}
+        offers: tp.Dict[int, 'TravellerOffer'] = {}
         LOG.debug(f"Collecting offers for request {rid} with modal state {parent_modal_state}")
 
         # 1. collect PT offers for multimodal requests
@@ -251,151 +150,20 @@ class PTBroker(BrokerBasic):
 
         # 2.1 collect AMoD offers for MONOMODAL and PT requests
         if parent_modal_state == RQ_MODAL_STATE.MONOMODAL or parent_modal_state == RQ_MODAL_STATE.PT:
-            for amod_op_id in range(self.n_amod_op):
-                amod_offer = self.amod_operators[amod_op_id].get_current_offer(rid)
-                LOG.debug(f"amod offer {amod_offer}")
-                if amod_offer is not None and not amod_offer.service_declined():
-                    offers[amod_op_id] = amod_offer
+            offers = self._process_collect_monomodal_offers(rid, parent_modal_state, offers)
 
         # 2.2 collect AMoD offers for FIRSTMILE requests
         elif parent_modal_state == RQ_MODAL_STATE.FIRSTMILE:
-            # get firstmile amod offer
-            fm_amod_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.FM_AMOD.value}"
-            # get the transfer station id and its closest pt station
-            transfer_station_ids: tp.List[str] = parent_rq_obj.get_transfer_station_ids()
-            transfer_street_node, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[0])
-
-            for amod_op_id in range(self.n_amod_op):
-                fm_amod_offer = self.amod_operators[amod_op_id].get_current_offer(fm_amod_rid_struct)
-                LOG.debug(f"fm_amod offer {fm_amod_offer}")
-
-                if fm_amod_offer is not None and not fm_amod_offer.service_declined():
-                    # register the amod offer in the sub-request
-                    self.demand[fm_amod_rid_struct].receive_offer(amod_op_id, fm_amod_offer, None)
-                    # TODO: check if this is correct
-                    fm_est_pt_mod: int = self._determine_est_pt_mod(
-                                                                    parent_rq_obj,
-                                                                    amod_op_id,
-                                                                    fm_amod_offer,
-                                                                    )
-                    # query firstmile pt travel costs
-                    fm_pt_arrival: tp.Optional[int] = self._inform_pt_sub_request(
-                                                                                parent_rq_obj,
-                                                                                RQ_SUB_TRIP_ID.FM_PT.value,
-                                                                                transfer_street_node,
-                                                                                parent_rq_obj.get_destination_node(),
-                                                                                fm_est_pt_mod,
-                                                                                parent_modal_state,
-                                                                                amod_op_id,
-                                                                                )
-                    
-                    if fm_pt_arrival is not None:
-                        # get pt offer
-                        fm_pt_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.FM_PT.value}"
-                        fm_pt_offer: 'TravellerOffer' = self.pt_operator.get_current_offer(fm_pt_rid_struct, amod_op_id)
-                        # register the pt offer in the sub-request
-                        self.demand[fm_pt_rid_struct].receive_offer(self.pt_operator_id, fm_pt_offer, None)
-                        # create multimodal offer
-                        sub_trip_offers: tp.Dict[int, TravellerOffer] = {}
-                        sub_trip_offers[RQ_SUB_TRIP_ID.FM_AMOD.value] = fm_amod_offer
-                        sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value] = fm_pt_offer
-                        multimodal_offer: 'MultimodalOffer' = self._create_multimodal_offer(
-                                                                                            rid,
-                                                                                            sub_trip_offers,
-                                                                                            parent_modal_state,
-                                                                                            )
-                        offers[multimodal_offer.operator_id] = multimodal_offer
-                    else:
-                        LOG.info(f"PT offer is not available for sub_request {fm_pt_rid_struct}")
-                else:
-                    LOG.info(f"AMoD offer is not available for sub_request {fm_amod_rid_struct}")
+            offers = self._process_collect_firstmile_offers(rid, parent_rq_obj, parent_modal_state, offers)
 
         # 2.3 collect AMoD offers for LASTMILE requests
         elif parent_modal_state == RQ_MODAL_STATE.LASTMILE:
-            # get lastmile pt offer
-            lm_pt_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.LM_PT.value}"
-            lm_pt_offer: 'TravellerOffer' = self.pt_operator.get_current_offer(lm_pt_rid_struct)
-            LOG.debug(f"lm_pt offer {lm_pt_offer}")
-            
-            if lm_pt_offer is not None and not lm_pt_offer.service_declined():
-                # register the pt offer in the sub-request
-                self.demand[lm_pt_rid_struct].receive_offer(self.pt_operator_id, lm_pt_offer, None)
-                lm_amod_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.LM_AMOD.value}"
-                for amod_op_id in range(self.n_amod_op):
-                    # get lastmile amod offer
-                    lm_amod_offer = self.amod_operators[amod_op_id].get_current_offer(lm_amod_rid_struct)
-                    LOG.debug(f"lm_amod offer {lm_amod_offer}")
-                    
-                    if lm_amod_offer is not None and not lm_amod_offer.service_declined():
-                        # register the amod offer in the sub-request
-                        self.demand[lm_amod_rid_struct].receive_offer(amod_op_id, lm_amod_offer, None)
-                        # create multimodal offer
-                        sub_trip_offers: tp.Dict[int, TravellerOffer] = {}
-                        sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value] = lm_pt_offer
-                        sub_trip_offers[RQ_SUB_TRIP_ID.LM_AMOD.value] = lm_amod_offer
-                        multimodal_offer: 'MultimodalOffer' = self._create_multimodal_offer(rid, sub_trip_offers, parent_modal_state)
-                        offers[multimodal_offer.operator_id] = multimodal_offer
-                    else:
-                        LOG.info(f"AMoD offer is not available for sub_request {lm_amod_rid_struct}")
-            else:
-                LOG.info(f"PT offer is not available for sub_request {lm_pt_rid_struct}")
+            offers = self._process_collect_lastmile_offers(rid, parent_modal_state, offers)
 
         # 2.4 collect AMoD offers for FIRSTLASTMILE requests
         elif parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
-            # get the firstmile amod offer
-            flm_amod_rid_struct_0: str = f"{rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_0.value}"
-            for amod_op_id in range(self.n_amod_op):
-                # get the firstmile amod offer
-                flm_amod_offer_0: 'TravellerOffer' = self.amod_operators[amod_op_id].get_current_offer(flm_amod_rid_struct_0)
-                LOG.debug(f"flm_amod offer {flm_amod_offer_0}")
-                
-                if flm_amod_offer_0 is not None and not flm_amod_offer_0.service_declined():
-                    # register the amod offer in the sub-request
-                    self.demand[flm_amod_rid_struct_0].receive_offer(amod_op_id, flm_amod_offer_0, None)
-                    # query the actual pt offer
-                    # get the transfer station ids and their closest pt stations
-                    flm_pt_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}"
-                    transfer_station_ids: tp.List[str] = parent_rq_obj.get_transfer_station_ids()
-                    transfer_street_node_0, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[0])
-                    transfer_street_node_1, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[1])
-
-                    flm_est_pt_mod: int = self._determine_est_pt_mod(parent_rq_obj, amod_op_id, flm_amod_offer_0)
-
-                    _ = self._inform_pt_sub_request(
-                                                    parent_rq_obj,
-                                                    RQ_SUB_TRIP_ID.FLM_PT.value, 
-                                                    transfer_street_node_0,
-                                                    transfer_street_node_1, 
-                                                    flm_est_pt_mod,
-                                                    parent_modal_state,
-                                                    amod_op_id,
-                                                    )
-                    flm_pt_offer: 'TravellerOffer' = self.pt_operator.get_current_offer(flm_pt_rid_struct, amod_op_id)
-                    LOG.debug(f"flm_pt offer {flm_pt_offer}")
-                    
-                    if flm_pt_offer is not None and not flm_pt_offer.service_declined():
-                        # register the pt offer in the sub-request
-                        self.demand[flm_pt_rid_struct].receive_offer(self.pt_operator_id, flm_pt_offer, None)
-                        # get the lastmile amod offer
-                        flm_amod_rid_struct_1: str = f"{rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}"
-                        flm_amod_offer_1: 'TravellerOffer' = self.amod_operators[amod_op_id].get_current_offer(flm_amod_rid_struct_1)
-                        
-                        if flm_amod_offer_1 is not None and not flm_amod_offer_1.service_declined():
-                            # register the amod offer in the sub-request
-                            self.demand[flm_amod_rid_struct_1].receive_offer(amod_op_id, flm_amod_offer_1, None)
-                            # create multimodal offer
-                            sub_trip_offers: tp.Dict[int, TravellerOffer] = {}
-                            sub_trip_offers[RQ_SUB_TRIP_ID.FLM_AMOD_0.value] = flm_amod_offer_0
-                            sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value] = flm_pt_offer
-                            sub_trip_offers[RQ_SUB_TRIP_ID.FLM_AMOD_1.value] = flm_amod_offer_1
-                            multimodal_offer: 'MultimodalOffer' = self._create_multimodal_offer(rid, sub_trip_offers, parent_modal_state)
-                            offers[multimodal_offer.operator_id] = multimodal_offer
-                        else:
-                            LOG.info(f"AMoD offer is not available for sub_request {flm_amod_rid_struct_1}") 
-                    else:
-                        LOG.info(f"PT offer is not available for sub_request {flm_pt_rid_struct}")
-                else:
-                    LOG.info(f"AMoD offer is not available for sub_request {flm_amod_rid_struct_0}")
+            offers = self._process_collect_firstlastmile_offers(rid, parent_rq_obj, parent_modal_state, offers)
+        
         else:
             raise ValueError(f"Invalid modal state: {parent_modal_state}")
 
@@ -475,7 +243,12 @@ class PTBroker(BrokerBasic):
         else:
             raise ValueError(f"Invalid modal state: {parent_modal_state}")
 
-    def inform_waiting_request_cancellations(self, chosen_operator: int, rid: int, sim_time: int):
+    def inform_waiting_request_cancellations(
+        self,
+        chosen_operator: int,
+        rid: int,
+        sim_time: int
+    ):
         """This method informs the operators that the waiting requests have been cancelled.
         """
         rq_obj: 'RequestBase' = self.demand[rid]
@@ -647,74 +420,384 @@ class PTBroker(BrokerBasic):
                                         )
         if pt_journey_plan_dict is not None:
             t_d_node_arrival: int = self.pt_operator.get_current_offer(pt_rid_struct, previous_amod_operator_id).destination_node_arrival_time
-
-            # automatically set boarding and alighting time
-            pt_sub_rq_obj.user_boards_vehicle(mod_start_time, self.pt_operator_id, None, None, None)
-            pt_sub_rq_obj.user_leaves_vehicle(t_d_node_arrival, None, None)
             return t_d_node_arrival
         else:
             return None
-    
-    def _estimate_amod_tt_costs(
+        
+    def _process_inform_monomodal_request(
         self,
-        rq_o_node: int,
-        rq_d_node: int, 
-        min_wait_time : int=0, 
-        max_detour_time_factor: float = None,
-        max_constant_detour_time: int = None, 
-        add_constant_detour_time: int = None, 
-        min_detour_time_window: int = None,
-        boarding_time: int = 0
-    ) -> int:
-        """This method estimates the costs of the longest amod route between two street nodes.
+        rid: int,
+        rq_obj: 'RequestBase',
+        sim_time: int,
+        parent_modal_state: RQ_MODAL_STATE,
+    ):
+        """This method processes the new monomodal request.
 
         Args:
-            rq_o_node (int): the origin street node id
-            rq_d_node (int): the destination street node id
-            min_wait_time (int): the minimum wait time
-            max_detour_time_factor (float): the maximum detour time factor
-            max_constant_detour_time (int): the maximum constant detour time
-            add_constant_detour_time (int): the additional constant detour time
-            min_detour_time_window (int): the minimum detour time window
-            boarding_time (int): the boarding time
-
-        Returns:
-            int: the maximum amod travel time costs
+            rid (int): the request id
+            rq_obj (RequestBase): the request object
+            sim_time (int): the simulation time
+            parent_modal_state (RQ_MODAL_STATE): the parent modal state
         """
-        _, tt, _ = self.routing_engine.return_travel_costs_1to1((rq_o_node, None, None), (rq_d_node, None, None))
-        max_trip_time = tt + boarding_time
-        # LOG.debug(f"max trip time: {max_trip_time}")
-        if not pd.isnull(max_detour_time_factor):
-            max_trip_time = (100 + max_detour_time_factor) * max_trip_time / 100
-            # LOG.debug(f"max trip time {max_trip_time} -> max detour factor {max_detour_time_factor}")
-        if not pd.isnull(add_constant_detour_time):
-            max_trip_time += add_constant_detour_time
-            # LOG.debug(f"max trip time {max_trip_time} -> add_constant_detour_time {add_constant_detour_time}")
-        if not pd.isnull(min_detour_time_window):
-            max_trip_time = max(tt + boarding_time + min_detour_time_window, max_trip_time)
-            # LOG.debug(f"max trip time {max_trip_time} -> min_detour_time_window {min_detour_time_window}")
-        if not pd.isnull(max_constant_detour_time):
-            max_trip_time = min(tt + boarding_time + max_constant_detour_time, max_trip_time)
-            # LOG.debug(f"max trip time {max_trip_time} -> max_constant_detour_time {max_constant_detour_time}")
-        max_amod_tt_costs = max_trip_time + min_wait_time
-        return max_amod_tt_costs
-    
-    def _estimate_pt_tt_costs(
+        for op_id in range(self.n_amod_op):
+            LOG.debug(f"AMoD Request {rid} with modal state {parent_modal_state}: To operator {op_id} ...")
+            self.amod_operators[op_id].user_request(rq_obj, sim_time)
+
+    def _process_inform_firstmile_request(
         self,
-        rq_o_node: int,
-        rq_d_node: int, 
-    ) -> int:
-        """This method estimates the costs of the longest pt route between two street nodes.
+        rq_obj: 'BasicMultimodalRequest',
+        sim_time: int,
+        parent_modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE.FIRSTMILE,
+    ):
+        """This method processes the new firstmile request.
 
         Args:
-            rq_o_node (int): the origin street node id
-            rq_d_node (int): the destination street node id
+            rq_obj (BasicMultimodalRequest): the request object
+            sim_time (int): the simulation time
+            parent_modal_state (RQ_MODAL_STATE): the parent modal state
+        """
+        # get the transfer station id and its closest pt station
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_street_node, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[0])
+        # create sub-request for AMoD
+        for op_id in range(self.n_amod_op):
+            self._inform_amod_sub_request(
+                                        rq_obj, 
+                                        RQ_SUB_TRIP_ID.FM_AMOD.value, 
+                                        rq_obj.get_origin_node(), 
+                                        transfer_street_node, 
+                                        rq_obj.earliest_start_time, 
+                                        parent_modal_state,
+                                        op_id,
+                                        sim_time,
+                                        )
+        # PT sub-request can be created later when the AMoD operator has accepted the request and predicted the arrival time at the pt station
+
+    def _process_inform_lastmile_request(
+        self,
+        rid: int,
+        rq_obj: 'BasicMultimodalRequest',
+        sim_time: int,
+        parent_modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE.LASTMILE,
+    ):
+        """This method processes the new lastmile request.
+
+        Args:
+            rid (int): the request id
+            rq_obj (BasicMultimodalRequest): the request object
+            sim_time (int): the simulation time
+            parent_modal_state (RQ_MODAL_STATE): the parent modal state
+        """
+        # get the transfer station id and its closest pt station
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_street_node, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[0])
+        # create sub-request for PT
+        lm_pt_arrival: tp.Optional[int] = self._inform_pt_sub_request(
+                                                                    rq_obj, 
+                                                                    RQ_SUB_TRIP_ID.LM_PT.value, 
+                                                                    rq_obj.get_origin_node(),
+                                                                    transfer_street_node, 
+                                                                    rq_obj.earliest_start_time,
+                                                                    parent_modal_state,
+                                                                    )
+        if lm_pt_arrival is not None:
+            # create sub-request for AMoD
+            for op_id in range(self.n_amod_op):
+                self._inform_amod_sub_request(
+                                            rq_obj,
+                                            RQ_SUB_TRIP_ID.LM_AMOD.value,
+                                            transfer_street_node,
+                                            rq_obj.get_destination_node(), 
+                                            lm_pt_arrival,
+                                            parent_modal_state,
+                                            op_id,
+                                            sim_time,
+                                            )
+        else:
+            LOG.info(f"PT offer is not available for sub_request {rid}_{RQ_SUB_TRIP_ID.LM_PT.value}")
+
+    def _process_inform_firstlastmile_request(
+        self,
+        rid: int,
+        rq_obj: 'BasicMultimodalRequest',
+        sim_time: int,
+        parent_modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE.FIRSTLASTMILE,
+    ):
+        """This method processes the new firstlastmile request.
+
+        Args:
+            rid (int): the request id
+            rq_obj (BasicMultimodalRequest): the request object
+            sim_time (int): the simulation time
+            parent_modal_state (RQ_MODAL_STATE): the parent modal state
+        """
+        # get the transfer station ids and their closest pt stations
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_street_node_0, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[0])
+        transfer_street_node_1, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[1])
+        
+        # create sub-request for AMoD
+        for op_id in range(self.n_amod_op):
+            self._inform_amod_sub_request(
+                                        rq_obj,
+                                        RQ_SUB_TRIP_ID.FLM_AMOD_0.value, 
+                                        rq_obj.get_origin_node(),
+                                        transfer_street_node_0, 
+                                        rq_obj.earliest_start_time,
+                                        parent_modal_state,
+                                        op_id,
+                                        sim_time,
+                                        )
+            flm_amod_rid_struct_0: str = f"{rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_0.value}"
+            flm_amod_sub_rq_obj_0: 'BasicMultimodalRequest' = self.demand[flm_amod_rid_struct_0]
+            # create sub-request for PT
+            # estimate the dropoff time of the amod sub-request
+            estimated_amod_dropoff_time: int = self._estimate_amod_dropoff_time(op_id, flm_amod_sub_rq_obj_0, "latest")
+            # estimate the earliest start time of the pt sub-request
+            flm_est_pt_mod: int = estimated_amod_dropoff_time + self.amod_operators[op_id].const_bt
+            # create the pt sub-request
+            flm_pt_arrival: tp.Optional[int] = self._inform_pt_sub_request(
+                                                                        rq_obj,
+                                                                        RQ_SUB_TRIP_ID.FLM_PT.value, 
+                                                                        transfer_street_node_0,
+                                                                        transfer_street_node_1, 
+                                                                        flm_est_pt_mod,
+                                                                        parent_modal_state,
+                                                                        op_id,
+                                                                        )
+            # create sub-request for the same AMoD operator
+            if flm_pt_arrival is None:
+                raise ValueError(f"PT offer is not available for sub_request {rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}")
+            else:
+                self._inform_amod_sub_request(
+                                            rq_obj,
+                                            RQ_SUB_TRIP_ID.FLM_AMOD_1.value, 
+                                            transfer_street_node_1,
+                                            rq_obj.get_destination_node(), 
+                                            flm_pt_arrival,
+                                            parent_modal_state,
+                                            op_id,
+                                            sim_time,
+                                            )
+    
+    def _process_collect_monomodal_offers(
+        self,
+        rid: int,
+        parent_modal_state: RQ_MODAL_STATE,
+        offers: tp.Dict[int, 'TravellerOffer'],
+    ) -> tp.Dict[int, 'TravellerOffer']:
+        """This method processes the collection of monomodal offers.
+        """
+        for amod_op_id in range(self.n_amod_op):
+            amod_offer = self.amod_operators[amod_op_id].get_current_offer(rid)
+            LOG.debug(f"Collecting amod offer for request {rid} with modal state {parent_modal_state} from operator {amod_op_id}: {amod_offer}")
+            if amod_offer is not None and not amod_offer.service_declined():
+                offers[amod_op_id] = amod_offer
+        return offers
+    
+    def _process_collect_firstmile_offers(
+        self,
+        rid: int,
+        parent_rq_obj: 'BasicMultimodalRequest',
+        parent_modal_state: RQ_MODAL_STATE,
+        offers: tp.Dict[int, 'TravellerOffer'],
+    ) -> tp.Dict[int, 'TravellerOffer']:
+        """This method processes the collection of firstmile offers.
+        """
+        # get firstmile amod offer
+        fm_amod_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.FM_AMOD.value}"
+        # get the transfer station id and its closest pt station
+        transfer_station_ids: tp.List[str] = parent_rq_obj.get_transfer_station_ids()
+        transfer_street_node, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[0])
+
+        for amod_op_id in range(self.n_amod_op):
+            fm_amod_offer = self.amod_operators[amod_op_id].get_current_offer(fm_amod_rid_struct)
+            LOG.debug(f"Collecting fm_amod offer for request {fm_amod_rid_struct} from operator {amod_op_id}: {fm_amod_offer}")
+
+            if fm_amod_offer is not None and not fm_amod_offer.service_declined():
+                # register the amod offer in the sub-request
+                self.demand[fm_amod_rid_struct].receive_offer(amod_op_id, fm_amod_offer, None)
+                # TODO: check if this is correct
+                fm_est_pt_mod: int = self._determine_est_pt_mod(
+                                                                parent_rq_obj,
+                                                                amod_op_id,
+                                                                fm_amod_offer,
+                                                                )
+                # query firstmile pt travel costs
+                fm_pt_arrival: tp.Optional[int] = self._inform_pt_sub_request(
+                                                                            parent_rq_obj,
+                                                                            RQ_SUB_TRIP_ID.FM_PT.value,
+                                                                            transfer_street_node,
+                                                                            parent_rq_obj.get_destination_node(),
+                                                                            fm_est_pt_mod,
+                                                                            parent_modal_state,
+                                                                            amod_op_id,
+                                                                            )
+                
+                if fm_pt_arrival is not None:
+                    # get pt offer
+                    fm_pt_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.FM_PT.value}"
+                    fm_pt_offer: 'TravellerOffer' = self.pt_operator.get_current_offer(fm_pt_rid_struct, amod_op_id)
+                    LOG.debug(f"Collecting fm_pt offer for request {fm_pt_rid_struct} from operator {self.pt_operator_id}: {fm_pt_offer}")
+                    # register the pt offer in the sub-request
+                    self.demand[fm_pt_rid_struct].receive_offer(self.pt_operator_id, fm_pt_offer, None)
+                    # create multimodal offer
+                    sub_trip_offers: tp.Dict[int, TravellerOffer] = {}
+                    sub_trip_offers[RQ_SUB_TRIP_ID.FM_AMOD.value] = fm_amod_offer
+                    sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value] = fm_pt_offer
+                    multimodal_offer: 'MultimodalOffer' = self._create_multimodal_offer(rid, sub_trip_offers, parent_modal_state)
+                    offers[multimodal_offer.operator_ids_str] = multimodal_offer
+                else:
+                    LOG.info(f"PT offer is not available for sub_request {fm_pt_rid_struct}")
+            else:
+                LOG.info(f"AMoD offer is not available for sub_request {fm_amod_rid_struct}")
+        return offers
+
+    def _process_collect_lastmile_offers(
+        self,
+        rid: int,
+        parent_modal_state: RQ_MODAL_STATE,
+        offers: tp.Dict[int, 'TravellerOffer'],
+    ) -> tp.Dict[int, 'TravellerOffer']:
+        """This method processes the collection of lastmile offers.
+        """
+        # get lastmile pt offer
+        lm_pt_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.LM_PT.value}"
+        lm_pt_offer: 'TravellerOffer' = self.pt_operator.get_current_offer(lm_pt_rid_struct)
+        LOG.debug(f"Collecting lm_pt offer for request {lm_pt_rid_struct} from PT operator {self.pt_operator_id}: {lm_pt_offer}")
+        
+        if lm_pt_offer is not None and not lm_pt_offer.service_declined():
+            # register the pt offer in the sub-request
+            self.demand[lm_pt_rid_struct].receive_offer(self.pt_operator_id, lm_pt_offer, None)
+            lm_amod_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.LM_AMOD.value}"
+            for amod_op_id in range(self.n_amod_op):
+                # get lastmile amod offer
+                lm_amod_offer = self.amod_operators[amod_op_id].get_current_offer(lm_amod_rid_struct)
+                LOG.debug(f"Collecting lm_amod offer for request {lm_amod_rid_struct} from operator {amod_op_id}: {lm_amod_offer}")
+                
+                if lm_amod_offer is not None and not lm_amod_offer.service_declined():
+                    # register the amod offer in the sub-request
+                    self.demand[lm_amod_rid_struct].receive_offer(amod_op_id, lm_amod_offer, None)
+                    # create multimodal offer
+                    sub_trip_offers: tp.Dict[int, TravellerOffer] = {}
+                    sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value] = lm_pt_offer
+                    sub_trip_offers[RQ_SUB_TRIP_ID.LM_AMOD.value] = lm_amod_offer
+                    multimodal_offer: 'MultimodalOffer' = self._create_multimodal_offer(rid, sub_trip_offers, parent_modal_state)
+                    offers[multimodal_offer.operator_ids_str] = multimodal_offer
+                else:
+                    LOG.info(f"AMoD offer is not available for sub_request {lm_amod_rid_struct}")
+        else:
+            LOG.info(f"PT offer is not available for sub_request {lm_pt_rid_struct}")
+        return offers
+
+    def _process_collect_firstlastmile_offers(
+        self,
+        rid: int,
+        parent_rq_obj: 'BasicMultimodalRequest',
+        parent_modal_state: RQ_MODAL_STATE,
+        offers: tp.Dict[int, 'TravellerOffer'],
+    ) -> tp.Dict[int, 'TravellerOffer']:
+        """This method processes the collection of firstlastmile offers.
+        """
+        # get the firstmile amod offer
+        flm_amod_rid_struct_0: str = f"{rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_0.value}"
+        for amod_op_id in range(self.n_amod_op):
+            # get the firstmile amod offer
+            flm_amod_offer_0: 'TravellerOffer' = self.amod_operators[amod_op_id].get_current_offer(flm_amod_rid_struct_0)
+            LOG.debug(f"flm_amod offer {flm_amod_offer_0}")
+            
+            if flm_amod_offer_0 is not None and not flm_amod_offer_0.service_declined():
+                # register the amod offer in the sub-request
+                self.demand[flm_amod_rid_struct_0].receive_offer(amod_op_id, flm_amod_offer_0, None)
+                # query the actual pt offer
+                # get the transfer station ids and their closest pt stations
+                flm_pt_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}"
+                transfer_station_ids: tp.List[str] = parent_rq_obj.get_transfer_station_ids()
+                transfer_street_node_0, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[0])
+                transfer_street_node_1, _ = self.pt_operator.find_closest_street_node(transfer_station_ids[1])
+
+                flm_est_pt_mod: int = self._determine_est_pt_mod(parent_rq_obj, amod_op_id, flm_amod_offer_0)
+
+                _ = self._inform_pt_sub_request(
+                                                parent_rq_obj,
+                                                RQ_SUB_TRIP_ID.FLM_PT.value, 
+                                                transfer_street_node_0,
+                                                transfer_street_node_1, 
+                                                flm_est_pt_mod,
+                                                parent_modal_state,
+                                                amod_op_id,
+                                                )
+                flm_pt_offer: 'TravellerOffer' = self.pt_operator.get_current_offer(flm_pt_rid_struct, amod_op_id)
+                LOG.debug(f"flm_pt offer {flm_pt_offer}")
+                
+                if flm_pt_offer is not None and not flm_pt_offer.service_declined():
+                    # register the pt offer in the sub-request
+                    self.demand[flm_pt_rid_struct].receive_offer(self.pt_operator_id, flm_pt_offer, None)
+                    # get the lastmile amod offer
+                    flm_amod_rid_struct_1: str = f"{rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}"
+                    flm_amod_offer_1: 'TravellerOffer' = self.amod_operators[amod_op_id].get_current_offer(flm_amod_rid_struct_1)
+                    
+                    if flm_amod_offer_1 is not None and not flm_amod_offer_1.service_declined():
+                        # register the amod offer in the sub-request
+                        self.demand[flm_amod_rid_struct_1].receive_offer(amod_op_id, flm_amod_offer_1, None)
+                        # create multimodal offer
+                        sub_trip_offers: tp.Dict[int, TravellerOffer] = {}
+                        sub_trip_offers[RQ_SUB_TRIP_ID.FLM_AMOD_0.value] = flm_amod_offer_0
+                        sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value] = flm_pt_offer
+                        sub_trip_offers[RQ_SUB_TRIP_ID.FLM_AMOD_1.value] = flm_amod_offer_1
+                        multimodal_offer: 'MultimodalOffer' = self._create_multimodal_offer(rid, sub_trip_offers, parent_modal_state)
+                        offers[multimodal_offer.operator_id] = multimodal_offer
+                    else:
+                        LOG.info(f"AMoD offer is not available for sub_request {flm_amod_rid_struct_1}") 
+                else:
+                    LOG.info(f"PT offer is not available for sub_request {flm_pt_rid_struct}")
+            else:
+                LOG.info(f"AMoD offer is not available for sub_request {flm_amod_rid_struct_0}")
+
+        return offers
+
+    def _get_amod_dropoff_time_range(
+        self,
+        amod_op_id: int,
+        sub_rq_obj: 'RequestBase',
+    ) -> tp.Tuple[tp.Optional[int], tp.Optional[int]]:
+        """This method returns the earliest and latest amod dropoff time.
+           Dropoff time is defined as the time when the user starts to leave the vehicle.
+        """
+        sub_rq_rid_struct: str = sub_rq_obj.get_rid_struct()
+        sub_prq_obj: 'PlanRequest' = self.amod_operators[amod_op_id].rq_dict.get(sub_rq_rid_struct, None)
+        if sub_prq_obj is None:
+            return None, None
+        else:
+            return sub_prq_obj.t_do_earliest, sub_prq_obj.t_do_latest
+    
+    def _estimate_amod_dropoff_time(
+        self,
+        amod_op_id: int,
+        sub_rq_obj: 'BasicMultimodalRequest',
+        estimation_type: str = "latest",
+    ) -> tp.Optional[int]:
+        """This method estimates the dropoff time of an amod sub-request.
+
+        Args:
+            amod_op_id (int): the id of the amod operator
+            sub_rq_obj (BasicMultimodalRequest): the sub-request object
+            estimation_type (str): the type of the estimation
 
         Returns:
-            max_pt_route_costs (int): the maximum pt route costs
+            int: the dropoff time of the sub-request
         """
-        _, tt, _ = self.routing_engine.return_travel_costs_1to1((rq_o_node, None, None), (rq_d_node, None, None))
-        return tt * self.pt_travel_costs_scaling_factor
+        # get amod dropoff time range
+        earliest_dropoff_time, latest_dropoff_time = self._get_amod_dropoff_time_range(amod_op_id, sub_rq_obj)
+        if earliest_dropoff_time is None or latest_dropoff_time is None:
+            return None
+        else:
+            if estimation_type == "latest":
+                return latest_dropoff_time
+            elif estimation_type == "earliest":
+                return earliest_dropoff_time
+            else:
+                raise ValueError(f"Invalid estimation type: {estimation_type}")
     
     def _create_multimodal_offer(
         self,

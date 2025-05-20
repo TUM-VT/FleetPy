@@ -77,7 +77,6 @@ G_BROKER_TYPE = "broker_type"
 # public transport router specific attributes
 G_PT_ROUTER_TYPE = "pt_router_type"
 G_SIM_START_DATE = "sim_start_date"  # date of the simulation start in format: YYYYMMDD
-G_PT_TRAVEL_COSTS_SCALING_FACTOR = "pt_travel_costs_scaling_factor"  # factor to scale the pt travel costs from the road network travel times
 
 # public transport specific attributes
 G_PT_TYPE = "pt_type"

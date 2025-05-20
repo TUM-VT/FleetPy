@@ -99,6 +99,7 @@ class PlanRequest:
             if self.max_trip_time == self.init_direct_tt + boarding_time:
                 self.max_trip_time = LARGE_INT
         self.t_do_latest = self.t_pu_latest + self.max_trip_time
+        self.t_do_earliest = self.t_pu_earliest + self.init_direct_tt + boarding_time
         self.locked = False
         # LOG.debug(f"new PlanRequest: rid {self.rid}|{self.sub_rid_struct} start {self.o_pos} dest {self.d_pos} epa
         # {self.t_pu_earliest} lpa {self.t_pu_latest} dtt {self.init_direct_tt} mtt {self.max_trip_time}")
@@ -206,6 +207,11 @@ class PlanRequest:
         if new_earliest_pu_time is not None:
             self.t_pu_earliest = new_earliest_pu_time
         # LOG.debug("after: {}".format(self))
+
+    def set_new_dropoff_time_constraint(self, new_latest_do_time : int):
+        """ this function is used to update dropoff time constraints of the plan request
+        :param new_latest_do_time: new latest dropoff time"""
+        self.t_do_latest = new_latest_do_time
 
     def set_new_max_trip_time(self, new_max_trip_time : float):
         """ this function updates the maximum trip time constraint

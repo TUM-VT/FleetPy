@@ -221,7 +221,8 @@ class MultimodalOffer(TravellerOffer):
 
         # merge sub-trip offers
         aggregated_offer: tp.Dict[str, tp.Any] = self._merge_sub_trip_offers()
-        operator_ids: tp.FrozenSet[tp.Tuple[int, int]] = aggregated_offer[G_MULTI_OFFER_OPERATOR_SUB_TRIP_TUPLE]  # {(operator_id, sub_trip_id)}
+        operator_ids: tp.Tuple[tp.Tuple[int, int]] = aggregated_offer[G_MULTI_OFFER_OPERATOR_SUB_TRIP_TUPLE]  # {(operator_id, sub_trip_id),}
+        self.operator_ids_str = self.convert_operator_ids_to_str(operator_ids)
         offered_waiting_time: int = aggregated_offer[G_OFFER_WAIT]
         offered_driving_time: int = aggregated_offer[G_OFFER_DRIVE]
         fare: int = aggregated_offer[G_OFFER_FARE]
@@ -247,6 +248,13 @@ class MultimodalOffer(TravellerOffer):
     def get_sub_trip_offers(self) -> tp.Dict[int, TravellerOffer]:
         """Get the sub-trip offers for the multimodal offer."""
         return self.sub_trip_offers
+    
+    def convert_operator_ids_to_str(
+        self,
+        operator_ids: tp.Tuple[tp.Tuple[int, int]]
+    ) -> str:
+        """Convert the operator ids to a string representation."""
+        return "-".join([f"{op_id}_{sub_trip_id}" for op_id, sub_trip_id in operator_ids])
     
     def _merge_sub_trip_offers(self) -> tp.Dict[str, tp.Any]:
         """Merge the sub-trip offers into a single offer."""
