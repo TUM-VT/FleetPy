@@ -138,6 +138,30 @@ class SUMOFleetPyServer():
             self.g_update_fleetsim_traveltimes = True
             self.g_update_travel_statistics_time_step = travel_time_interval
 
+        
+    def setup_hybrid_router(self):
+        if self.fp_scenario_config.get("hybrid_router") == True:
+            self.fp_hybrid_router_sc0_df = pd.read_csv(r"D:\GitHub\fleetpy_coupling\hybrid_router\hourly_edge_counts_sc0.csv")
+            self.fp_hybrid_router_sc0_df["edge_id"] = self.fp_hybrid_router_sc0_df["edge"].map(self.g_sumo_edge_id_to_fs_edge)
+            self.fp_hybrid_router_sc0_df = self.fp_hybrid_router_sc0_df.rename(columns={"count":"count_sc0"})
+            
+            network_dir_path = pathlib.Path(self.fp_sim_env.dir_names[G_DIR_NETWORK])
+            historic_tt_dir = network_dir_path.parent / f"sumo_in_s_{str(self.fp_sim_env.scenario_parameters.get('random_seed')).zfill(2)}"
+            eval_start = self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME, self.fp_sim_env.scenario_parameters.get(G_EVAL_INT_START)) 
+            eval_end = self.fp_sim_env.scenario_parameters.get(G_SIM_END_TIME, self.fp_sim_env.scenario_parameters.get(G_EVAL_INT_END))
+            hourly_dirs = [
+                d for d in os.listdir(historic_tt_dir)
+                if d.isdigit() and eval_start <= int(d) <= eval_end and os.path.isdir(os.path.join(historic_tt_dir, d))
+            ]
+            hourly_tt_df_dict = {}
+            for hour in hourly_dirs:
+                hour_path = historic_tt_dir / hour / "edges_td_att.csv"
+                edges_df = pd.read_csv(hour_path)
+                hourly_tt_df_dict.update({hour: edges_df})
+            self.fp_hybrid_router_hourly_tt_dict = hourly_tt_df_dict
+
+        else:
+            return
     def setup_traci(self):
         results_path = self.fp_sim_env.dir_names[G_DIR_OUTPUT]
         seed = self.fp_sim_env.scenario_parameters[G_RANDOM_SEED]
@@ -340,7 +364,7 @@ class SUMOFleetPyServer():
             
             # 5) send new travel times to fleetsim
             if (sim_time%self.g_update_travel_statistics_time_step==0) and self.g_update_fleetsim_traveltimes==True:
-                time_df = self._process_tt_data(res_list=res_list)
+                time_df = self._process_tt_data(res_list=res_list,sim_time=sim_time)
                 time_update_dict = dict(zip(zip(list(time_df["from_node"]),list(time_df["to_node"])),zip(list(time_df["edge_tt"]),list(time_df["edge_var"]))))
                 self._save_tt_to_csv(time_df, sim_time)
                 veh_edge_start_time_count ={}
@@ -586,9 +610,38 @@ class SUMOFleetPyServer():
 
         return sim_pos_dict,res_list
 
-    def _get_rt_with_historic_estimate(self,tt_df):
+    def _get_rt_with_historic_estimate(self,tt_df,sim_time):
+        print("Historic Estimate")
+        
+        sim_hour = int(sim_time/3600)
+        tt_df["count"] = tt_df["count"] * 3600/int(self.fp_sim_env.scenario_parameters.get("sumo_statistics_interval"))
+        tt_df = tt_df.merge(self.fp_hybrid_router_sc0_df, on="edge_id", how="left")
+        
+        tt_df["p_fco"] = np.where(
+                                tt_df["count_sc0"] == None,
+                                self.fp_scenario_config.get("p_opt", 1),
+                                tt_df["count"] / tt_df["count_sc0"])   
+        tt_df["hybrid_router_alpha"] = tt_df["p_fco"] / self.fp_scenario_config.get("p_opt", 1)
+        tt_df["hybrid_router_alpha"] = tt_df["hybrid_router_alpha"].clip(upper=1)
+        tt_df = tt_df[tt_df["hour"] == sim_hour]
+    
+        historic_tt_df = self.fp_hybrid_router_hourly_tt_dict.get(str(sim_hour*3600))
+        historic_tt_df.rename(columns={"source_edge_id":"edge","edge_tt":"edge_tt_historic"}, inplace=True)
+        tt_df = tt_df.merge(historic_tt_df, on="edge", how="left")
+        tt_df["edge_tt_hybrid"] = tt_df["hybrid_router_alpha"] *tt_df["edge_tt"] +  (1-tt_df["hybrid_router_alpha"])*tt_df["edge_tt_historic"]
+        tt_df.drop(columns=["Unnamed: 0", "index", "from_node_y", "to_node_y"], inplace=True)
+        tt_df.rename(columns={"from_node_x":"from_node","to_node_x":"to_node","edge_var_x":"edge_var"}, inplace=True)
+        tt_df["edge_tt"] = tt_df["edge_tt_hybrid"].round(3)
+        print(f"alpha: {np.average(tt_df['hybrid_router_alpha'])}")
+        print(f'avg p:{np.average(tt_df["p_fco"])}')
+        tt_df = tt_df[["edge_tt", "edge_var", "from_node", "to_node"]]
+        tt_df = tt_df.dropna(subset=['edge_tt'])
+        tt_df["edge_var"] = tt_df["edge_var"].fillna(0)
         return tt_df
-    def _process_tt_data(self,res_list):        
+    
+
+
+    def _process_tt_data(self,res_list,sim_time):        
         tt_df = pd.DataFrame(res_list, columns=['veh_id','edge_id', 'starting_time', 'end_time'])
         if len(tt_df) == 0:
             return pd.DataFrame(columns=['from_node', 'to_node', 'edge_tt', 'edge_var'])
@@ -608,8 +661,8 @@ class SUMOFleetPyServer():
         tt_df["edge_tt"]=tt_df['edge_tt'].round(3)
         tt_df["edge_var"] = tt_df["edge_var"].fillna(0)
         tt_df["edge_var"]=tt_df['edge_var'].round(3)
-        tt_df = self._get_rt_with_historic_estimate(tt_df)
-        tt_df.drop(columns="edge_id",inplace=True)
+        tt_df = self._get_rt_with_historic_estimate(tt_df,sim_time)
+        
 
         return tt_df 
 
@@ -792,4 +845,5 @@ if __name__ == "__main__":
         SUMOFleetPyCoupling.setup_fleetsimulation()
         SUMOFleetPyCoupling.setup_traci()
         SUMOFleetPyCoupling.setup_network_translation()
+        SUMOFleetPyCoupling.setup_hybrid_router( )
         SUMOFleetPyCoupling.run_coupled_simulation()
