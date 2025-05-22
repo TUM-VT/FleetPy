@@ -8,6 +8,8 @@ from src.fleetctrl.pooling.immediate.insertion import reservation_insertion_with
 import logging
 LOG = logging.getLogger(__name__)
 
+TEST_LIST = ['4_7', '8_7', '16_7', '31_7', '32_7', '35_7', '39_7', '44_7', '56_7', '57_7', '61_7', '64_7', '70_7', '71_7', '78_7', '86_7', '87_7', '93_7', '97_7']
+
 INPUT_PARAMETERS_RollingHorizonReservation = {
     "doc" :  """ this reservation class treats reservation requests with a naive rolling horizon approach:
             innitially reservation requests are assigned to vehicles by an insertion heuristic;
@@ -101,9 +103,9 @@ class RollingHorizonReservation(ReservationBase):
         :param simulation_time: current simulation time
         """
         if self.rid_to_assigned_vid.get(rid) is not None:
-            vid = self.rid_to_assigned_vid.get[rid]
+            vid = self.rid_to_assigned_vid[rid]
             assigned_plan = self.fleetctrl.veh_plans[vid]
-            veh_obj = self.fleetctrl.veh_plans[vid]
+            veh_obj = self.fleetctrl.sim_vehicles[vid]
             new_plan = simple_remove(veh_obj, assigned_plan, rid, simulation_time,
                 self.routing_engine, self.fleetctrl.vr_ctrl_f, self.fleetctrl.rq_dict, self.fleetctrl.const_bt, self.fleetctrl.add_bt)
             self.fleetctrl.assign_vehicle_plan(veh_obj, new_plan, simulation_time)

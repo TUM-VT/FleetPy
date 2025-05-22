@@ -679,20 +679,20 @@ class FleetSimulationBase:
                 self.vehicle_update_order[opid_vid_tuple] = 0
             else:
                 self.vehicle_update_order[opid_vid_tuple] = 1
-            for rid, boarding_time_and_pos in boarding_requests.items():
+            for rid_struct, boarding_time_and_pos in boarding_requests.items():  # rid_struct is the actual key
                 boarding_time, boarding_pos = boarding_time_and_pos
-                LOG.debug(f"rid {rid} boarding at {boarding_time} at pos {boarding_pos}")
-                self.demand.record_boarding(rid, vid, op_id, boarding_time, pu_pos=boarding_pos)
-                self.broker.acknowledge_user_boarding(op_id, rid, vid, boarding_time)
-            for rid, alighting_start_time_and_pos in dict_start_alighting.items():
+                LOG.debug(f"rid {rid_struct} boarding at {boarding_time} at pos {boarding_pos}")
+                self.demand.record_boarding(rid_struct, vid, op_id, boarding_time, pu_pos=boarding_pos)
+                self.broker.acknowledge_user_boarding(op_id, rid_struct, vid, boarding_time)
+            for rid_struct, alighting_start_time_and_pos in dict_start_alighting.items():
                 # record user stats at beginning of alighting process
                 alighting_start_time, alighting_pos = alighting_start_time_and_pos
-                LOG.debug(f"rid {rid} deboarding at {alighting_start_time} at pos {alighting_pos}")
-                self.demand.record_alighting_start(rid, vid, op_id, alighting_start_time, do_pos=alighting_pos)
-            for rid, alighting_end_time in alighting_requests.items():
+                LOG.debug(f"rid {rid_struct} deboarding at {alighting_start_time} at pos {alighting_pos}")
+                self.demand.record_alighting_start(rid_struct, vid, op_id, alighting_start_time, do_pos=alighting_pos)
+            for rid_struct, alighting_end_time in alighting_requests.items():
                 # # record user stats at end of alighting process
-                self.demand.user_ends_alighting(rid, vid, op_id, alighting_end_time)
-                self.broker.acknowledge_user_alighting(op_id, rid, vid, alighting_end_time)
+                self.demand.user_ends_alighting(rid_struct, vid, op_id, alighting_end_time)
+                self.broker.acknowledge_user_alighting(op_id, rid_struct, vid, alighting_end_time)
             # send update to operator
             if len(boarding_requests) > 0 or len(dict_start_alighting) > 0:
                 self.broker.receive_status_update(op_id, vid, next_time, passed_VRL, True)

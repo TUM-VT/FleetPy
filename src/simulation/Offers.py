@@ -254,7 +254,7 @@ class MultimodalOffer(TravellerOffer):
         operator_ids: tp.Tuple[tp.Tuple[int, int]]
     ) -> str:
         """Convert the operator ids to a string representation."""
-        return "-".join([f"{op_id}_{sub_trip_id}" for op_id, sub_trip_id in operator_ids])
+        return "#".join([f"{op_id}_{sub_trip_id}" for op_id, sub_trip_id in operator_ids])
     
     def _merge_sub_trip_offers(self) -> tp.Dict[str, tp.Any]:
         """Merge the sub-trip offers into a single offer."""

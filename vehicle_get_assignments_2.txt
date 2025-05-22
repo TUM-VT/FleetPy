@@ -1,0 +1,385 @@
+
+Vehicle 2 received new VRLs at time 180:
+VRL: status VRL_STATES.ROUTE dest (2966, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2966, None, None) duration 30 earliest start time 180 earliest end time -100000000 locked False bd: {1: [1], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2973, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2973, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: [1]}
+-> current assignment:
+
+-> force: False
+
+Vehicle 2 received new VRLs at time 1140:
+VRL: status VRL_STATES.ROUTE dest (2987, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2987, None, None) duration 30 earliest start time 1140 earliest end time -100000000 locked False bd: {1: [13], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2984, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2984, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: [13]}
+-> current assignment:
+
+-> force: False
+
+Vehicle 2 received new VRLs at time 1440:
+VRL: status VRL_STATES.ROUTE dest (2977, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2977, None, None) duration 30 earliest start time 1440 earliest end time -100000000 locked False bd: {1: ['16_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['16_5']}
+-> current assignment:
+
+-> force: False
+
+Vehicle 2 received new VRLs at time 1500:
+VRL: status VRL_STATES.BOARDING dest (2977, None, None) duration 30 earliest start time 1440 earliest end time -100000000 locked True bd: {1: ['16_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['16_5']}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 2608 earliest end time -100000000 locked False bd: {1: ['19_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2975, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2975, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['19_7']}
+-> current assignment:
+VRL: status VRL_STATES.BOARDING dest (2977, None, None) duration 30 earliest start time 1440 earliest end time -100000000 locked True bd: {1: ['16_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['16_5']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 1500:
+VRL: status VRL_STATES.BOARDING dest (2977, None, None) duration 30 earliest start time 1440 earliest end time -100000000 locked True bd: {1: ['16_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['16_5']}
+-> current assignment:
+VRL: status VRL_STATES.BOARDING dest (2977, None, None) duration 30 earliest start time 1440 earliest end time -100000000 locked True bd: {1: ['16_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['16_5']}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 2608 earliest end time -100000000 locked False bd: {1: ['19_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2975, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2975, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['19_7']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 2040:
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time 2059.998320411885 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2340 earliest end time -100000000 locked False bd: {1: ['26_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['26_4']}
+-> current assignment:
+
+-> force: False
+
+Vehicle 2 received new VRLs at time 2040:
+VRL: status VRL_STATES.ROUTE dest (2969, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time 2040 earliest end time -100000000 locked False bd: {1: [27], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: [27]}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2340 earliest end time -100000000 locked False bd: {1: ['26_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['26_4']}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time 2059.998320411885 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2340 earliest end time -100000000 locked False bd: {1: ['26_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['26_4']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 2520:
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2340 earliest end time -100000000 locked False bd: {1: ['26_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['26_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time 2802.465820879927 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2940 earliest end time -100000000 locked False bd: {1: ['34_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2970, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2970, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['34_4']}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2340 earliest end time -100000000 locked False bd: {1: ['26_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['26_4']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 2580:
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['26_4']}
+VRL: status VRL_STATES.ROUTE dest (2990, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2990, None, None) duration 30 earliest start time 2580 earliest end time -100000000 locked False bd: {1: ['35_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2940 earliest end time -100000000 locked False bd: {1: ['34_4'], -1: ['35_5']}
+VRL: status VRL_STATES.ROUTE dest (2970, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2970, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['34_4']}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['26_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time 2802.465820879927 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2940 earliest end time -100000000 locked False bd: {1: ['34_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2970, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2970, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['34_4']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 2880:
+VRL: status VRL_STATES.BOARDING dest (2990, None, None) duration 30 earliest start time 2580 earliest end time -100000000 locked True bd: {1: ['35_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time 2880 earliest end time -100000000 locked False bd: {1: ['38_1'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2940 earliest end time -100000000 locked False bd: {1: ['34_4'], -1: ['35_5', '38_1']}
+VRL: status VRL_STATES.ROUTE dest (2970, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2970, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['34_4']}
+-> current assignment:
+VRL: status VRL_STATES.BOARDING dest (2990, None, None) duration 30 earliest start time 2580 earliest end time -100000000 locked True bd: {1: ['35_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2940 earliest end time -100000000 locked False bd: {1: ['34_4'], -1: ['35_5']}
+VRL: status VRL_STATES.ROUTE dest (2970, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2970, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['34_4']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 2880:
+VRL: status VRL_STATES.BOARDING dest (2990, None, None) duration 30 earliest start time 2580 earliest end time -100000000 locked True bd: {1: ['35_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time 2880 earliest end time -100000000 locked False bd: {1: ['38_1'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2940 earliest end time -100000000 locked False bd: {1: ['34_4'], -1: ['35_5', '38_1']}
+VRL: status VRL_STATES.ROUTE dest (2970, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2970, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['34_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time 3617.586270573672 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 3808 earliest end time -100000000 locked False bd: {1: ['39_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2982, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2982, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['39_7']}
+-> current assignment:
+VRL: status VRL_STATES.BOARDING dest (2990, None, None) duration 30 earliest start time 2580 earliest end time -100000000 locked True bd: {1: ['35_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time 2880 earliest end time -100000000 locked False bd: {1: ['38_1'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2940 earliest end time -100000000 locked False bd: {1: ['34_4'], -1: ['35_5', '38_1']}
+VRL: status VRL_STATES.ROUTE dest (2970, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2970, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['34_4']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 2880:
+VRL: status VRL_STATES.BOARDING dest (2990, None, None) duration 30 earliest start time 2580 earliest end time -100000000 locked True bd: {1: ['35_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2992, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2992, None, None) duration 30 earliest start time 2880 earliest end time -100000000 locked False bd: {1: ['39_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time 2880 earliest end time -100000000 locked False bd: {1: ['38_1'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2940 earliest end time -100000000 locked False bd: {1: ['34_4'], -1: ['35_5', '38_1', '39_5']}
+VRL: status VRL_STATES.ROUTE dest (2970, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2970, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['34_4']}
+-> current assignment:
+VRL: status VRL_STATES.BOARDING dest (2990, None, None) duration 30 earliest start time 2580 earliest end time -100000000 locked True bd: {1: ['35_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2993, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2993, None, None) duration 30 earliest start time 2880 earliest end time -100000000 locked False bd: {1: ['38_1'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 2940 earliest end time -100000000 locked False bd: {1: ['34_4'], -1: ['35_5', '38_1']}
+VRL: status VRL_STATES.ROUTE dest (2970, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2970, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['34_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time 3617.586270573672 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 3808 earliest end time -100000000 locked False bd: {1: ['39_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2982, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2982, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['39_7']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 3360:
+VRL: status VRL_STATES.ROUTE dest (2970, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2970, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['34_4']}
+VRL: status VRL_STATES.ROUTE dest (2976, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2976, None, None) duration 30 earliest start time 3360 earliest end time -100000000 locked False bd: {1: [46], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2987, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2987, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: [46]}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (2970, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2970, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['34_4']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 3720:
+VRL: status VRL_STATES.ROUTE dest (2987, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2987, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: [46]}
+VRL: status VRL_STATES.ROUTE dest (2974, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2974, None, None) duration 30 earliest start time 3720 earliest end time -100000000 locked False bd: {1: ['50_1'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['50_1']}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (2987, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2987, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: [46]}
+-> force: False
+
+Vehicle 2 received new VRLs at time 3840:
+VRL: status VRL_STATES.ROUTE dest (2974, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2974, None, None) duration 30 earliest start time 3720 earliest end time -100000000 locked False bd: {1: ['50_1'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['50_1']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 4140 earliest end time -100000000 locked False bd: {1: ['53_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2990, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2990, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['53_4']}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (2974, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2974, None, None) duration 30 earliest start time 3720 earliest end time -100000000 locked False bd: {1: ['50_1'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['50_1']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 4560:
+VRL: status VRL_STATES.ROUTE dest (2990, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2990, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['53_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time 4823.542146455031 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 5040 earliest end time -100000000 locked False bd: {1: ['60_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2969, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['60_4']}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (2990, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2990, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['53_4']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 5220:
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked True bd: {1: [], -1: ['60_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time 6051.488923624168 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 6240 earliest end time -100000000 locked False bd: {1: ['71_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2967, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2967, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['71_7']}
+-> current assignment:
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked True bd: {1: [], -1: ['60_4']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 5220:
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked True bd: {1: [], -1: ['60_4']}
+VRL: status VRL_STATES.ROUTE dest (2985, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2985, None, None) duration 30 earliest start time 5220 earliest end time -100000000 locked False bd: {1: ['71_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['71_5']}
+-> current assignment:
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked True bd: {1: [], -1: ['60_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time 6051.488923624168 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 6240 earliest end time -100000000 locked False bd: {1: ['71_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2967, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2967, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['71_7']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 5400:
+VRL: status VRL_STATES.ROUTE dest (2985, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2985, None, None) duration 30 earliest start time 5220 earliest end time -100000000 locked False bd: {1: ['71_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['71_5']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 5940 earliest end time -100000000 locked False bd: {1: ['73_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2969, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['73_4']}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (2985, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2985, None, None) duration 30 earliest start time 5220 earliest end time -100000000 locked False bd: {1: ['71_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['71_5']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 5520:
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['71_5']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 5940 earliest end time -100000000 locked False bd: {1: ['73_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2969, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['73_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time 6352.9148877837115 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 6508 earliest end time -100000000 locked False bd: {1: ['78_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2981, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2981, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['78_7']}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['71_5']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 5940 earliest end time -100000000 locked False bd: {1: ['73_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2969, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['73_4']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 5760:
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 5940 earliest end time -100000000 locked False bd: {1: ['73_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2969, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['73_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time 6352.9148877837115 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 6508 earliest end time -100000000 locked False bd: {1: ['78_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2981, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2981, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['78_7']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time 6707.431059881513 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 6808 earliest end time -100000000 locked False bd: {1: ['86_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2982, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2982, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['86_7']}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 5940 earliest end time -100000000 locked False bd: {1: ['73_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2969, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['73_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time 6352.9148877837115 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 6508 earliest end time -100000000 locked False bd: {1: ['78_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2981, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2981, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['78_7']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 5760:
+VRL: status VRL_STATES.ROUTE dest (2969, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time 5760 earliest end time -100000000 locked False bd: {1: ['86_5'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 5940 earliest end time -100000000 locked False bd: {1: ['73_4'], -1: ['86_5']}
+VRL: status VRL_STATES.ROUTE dest (2969, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['73_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time 6352.9148877837115 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 6508 earliest end time -100000000 locked False bd: {1: ['78_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2981, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2981, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['78_7']}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (np.int64(2966), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2966), None, None) duration 30 earliest start time 5940 earliest end time -100000000 locked False bd: {1: ['73_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2969, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['73_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time 6352.9148877837115 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 6508 earliest end time -100000000 locked False bd: {1: ['78_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2981, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2981, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['78_7']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time 6707.431059881513 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 6808 earliest end time -100000000 locked False bd: {1: ['86_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2982, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2982, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['86_7']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 6240:
+VRL: status VRL_STATES.ROUTE dest (2969, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['73_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time 6352.9148877837115 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 6508 earliest end time -100000000 locked False bd: {1: ['78_7', '88_4'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2981, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2981, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['78_7']}
+VRL: status VRL_STATES.ROUTE dest (2982, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2982, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['88_4']}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (2969, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2969, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['73_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time 6352.9148877837115 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 6508 earliest end time -100000000 locked False bd: {1: ['78_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2981, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2981, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['78_7']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 6540:
+VRL: status VRL_STATES.ROUTE dest (2981, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2981, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['78_7']}
+VRL: status VRL_STATES.ROUTE dest (2982, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2982, None, None) duration 30 earliest start time 6540 earliest end time -100000000 locked False bd: {1: ['90_1'], -1: ['88_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['90_1']}
+-> current assignment:
+VRL: status VRL_STATES.ROUTE dest (2981, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2981, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['78_7']}
+VRL: status VRL_STATES.ROUTE dest (2982, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2982, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['88_4']}
+-> force: False
+
+Vehicle 2 received new VRLs at time 6660:
+VRL: status VRL_STATES.BOARDING dest (2981, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked True bd: {1: [], -1: ['78_7']}
+VRL: status VRL_STATES.ROUTE dest (2982, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2982, None, None) duration 30 earliest start time 6540 earliest end time -100000000 locked False bd: {1: ['90_1'], -1: ['88_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['90_1']}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time 7708 earliest end time -100000000 locked False bd: {1: ['93_7'], -1: []}
+VRL: status VRL_STATES.ROUTE dest (2974, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2974, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['93_7']}
+-> current assignment:
+VRL: status VRL_STATES.BOARDING dest (2981, None, None) duration 30 earliest start time -1 earliest end time -100000000 locked True bd: {1: [], -1: ['78_7']}
+VRL: status VRL_STATES.ROUTE dest (2982, None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (2982, None, None) duration 30 earliest start time 6540 earliest end time -100000000 locked False bd: {1: ['90_1'], -1: ['88_4']}
+VRL: status VRL_STATES.ROUTE dest (np.int64(2980), None, None) duration None earliest start time -1000 earliest end time -1000 locked False bd: {1: [], -1: []}
+VRL: status VRL_STATES.BOARDING dest (np.int64(2980), None, None) duration 30 earliest start time -1 earliest end time -100000000 locked False bd: {1: [], -1: ['90_1']}
+-> force: False
