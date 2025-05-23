@@ -661,7 +661,7 @@ class PTBroker(BrokerBasic):
                     new_t_do_latest: int = self._determine_amod_latest_dropoff_time(
                                                                                 parent_rq_obj,
                                                                                 fm_amod_offer,
-                                                                                fm_pt_offer.get(G_PT_OFFER_SOURCE_TRANSFER_TIME),
+                                                                                fm_pt_offer.get(G_OFFER_WAIT),
                                                                                 )
                     sub_prq_obj: 'PlanRequest' = self.amod_operators[amod_op_id].rq_dict[fm_amod_rid_struct]
                     sub_prq_obj.set_new_dropoff_time_constraint(new_t_do_latest)
@@ -760,7 +760,7 @@ class PTBroker(BrokerBasic):
                         new_t_do_latest: int = self._determine_amod_latest_dropoff_time(
                                                                                     parent_rq_obj,
                                                                                     flm_amod_offer_0,
-                                                                                    flm_pt_offer.get(G_PT_OFFER_SOURCE_TRANSFER_TIME),
+                                                                                    flm_pt_offer.get(G_OFFER_WAIT),
                                                                                     )
                         sub_prq_obj: 'PlanRequest' = self.amod_operators[amod_op_id].rq_dict[flm_amod_rid_struct_0]
                         sub_prq_obj.set_new_dropoff_time_constraint(new_t_do_latest)
@@ -849,9 +849,9 @@ class PTBroker(BrokerBasic):
         self, 
         rq_obj: 'RequestBase',
         amod_offer: 'TravellerOffer',
-        pt_source_transfer_time: int,
+        pt_waiting_time: int,
     ) -> tp.Optional[int]:
         """This method determines the latest dropoff time for the amod sub-request.
         """
-        t_do_latest: int = rq_obj.earliest_start_time + amod_offer.get(G_OFFER_WAIT) + amod_offer.get(G_OFFER_DRIVE) + pt_source_transfer_time
+        t_do_latest: int = rq_obj.earliest_start_time + amod_offer.get(G_OFFER_WAIT) + amod_offer.get(G_OFFER_DRIVE) + pt_waiting_time
         return t_do_latest

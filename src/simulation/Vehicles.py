@@ -342,12 +342,6 @@ class SimulationVehicle:
             boarding_list = [self.rq_db[prq.get_rid_struct()] for prq in vrl.rq_dict.get(1,[])]
             alighting_list = [self.rq_db[prq.get_rid_struct()] for prq in vrl.rq_dict.get(-1,[])]
             vrl.rq_dict = {1:boarding_list, -1:alighting_list}
-
-        with open(f"vehicle_get_assignments_{self.vid}.txt", "a") as f:
-            f.write(f"\nVehicle {self.vid} received new VRLs at time {sim_time}:\n{chr(10).join([str(x) for x in list_route_legs])}")
-            f.write(f"\n-> current assignment:\n{chr(10).join([str(x) for x in self.assigned_route])}")
-            f.write(f"\n-> force: {force_ignore_lock}\n")
-
         LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
         LOG.debug(f"  -> current assignment: {[str(x) for x in self.assigned_route]}")
         LOG.debug(f" -> force: {force_ignore_lock}")
@@ -397,10 +391,6 @@ class SimulationVehicle:
         :return:(dict of boarding requests -> (time, position), dict of alighting request objects -> (time, position), list of passed VRL, dict_start_alighting)
         :rtype: list
         """
-
-        with open(f"vehicle_assignments_log_{self.vid}.txt", "a") as f:
-            f.write(f"\nVehicle {self.vid} has assignments at time {current_time}:\n{chr(10).join([str(x) for x in self.assigned_route])}")
-
         LOG.debug(f"update veh state {current_time} -> {next_time} : {self}")
         dict_boarding_requests = {}
         dict_start_alighting = {}

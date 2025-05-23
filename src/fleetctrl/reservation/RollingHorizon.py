@@ -8,8 +8,6 @@ from src.fleetctrl.pooling.immediate.insertion import reservation_insertion_with
 import logging
 LOG = logging.getLogger(__name__)
 
-TEST_LIST = ['4_7', '8_7', '16_7', '31_7', '32_7', '35_7', '39_7', '44_7', '56_7', '57_7', '61_7', '64_7', '70_7', '71_7', '78_7', '86_7', '87_7', '93_7', '97_7']
-
 INPUT_PARAMETERS_RollingHorizonReservation = {
     "doc" :  """ this reservation class treats reservation requests with a naive rolling horizon approach:
             innitially reservation requests are assigned to vehicles by an insertion heuristic;
@@ -67,14 +65,15 @@ class RollingHorizonReservation(ReservationBase):
         :return: list of (position, latest arrival time)"""
         return []
 
-    def return_immediate_reservation_offer(self, rid, sim_time):
+    def return_immediate_reservation_offer(self, rid, sim_time, excluded_vid=[]):
         """ this function returns an offer if possible for an reservation request which has been added to the reservation module before 
         in this implementation, an offer is always returned discribed by the earliest and latest pick up time
         :param rid: request id
         :param sim_time: current simulation time
+        :param excluded_vid: list of vehicle ids that should not be considered for assignment
         :return: offer for request """
         prq = self.active_reservation_requests[rid]
-        tuple_list = reservation_insertion_with_heuristics(sim_time, prq, self.fleetctrl, force_feasible_assignment=True)
+        tuple_list = reservation_insertion_with_heuristics(sim_time, prq, self.fleetctrl, force_feasible_assignment=True, excluded_vid=excluded_vid)
         if len(tuple_list) > 0:
             best_tuple = min(tuple_list, key=lambda x:x[2])
             best_vid, best_plan, _ = best_tuple
