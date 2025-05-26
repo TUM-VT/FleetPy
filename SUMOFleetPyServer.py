@@ -660,13 +660,12 @@ class SUMOFleetPyServer():
             tt_df = tt_df.dropna(subset=['edge_id'])
         tt_df["from_node"] = tt_df["edge_id"].apply(lambda x: x[0])
         tt_df["to_node"] = tt_df["edge_id"].apply(lambda x: x[1])
-        
+    
         tt_df["edge_tt"]=tt_df['edge_tt'].round(3)
         tt_df["edge_var"] = tt_df["edge_var"].fillna(0)
         tt_df["edge_var"]=tt_df['edge_var'].round(3)
-        tt_df = self._get_hybrid_router_tt(tt_df,sim_time)
-        
-
+        tt_df = self._get_hybrid_router_tt(tt_df,sim_time) 
+        tt_df = tt_df[["from_node", "to_node", "edge_tt", "edge_var"]]
         return tt_df 
 
     def _save_tt_to_csv(self,tt_df, sim_time):
