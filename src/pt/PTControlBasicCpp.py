@@ -16,6 +16,8 @@ import pandas as pd
 from src.pt.PTControlBase import PTControlBase
 from src.pt.cpp_pt_router.PyPTRouter import PyPTRouter
 from src.simulation.Offers import Rejection, PTOffer
+if tp.TYPE_CHECKING:
+    from src.demand.TravelerModels import BasicMultimodalRequest
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -37,8 +39,10 @@ INPUT_PARAMETERS_PTControlBasicCpp = {
 # main
 # ----
 class PTControlBasicCpp(PTControlBase):
-    def __init__(self, fp_gtfs_dir: str):
+    def __init__(self, fp_gtfs_dir: str, pt_operator_id: int = -2):
         super().__init__()
+
+        self.pt_operator_id = pt_operator_id
 
         self.pt_offer_db: tp.Dict[str, 'PTOffer'] = {}  # rid_struct -> PTOffer
 
@@ -261,6 +265,33 @@ class PTControlBasicCpp(PTControlBase):
             tp.Optional[PTOffer]: The current offer for the pt request.
         """
         return self.pt_offer_db.get((rid_struct, previous_amod_operator_id), None)
+    
+    def user_confirms_booking(
+        self,
+        pt_sub_rq_obj: 'BasicMultimodalRequest',
+        previous_amod_operator_id: int = None
+    ):
+        """This method is used to confirm a customer booking. This can trigger some database processes.
+
+        Args:
+            pt_sub_rq_obj (BasicMultimodalRequest): The pt sub-request object.
+            previous_amod_operator_id (int, optional): The operator id of the previous amod operator. Defaults to None.
+        """
+        pt_rid_struct: str = pt_sub_rq_obj.get_rid_struct()
+        pt_offer: 'PTOffer' = self.get_current_offer(pt_rid_struct, previous_amod_operator_id)
+        pt_sub_rq_obj.user_boards_vehicle(
+                                        simulation_time = pt_offer.source_station_arrival_time,  # source stop transfer time in not included
+                                        op_id = self.pt_operator_id,
+                                        vid = -1,
+                                        pu_pos = None,
+                                        t_access = pt_offer.get(G_PT_OFFER_SOURCE_WALK, None),
+                                        )
+        pt_sub_rq_obj.user_leaves_vehicle(
+                                        simulation_time = pt_offer.target_station_arrival_time,
+                                        do_pos = None,
+                                        t_egress = pt_offer.get(G_PT_OFFER_TARGET_WALK, None),
+                                        )
+        
 
 if __name__ == "__main__":
     # Test the pt control class： python -m src.pt.PTControlBasicCpp

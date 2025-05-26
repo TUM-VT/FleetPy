@@ -20,8 +20,7 @@ if tp.TYPE_CHECKING:
     from src.demand.demand import Demand
     from src.routing.NetworkBase import NetworkBase
     from src.demand.TravelerModels import RequestBase, BasicMultimodalRequest
-    from src.simulation.Legs import VehicleRouteLeg
-    from src.simulation.Offers import TravellerOffer
+    from src.simulation.Offers import TravellerOffer, PTOffer
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -67,7 +66,7 @@ class PTBroker(BrokerBasic):
         """
         super().__init__(n_amod_op, amod_operators, pt_operator, demand, routing_engine, scenario_parameters)
 
-        self.pt_operator_id: int = -2
+        self.pt_operator_id: int = self.pt_operator.pt_operator_id
         
         self.sim_start_datetime: datetime = None
         self._set_sim_start_datetime(scenario_parameters.get(G_SIM_START_DATE))
@@ -188,6 +187,11 @@ class PTBroker(BrokerBasic):
 
             # inform all AMoD operators that the request is cancelled
             self.inform_user_leaving_system(rid, sim_time)
+
+            # inform PT operator that the request is confirmed
+            pt_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.PT.value}"
+            pt_sub_rq_obj: 'BasicMultimodalRequest' = self.demand[pt_rid_struct]
+            self.pt_operator.user_confirms_booking(pt_sub_rq_obj, None) 
             
         # 2. AMoD involved offer has been selected
         else:
@@ -201,16 +205,26 @@ class PTBroker(BrokerBasic):
             
             elif parent_modal_state.value > RQ_MODAL_STATE.MONOMODAL.value and parent_modal_state.value < RQ_MODAL_STATE.PT.value:
                 for operator_id, sub_trip_id in chosen_operator:
-                    if operator_id == self.pt_operator_id:  # PT operator does not need to be informed
-                        continue
+                    if operator_id == self.pt_operator_id:
+                        # inform the pt operator that the request is confirmed
+                        pt_rid_struct: str = f"{rid}_{sub_trip_id}"
+                        pt_sub_rq_obj: 'BasicMultimodalRequest' = self.demand[pt_rid_struct]
 
-                    amod_rid_struct: str = f"{rid}_{sub_trip_id}"
-
-                    for i, operator in enumerate(self.amod_operators):
-                        if i != operator_id: 
-                            operator.user_cancels_request(amod_rid_struct, sim_time)
-                        else:
-                            operator.user_confirms_booking(amod_rid_struct, sim_time)
+                        if parent_modal_state == RQ_MODAL_STATE.LASTMILE:
+                            previous_amod_operator_id = None  # no previous amod operator
+                        else:  # firstmile or firstlastmile
+                            previous_amod_operator_id: int = chosen_operator[0][0]  # the first amod operator
+                        
+                        self.pt_operator.user_confirms_booking(pt_sub_rq_obj, previous_amod_operator_id)
+                      
+                    else:
+                        # inform the amod operator that the request is confirmed
+                        amod_rid_struct: str = f"{rid}_{sub_trip_id}"
+                        for i, operator in enumerate(self.amod_operators):
+                            if i != operator_id: 
+                                operator.user_cancels_request(amod_rid_struct, sim_time)
+                            else:
+                                operator.user_confirms_booking(amod_rid_struct, sim_time)
 
                 amod_confirmed_rids.append((rid, rq_obj))
             

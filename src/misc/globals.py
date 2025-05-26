@@ -77,6 +77,7 @@ G_BROKER_TYPE = "broker_type"
 # public transport router specific attributes
 G_PT_ROUTER_TYPE = "pt_router_type"
 G_SIM_START_DATE = "sim_start_date"  # date of the simulation start in format: YYYYMMDD
+G_PT_OPERATOR_ID = "pt_operator_id"
 
 # public transport specific attributes
 G_PT_TYPE = "pt_type"

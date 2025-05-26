@@ -456,12 +456,13 @@ class FleetSimulationBase:
 
         pt_router_type = self.scenario_parameters.get(G_PT_ROUTER_TYPE)
         gtfs_data_dir = self.dir_names.get(G_DIR_PT)
+        pt_operator_id = self.scenario_parameters.get(G_PT_OPERATOR_ID, -2)
         if pt_router_type is None or gtfs_data_dir is None:
             return
         else:
             LOG.info(f"Public transport router type specified: {pt_router_type}")
             PTControlClass = load_pt_module(pt_router_type)
-            self.pt_operator = PTControlClass(gtfs_data_dir)
+            self.pt_operator = PTControlClass(gtfs_data_dir, pt_operator_id)
 
     @staticmethod
     def get_directory_dict(scenario_parameters, list_operator_dicts):

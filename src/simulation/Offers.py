@@ -179,10 +179,12 @@ class PTOffer(TravellerOffer):
     num_transfers: int,
     detailed_journey_plan: tp.List[tp.Dict[str, tp.Any]],
 ):
-        self.source_station_arrival_time = source_station_arrival_time
         self.detailed_journey_plan = detailed_journey_plan
+        
+        self.source_station_arrival_time = source_station_arrival_time
+        self.source_stop_arrival_time = source_station_arrival_time + source_transfer_time
 
-        self.target_station_arrival_time = source_station_arrival_time + offered_waiting_time + offered_trip_time
+        self.target_station_arrival_time = self.source_stop_arrival_time + offered_waiting_time + offered_trip_time
         self.destination_node_arrival_time = self.target_station_arrival_time + target_walking_time
 
         additional_parameters = {

@@ -72,4 +72,16 @@ class PTControlBase(metaclass=ABCMeta):
         """This method will return the current offer for the pt request.
         """
         pass
+
+    @abstractmethod
+    def user_confirms_booking(self):
+        """This method is used to confirm a customer booking. This can trigger some database processes.
+        """
+        pass
+
+    @abstractmethod
+    def _compute_fare(self):
+        """This method will compute the fare for the pt request.
+        """
+        pass
     
