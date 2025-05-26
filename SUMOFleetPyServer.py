@@ -616,7 +616,7 @@ class SUMOFleetPyServer():
             return tt_df
         
         sim_hour = int(sim_time/3600)
-        tt_df["count"] = tt_df["count"] * 3600/int(self.fp_sim_env.scenario_parameters.get("sumo_statistics_interval"))
+        #tt_df["count"] = tt_df["count"] * 3600/int(self.fp_sim_env.scenario_parameters.get("sumo_statistics_interval"))
         tt_df = tt_df.reset_index(drop=True)
         tt_df["edge_id_str"] = tt_df["edge_id"].astype(str) 
         tt_df = pd.merge(left=tt_df, right= self.fp_hybrid_router_sc0_df, on="edge_id_str", how="left")
