@@ -1,18 +1,23 @@
 import torch
 from torch_geometric.loader import DataLoader
 import os
+from sklearn.metrics import f1_score
+from data_processing.config import DataProcessingConfig
+from typing import Optional
 
 
 class Trainer:
     DEFAULT_EPOCHS = 200
     THRESHOLD = 0.5
 
-    def __init__(self, model_dir, data, device, masks, batch_size=32, epochs=200):
+    def __init__(self, data, device, masks, config: Optional[DataProcessingConfig] = None, batch_size=32, epochs=200):
         """
         Initialize the trainer
         """
-        self.model_dir = model_dir
         self.device = device
+        self.config = config or DataProcessingConfig()
+        self.model_dir = os.path.join(self.config.base_data_dir, self.config.models_dir)
+        os.makedirs(self.model_dir, exist_ok=True)
         self.epochs = epochs
         self.batch_size = batch_size
         self.threshold = 0.5  # Threshold for binary classification
@@ -26,7 +31,7 @@ class Trainer:
         """
         Train the model
         """
-        best_val_acc = 0
+        best_val_f1 = 0
         no_improve_epochs = 0
         
         # Initialize scheduler with optimizer
@@ -40,20 +45,20 @@ class Trainer:
         
         for epoch in range(self.epochs):
             loss = self.train_epoch(model, optimizer, criterion)
-            val_acc = self.evaluate(model, self.val_loader)
+            val_f1 = self.evaluate(model, self.val_loader)
             
-            # Update learning rate based on validation accuracy
-            scheduler.step(val_acc)
+            # Update learning rate based on validation F1
+            scheduler.step(val_f1)
             
             # Print progress
             print(f'Epoch {epoch+1}/{self.epochs}:')
             print(f'  Loss: {loss:.4f}')
-            print(f'  Validation Accuracy: {val_acc:.4f}')
+            print(f'  Validation F1: {val_f1:.4f}')
             print(f'  Learning Rate: {optimizer.param_groups[0]["lr"]:.6f}')
             
             # Early stopping
-            if val_acc > best_val_acc:
-                best_val_acc = val_acc
+            if val_f1 > best_val_f1:
+                best_val_f1 = val_f1
                 no_improve_epochs = 0
                 # Save best model
                 torch.save(model.state_dict(), f'{self.model_dir}/best_model.pt')
@@ -65,8 +70,8 @@ class Trainer:
         
         # Load best model for final evaluation
         model.load_state_dict(torch.load(f'{self.model_dir}/best_model.pt'))
-        test_acc = self.evaluate(model, self.test_loader)
-        print(f'Final Test Accuracy: {test_acc:.4f}')
+        test_f1 = self.evaluate(model, self.test_loader)
+        print(f'Final Test F1: {test_f1:.4f}')
 
     def train_epoch(self, model, optimizer, criterion):
         model.train()
@@ -108,7 +113,7 @@ class Trainer:
 
     def evaluate(self, model, loader):
         model.eval()
-        total_acc = 0
+        total_f1 = 0
         num_batches = 0
         with torch.no_grad():
             for batch in loader:
@@ -125,11 +130,15 @@ class Trainer:
                 # Skip batches with NaN values
                 if torch.isnan(target).any() or torch.isnan(pred_labels).any():
                     continue
-                    
-                mean_batch_acc = (pred_labels == target).float().mean()
-                total_acc += mean_batch_acc.item()
+
+                # Convert to numpy for sklearn
+                target_np = target.cpu().numpy()
+                pred_labels_np = pred_labels.cpu().numpy()
+                # Compute F1 score for the batch
+                batch_f1 = f1_score(target_np, pred_labels_np, zero_division=0)
+                total_f1 += batch_f1
                 num_batches += 1
-        return total_acc / num_batches if num_batches > 0 else 0
+        return total_f1 / num_batches if num_batches > 0 else 0
 
     def _create_loader(self, data, mask, batch_size, shuffle):
         # Filter out empty graphs
