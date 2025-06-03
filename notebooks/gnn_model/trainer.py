@@ -1,154 +1,230 @@
 import torch
 from torch_geometric.loader import DataLoader
 import os
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, precision_score, recall_score
+import numpy as np
 from data_processing.config import DataProcessingConfig
 from typing import Optional
 
 
 class Trainer:
-    DEFAULT_EPOCHS = 200
-    THRESHOLD = 0.5
-
     def __init__(self, data, device, masks, config: Optional[DataProcessingConfig] = None, batch_size=32, epochs=200):
-        """
-        Initialize the trainer
-        """
+        """Initialize the trainer with improved handling of class imbalance"""
         self.device = device
         self.config = config or DataProcessingConfig()
         self.model_dir = os.path.join(self.config.base_data_dir, self.config.models_dir)
         os.makedirs(self.model_dir, exist_ok=True)
         self.epochs = epochs
         self.batch_size = batch_size
-        self.threshold = 0.5  # Threshold for binary classification
+        self.threshold = 0.5  # Fixed threshold for binary classification
         
         # Create data loaders
         self.train_loader = self._create_loader(data, masks[0], batch_size, shuffle=True)
         self.val_loader = self._create_loader(data, masks[1], batch_size, shuffle=False)
         self.test_loader = self._create_loader(data, masks[2], batch_size, shuffle=False)
+        
+        # Calculate class weights from training data
+        self.pos_weight = self._calculate_pos_weight(data, masks[0])
+        print(f"\n{'='*80}")
+        print(f"Training Configuration")
+        print(f"{'-'*80}")
+        print(f"{'Batch Size:':<20} {batch_size}")
+        print(f"{'Max Epochs:':<20} {epochs}")
+        print(f"{'Device:':<20} {device}")
+        print(f"{'Pos Weight:':<20} {self.pos_weight:.4f}")
+        print(f"{'-'*80}")
 
-    def train(self, model, criterion, optimizer):
-        """
-        Train the model
-        """
+    def _calculate_pos_weight(self, data, mask):
+        """Calculate weight for positive class to handle class imbalance"""
+        all_labels = []
+        for i in range(len(data)):
+            if mask[i]:
+                for edge_type in data[i].y_dict:
+                    all_labels.append(data[i].y_dict[edge_type])
+        all_labels = torch.cat(all_labels)
+        neg_pos_ratio = (all_labels == 0).sum() / (all_labels == 1).sum()
+        return torch.tensor(neg_pos_ratio, device=self.device)
+
+    def train(self, model, optimizer):
+        """Train the model with improved monitoring and class balance handling"""
         best_val_f1 = 0
+        patience = 15
         no_improve_epochs = 0
         
-        # Initialize scheduler with optimizer
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode='max',
-            factor=0.7,
-            patience=7,
-            min_lr=1e-6
-        )
+        # Use BCEWithLogitsLoss with pos_weight
+        criterion = torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight)
         
         for epoch in range(self.epochs):
-            loss = self.train_epoch(model, optimizer, criterion)
-            val_f1 = self.evaluate(model, self.val_loader)
+            # Training
+            train_metrics = self.train_epoch(model, optimizer, criterion)
             
-            # Update learning rate based on validation F1
-            scheduler.step(val_f1)
+            # Validation
+            val_metrics = self.evaluate(model, self.val_loader)
             
-            # Print progress
-            print(f'Epoch {epoch+1}/{self.epochs}:')
-            print(f'  Loss: {loss:.4f}')
-            print(f'  Validation F1: {val_f1:.4f}')
-            print(f'  Learning Rate: {optimizer.param_groups[0]["lr"]:.6f}')
-            
-            # Early stopping
-            if val_f1 > best_val_f1:
-                best_val_f1 = val_f1
+            # Update best model
+            if val_metrics['f1'] > best_val_f1:
+                best_val_f1 = val_metrics['f1']
                 no_improve_epochs = 0
                 # Save best model
-                torch.save(model.state_dict(), f'{self.model_dir}/best_model.pt')
+                torch.save({
+                    'model_state_dict': model.state_dict(),
+                    'pos_weight': self.pos_weight
+                }, f'{self.model_dir}/best_model.pt')
             else:
                 no_improve_epochs += 1
-                if no_improve_epochs >= 15:
-                    print(f'Early stopping triggered after {epoch+1} epochs')
-                    break
+            
+            # Print epoch metrics in a clean tabular format
+            print(f"\n{'='*80}")
+            print(f"Epoch {epoch+1}/{self.epochs}")
+            print(f"{'-'*80}")
+            print(f"{'Metric':<15} {'Training':<15} {'Validation':<15}")
+            print(f"{'-'*80}")
+            print(f"{'Loss':<15} {train_metrics['loss']:<15.4f} {'-':<15}")
+            print(f"{'Accuracy':<15} {train_metrics['accuracy']:<15.4f} {val_metrics['accuracy']:<15.4f}")
+            print(f"{'F1':<15} {train_metrics['f1']:<15.4f} {val_metrics['f1']:<15.4f}")
+            print(f"{'Precision':<15} {train_metrics['precision']:<15.4f} {val_metrics['precision']:<15.4f}")
+            print(f"{'Recall':<15} {train_metrics['recall']:<15.4f} {val_metrics['recall']:<15.4f}")
+            print(f"{'-'*80}")
+            
+            # Print improvement status
+            if val_metrics['f1'] > best_val_f1:
+                print("✓ New best model saved!")
+            
+            if no_improve_epochs >= patience:
+                print(f'Early stopping triggered after {epoch+1} epochs')
+                break
         
-        # Load best model for final evaluation
-        model.load_state_dict(torch.load(f'{self.model_dir}/best_model.pt'))
-        test_f1 = self.evaluate(model, self.test_loader)
-        print(f'Final Test F1: {test_f1:.4f}')
+        # Load best model and evaluate on test set
+        try:
+            checkpoint = torch.load(f'{self.model_dir}/best_model.pt', weights_only=False)
+        except Exception as e:
+            print(f"Warning: Could not load checkpoint with weights_only=False: {str(e)}")
+            torch.serialization.add_safe_globals(['numpy._core.multiarray.scalar'])
+            checkpoint = torch.load(f'{self.model_dir}/best_model.pt', weights_only=True)
+        
+        model.load_state_dict(checkpoint['model_state_dict'])
+        test_metrics = self.evaluate(model, self.test_loader)
+        print(f"\n{'='*80}")
+        print(f"Final Test Results")
+        print(f"{'-'*80}")
+        print(f"{'Metric':<15} {'Score':<15}")
+        print(f"{'-'*80}")
+        print(f"{'Accuracy':<15} {test_metrics['accuracy']:<15.4f}")
+        print(f"{'F1':<15} {test_metrics['f1']:<15.4f}")
+        print(f"{'Precision':<15} {test_metrics['precision']:<15.4f}")
+        print(f"{'Recall':<15} {test_metrics['recall']:<15.4f}")
+        print(f"{'='*80}")
 
     def train_epoch(self, model, optimizer, criterion):
+        """Train for one epoch with improved monitoring"""
         model.train()
         total_loss = 0
+        all_preds = []
+        all_targets = []
         num_batches = 0
         
         for batch_idx, batch in enumerate(self.train_loader):
             batch = batch.to(self.device)
-            optimizer.zero_grad()  # Clear gradients.
-
-            out = model(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)  # Perform a single forward pass.
+            optimizer.zero_grad()
             
-            # Get the target labels for all edges and convert to float
+            # Forward pass
+            logits = model(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
             target = torch.cat([batch.y_dict[edge_type].float() for edge_type in batch.edge_index_dict.keys()])
             
-            # Skip batches with NaN values in target
-            if torch.isnan(target).any():
-                print(f"Warning: NaN values in target for batch {batch_idx}")
-                continue
+            # Ensure logits and target have compatible shapes
+            if logits.dim() > 1 and logits.size(1) > 1:
+                logits = logits[:, 1]  # Take the positive class logit
+            else:
+                logits = logits.squeeze(-1)  # Remove any extra dimensions
+
+            # Compute loss and backprop
+            loss = criterion(logits, target)
             
-            # Take only the positive class probability for binary classification
-            out = out[:, 1]
+            loss.backward()
+            optimizer.step()
             
-            # Compute the loss for all edges in this batch
-            loss = criterion(out, target)
-
-            # Check for nan loss
-            if torch.isnan(loss):
-                print(f"Warning: NaN loss detected in batch {batch_idx}")
-                continue
-
-            loss.backward()  # Derive gradients.
-            optimizer.step()  # Update parameters based on gradients.
-
+            # Get predictions
+            with torch.no_grad():
+                probs = torch.sigmoid(logits)
+                pred_labels = (probs > self.threshold).float()
+                all_preds.append(pred_labels.cpu())
+                all_targets.append(target.cpu())
+            
             total_loss += loss.item()
             num_batches += 1
-
-        return total_loss / num_batches if num_batches > 0 else 0
+            
+            # Print batch statistics periodically
+            # if batch_idx % 10 == 0:
+                # self._print_batch_stats(batch_idx, loss.item(), logits, probs, target, pred_labels)
+        
+        # Compute epoch metrics
+        metrics = self._compute_metrics(all_preds, all_targets)
+        metrics['loss'] = total_loss / num_batches if num_batches > 0 else float('inf')
+        return metrics
 
     def evaluate(self, model, loader):
+        """Evaluate model"""
         model.eval()
-        total_f1 = 0
-        num_batches = 0
+        all_preds = []
+        all_targets = []
+        
         with torch.no_grad():
             for batch in loader:
                 batch = batch.to(self.device)
-                pred = model(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
-                
-                # Get the target labels for all edges and convert to float
+                logits = model(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
                 target = torch.cat([batch.y_dict[edge_type].float() for edge_type in batch.edge_index_dict.keys()])
                 
-                # Take only the positive class probability
-                pred = pred[:, 1]
-                pred_labels = (pred > self.threshold).float()
+                # Ensure logits have the right shape
+                if logits.dim() > 1 and logits.size(1) > 1:
+                    logits = logits[:, 1]  # Take the positive class logit
+                else:
+                    logits = logits.squeeze(-1)  # Remove any extra dimensions
                 
-                # Skip batches with NaN values
-                if torch.isnan(target).any() or torch.isnan(pred_labels).any():
-                    continue
+                probs = torch.sigmoid(logits)
+                pred_labels = (probs > self.threshold).float()
+                all_preds.append(pred_labels.cpu())
+                all_targets.append(target.cpu())
+        
+        if not all_preds:
+            return {'f1': 0, 'precision': 0, 'recall': 0}
+        
+        metrics = self._compute_metrics(all_preds, all_targets)
+        return metrics
 
-                # Convert to numpy for sklearn
-                target_np = target.cpu().numpy()
-                pred_labels_np = pred_labels.cpu().numpy()
-                # Compute F1 score for the batch
-                batch_f1 = f1_score(target_np, pred_labels_np, zero_division=0)
-                total_f1 += batch_f1
-                num_batches += 1
-        return total_f1 / num_batches if num_batches > 0 else 0
+    def _compute_metrics(self, all_preds, all_targets):
+        """Compute F1, precision, recall, and accuracy"""
+        if not all_preds or not all_targets:
+            return {'f1': 0, 'precision': 0, 'recall': 0, 'accuracy': 0}
+        
+        preds = torch.cat(all_preds).numpy()
+        targets = torch.cat(all_targets).numpy()
+        
+        return {
+            'f1': f1_score(targets, preds, zero_division=0),
+            'precision': precision_score(targets, preds, zero_division=0),
+            'recall': recall_score(targets, preds, zero_division=0),
+            'accuracy': (preds == targets).mean()
+        }
+
+    def _print_batch_stats(self, batch_idx, loss, logits, probs, target, pred_labels):
+        """Print detailed batch statistics"""
+        target_dist = torch.bincount(target.long())
+        pred_dist = torch.bincount(pred_labels.long())
+        print(f"\r[Batch {batch_idx:3d}] Loss: {loss:.4f} | "
+              f"Class dist - Target: {target_dist.tolist()} Pred: {pred_dist.tolist()}", 
+              end="", flush=True)
 
     def _create_loader(self, data, mask, batch_size, shuffle):
-        # Filter out empty graphs
+        """Create data loader with empty graph filtering"""
         filtered_data = []
+        total_graphs = sum(mask)
         for i in range(len(data)):
             if mask[i]:
-                # Check if the graph has any edges
                 has_edges = any(len(edges[0]) > 0 for edges in data[i].edge_index_dict.values())
                 if has_edges:
                     filtered_data.append(data[i])
         
-        print(f"Filtered out {len([i for i in range(len(data)) if mask[i]]) - len(filtered_data)} empty graphs")
+        filtered_out = total_graphs - len(filtered_data)
+        if filtered_out > 0:
+            print(f"Filtered {filtered_out} empty graphs from dataset")
         return DataLoader(filtered_data, batch_size=batch_size, shuffle=shuffle)

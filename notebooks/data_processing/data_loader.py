@@ -51,7 +51,9 @@ class DataLoader:
                 - List of corresponding data masks
         """
         scenario_data = []
-        scenario_masks = []
+        train_masks = []
+        val_masks = []
+        test_masks = []
         
         for scenario_path in tqdm(self.scenarios):
             scenario_name = self._get_scenario_name(scenario_path)
@@ -59,9 +61,12 @@ class DataLoader:
             
             if data is not None:
                 scenario_data.extend(data)
-                scenario_masks.extend(self._create_data_masks(data))
+                train_mask, val_mask, test_mask = self._create_data_masks(data)
+                train_masks.extend(train_mask)
+                val_masks.extend(val_mask)
+                test_masks.extend(test_mask)
         
-        return scenario_data, scenario_masks
+        return scenario_data, train_masks, val_masks, test_masks
     
     def _get_scenario_name(self, scenario_path: str) -> str:
         """Extract scenario name from path."""
@@ -239,7 +244,7 @@ class DataLoader:
         masks['test'][train_size + val_size:] = True
         
         self._log_split_info(train_size, val_size, num_samples)
-        return masks
+        return tuple(masks.values())
     
     @staticmethod
     def _get_data_device(data: List[HeteroData]) -> torch.device:

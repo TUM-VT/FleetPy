@@ -30,6 +30,8 @@ class DataProcessingConfig:
     
     # Model parameters
     device: torch.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    random_seed = 42
     
     # Feature processing
     categorical_features: Dict[str, List[str]] = None
