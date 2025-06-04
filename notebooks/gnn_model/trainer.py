@@ -1,7 +1,7 @@
 import torch
 from torch_geometric.loader import DataLoader
 import os
-from sklearn.metrics import f1_score, precision_score, recall_score
+from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
 import numpy as np
 from data_processing.config import DataProcessingConfig
 from typing import Optional
@@ -84,6 +84,7 @@ class Trainer:
             print(f"{'F1':<15} {train_metrics['f1']:<15.4f} {val_metrics['f1']:<15.4f}")
             print(f"{'Precision':<15} {train_metrics['precision']:<15.4f} {val_metrics['precision']:<15.4f}")
             print(f"{'Recall':<15} {train_metrics['recall']:<15.4f} {val_metrics['recall']:<15.4f}")
+            print(f"{'AUC-ROC':<15} {train_metrics['auc_roc']:<15.4f} {val_metrics['auc_roc']:<15.4f}")
             print(f"{'-'*80}")
             
             # Print improvement status
@@ -99,7 +100,6 @@ class Trainer:
             checkpoint = torch.load(f'{self.model_dir}/best_model.pt', weights_only=False)
         except Exception as e:
             print(f"Warning: Could not load checkpoint with weights_only=False: {str(e)}")
-            torch.serialization.add_safe_globals(['numpy._core.multiarray.scalar'])
             checkpoint = torch.load(f'{self.model_dir}/best_model.pt', weights_only=True)
         
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -113,6 +113,7 @@ class Trainer:
         print(f"{'F1':<15} {test_metrics['f1']:<15.4f}")
         print(f"{'Precision':<15} {test_metrics['precision']:<15.4f}")
         print(f"{'Recall':<15} {test_metrics['recall']:<15.4f}")
+        print(f"{'AUC-ROC':<15} {test_metrics['auc_roc']:<15.4f}")
         print(f"{'='*80}")
 
     def train_epoch(self, model, optimizer, criterion):
@@ -163,9 +164,10 @@ class Trainer:
         return metrics
 
     def evaluate(self, model, loader):
-        """Evaluate model"""
+        """Evaluate model with all metrics including AUC-ROC"""
         model.eval()
         all_preds = []
+        all_probs = []
         all_targets = []
         
         with torch.no_grad():
@@ -182,28 +184,44 @@ class Trainer:
                 
                 probs = torch.sigmoid(logits)
                 pred_labels = (probs > self.threshold).float()
+                
                 all_preds.append(pred_labels.cpu())
+                all_probs.append(probs.cpu())
                 all_targets.append(target.cpu())
         
         if not all_preds:
-            return {'f1': 0, 'precision': 0, 'recall': 0}
-        
-        metrics = self._compute_metrics(all_preds, all_targets)
-        return metrics
-
-    def _compute_metrics(self, all_preds, all_targets):
-        """Compute F1, precision, recall, and accuracy"""
-        if not all_preds or not all_targets:
-            return {'f1': 0, 'precision': 0, 'recall': 0, 'accuracy': 0}
-        
+            return {'f1': 0, 'precision': 0, 'recall': 0, 'accuracy': 0, 'auc_roc': 0}
+            
+        # Calculate metrics
         preds = torch.cat(all_preds).numpy()
+        probs = torch.cat(all_probs).numpy()
         targets = torch.cat(all_targets).numpy()
         
         return {
             'f1': f1_score(targets, preds, zero_division=0),
             'precision': precision_score(targets, preds, zero_division=0),
             'recall': recall_score(targets, preds, zero_division=0),
-            'accuracy': (preds == targets).mean()
+            'accuracy': (preds == targets).mean(),
+            'auc_roc': roc_auc_score(targets, probs)
+        }
+
+    def _compute_metrics(self, all_preds, all_targets):
+        """Compute F1, precision, recall, accuracy and AUC-ROC"""
+        if not all_preds or not all_targets:
+            return {'f1': 0, 'precision': 0, 'recall': 0, 'accuracy': 0, 'auc_roc': 0}
+        
+        preds = torch.cat(all_preds).numpy()
+        targets = torch.cat(all_targets).numpy()
+        
+        # For AUC-ROC we need probabilities
+        probs = torch.cat([torch.sigmoid(torch.tensor(p)) for p in all_preds]).numpy()
+        
+        return {
+            'f1': f1_score(targets, preds, zero_division=0),
+            'precision': precision_score(targets, preds, zero_division=0),
+            'recall': recall_score(targets, preds, zero_division=0),
+            'accuracy': (preds == targets).mean(),
+            'auc_roc': roc_auc_score(targets, probs)
         }
 
     def _print_batch_stats(self, batch_idx, loss, logits, probs, target, pred_labels):
