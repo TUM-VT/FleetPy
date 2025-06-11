@@ -141,7 +141,12 @@ class SUMOFleetPyServer():
         
     def setup_hybrid_router(self):
         if self.fp_sim_env.scenario_parameters.get("hybrid_router") == True:
-            self.fp_hybrid_router_sc0_df = pd.read_csv(r"D:\GitHub\fleetpy_coupling\hybrid_router\hourly_edge_counts_sc0.csv")
+            fp_path = pathlib.Path(self.fp_sim_env.dir_names.get(G_DIR_MAIN))
+            sc_0_data_path = fp_path.parent / "fleetpy_coupling" / "hybrid_router" / "hourly_edge_counts_sc0.csv"
+            if not os.path.isfile(sc_0_data_path):
+                raise(f"Error: {sc_0_data_path} does not exist! Please run the hybrid router script to create this file.")
+            self.fp_hybrid_router_sc0_df = pd.read_csv(sc_0_data_path)
+            fp_path = pathlib.Path(self.fp_sim_env.dir_names.get(G_DIR_MAIN))
             self.fp_hybrid_router_sc0_df["edge_id"] = self.fp_hybrid_router_sc0_df["edge"].map(self.g_sumo_edge_id_to_fs_edge)
             self.fp_hybrid_router_sc0_df = self.fp_hybrid_router_sc0_df.rename(columns={"count":"count_sc0"})
             self.fp_hybrid_router_sc0_df["edge_id_str"] = self.fp_hybrid_router_sc0_df["edge_id"].astype(str)
