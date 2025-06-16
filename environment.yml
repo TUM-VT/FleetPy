@@ -20,3 +20,5 @@ dependencies:
     - shapely==2.0.6
     - tqdm==4.67.1
     - dill==0.3.9
+    - streamlit==1.28.0
+    - contextily==1.4.0
