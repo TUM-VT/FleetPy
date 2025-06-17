@@ -83,7 +83,7 @@ class BrokerBasic(BrokerBase):
             LOG.debug(f"Request {rid}: To operator {op_id} ...")
             self.amod_operators[op_id].user_request(rq_obj, sim_time)    
 
-    def collect_offers(self, rid: int) -> tp.Dict[int, 'RequestBase']:
+    def collect_offers(self, rid: int, sim_time: int = None) -> tp.Dict[int, 'RequestBase']:
         """This method collects the offers from the amod operators.
         The return value is a list of tuples, where each tuple contains the operator id, the offer, and the simulation time.
         """

@@ -94,6 +94,7 @@ class BrokerBase(metaclass=ABCMeta):
     def collect_offers(
         self, 
         rid: int,
+        sim_time: int = None,
     ) -> tp.Dict[int, 'RequestBase']:
         """This method collects the offers from the operators.
         The return value is a list of tuples, where each tuple contains the operator id, the offer, and the simulation time.

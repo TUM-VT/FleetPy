@@ -605,6 +605,7 @@ G_OFFER_WAIT_0 = "t_wait_0" # Only used for FM AMoD segment in FLM
 G_OFFER_WAIT_1 = "t_wait_1" # Only used for LM AMoD segment in FLM
 G_OFFER_DRIVE_0 = "t_drive_0" # Only used for FM AMoD segment in FLM
 G_OFFER_DRIVE_1 = "t_drive_1" # Only used for LM AMoD segment in FLM
+G_OFFER_DURATION = "t_duration"
 
 # additional parameters for pt offers
 # ------------------------------------------

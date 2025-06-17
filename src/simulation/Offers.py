@@ -231,12 +231,14 @@ class MultimodalOffer(TravellerOffer):
 
         additional_parameters = {
             G_PT_OFFER_SOURCE_WALK: aggregated_offer[G_PT_OFFER_SOURCE_WALK],
+            G_PT_OFFER_SOURCE_TRANSFER_TIME: aggregated_offer[G_PT_OFFER_SOURCE_TRANSFER_TIME],
             G_PT_OFFER_WAIT: aggregated_offer[G_PT_OFFER_WAIT],
             G_PT_OFFER_TRIP: aggregated_offer[G_PT_OFFER_TRIP],
             G_PT_OFFER_TARGET_WALK: aggregated_offer[G_PT_OFFER_TARGET_WALK],
             G_PT_OFFER_NUM_TRANSFERS: aggregated_offer[G_PT_OFFER_NUM_TRANSFERS],
             G_PT_OFFER_SOURCE_STATION: aggregated_offer[G_PT_OFFER_SOURCE_STATION],
             G_PT_OFFER_TARGET_STATION: aggregated_offer[G_PT_OFFER_TARGET_STATION],
+            G_OFFER_DURATION: aggregated_offer[G_OFFER_DURATION],
         }
 
         if self.rq_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
@@ -276,6 +278,7 @@ class MultimodalOffer(TravellerOffer):
         if self.rq_modal_state == RQ_MODAL_STATE.FIRSTMILE:
             aggregated_offer[G_OFFER_WAIT] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_AMOD.value].get(G_OFFER_WAIT)
             aggregated_offer[G_OFFER_DRIVE] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_AMOD.value].get(G_OFFER_DRIVE)
+            aggregated_offer[G_PT_OFFER_SOURCE_TRANSFER_TIME] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value].get(G_PT_OFFER_SOURCE_TRANSFER_TIME)
             aggregated_offer[G_PT_OFFER_WAIT] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value].get(G_OFFER_WAIT)
             aggregated_offer[G_PT_OFFER_TRIP] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value].get(G_OFFER_DRIVE)
             aggregated_offer[G_PT_OFFER_SOURCE_WALK] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value].get(G_PT_OFFER_SOURCE_WALK)
@@ -286,6 +289,7 @@ class MultimodalOffer(TravellerOffer):
         elif self.rq_modal_state == RQ_MODAL_STATE.LASTMILE:
             aggregated_offer[G_OFFER_WAIT] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_AMOD.value].get(G_OFFER_WAIT)
             aggregated_offer[G_OFFER_DRIVE] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_AMOD.value].get(G_OFFER_DRIVE)
+            aggregated_offer[G_PT_OFFER_SOURCE_TRANSFER_TIME] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value].get(G_PT_OFFER_SOURCE_TRANSFER_TIME)
             aggregated_offer[G_PT_OFFER_WAIT] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value].get(G_OFFER_WAIT)
             aggregated_offer[G_PT_OFFER_TRIP] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value].get(G_OFFER_DRIVE)
             aggregated_offer[G_PT_OFFER_SOURCE_WALK] = self.sub_trip_offers[RQ_SUB_TRIP_ID.LM_PT.value].get(G_PT_OFFER_SOURCE_WALK)
@@ -300,6 +304,7 @@ class MultimodalOffer(TravellerOffer):
             aggregated_offer[G_OFFER_DRIVE_1] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_AMOD_1.value].get(G_OFFER_DRIVE)
             aggregated_offer[G_OFFER_WAIT] = aggregated_offer[G_OFFER_WAIT_0] + aggregated_offer[G_OFFER_WAIT_1]
             aggregated_offer[G_OFFER_DRIVE] = aggregated_offer[G_OFFER_DRIVE_0] + aggregated_offer[G_OFFER_DRIVE_1]
+            aggregated_offer[G_PT_OFFER_SOURCE_TRANSFER_TIME] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_PT_OFFER_SOURCE_TRANSFER_TIME)
             aggregated_offer[G_PT_OFFER_WAIT] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_OFFER_WAIT)
             aggregated_offer[G_PT_OFFER_TRIP] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_OFFER_DRIVE)
             aggregated_offer[G_PT_OFFER_SOURCE_WALK] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_PT_OFFER_SOURCE_WALK)
@@ -307,6 +312,10 @@ class MultimodalOffer(TravellerOffer):
             aggregated_offer[G_PT_OFFER_SOURCE_STATION] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_PT_OFFER_SOURCE_STATION)
             aggregated_offer[G_PT_OFFER_TARGET_STATION] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_PT_OFFER_TARGET_STATION)
             aggregated_offer[G_PT_OFFER_NUM_TRANSFERS] = self.sub_trip_offers[RQ_SUB_TRIP_ID.FLM_PT.value].get(G_PT_OFFER_NUM_TRANSFERS)
+        
+        # TODO: consider boarding and alighting times
+        aggregated_offer[G_OFFER_DURATION] = aggregated_offer[G_OFFER_WAIT] + aggregated_offer[G_OFFER_DRIVE] + aggregated_offer[G_PT_OFFER_SOURCE_TRANSFER_TIME]\
+            + aggregated_offer[G_PT_OFFER_WAIT] + aggregated_offer[G_PT_OFFER_TRIP] + aggregated_offer[G_PT_OFFER_SOURCE_WALK] + aggregated_offer[G_PT_OFFER_TARGET_WALK]
         return aggregated_offer
     
 
