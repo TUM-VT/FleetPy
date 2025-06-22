@@ -437,7 +437,7 @@ class FleetSimulationBase:
             op_broker_class_string = "BrokerBasic"
             BrokerClass = load_broker_module(op_broker_class_string)
             self.broker = BrokerClass(self.n_op, self.operators)
-        elif broker_type == "PTBroker":
+        elif broker_type == "PTBroker" or broker_type == "PTBroker3Phases":
             prt_msg: str = "PTBroker specified"
             LOG.info(prt_msg)
             if self.pt_operator is None:
@@ -488,8 +488,9 @@ class FleetSimulationBase:
         """Runs standard and simulation environment specific evaluations over simulation results."""
         output_dir = self.dir_names[G_DIR_OUTPUT]
         # standard evaluation
-        from src.evaluation.standard import standard_evaluation
-        standard_evaluation(output_dir)
+        # from src.evaluation.standard import standard_evaluation
+        from src.evaluation.wctr26_flm_eval import wctr26_flm_eval
+        wctr26_flm_eval(output_dir)
         self.add_evaluate()
 
     # def initialize_operators_and_vehicles(self): TODO I think this is depricated!

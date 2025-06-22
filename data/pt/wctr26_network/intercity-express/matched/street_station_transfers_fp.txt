@@ -1,0 +1,3 @@
+node_id,closest_station_id,street_station_transfer_time
+120,A,30
+241,B,30
