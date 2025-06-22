@@ -7,7 +7,7 @@ nw_dynamic_f: 2018-11-12_mean_tt_factor_hourly.csv
 demand_name: Manhattan_2018
 random_seed: 0
 start_time: 0
-end_time: 86400
+end_time: 7200
 time_step: 30
 user_max_decision_time: 30
 route_output_flag: True

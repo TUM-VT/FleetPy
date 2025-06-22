@@ -102,7 +102,7 @@ class DataLoader:
             return None
             
         try:
-            return torch.load(graph_path)
+            return torch.load(graph_path, weights_only=False)
         except Exception as e:
             print(f"Error loading preprocessed data: {e}")
             return None
@@ -124,11 +124,14 @@ class DataLoader:
         """Transform categorical features to one-hot encoded features."""
         for feature_type, categories in self.config.categorical_features.items():
             if feature_type in data and not data[feature_type].empty:
-                data[feature_type] = pd.get_dummies(
-                    data=data[feature_type],
-                    columns=categories,
-                    dtype=float
-                )
+                data[feature_type] = data[feature_type].drop(columns=[cat for cat in categories if 'pos' in cat], errors='ignore')
+                categories = [cat for cat in categories if 'pos' not in cat]  # Exclude position features
+                if categories:
+                    data[feature_type] = pd.get_dummies(
+                        data=data[feature_type],
+                        columns=categories,
+                        dtype=float
+                    )
         return data
     
     def _transform_and_save_data(self, data: Dict, scenario_name: str) -> List[HeteroData]:
