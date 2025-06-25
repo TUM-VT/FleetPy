@@ -109,12 +109,33 @@ For now, you can inspect the data structures and files in the examples provided 
 * 📁 `FleetPy/studies`
 
 More detailed descriptions of the **data structure, preprocessing steps, and result data** will be provided in upcoming versions.
-Additionally, a **GUI to set up scenarios** (with a choice of submodules and data) is planned for the future. 🎨
 
 In general, you can **save your data and study definitions** in the mentioned directories. These are included in `.gitignore`.
 
 <!-- ... (prepare study by config.csv and scenarios.csv) -->
 <!-- ... (necessary modules for preprocessing can be installed by "pip3 install -r requirements_with_pp.txt") -->
+
+---
+
+## 🖥️ Using the FleetPy GUI
+
+FleetPy provides a graphical user interface (GUI) for creating scenarios, running simulations, and visualizing results.
+
+To launch the GUI:
+
+1. Activate your Conda environment:
+   ```bash
+   conda activate fleetpy
+   ```
+2. Start the GUI with:
+   ```bash
+   streamlit run streamlit_gui.py
+   ```
+
+This will open the FleetPy GUI in your web browser, where you can:
+- **Create new simulation scenarios** with guided parameter selection.
+- **Run simulations** by uploading or selecting configuration files.
+- **Visualize results** interactively.
 
 ---
 
