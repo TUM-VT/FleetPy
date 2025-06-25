@@ -5,7 +5,7 @@ FleetPy is an open-source **fleet simulation framework** for modeling and contro
 
 > Whether you're a **researcher**, **transportation engineer**, or **mobility innovator**, FleetPy helps you analyze and optimize **fleet operations, routing strategies, and demand-responsive services**.
 
-😶‍🌫️ **[Fleetpy for dummies](https://github.com/TUM-VT/FleetPy/wiki](https://github.com/TUM-VT/FleetPy/wiki/0_Fleetpy_for_dummies))** 📖 **[Read the Wiki](https://github.com/TUM-VT/FleetPy/wiki)** | 🛠 **[Installation Guide](#-installation)** | 🚀 **[Quickstart](#-quickstart)**  
+😶‍🌫️ **[Fleetpy for dummies](https://github.com/TUM-VT/FleetPy/wiki/0_Fleetpy_for_dummies)** 📖 **[Read the Wiki](https://github.com/TUM-VT/FleetPy/wiki)** | 🛠 **[Installation Guide](#-installation)** | 🚀 **[Quickstart](#-quickstart)**  
 
 <img src="https://github.com/user-attachments/assets/ea839af5-3465-4bd1-8ed4-79c8fe0fd524" alt="Fleetpy Logo" height="400">
 
