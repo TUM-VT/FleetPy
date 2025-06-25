@@ -12,7 +12,6 @@ from torch_geometric.data import HeteroData
 
 # Local imports
 from .config import DataProcessingConfig
-from .graph_definitions import NODE_TYPES, EDGE_TYPES, CATEGORICAL_FEATURES
 from .data_processor import DataProcessor
 
 
@@ -51,20 +50,20 @@ class DataLoader:
                 - List of corresponding data masks
         """
         scenario_data = []
-        train_masks = []
-        val_masks = []
-        test_masks = []
+        scenario_sizes = []  # Keep track of number of timesteps per scenario
         
-        for scenario_path in tqdm(self.scenarios):
+        # First, load all scenario data
+        for scenario_path in tqdm(self.scenarios, desc="Loading scenarios"):
             scenario_name = self._get_scenario_name(scenario_path)
             data = self._load_or_process_scenario(scenario_path, scenario_name)
+            data = data[self.config.start_graph:self.config.start_graph+self.config.max_graphs_test] if self.config.test_mode else data
             
             if data is not None:
                 scenario_data.extend(data)
-                train_mask, val_mask, test_mask = self._create_data_masks(data)
-                train_masks.extend(train_mask)
-                val_masks.extend(val_mask)
-                test_masks.extend(test_mask)
+                scenario_sizes.append(len(data))
+        
+        # Create masks based on scenario-level splits
+        train_masks, val_masks, test_masks = self._create_scenario_based_masks(scenario_sizes)
         
         return scenario_data, train_masks, val_masks, test_masks
     
@@ -125,7 +124,7 @@ class DataLoader:
         for feature_type, categories in self.config.categorical_features.items():
             if feature_type in data and not data[feature_type].empty:
                 data[feature_type] = data[feature_type].drop(columns=[cat for cat in categories if 'pos' in cat], errors='ignore')
-                categories = [cat for cat in categories if 'pos' not in cat]  # Exclude position features
+                categories = [cat for cat in categories if 'pos' not in cat]  # Exclude position features, TODO handle later
                 if categories:
                     data[feature_type] = pd.get_dummies(
                         data=data[feature_type],
@@ -229,25 +228,61 @@ class DataLoader:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         torch.save(graphs, save_path)
     
-    def _create_data_masks(self, data: List[HeteroData]) -> List[torch.Tensor]:
-        """Create train/val/test masks for the data."""
-        num_samples = len(data)
+    def _create_scenario_based_masks(self, scenario_sizes: List[int]) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
+        """Create train/val/test masks at the scenario level.
         
-        # Calculate split sizes
-        train_size = int(self.config.train_ratio * num_samples)
-        val_size = int(self.config.val_ratio * num_samples)
+        Args:
+            scenario_sizes: List of number of timesteps in each scenario
+            
+        Returns:
+            Tuple of (train_masks, val_masks, test_masks) where each mask is a list of boolean tensors
+        """
+        num_scenarios = len(scenario_sizes)
+        total_timesteps = sum(scenario_sizes)
         
-        # Create and initialize masks
-        device = self._get_data_device(data)
-        masks = self._initialize_masks(num_samples, device)
+        # Calculate split sizes for scenarios
+        train_scenarios = int(self.config.train_ratio * num_scenarios)
+        val_scenarios = int(self.config.val_ratio * num_scenarios)
         
-        # Assign splits
-        masks['train'][:train_size] = True
-        masks['val'][train_size:train_size + val_size] = True
-        masks['test'][train_size + val_size:] = True
+        # Create shuffled scenario indices TODO check if this is needed
+        # scenario_indices = torch.randperm(num_scenarios)
+        scenario_indices = list(range(num_scenarios))
+        train_indices = scenario_indices[:train_scenarios]
+        val_indices = scenario_indices[train_scenarios:train_scenarios + val_scenarios]
+        test_indices = scenario_indices[train_scenarios + val_scenarios:]
         
-        self._log_split_info(train_size, val_size, num_samples)
-        return tuple(masks.values())
+        # Initialize masks for all timesteps
+        device = torch.device('cpu')  # We'll keep masks on CPU initially
+        train_masks = torch.zeros(total_timesteps, dtype=torch.bool, device=device)
+        val_masks = torch.zeros(total_timesteps, dtype=torch.bool, device=device)
+        test_masks = torch.zeros(total_timesteps, dtype=torch.bool, device=device)
+        
+        # Fill masks based on scenario assignments
+        current_pos = 0
+        for scenario_idx in range(num_scenarios):
+            size = scenario_sizes[scenario_idx]
+            if scenario_idx in train_indices:
+                train_masks[current_pos:current_pos + size] = True
+            elif scenario_idx in val_indices:
+                val_masks[current_pos:current_pos + size] = True
+            else:  # Test set
+                test_masks[current_pos:current_pos + size] = True
+            current_pos += size
+        
+        # Convert to list form as expected by the rest of the code
+        train_masks = [train_masks[i] for i in range(total_timesteps)]
+        val_masks = [val_masks[i] for i in range(total_timesteps)]
+        test_masks = [test_masks[i] for i in range(total_timesteps)]
+        
+        # Log split information
+        train_timesteps = sum(1 for m in train_masks if m)
+        val_timesteps = sum(1 for m in val_masks if m)
+        test_timesteps = sum(1 for m in test_masks if m)
+        
+        print(f"Scenario split: Train={len(train_indices)}, Val={len(val_indices)}, Test={len(test_indices)} scenarios")
+        print(f"Timestep split: Train={train_timesteps}, Val={val_timesteps}, Test={test_timesteps} timesteps")
+        
+        return train_masks, val_masks, test_masks
     
     @staticmethod
     def _get_data_device(data: List[HeteroData]) -> torch.device:
@@ -255,15 +290,6 @@ class DataLoader:
         if len(data) > 0 and hasattr(data[0], 'device'):
             return data[0].device
         return torch.device('cpu')
-    
-    @staticmethod
-    def _initialize_masks(size: int, device: torch.device) -> Dict[str, torch.Tensor]:
-        """Initialize boolean masks for data splitting."""
-        return {
-            'train': torch.zeros(size, dtype=torch.bool, device=device),
-            'val': torch.zeros(size, dtype=torch.bool, device=device),
-            'test': torch.zeros(size, dtype=torch.bool, device=device)
-        }
     
     @staticmethod
     def _log_split_info(train_size: int, val_size: int, total_size: int) -> None:

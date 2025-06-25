@@ -24,15 +24,18 @@ class DataProcessingConfig:
     sim_step: int = 60  # seconds (1min)
     
     # Data splitting
-    train_ratio: float = 0.7
-    val_ratio: float = 0.15
-    test_ratio: float = 0.15
+    train_ratio: float = 1/3
+    val_ratio: float = 1/3
+    test_ratio: float = 1/3
     
     # Model parameters
     device: torch.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     random_seed = 42
-    
+    test_mode : bool = True  # If True, use a smaller dataset for quick testing
+    max_graphs_test: int = 5
+    start_graph : int = 480
+
     # Feature processing
     categorical_features: Dict[str, List[str]] = None
     

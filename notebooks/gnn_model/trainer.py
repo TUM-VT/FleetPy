@@ -19,7 +19,7 @@ class Trainer:
         self.threshold = 0.5  # Fixed threshold for binary classification
         
         # Create data loaders
-        self.train_loader = self._create_loader(data, masks[0], batch_size, shuffle=True)
+        self.train_loader = self._create_loader(data, masks[0], batch_size, shuffle=False)
         self.val_loader = self._create_loader(data, masks[1], batch_size, shuffle=False)
         self.test_loader = self._create_loader(data, masks[2], batch_size, shuffle=False)
         
@@ -121,6 +121,7 @@ class Trainer:
         model.train()
         total_loss = 0
         all_preds = []
+        all_probs = []
         all_targets = []
         num_batches = 0
         
@@ -137,6 +138,7 @@ class Trainer:
                 logits = logits[:, 1]  # Take the positive class logit
             else:
                 logits = logits.squeeze(-1)  # Remove any extra dimensions
+            print('Logits:', logits[:10], 'Target:', target[:10])  # Debugging line
 
             # Compute loss and backprop
             loss = criterion(logits, target)
@@ -149,17 +151,19 @@ class Trainer:
                 probs = torch.sigmoid(logits)
                 pred_labels = (probs > self.threshold).float()
                 all_preds.append(pred_labels.cpu())
+                all_probs.append(probs.cpu())
                 all_targets.append(target.cpu())
+            
             
             total_loss += loss.item()
             num_batches += 1
             
             # Print batch statistics periodically
             # if batch_idx % 10 == 0:
-                # self._print_batch_stats(batch_idx, loss.item(), logits, probs, target, pred_labels)
+            self._print_batch_stats(batch_idx, loss.item(), logits, probs, target, pred_labels)
         
         # Compute epoch metrics
-        metrics = self._compute_metrics(all_preds, all_targets)
+        metrics = self._compute_metrics(all_preds, all_probs, all_targets)
         metrics['loss'] = total_loss / num_batches if num_batches > 0 else float('inf')
         return metrics
 
@@ -188,33 +192,18 @@ class Trainer:
                 all_preds.append(pred_labels.cpu())
                 all_probs.append(probs.cpu())
                 all_targets.append(target.cpu())
-        
-        if not all_preds:
-            return {'f1': 0, 'precision': 0, 'recall': 0, 'accuracy': 0, 'auc_roc': 0}
             
         # Calculate metrics
-        preds = torch.cat(all_preds).numpy()
-        probs = torch.cat(all_probs).numpy()
-        targets = torch.cat(all_targets).numpy()
-        
-        return {
-            'f1': f1_score(targets, preds, zero_division=0),
-            'precision': precision_score(targets, preds, zero_division=0),
-            'recall': recall_score(targets, preds, zero_division=0),
-            'accuracy': (preds == targets).mean(),
-            'auc_roc': roc_auc_score(targets, probs)
-        }
+        return self._compute_metrics(all_preds, all_probs, all_targets)
 
-    def _compute_metrics(self, all_preds, all_targets):
+    def _compute_metrics(self, all_preds, all_probs, all_targets):
         """Compute F1, precision, recall, accuracy and AUC-ROC"""
         if not all_preds or not all_targets:
             return {'f1': 0, 'precision': 0, 'recall': 0, 'accuracy': 0, 'auc_roc': 0}
         
         preds = torch.cat(all_preds).numpy()
         targets = torch.cat(all_targets).numpy()
-        
-        # For AUC-ROC we need probabilities
-        probs = torch.cat([torch.sigmoid(torch.tensor(p)) for p in all_preds]).numpy()
+        probs = torch.cat(all_probs).numpy()
         
         return {
             'f1': f1_score(targets, preds, zero_division=0),
