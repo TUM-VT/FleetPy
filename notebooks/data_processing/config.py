@@ -32,8 +32,8 @@ class DataProcessingConfig:
     device: torch.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     random_seed = 42
-    test_mode : bool = True  # If True, use a smaller dataset for quick testing
-    max_graphs_test: int = 5
+    test_mode : bool = False  # If True, use a smaller dataset for quick testing
+    max_graphs_test: int = 24
     start_graph : int = 480
 
     # Feature processing
@@ -43,8 +43,8 @@ class DataProcessingConfig:
         """Initialize derived attributes after instance creation."""
         if self.categorical_features is None:
             self.categorical_features = {
-                'req_features': ['status', 'o_pos', 'd_pos'],
-                'veh_features': ['type', 'status', 'pos']
+                'req_features': ['status'],
+                'veh_features': ['type', 'status']
             }
         
         # Validate ratios

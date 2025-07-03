@@ -23,29 +23,34 @@ class DataProcessor:
     """
     
     def __init__(self, train_data_dir: str, save_raw_dir: str, 
-                 config: Optional[DataProcessingConfig] = None):
+                 config: Optional[DataProcessingConfig] = None, prefer_processed: bool = True):
         """Initialize the DataProcessor.
         
         Args:
             train_data_dir: Directory containing training data
             save_raw_dir: Directory to save raw processed data
             config: Configuration for data processing
+            prefer_processed: If True, load processed data if it exists (default). If False, always regenerate.
         """
         self.config = config or DataProcessingConfig()
-        
         self.train_data_dir = train_data_dir
         self.save_raw_dir = save_raw_dir
         self.n_requests = 0  # Will be set during processing
+        self.prefer_processed = prefer_processed
     
-    def process_data(self, scenario_name: str) -> List[Dict]:
+    def process_data(self, scenario_name: str) -> dict[Any, Any]:
         """Process raw data and generate feature-rich dataset.
         
         Args:
             scenario_name: Scenario name
-            
         Returns:
             List of dictionaries containing processed data for each timestep
         """
+        processed_dir = self._prepare_process_directory(scenario_name, check_only=True)
+        if self.prefer_processed and os.path.exists(processed_dir):
+            print(f"Loading processed data from {processed_dir}")
+            return self.load_processed_data(processed_dir)
+        # Otherwise, process as usual
         all_data = self._process_timesteps()
         processed_dir = self._prepare_process_directory(scenario_name)
         self._save_feature_data(processed_dir, all_data)
@@ -233,9 +238,11 @@ class DataProcessor:
             for req1, req2 in zip(sequence[1:], sequence[2:]):
                 data['rr_graph'][req1][req2][feature_name] = 1
     
-    def _prepare_process_directory(self, scenario_name: str) -> str:
-        """Prepare directory for processed data."""
+    def _prepare_process_directory(self, scenario_name: str, check_only: bool = False) -> str:
+        """Prepare directory for processed data. If check_only is True, just return the path without modifying anything."""
         process_dir = os.path.join(self.config.base_data_dir, scenario_name, self.config.processed_dir)
+        if check_only:
+            return process_dir
         if os.path.exists(process_dir):
             shutil.rmtree(process_dir)
         os.makedirs(process_dir)

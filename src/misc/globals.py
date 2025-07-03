@@ -703,8 +703,10 @@ G_TRAIN_FEATURE_TRAVEL_COST = "travel_cost"
 G_TRAIN_FEATURE_TRAVEL_TIME = "travel_time"
 G_TRAIN_FEATURE_TRAVEL_DIST = "travel_dist"
 
-G_TRAIN_FEATURE_O_POS = "o_pos"
-G_TRAIN_FEATURE_D_POS = "d_pos"
+G_TRAIN_FEATURE_O_POS_LAT = "o_lat"
+G_TRAIN_FEATURE_O_POS_LON = "o_lon"
+G_TRAIN_FEATURE_D_POS_LAT = "d_lat"
+G_TRAIN_FEATURE_D_POS_LON = "d_lon"
 G_TRAIN_FEATURE_RQ_TIME = "rq_time"
 G_TRAIN_FEATURE_TW_PE = "tw_pe"
 G_TRAIN_FEATURE_TW_PL = "tw_pl"
@@ -714,7 +716,8 @@ G_TRAIN_FEATURE_MAX_TRIP_TIME = "max_trip_time"
 G_TRAIN_FEATURE_STATUS = "status"
 G_TRAIN_FEATURE_SOC = "soc"
 G_TRAIN_FEATURE_TYPE = "type"
-G_TRAIN_FEATURE_V_POS = "pos"
+G_TRAIN_FEATURE_V_POS_LAT = "lat"
+G_TRAIN_FEATURE_V_POS_LON = "lon"
 
 #--------------------------------------------------------------------------------------------------------------#
 # Evaluation specific params
