@@ -466,9 +466,12 @@ class FleetSimulationBase:
             if self.operators[-1].repo is not None and self.operators[-1].repo.zone_system is not None:
                 self.operators[-1].repo.zone_system.register_demand_ref(self.demand)
         veh_type_f = os.path.join(self.dir_names[G_DIR_OUTPUT], "2_vehicle_types.csv")
-        veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
-        if not self.skip_output:
-            veh_type_df.to_csv(veh_type_f, index=False)
+        if len(veh_type_list) != 0:
+            veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
+            if not self.skip_output:
+                veh_type_df.to_csv(veh_type_f, index=False)
+        else:
+            LOG.warning("No vehicles initialized for simulation! Check fleet composition in scenario input file!")
         self.vehicle_update_order: tp.Dict[tp.Tuple[int, int], int] = {vid : 1 for vid in self.sim_vehicles.keys()}
 
     def _load_broker_module(self):

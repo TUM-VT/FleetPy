@@ -31,7 +31,8 @@ class MATSimSocket:
         self.server_ip = host
         self.server_port = port
         self.log_communication = log_communication
-        scenario_parameters["matsim_iteration"] = 0
+        self.matsim_iteration = 0
+        scenario_parameters["matsim_iteration"] = self.matsim_iteration
         self.scenario_parameters = scenario_parameters
         
         self.context = zmq.Context()
@@ -83,7 +84,7 @@ class MATSimSocket:
             
         #
         print("starting socket communication")
-        init_obj = {"type": 0} # "message", "content": f"init status: {self.init_status}"}
+        init_obj = {"@message": "initialization"} 
         self.format_object_and_send_msg(init_obj)
             
         full_msg = None
@@ -115,6 +116,7 @@ class MATSimSocket:
                     continue
                 full_msg = byte_stream_msg.decode(ENCODING)
                 response_obj = json.loads(full_msg)
+                print("RECEIVED:", response_obj)
                 self._treat_matsim_response(response_obj)
                 
                 # c_stream_msg = byte_stream_msg.decode(ENCODING)
@@ -138,18 +140,29 @@ class MATSimSocket:
         """
         Process the response from MATSim.
         """
-        if response_obj["type"] == "start_simulation":
-            self._start_simulation(response_obj)
-        elif response_obj["type"] == "new_iteration":
+        if response_obj["@message"] == "iteration":
             self._new_iteration(response_obj)
-        elif response_obj["type"] == "new_time_step":
-            self._new_time_step(response_obj)
-        elif response_obj["type"] == "new_edge_traveltimes":
+        elif response_obj["@messasge"] == "state":
+            self._new_state_update(response_obj)
+        elif response_obj["@message"] == "traveltimes_update":
             self._new_edge_traveltimes(response_obj)
-        elif response_obj["type"] == "end_simulation":
+        elif response_obj["@message"] == "finalization":
             self._end_simulation(response_obj)
-        elif response_obj["type"] == "error":
+        elif response_obj["@message"] == "error":
             self._handle_error(response_obj)
+            
+        # if response_obj["type"] == "start_simulation":
+        #     self._start_simulation(response_obj)
+        # elif response_obj["type"] == "new_iteration":
+        #     self._new_iteration(response_obj)
+        # elif response_obj["type"] == "new_time_step":
+        #     self._new_time_step(response_obj)
+        # elif response_obj["type"] == "new_edge_traveltimes":
+        #     self._new_edge_traveltimes(response_obj)
+        # elif response_obj["type"] == "end_simulation":
+        #     self._end_simulation(response_obj)
+        # elif response_obj["type"] == "error":
+        #     self._handle_error(response_obj)
 
     def _start_simulation(self, response_obj):
         list_vehicle_attributes = response_obj["vehicle_attributes"]
@@ -164,8 +177,8 @@ class MATSimSocket:
         self.fleetpy_to_matsim_vid = {}
         
         for vehicle_attributes in list_vehicle_attributes:
-            matsim_vehicle_id = int(vehicle_attributes["vehicle_id"])
-            vehicle_start_pos = self.from_matsim_to_fleetpy_position(int(vehicle_attributes["position"]))
+            matsim_vehicle_id = vehicle_attributes["id"]
+            vehicle_start_pos = self.from_matsim_to_fleetpy_position(int(vehicle_attributes["startLink"]))
             vehicle_capacity = int(vehicle_attributes["capacity"])
 
             vehicle_id = self.fs_obj.add_vehicle(0, vehicle_capacity, vehicle_start_pos[0])
@@ -178,44 +191,81 @@ class MATSimSocket:
         Handle new iteration request from MATSim.
         """
         # end FP simulation
-        sim_time = response_obj["sim_time"] # maybe no sim_time here
-        self.fs_obj.terminate(sim_time)
+        if self.matsim_iteration > 0:
+            self.fs_obj.terminate()
         
-        scenario_parameters["matsim_iteration"] = response_obj["iteration"]
-        self.fs_obj = MATSimSimulationClass(self.scenario_parameters)
-        self.fs_obj.dir_names = self.dir_names
+            scenario_parameters["matsim_iteration"] = response_obj["iteration"]
+            self.fs_obj = MATSimSimulationClass(self.scenario_parameters)
+            self.fs_obj.dir_names = self.dir_names
         
-        list_vehicle_attributes = response_obj["vehicle_attributes"]
+        list_vehicle_attributes = response_obj["vehicles"]
         
         self._initialize_vehicles(list_vehicle_attributes)
         
-        response = {"type": "new_iteration", "status": 0}
-        self.format_object_and_send_msg(response)
+        self.fs_obj.step(self.scenario_parameters[G_SIM_START_TIME])
+
+        new_assignments = self.fs_obj.get_current_assignments() # dict (op_id, vid) -> VehPlan
         
-    def _new_time_step(self, response_obj):
+        assignment_message = self._create_assignment_message(new_assignments)
+        self.format_object_and_send_msg(assignment_message)
+        
+    def _new_state_update(self, response_obj):
         """
         Handle new time step request from MATSim.
         """
-        new_sim_time = response_obj["sim_time"]
-        list_requests = response_obj["list_requests"]
-        list_vehicle_states = response_obj["vehicle_states"]
+        new_sim_time = response_obj["time"]
+        
+        picked_up_requests = response_obj["pickedUp"] # dict { "req1": "veh1" }
+        dropped_off_requests = response_obj["droppedOff"] # { "req5": "veh10", "req7": "veh12" }
+        veh_pick_up_requests = {}
+        veh_drop_off_requests = {}
+        for rq_id, veh_id in picked_up_requests.items():
+            veh_id = self.matsim_to_fleetpy_vid[veh_id]
+            try:
+                veh_pick_up_requests[veh_id].append(rq_id)
+            except KeyError:
+                veh_pick_up_requests[veh_id] = [rq_id]
+        for rq_id, veh_id in dropped_off_requests.items():
+            veh_id = self.matsim_to_fleetpy_vid[veh_id]
+            try:
+                veh_drop_off_requests[veh_id].append(rq_id)
+            except KeyError:
+                veh_drop_off_requests[veh_id] = [rq_id]
+                
+        
+        list_vehicle_states = response_obj["vehicles"] # list of dicts
         
         for veh_state in list_vehicle_states:
-            vid = int(veh_state["vehicle_id"])
-            veh_pos = self.from_matsim_to_fleetpy_position(veh_state["position"])
-            list_ob_rids = veh_state["ob_rids"]
+            vid = int(veh_state["id"])
+            matsim_link = veh_state["current_link"]
+            matsim_link_exit_time = veh_state["curentExitTime"]
+            
+            veh_pos = self.from_matsim_to_fleetpy_position(matsim_link, remaining_time=matsim_link_exit_time - new_sim_time)
+            
+            matsim_diverge_link = veh_state["divergeLink"]
+            matsim_diverge_link_exit_time = veh_state["divergeTime"]
+            earliest_diverge_pos = self.from_matsim_to_fleetpy_position(matsim_diverge_link)
+            earliest_diverge_time = matsim_diverge_link_exit_time
+            
+            state = veh_state["state"]
+            
+            picked_up = veh_pick_up_requests.get(vid, [])
+            dropped_off = veh_drop_off_requests.get(vid, [])
+            
             status = veh_state["status"]
             first_diverge_link = veh_state["first_diverge_link"] # TODO
-            self.fs_obj.update_veh_state(vid, veh_pos, list_ob_rids, status, first_diverge_link)
+            self.fs_obj.update_veh_state(vid, veh_pos, picked_up, dropped_off, status, earliest_diverge_pos, earliest_diverge_time)
         
+        list_requests = response_obj["submitted"] # list of dicts
         for rq_entry in list_requests:
-            rq_info_dict = {G_RQ_ID: int(rq_entry["request_id"]), 
-                            G_RQ_ORIGIN: self.from_matsim_to_fleetpy_position(int(rq_entry["origin"])), 
-                            G_RQ_DESTINATION: self.from_matsim_to_fleetpy_position(int(rq_entry["destination"])), 
+            rq_info_dict = {G_RQ_ID: int(rq_entry["id"]), # TODO convert to int
+                            G_RQ_ORIGIN: self.from_matsim_to_fleetpy_position(int(rq_entry["originLink"])), 
+                            G_RQ_DESTINATION: self.from_matsim_to_fleetpy_position(int(rq_entry["destinationLink"])), 
                             G_RQ_TIME: new_sim_time,
-                            G_RQ_EPT: int(rq_entry["ept"]), # TODO optional
-                            G_RQ_LPT: int(rq_entry["lpt"]), # TODO optional
-                            G_RQ_PAX: 1} # TODO to add?
+                            G_RQ_EPT: int(rq_entry["earliestPickupTime"]), # TODO optional
+                            G_RQ_LPT: int(rq_entry["latestPickupTime"]), # TODO optional
+                            G_RQ_LDT: int(rq_entry["latestArrivalTime"]), # TODO where does it come from?
+                            G_RQ_PAX: int(rq_entry["size"])} # TODO to add?
             rq_series = pd.Series(rq_info_dict)
             rq_series.name = rq_info_dict[G_RQ_ID]
             self.fs_obj.add_request(rq_series)
@@ -231,13 +281,15 @@ class MATSimSocket:
         """
         Create a message with the new assignments for MATSim.
         """
-        assignment_message = {"type": "new_assignments", "assignments": []}
-        
+        assignment_message = {"@message": "assignment", "stops": {}}
+        raise NotImplementedError("create_assignment_message is not implemented yet")
         for (op_id, veh_id), veh_plan in new_assignments.items():
             matsim_vehicle_id = self.fleetpy_to_matsim_vid[(op_id, veh_id)]
-            matsim_edge = self.fp_edge_to_matsim_edge[veh_plan.get_current_edge()]
-            assignment_message["assignments"].append({"vehicle_id": matsim_vehicle_id, "edge": matsim_edge})
-        
+            list_stops = []
+            for stop in veh_plan.list_plan_stops: ### TODO
+                matsim_edge = self.fp_edge_to_matsim_edge[veh_plan.get_current_edge()]
+                
+            assignment_message["stops"][matsim_vehicle_id] = list_stops
         return assignment_message    
 
     def _create_fleetpy_network(self, matsim_network_path):
@@ -296,11 +348,11 @@ if __name__ == "__main__":
     # Example usage of MATSimSocket class
     scenario_parameters = {}
     host = "localhost"
-    port = 9000
+    port = 9001
     
     from src.misc.config import ConstantConfig, ScenarioConfig
     
-    matsim_network_path = r"C:\Users\ge37ser\Documents\Projekte\MINGA\AP5\IRTSystemX\KopplungMATSimFleetPy\matsim-fleetpy\scenario\network.xml\network.xml"
+    matsim_network_path = r"C:\Users\ge37ser\Documents\Projekte\MINGA\AP5\IRTSystemX\KopplungMATSimFleetPy\matsim-fleetpy\scenario\network.xml.gz"
     
     const_cfg = ConstantConfig(r"C:\Users\ge37ser\Documents\Coding\FleetPy\studies\test_matsim_coupling\scenarios\constant_config_pool.csv")
     print(const_cfg)

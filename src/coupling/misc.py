@@ -1,6 +1,7 @@
 import xml.etree.ElementTree as ET
 import os
 import pandas as pd
+import gzip
 
 def create_fleetpy_network_from_matsim(matsim_network_path, fleetpy_data_path, network_name):
     """
@@ -9,7 +10,12 @@ def create_fleetpy_network_from_matsim(matsim_network_path, fleetpy_data_path, n
     :return: FleetPy network DataFrame.
     """
     # Load the MATSim network XML file
-    tree = ET.parse(matsim_network_path)
+    print("matsim_network_path:", matsim_network_path)
+    if matsim_network_path.endswith(".gz"):
+        with gzip.open(matsim_network_path, 'rb') as f:
+            tree = ET.parse(f)
+    else:
+        tree = ET.parse(matsim_network_path)
     root = tree.getroot()
     
     # Extract nodes

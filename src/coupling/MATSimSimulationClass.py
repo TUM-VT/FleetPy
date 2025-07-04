@@ -10,7 +10,9 @@ import random
 # src imports
 # -----------
 from src.FleetSimulationBase import FleetSimulationBase
-from src.simulation.Vehicles import SimulationVehicle
+from src.simulation.Vehicles import ExternallyControlledVehicle
+from src.fleetctrl.FleetControlBase import FleetControlBase
+from src.fleetctrl.planning.VehiclePlan import VehiclePlan
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -26,14 +28,13 @@ class MATSimSimulationClass(FleetSimulationBase):
         super().__init__(scenario_parameters)
 
         self.fs_time = self.scenario_parameters[G_SIM_START_TIME]
-        self.amod_operator = self.operators[0]
         
     @staticmethod
     def get_directory_dict(scenario_parameters, list_operator_dicts):
-        dirs = super().get_directory_dict(scenario_parameters, list_operator_dicts)
+        dirs = get_directory_dict(scenario_parameters, list_operator_dicts)
         iteration = scenario_parameters.get("matsim_iteration",0)
-        dirs[G_OUTPUT_PATH] = os.path.join(dirs[G_OUTPUT_PATH], "matsim", str(iteration))
-        os.mkdir(dirs[G_OUTPUT_PATH], exist_ok=True)
+        dirs[G_DIR_OUTPUT] = os.path.join(dirs[G_DIR_OUTPUT], "matsim", str(iteration))
+        os.makedirs(dirs[G_DIR_OUTPUT], exist_ok=True)
         return dirs
 
     def add_init(self, scenario_parameters):
@@ -79,7 +80,7 @@ class MATSimSimulationClass(FleetSimulationBase):
             "soc_per_m": 1/99999999999999*1000
         }
         veh_id = len(self.operators[operator_id].sim_vehicles)
-        new_veh = SimulationVehicle(operator_id, veh_id, veh_attributes_dict, 
+        new_veh = ExternallyControlledVehicle(operator_id, veh_id, veh_attributes_dict, 
                                     self.routing_engine, self.demand.rq_db,
                                     self.op_output[operator_id], route_output_flag,
                                     replay_flag)
@@ -93,6 +94,7 @@ class MATSimSimulationClass(FleetSimulationBase):
         
         self.sim_vehicles[(operator_id, veh_id)] = new_veh
         self.operators[operator_id].sim_vehicles.append(new_veh)
+        self.operators[operator_id].veh_plans[veh_id] = VehiclePlan(new_veh, self.fs_time, self.routing_engine, [])
         return veh_id
     
     def add_request(self, request_series):
@@ -103,15 +105,28 @@ class MATSimSimulationClass(FleetSimulationBase):
         rq_obj = self.demand.add_request(request_series, self.routing_engine, self.fs_time)
         self.broker.inform_request(rq_obj.rid, rq_obj, self.fs_time)
             
-    def update_veh_state(self, veh_id, veh_pos, list_ob_rids, status, first_diverge_link):
+    def update_veh_state(self, sim_time, vid, op_id, veh_pos, rids_picked_up, rids_dropped_off, status, earliest_diverge_pos, earliest_diverge_time):
         """
         Update the vehicle state in the simulation.
         :param veh_id: Vehicle ID
         :param veh_pos: Vehicle position
-        :param list_ob_rids: List of onboard requests IDs
+        :param rids_picked_up: List of requests that have been picked up since last update
+        :param rids_dropped_off: List of requests that have been dropped off since last update
         :param status: Vehicle status
-        :param first_diverge_link: First diverge link
+        :param earliest_diverge_pos: Earliest diverge position
+        :param earliest_diverge_time: Earliest diverge time
         """
+        veh_obj = self.sim_vehicles[(op_id, vid)]
+        for rid in rids_picked_up:
+            self.demand.record_boarding(rid, vid, op_id, sim_time, pu_pos=veh_pos)
+            self.broker.acknowledge_user_boarding(op_id, rid, vid, sim_time)
+        for rid in rids_dropped_off:
+            self.demand.record_alighting_start(rid, vid, op_id, sim_time, do_pos=veh_pos) # TODO -> start_time/end_time of alighting process not really defined
+            # # record user stats at end of alighting process
+            self.demand.user_ends_alighting(rid, vid, op_id, sim_time)
+            self.broker.acknowledge_user_alighting(op_id, rid, vid, sim_time)
+        veh_obj.update_state(sim_time, veh_pos, rids_picked_up, rids_dropped_off, status,
+                             earliest_diverge_pos, earliest_diverge_time)
         raise NotImplementedError("update_veh_state is not implemented in MATSimSimulationClass.")
     
     def step(self, sim_time):
@@ -140,7 +155,7 @@ class MATSimSimulationClass(FleetSimulationBase):
 
         self.record_stats()
         
-    def terminate(self, sim_time):
+    def terminate(self):
         """Terminate the simulation."""
         # record stats
         self.record_stats()

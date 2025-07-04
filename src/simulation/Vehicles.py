@@ -783,3 +783,15 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
             LOG.error("unassignment might be the reason?")
             LOG.error(f"sim time {simulation_time} route with time {self.cl_driven_route} {self.cl_driven_route_times} | veh {self}")
             raise NotImplementedError
+        
+        
+class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
+    """ this class can be used for simulations where vehicle movements and boardings are controlled externally i.e. when coupling with
+    MATSim.
+    boarding processes are only registered, vehicles only move if their positions are actively updated
+    and driving legs are only ended if reaching a destination is externally triggered """
+    
+    def __init__(self, operator_id, vehicle_id, vehicle_data_dir, vehicle_type, routing_engine, rq_db, op_output, record_route_flag, replay_flag):
+        super().__init__(operator_id, vehicle_id, vehicle_data_dir, vehicle_type, routing_engine, rq_db, op_output, record_route_flag, replay_flag)
+        self._route_update_needed = False # set true if new route available or vehicle doesnt move on planned route
+        self._new_assignment_available = False # set true if new assignment available that has to be communicated to the vehicle controller
