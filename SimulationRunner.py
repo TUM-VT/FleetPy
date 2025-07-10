@@ -87,13 +87,15 @@ class SimulationRunner:
         with open(rerouting_cfg_path, 'r') as file:
             reader = csv.DictReader(file)
             for row in reader:
+                closed_lanes = row['closed_lane'].split('*') if row['closed_lane'] else []
                 root = ET.Element("additional")
                 tree = ET.ElementTree(root)
                 if row["type"] == "lane":
                     rerouter = ET.SubElement(root, 'rerouter', {'id': str(row['id']), 'edges': str(row['rerouter_edges']),"probability":str(row['probability'])})
                     param = ET.SubElement(rerouter, 'param', {'key': 'rerouting_name', 'value': str(row['rerouting_name'])})
                     interval = ET.SubElement(rerouter, 'interval', {'begin': row['begin_time'], 'end': row['end_time']})
-                    ET.SubElement(interval, 'closingLaneReroute', {'id': row['closed_lane'], 'disallow': "all"})
+                    for closed_lane in closed_lanes:
+                        ET.SubElement(interval, 'closingLaneReroute', {'id': closed_lane, 'disallow': "all"})
                     self.indent_xml(root)
                     tree.write(rerouting_cfg_path.parent/f"{row['id']}_rerouting.add.xml", encoding='utf-8', xml_declaration=True)
 
