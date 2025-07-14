@@ -4,6 +4,7 @@ from typing import Dict, List, Callable
 from collections import defaultdict
 
 from src.fleetctrl.FleetControlBase import FleetControlBase
+from src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignmentOriginal import AlonsoMoraAssignmentOriginal
 from src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignment import AlonsoMoraAssignment
 from src.misc.globals import *
 from src.routing.NetworkBase import NetworkBase
@@ -11,7 +12,7 @@ from src.simulation.Legs import VehicleRouteLeg
 from src.simulation.Vehicles import SimulationVehicle
 
 
-class GNNAlonsoMoraAssignment(AlonsoMoraAssignment):
+class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
     """Extension Alonso Mora Assignment Class for gathering training data for training machine learning models"""
 
     def __init__(self, fleetcontrol: FleetControlBase, routing_engine: NetworkBase, sim_time: int,

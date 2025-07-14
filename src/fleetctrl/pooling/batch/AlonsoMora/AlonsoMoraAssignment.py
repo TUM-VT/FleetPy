@@ -28,6 +28,7 @@ LARGE_INT = 100000
 MAX_LENGTH_OF_TREES = 15 # TODO
 RETRY_TIME = 300# 24*3600
 GUROBI_MIPGAP = 10**-8
+WRITE_PROBLEM = True
 
 INPUT_PARAMETERS_AlonsoMoraAssignment = {
     "doc" :  """This algorithm is a variant of the publication
@@ -1637,6 +1638,12 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                             LOG.warning("current assignment {} not found for setting initial solution".format(rtv_key))
                         else:
                             variables[rtv_key].start = 1
+
+                    if WRITE_PROBLEM:
+                        import os
+                        from src.misc.globals import G_DIR_OUTPUT
+                        m.write(os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT],
+                                             f"opt_matching_{self.sim_time}.lp"))
 
                     m.optimize() #optimization
                     LOG.info("=========")

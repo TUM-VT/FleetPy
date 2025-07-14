@@ -186,6 +186,7 @@ def get_src_ride_pooling_batch_optimizers():
     # FleetPy ride pooling optimization strategy options
     rbo_dict = {}  # str -> (module path, class name)
     rbo_dict["AlonsoMora"] = ("src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignment", "AlonsoMoraAssignment")
+    rbo_dict["AlonsoMoraOriginal"] = ("src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignmentOriginal", "AlonsoMoraAssignmentOriginal")
     rbo_dict["GNNAlonsoMora"] = ("src.fleetctrl.pooling.batch.AlonsoMora.GNNAlonsoMoraAssignment", "GNNAlonsoMoraAssignment")
     rbo_dict["InsertionHeuristic"] = ("src.fleetctrl.pooling.batch.InsertionHeuristic.BatchInsertionHeuristicAssignment", "BatchInsertionHeuristicAssignment")
     rbo_dict["SimonettoAssignment"] = ("src.fleetctrl.pooling.batch.Simonetto.SimonettoAssignment", "SimonettoAssignment")
