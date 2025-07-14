@@ -625,11 +625,12 @@ class SUMOFleetPyServer():
         tt_df = tt_df.reset_index(drop=True)
         tt_df["edge_id_str"] = tt_df["edge_id"].astype(str) 
         tt_df = pd.merge(left=tt_df, right= self.fp_hybrid_router_sc0_df, on="edge_id_str", how="left")
+        p_opt = self.fp_scenario_config.get("p_opt", 1) if self.fp_scenario_config.get("p_opt", 1) is not None else 1
         tt_df["p_fco"] = np.where(
                                 tt_df["count_sc0"] == None,
-                                self.fp_scenario_config.get("p_opt", 1),
+                                p_opt,
                                 tt_df["count"] / tt_df["count_sc0"])   
-        tt_df["hybrid_router_alpha"] = tt_df["p_fco"] / self.fp_scenario_config.get("p_opt", 1)
+        tt_df["hybrid_router_alpha"] = tt_df["p_fco"] / p_opt
         tt_df["hybrid_router_alpha"] = tt_df["hybrid_router_alpha"].clip(upper=1)
         tt_df = tt_df[tt_df["hour"] == sim_hour]
     
