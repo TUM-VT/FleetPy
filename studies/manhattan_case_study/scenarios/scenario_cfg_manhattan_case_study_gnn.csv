@@ -1,0 +1,36 @@
+scenario_name,rq_file,op_fleet_composition,op_rp_batch_optimizer
+# test_manhattan_scenario_1,2018-11-12_sample_5_1.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_2,2018-11-12_sample_5_2.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_3,2018-11-12_sample_5_3.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_4,2018-11-12_sample_5_4.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_5,2018-11-13_sample_5_1.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_6,2018-11-13_sample_5_2.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_7,2018-11-13_sample_5_3.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_8,2018-11-13_sample_5_4.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_9,2018-11-14_sample_5_1.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_10,2018-11-14_sample_5_2.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_11,2018-11-14_sample_5_3.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_12,2018-11-14_sample_5_4.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_13,2018-11-15_sample_5_1.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_14,2018-11-15_sample_5_2.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_15,2018-11-15_sample_5_3.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_16,2018-11-15_sample_5_4.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_17,2018-11-16_sample_5_1.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_18,2018-11-16_sample_5_2.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_19,2018-11-16_sample_5_3.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_20,2018-11-16_sample_5_4.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_21,2018-11-17_sample_5_1.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_22,2018-11-17_sample_5_2.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_23,2018-11-17_sample_5_3.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_24,2018-11-17_sample_5_4.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_25,2018-11-18_sample_5_1.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_26,2018-11-18_sample_5_2.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_27,2018-11-18_sample_5_3.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_28,2018-11-18_sample_5_4.csv,default_vehtype:120,GNNAlonsoMora
+# test_manhattan_scenario_1_20pct,2018-11-12_sample_10_1.csv,default_vehtype:330,GNNAlonsoMora
+# test_manhattan_scenario_2_20pct,2018-11-13_sample_10_1.csv,default_vehtype:330,GNNAlonsoMora
+# test_manhattan_scenario_3_20pct,2018-11-14_sample_10_1.csv,default_vehtype:330,GNNAlonsoMora
+test_manhattan_scenario_4_20pct,2018-11-15_sample_10_1.csv,default_vehtype:330,GNNAlonsoMora
+# test_manhattan_scenario_5_20pct,2018-11-16_sample_10_1.csv,default_vehtype:330,GNNAlonsoMora
+# test_manhattan_scenario_6_20pct,2018-11-17_sample_10_1.csv,default_vehtype:330,GNNAlonsoMora
+# test_manhattan_scenario_7_20pct,2018-11-18_sample_10_1.csv,default_vehtype:330,GNNAlonsoMora
