@@ -128,6 +128,9 @@ class AlonsoMoraAssignmentOriginal(BatchAssignmentAlgorithmBase):
                                                                             max_cost_value=latest_pu - current_time)
             for veh_loc, tt, _, _ in routing_results:
                 for vid in veh_locations_to_vid[veh_loc]:
+                    vid_locked = self.r2v_locked.get(rid, None)
+                    if vid_locked is not None and vid_locked != vid:
+                        continue
                     self.r2v[rid][vid] = tt
                     try:
                         self.v2r[vid][rid] = tt
