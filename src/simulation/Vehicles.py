@@ -584,8 +584,8 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
     an microscopic traffic simulation.
     boarding processes are still handled in this class, but vehicles only move if their positions are actively updated
     and driving legs are only ended if reaching a destination is externally triggered """
-    def __init__(self, operator_id, vehicle_id, vehicle_data_dir, vehicle_type, routing_engine, rq_db, op_output, record_route_flag, replay_flag):
-        super().__init__(operator_id, vehicle_id, vehicle_data_dir, vehicle_type, routing_engine, rq_db, op_output, record_route_flag, replay_flag)
+    def __init__(self, operator_id, vehicle_id, veh_attributes_dict, routing_engine, rq_db, op_output, record_route_flag, replay_flag):
+        super().__init__(operator_id, vehicle_id, veh_attributes_dict, routing_engine, rq_db, op_output, record_route_flag, replay_flag)
         self._route_update_needed = False # set true if new route available or vehicle doesnt move on planned route
 
     def update_vehicle_position(self, veh_pos, simulation_time):
@@ -791,7 +791,113 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
     boarding processes are only registered, vehicles only move if their positions are actively updated
     and driving legs are only ended if reaching a destination is externally triggered """
     
-    def __init__(self, operator_id, vehicle_id, vehicle_data_dir, vehicle_type, routing_engine, rq_db, op_output, record_route_flag, replay_flag):
-        super().__init__(operator_id, vehicle_id, vehicle_data_dir, vehicle_type, routing_engine, rq_db, op_output, record_route_flag, replay_flag)
+    def __init__(self, operator_id, vehicle_id, veh_attributes_dict, routing_engine, rq_db, op_output, record_route_flag, replay_flag):
+        super().__init__(operator_id, vehicle_id, veh_attributes_dict, routing_engine, rq_db, op_output, record_route_flag, replay_flag)
         self._route_update_needed = False # set true if new route available or vehicle doesnt move on planned route
         self._new_assignment_available = False # set true if new assignment available that has to be communicated to the vehicle controller
+        self._current_leg_id_counter = 0
+        
+    def update_state(self, sim_time, veh_pos, rids_picked_up, rids_dropped_off, status: VRL_STATES,
+                             earliest_diverge_pos, earliest_diverge_time, finished_leg_ids):
+        """
+        :param sim_time: current simulation time
+        :param veh_pos: current vehicle position (tuple)
+        :param rids_picked_up: list requests that have been picked up since last update
+        :param rids_dropped_off: list requests that have been dropped off since last update
+        :param status: TODO
+        :param earliest_diverge_pos: first position where route is allowed to change
+        :param earliest_diverge_time: earliest time the route is allowed to change
+        :param finished_leg_ids: leg ids finished since last update
+        """
+        def raise_error_msg():
+            raise EnvironmentError(f"Error in incoming state: {veh_pos} |{rids_picked_up} | {rids_dropped_off} | {status} | {finished_leg_ids} \n <-> \n {self} \n {[x.id for x in self.assigned_route]}")
+        
+        done_VRLs = []
+        for finished_leg_id in finished_leg_ids:
+            if self.assigned_route[0].id == finished_leg_id:
+                self.update_vehicle_position(self.assigned_route[0].destination_pos, sim_time)
+                done_VRL = self.end_current_leg(sim_time)[1]
+                if type(done_VRL) == dict and len(done_VRL) == 0:
+                    pass
+                else:
+                    done_VRLs.append(done_VRL)
+                self.start_next_leg(sim_time)
+            elif self.assigned_route[1].id == finished_leg_id:
+                self.update_vehicle_position(self.assigned_route[0].destination_pos, sim_time)
+                done_VRL = self.end_current_leg(sim_time)[1]
+                if type(done_VRL) == dict and len(done_VRL) == 0:
+                    pass
+                else:
+                    done_VRLs.append(done_VRL)
+                self.start_next_leg(sim_time)
+                self.update_vehicle_position(self.assigned_route[0].destination_pos, sim_time)
+                done_VRL = self.end_current_leg(sim_time)[1]
+                if type(done_VRL) == dict and len(done_VRL) == 0:
+                    pass
+                else:
+                    done_VRLs.append(done_VRL)
+                self.start_next_leg(sim_time)
+            else:
+                raise_error_msg()
+                
+        if len(rids_picked_up) != 0 or len(rids_dropped_off) != 0:
+            if self.status != VRL_STATES.BOARDING:
+                if len(self.assigned_route) < 2:
+                    raise_error_msg()
+                next_planned_pos = self.assigned_route[1].destination_pos
+                if next_planned_pos != veh_pos:
+                    raise_error_msg()
+                self.update_vehicle_position(next_planned_pos, sim_time)
+                done_VRL = self.end_current_leg(sim_time)[1]
+                if type(done_VRL) == dict and len(done_VRL) == 0:
+                    pass
+                else:
+                    done_VRLs.append(done_VRL)
+                self.start_next_leg(sim_time)
+                if self.status != VRL_STATES.BOARDING:
+                    raise_error_msg()
+                planned_pick_up = [rq.get_rid() for rq in self.assigned_route[0].rq_dict.get(1, [])]
+                planned_drop_off = [rq.get_rid() for rq in self.assigned_route[0].rq_dict.get(-1, [])]
+                if tuple(sorted(planned_pick_up)) != tuple(sorted(rids_picked_up)) or tuple(sorted(planned_drop_off)) != tuple(sorted(planned_drop_off)):
+                    raise_error_msg()
+        if status in G_DRIVING_STATUS:
+            if self.status in G_DRIVING_STATUS:
+                self.update_vehicle_position(veh_pos, sim_time)
+            else:
+                done_VRL = self.end_current_leg(sim_time)[1]
+                if type(done_VRL) == dict and len(done_VRL) == 0:
+                    pass
+                else:
+                    done_VRLs.append(done_VRL)
+                self.start_next_leg(sim_time)
+                if self.status not in G_DRIVING_STATUS:
+                    raise_error_msg()
+                    
+        return done_VRLs
+                
+    def assign_vehicle_plan(self, list_route_legs, sim_time, force_ignore_lock=False):
+        r = super().assign_vehicle_plan(list_route_legs, sim_time, force_ignore_lock=force_ignore_lock)
+        self._new_assignment_available = True
+        for leg in self.assigned_route:
+            if leg.id is None:
+                leg.set_id(self._current_leg_id_counter)
+                self._current_leg_id_counter += 1
+        return r
+    
+    def get_new_assignment(self):
+        if not self._new_assignment_available:
+            return None
+        else:
+            assignment_list = []
+            for leg in self.assigned_route:
+                if leg.status in G_DRIVING_STATUS:
+                    continue
+                assignment_list.append({
+                    "pos" : leg.destination_pos,
+                    "duration" : leg.duration,
+                    "earliest_start_time" : leg.earliest_start_time,
+                    "boarding_rids" : [rq.get_rid() for rq in leg.rq_dict.get(1, [])],
+                    "alighting_rids" : [rq.get_rid() for rq in leg.rq_dict.get(-1, [])],
+                    "id" : leg.id
+                })
+            return assignment_list

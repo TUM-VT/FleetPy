@@ -105,7 +105,7 @@ class MATSimSimulationClass(FleetSimulationBase):
         rq_obj = self.demand.add_request(request_series, self.routing_engine, self.fs_time)
         self.broker.inform_request(rq_obj.rid, rq_obj, self.fs_time)
             
-    def update_veh_state(self, sim_time, vid, op_id, veh_pos, rids_picked_up, rids_dropped_off, status, earliest_diverge_pos, earliest_diverge_time):
+    def update_veh_state(self, sim_time, vid, op_id, veh_pos, rids_picked_up, rids_dropped_off, status, earliest_diverge_pos, earliest_diverge_time, finished_leg_ids):
         """
         Update the vehicle state in the simulation.
         :param veh_id: Vehicle ID
@@ -115,8 +115,9 @@ class MATSimSimulationClass(FleetSimulationBase):
         :param status: Vehicle status
         :param earliest_diverge_pos: Earliest diverge position
         :param earliest_diverge_time: Earliest diverge time
+        :param finished_leg_ids: list of leg ids that the vehicle finished since the last update
         """
-        veh_obj = self.sim_vehicles[(op_id, vid)]
+        veh_obj: ExternallyControlledVehicle = self.sim_vehicles[(op_id, vid)]
         for rid in rids_picked_up:
             self.demand.record_boarding(rid, vid, op_id, sim_time, pu_pos=veh_pos)
             self.broker.acknowledge_user_boarding(op_id, rid, vid, sim_time)
@@ -125,9 +126,13 @@ class MATSimSimulationClass(FleetSimulationBase):
             # # record user stats at end of alighting process
             self.demand.user_ends_alighting(rid, vid, op_id, sim_time)
             self.broker.acknowledge_user_alighting(op_id, rid, vid, sim_time)
-        veh_obj.update_state(sim_time, veh_pos, rids_picked_up, rids_dropped_off, status,
-                             earliest_diverge_pos, earliest_diverge_time)
-        raise NotImplementedError("update_veh_state is not implemented in MATSimSimulationClass.")
+        done_VRLS = veh_obj.update_state(sim_time, veh_pos, rids_picked_up, rids_dropped_off, status,
+                             earliest_diverge_pos, earliest_diverge_time, finished_leg_ids)
+        # send update to operator
+        if len(rids_picked_up) > 0 or len(rids_dropped_off) > 0:
+            self.broker.receive_status_update(op_id, vid, sim_time, done_VRLS, True)
+        else:
+            self.broker.receive_status_update(op_id, vid, sim_time, done_VRLS, True) # TODO force update plan
     
     def step(self, sim_time):
         """
@@ -173,8 +178,8 @@ class MATSimSimulationClass(FleetSimulationBase):
         :return: dict of new assignments
         """
         new_assignments = {}
-        raise NotImplementedError("get_current_assignments is not implemented in MATSimSimulationClass.")
-        for op_id, op_obj in enumerate(self.operators):
-            for vid, veh_plan in op_obj.veh_plans.items():
-                new_assignments[(op_id, vid)] = veh_plan
+        for vid, veh in self.sim_vehicles.items():
+            new_assignment = veh.get_new_assignment()
+            if new_assignment is not None:
+                new_assignments[vid] = new_assignment
         return new_assignments

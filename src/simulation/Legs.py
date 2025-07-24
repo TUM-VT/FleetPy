@@ -12,7 +12,7 @@ if tp.TYPE_CHECKING is True:
 # ----------------------------------
 class VehicleRouteLeg:
     def __init__(self, status:VRL_STATES, destination_pos:tuple, rq_dict:tp.Dict[tp.Any, RequestBase], power:float=0.0, duration:float=None, route:tp.List[int]=[], locked:bool=False,
-                 earliest_start_time:float=-1000, earliest_end_time:float=-1000, stationary_process:StationaryProcess=None):
+                 earliest_start_time:float=-1000, earliest_end_time:float=-1000, stationary_process:StationaryProcess=None, leg_id=None):
         """
         This class summarizes the minimal information for a a route leg. It only reflects a complete state
         with the information of the initial state at the start of the leg.
@@ -26,6 +26,7 @@ class VehicleRouteLeg:
         :param earliest_start_time: for e.g. boarding processes
         :param earliest_end_time: earliest time for ending the process
         :param stationary_process:  The stationary process do be carried out at the stop
+        :param leg_id: (optional) id of route-leg -> usefull in coupled simulation (i.e. matsim) when vehicle tasks have to by synchronized
         """
         self.status = status
         self.rq_dict = rq_dict
@@ -42,6 +43,7 @@ class VehicleRouteLeg:
             except:
                 raise TypeError("wrong type for duration: {}".format(duration))
         self.stationary_process: StationaryProcess = stationary_process
+        self.id = leg_id
 
     def __eq__(self, other)->bool:
         """Comparison of two VehicleRouteLegs.
@@ -68,4 +70,7 @@ class VehicleRouteLeg:
 
     def update_lock_status(self, lock=True):
         self.locked = lock
+        
+    def set_id(self, leg_id):
+        self.id = leg_id
 
