@@ -24,10 +24,10 @@ import numpy as np
 from src.misc.init_modules import load_fleet_control_module, load_routing_engine
 from src.demand.demand import Demand, SlaveDemand
 from src.simulation.Vehicles import SimulationVehicle
+from src.python_plots.plot_classes import PyPlot
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.routing.NetworkBase import NetworkBase
-    from src.python_plots.plot_classes import PyPlot
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
