@@ -790,7 +790,7 @@ class FleetSimulationBase:
                         cur_perc = int(100 * (1 - remaining_requests/all_requests))
                         pbar.update(cur_perc - pbar.n)
                         vehicle_counts = self.count_fleet_status()
-                        info_dict = {"simulation_time": sim_time,
+                        info_dict = {"simulation_time": str(sim_time) + "/" + str(self.end_time),
                                      "driving": sum([vehicle_counts[x] for x in G_DRIVING_STATUS])}
                         info_dict.update({x.display_name: vehicle_counts[x] for x in PROGRESS_LOOP_VEHICLE_STATUS})
                         pbar.set_postfix(info_dict)
