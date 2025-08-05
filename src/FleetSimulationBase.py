@@ -832,22 +832,22 @@ class FleetSimulationBase:
         """ This method starts a separate process for real time python plots """
         if self.realtime_plot_flag in {1, 2}:
             if self.scenario_parameters.get(G_SIM_REALTIME_PLOT_EXTENTS, None):
-                extents = self.scenario_parameters.get(G_SIM_REALTIME_PLOT_EXTENTS)
-                lons, lats = extents[:2], extents[2:]
+                bounding = self.scenario_parameters.get(G_SIM_REALTIME_PLOT_EXTENTS)
             else:
                 bounding = self.routing_engine.return_network_bounding_box()
-                lons, lats = list(zip(*bounding))
+            LOG.info(f"Using bounding box {bounding} with crs {self.routing_engine.crs} for real time plots. "
+                     f"Use parameter {G_SIM_REALTIME_PLOT_EXTENTS} for custom bounds")
             if self.realtime_plot_flag == 1:
                 self._manager = Manager()
                 self._shared_dict = self._manager.dict()
-                self._plot_class_instance = PyPlot(self.dir_names["network"], self._shared_dict, plot_extent=lons+lats)
+                self._plot_class_instance = PyPlot(self.dir_names["network"], self._shared_dict, plot_extent=bounding)
                 self._plot_class_instance.start()
             else:
                 plot_dir = Path(self.dir_names["output"], "real_time_plots")
                 if plot_dir.exists() is False:
                     plot_dir.mkdir()
                 self._plot_class_instance = PyPlot(self.dir_names["network"], self._shared_dict,
-                                                   plot_extent=lons + lats, plot_folder=str(plot_dir))
+                                                   plot_extent=bounding, plot_folder=str(plot_dir))
 
     def _end_realtime_plot(self):
         """ Closes the process for real time plots """
@@ -867,7 +867,7 @@ class FleetSimulationBase:
             veh_status = [self.sim_vehicles[veh].status for veh in veh_ids]
             veh_status = [state.display_name for state in veh_status]
             veh_positions = [self.sim_vehicles[veh].pos for veh in veh_ids]
-            veh_positions = self.routing_engine.return_positions_lon_lat(veh_positions)
+            veh_positions = [self.routing_engine.return_position_coordinates(pos) for pos in veh_positions]
             df = pd.DataFrame({"status": veh_status,
                                "coordinates": veh_positions})
             self._shared_dict.update({"veh_coord_status_df": df,

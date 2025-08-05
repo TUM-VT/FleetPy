@@ -457,6 +457,6 @@ class NetworkBase(metaclass=ABCMeta):
     def return_network_bounding_box(self):
         """ Calculates the bounding box points for the whole network
 
-        :return: a list of tuples, (longitude, latitude) for the south-west and north-east corners of the bounding box.
+        :return: a list of tuples, (min_x, max_x, min_y, max_y) in uml coordinates
          """
         raise NotImplementedError("The bounding box method is not implemented for current routing class")

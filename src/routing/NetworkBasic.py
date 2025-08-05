@@ -328,9 +328,7 @@ class NetworkBasic(NetworkBase):
         max_x = max([node.pos_x for node in self.nodes])
         min_y = min([node.pos_y for node in self.nodes])
         max_y = max([node.pos_y for node in self.nodes])
-        proj_transformer = Transformer.from_proj(self.crs, 'epsg:4326')
-        lats, lons = proj_transformer.transform([min_x, max_x], [min_y, max_y])
-        return list(zip(lons, lats))
+        return (min_x, max_x, min_y, max_y)
 
     def return_positions_lon_lat(self, position_tuple_list: list) -> list:
         pos_list = [self.return_position_coordinates(pos) for pos in position_tuple_list]

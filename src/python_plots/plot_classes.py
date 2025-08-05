@@ -29,18 +29,19 @@ class PyPlot(Process):
         :param shared_dict: a dictionary object for sharing real time information
         :param plot_folder: full path of the folder for saving the animation. If provided, each frame is saved
                             in the location.
-        :param plot_extent: Tuple of (lon_1, lon_2, lat_1, lat_2) marking the left bottom and top right boundary of
-                            the map
+        :param plot_extent: Tuple of (min_x, min_y, max_x, max_y) marking boundaries of the plot in uml coordinates.
         """
 
         super().__init__()
         self.bg_map_path = os.path.join(nw_dir, "downloaded_map.tif")
         self.shared_dict: dict = shared_dict
         self.plot_folder: Path = Path(plot_folder) if plot_folder else None
+        with open(os.path.join(nw_dir, "base\\crs.info"), 'r') as f:
+            self.crs = f.readline().strip()
 
         self.fig, self.grid_spec, self.axes = None, None, None
         self.plot_extent = plot_extent
-        x, y = self.convert_lat_lon(plot_extent[2:4], plot_extent[0:2])
+        x, y = self.project_crs(plot_extent[0:2], plot_extent[2:4], self.crs)
         x[0], y[0] = x[0] - BOARDER_SIZE, y[0] - BOARDER_SIZE
         x[1], y[1] = x[1] + BOARDER_SIZE, y[1] + BOARDER_SIZE
         self.plot_extent_3857 = x + y
@@ -48,10 +49,10 @@ class PyPlot(Process):
         _, bbox = ctx.bounds2raster(x[0], y[0], x[1], y[1], path=self.bg_map_path, source=CTX_PROVIDER)
         self.plot_extent_3857 = bbox
 
-    def convert_lat_lon(self, lats: list, lons: list, to_epsg: str = "epsg:3857"):
-        proj_transformer = Transformer.from_proj('epsg:4326', to_epsg)
-        x, y = proj_transformer.transform(lats, lons)
-        return list(x), list(y)
+    def project_crs(self, x, y, from_crs, to_crs = "epsg:3857"):
+        proj_transformer = Transformer.from_proj(from_crs, to_crs)
+        x_proj, y_proj = proj_transformer.transform(x, y)
+        return list(x_proj), list(y_proj)
 
     def generate_plot_axes(self):
         fig = plt.figure(1, figsize=FIG_SIZE)
@@ -75,8 +76,8 @@ class PyPlot(Process):
             coords = vehicle_df[mask]["coordinates"].to_list()
             x, y = [], []
             if coords:
-                lons, lats = list(zip(*coords))
-                x, y = self.convert_lat_lon(lats, lons)
+                x, y = list(zip(*coords))
+                x, y = self.project_crs(x, y, self.crs)
             axes[3].scatter(x, y, s=VEHICLE_POINT_SIZE, label=status)
         axes[3].legend(loc="upper left")
         axes[3].axis('off')
