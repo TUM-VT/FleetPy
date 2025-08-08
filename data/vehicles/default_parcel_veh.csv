@@ -1,6 +1,7 @@
 vtype_name_full,default_parcel_veh
 maximum_passengers,4
 maximum_parcels,8
+maximum_parcel_vol,1000
 daily_fix_cost [cent],2500
 per_km_cost [cent],25
 battery_size [kWh],50

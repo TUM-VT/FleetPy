@@ -50,6 +50,7 @@ class SimulationVehicle:
         self.veh_type = veh_data[G_VTYPE_NAME]
         self.max_pax = int(veh_data[G_VTYPE_MAX_PAX])
         self.max_parcels = int(veh_data.get(G_VTYPE_MAX_PARCELS, 0))
+        self.max_parcel_volume = float(veh_data.get(G_VTYPE_MAX_PARCELS, 1000))
         self.daily_fix_cost = float(veh_data[G_VTYPE_FIX_COST])
         self.distance_cost = float(veh_data[G_VTYPE_DIST_COST])/1000.0
         self.battery_size = float(veh_data[G_VTYPE_BATTERY_SIZE])
@@ -538,6 +539,19 @@ class SimulationVehicle:
             return sum([rq.nr_pax for rq in self.pax if rq.is_parcel]) - sum([rq.nr_pax for rq in self.assigned_route[0].rq_dict.get(1, []) if rq.is_parcel])
         else:
             return sum([rq.nr_pax for rq in self.pax if rq.is_parcel])
+
+    def get_occupied_parcel_volume_without_currently_boarding(self)->int:
+        """ this method returns the current volume occupied by parcels for the use of setting the inititial stats for
+        the update_tt_... function in fleetControlBase.py.
+        In case the vehicle is currently boarding, this method doesnt use the currently boarding parcels
+        the reason is that boarding and deboarding of parcels is recognized during different timesteps of the vcl
+        :return: volume of parcels occupied without currently boarding ones
+        :rtype: int
+        """
+        if self.status == VRL_STATES.BOARDING:
+            return sum([rq.parcel_volume for rq in self.pax if rq.is_parcel]) - sum([rq.parcel_volume for rq in self.assigned_route[0].rq_dict.get(1, []) if rq.is_parcel])
+        else:
+            return sum([rq.parcel_volume for rq in self.pax if rq.is_parcel])
 
     def _move(self, c_time:float, remaining_step_time:float, update_start_time:float)->float:
         """ this function is used internally to move the vehicle when called in update_veh_state

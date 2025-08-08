@@ -462,6 +462,7 @@ G_RQ_MRD = "max_rel_detour"
 G_RQ_MAX_FARE = "max_fare"
 # parcel
 G_RQ_PA_SIZE = "parcel_size"
+G_RQ_PA_VOLUME = "parcel_volume"
 G_RQ_PA_EPT = "parcel_earliest_pickup_time"
 G_RQ_PA_LPT = "parcel_latest_pickup_time"
 G_RQ_PA_EDT = "parcel_earliest_dropoff_time"
@@ -646,6 +647,7 @@ G_VTYPE_BATTERY_SIZE = "battery_size [kWh]"
 G_VTYPE_RANGE = "range [km]"
 G_VTYPE_HOME_CHARGING_POWER = "home charging power [kW]"
 G_VTYPE_MAX_PARCELS = "maximum_parcels"
+G_VTYPE_MAX_PARCEL_VOL = "maximum_parcel_vol"
 
 
 # -------------------------------------------------------------------------------------------------------------------- #

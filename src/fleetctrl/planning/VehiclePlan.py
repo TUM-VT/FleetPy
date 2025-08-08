@@ -104,6 +104,11 @@ class PlanStopBase(metaclass=ABCMeta):
     def get_change_nr_parcels(self) -> int:
         """ get the change of parcel occupancy after this plan stop 
         :return: change number parcels (difference between boarding and deboarding parcels)"""
+
+    @abstractmethod
+    def get_change_parcels_vol(self) -> float:
+        """ get the change of available volume for parcel after this plan stop
+        :return: change in available volume for parcels """
         
     @abstractmethod
     def get_departure_time(self, start_time : float) -> float:
@@ -217,7 +222,7 @@ class PlanStop(PlanStopBase):
         vehicles are moving between these different plan stops.
         this class is the most general class of plan stops"""
     def __init__(self, position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={}, earliest_pickup_time_dict={}, latest_pickup_time_dict={},
-                 change_nr_pax=0, change_nr_parcels=0, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None,
+                 change_nr_pax=0, change_nr_parcels=0, change_parcels_vol=0, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None,
                  locked=False, locked_end=False, charging_power=0, planstop_state : G_PLANSTOP_STATES=G_PLANSTOP_STATES.MIXED,
                  charging_task_id: Tuple[int, str] = None, status: Optional[VRL_STATES] = None, fixed_stop: bool = False):
         """
@@ -229,6 +234,7 @@ class PlanStop(PlanStopBase):
         :param latest_pickup_time_dict: dictionary request_id -> latest pickup time of all requests boarding at this top to check latest pickup time constraint
         :param change_nr_pax: (int) change of number of passengers at this point: number people boarding - number people alighting to check capacity constraint
         :param change_nr_parcels: (int) change of number of parcels at this point: number boarding parcels - number alighting parcels to check capacity constraint
+        :param change_parcels_vol: (float) change in the available parcel volume at this point
         :param earliest_start_time: (float) absolute earliest start time this plan stop is allowed to start
         :param latest_start_time: (float) absolute latest start time this plan stop is allowed to start
         :param duration: (float) minimum duration this plan stops takes at this location
@@ -255,6 +261,7 @@ class PlanStop(PlanStopBase):
         # parameters that define capacity constraints
         self.change_nr_pax = change_nr_pax
         self.change_nr_parcels = change_nr_parcels
+        self.change_parcels_vol = change_parcels_vol
         # parameters that define time constraints
         self.max_trip_time_dict = max_trip_time_dict  # deboarding rid -> max_trip_time constraint
         self.latest_arrival_time_dict = latest_arrival_time_dict    # deboarding rid -> latest_arrival_time constraint
@@ -381,6 +388,9 @@ class PlanStop(PlanStopBase):
     
     def get_change_nr_parcels(self) -> int:
         return self.change_nr_parcels
+
+    def get_change_parcels_vol(self) -> float:
+        return self.change_parcels_vol
     
     def get_departure_time(self, start_time: float) -> float:
         """ this function returns the time the vehicle leaves the plan stop if it is started at start_time
@@ -482,7 +492,7 @@ class BoardingPlanStop(PlanStop):
     """ this class can be used to generate a plan stop where only boarding processes take place """
     def __init__(self, position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={},
                  earliest_pickup_time_dict={}, latest_pickup_time_dict={}, change_nr_pax=0, change_nr_parcels=0,
-                 duration=None, locked=False,
+                 change_parcels_vol=0, duration=None, locked=False,
                  earliest_start_time=None, latest_start_time=None, earliest_end_time=None, fixed_stop=False):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
@@ -499,7 +509,7 @@ class BoardingPlanStop(PlanStop):
         super().__init__(position, boarding_dict=boarding_dict, max_trip_time_dict=max_trip_time_dict,
                          latest_arrival_time_dict=latest_arrival_time_dict, earliest_pickup_time_dict=earliest_pickup_time_dict,
                          latest_pickup_time_dict=latest_pickup_time_dict, change_nr_pax=change_nr_pax, change_nr_parcels=change_nr_parcels,
-                         earliest_start_time=earliest_start_time, latest_start_time=latest_start_time,
+                         change_parcels_vol=change_parcels_vol, earliest_start_time=earliest_start_time, latest_start_time=latest_start_time,
                          duration=duration, earliest_end_time=earliest_end_time, locked=locked,
                          charging_power=0, planstop_state=G_PLANSTOP_STATES.BOARDING, fixed_stop=fixed_stop)
         
@@ -777,6 +787,7 @@ class VehiclePlan:
             c_pax = init_plan_state["c_pax"].copy()
             nr_pax = init_plan_state["c_nr_pax"]
             nr_parcels = init_plan_state["c_nr_parcels"]
+            vol_parcels = init_plan_state["c_volume_parcels"]
             self.pax_info = {}
             for k, v in init_plan_state["pax_info"].items():
                 self.pax_info[k] = v.copy()
@@ -793,6 +804,7 @@ class VehiclePlan:
             c_pax = {key_translator.get(rq.get_rid_struct(), rq.get_rid_struct()): 1 for rq in veh_obj.pax}
             nr_pax = veh_obj.get_nr_pax_without_currently_boarding()  # sum([rq.nr_pax for rq in veh_obj.pax])
             nr_parcels = veh_obj.get_nr_parcels_without_currently_boarding()
+            vol_parcels = veh_obj.get_occupied_parcel_volume_without_currently_boarding()
             self.pax_info = {}
             for rq in veh_obj.pax:
                 rid = key_translator.get(rq.get_rid_struct(), rq.get_rid_struct())
@@ -815,6 +827,7 @@ class VehiclePlan:
                 # update pax and check max. passenger constraint
                 nr_pax += pstop.get_change_nr_pax()
                 nr_parcels += pstop.get_change_nr_parcels()
+                vol_parcels += pstop.get_change_parcels_vol()
                 for rid in pstop.get_list_boarding_rids():
                     if self.pax_info.get(rid):
                         continue
@@ -837,9 +850,11 @@ class VehiclePlan:
                 pstop.set_planned_arrival_and_departure_soc(last_c_soc, c_soc)
                     
         return {"stop_index": stop_index, "c_pos": c_pos, "c_soc": c_soc, "c_time": c_time, "c_pax": c_pax,
-                "pax_info": self.pax_info.copy(), "c_nr_pax": nr_pax, "c_nr_parcels" : nr_parcels}
+                "pax_info": self.pax_info.copy(), "c_nr_pax": nr_pax, "c_nr_parcels" : nr_parcels,
+                "c_volume_parcels": vol_parcels}
 
-    def update_tt_and_check_plan(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase, init_plan_state : dict=None, keep_feasible : bool=False):
+    def update_tt_and_check_plan(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase,
+                                 init_plan_state : dict=None, keep_feasible : bool=False):
         """This method updates the planning properties of all PlanStops of the Plan according to the new vehicle
         position and checks if it is still feasible.
 
@@ -865,6 +880,7 @@ class VehiclePlan:
             c_pax = init_plan_state["c_pax"].copy()
             c_nr_pax = init_plan_state["c_nr_pax"]
             c_nr_parcels = init_plan_state["c_nr_parcels"]
+            c_volume_parcels = init_plan_state["c_volume_parcels"]
             self.pax_info = {}
             for k, v in init_plan_state["pax_info"].items():
                 self.pax_info[k] = v.copy()
@@ -883,6 +899,7 @@ class VehiclePlan:
             c_pax = {key_translator.get(rq.get_rid_struct(), rq.get_rid_struct()): 1 for rq in veh_obj.pax}
             c_nr_pax = veh_obj.get_nr_pax_without_currently_boarding()  # sum([rq.nr_pax for rq in veh_obj.pax])
             c_nr_parcels = veh_obj.get_nr_parcels_without_currently_boarding()
+            c_volume_parcels = veh_obj.get_occupied_parcel_volume_without_currently_boarding()
             for rq in veh_obj.pax:
                 # LOG.debug(f"add pax info {rq.get_rid_struct()} : {rq.pu_time}")
                 rid = key_translator.get(rq.get_rid_struct(), rq.get_rid_struct())
@@ -920,6 +937,7 @@ class VehiclePlan:
                 # update pax and check max. passenger constraint
                 c_nr_pax += pstop.get_change_nr_pax()
                 c_nr_parcels += pstop.get_change_nr_parcels()
+                c_volume_parcels += pstop.get_change_parcels_vol()
                 #LOG.debug(f"change nr pax {pstop.change_nr_pax}")
                 for rid in pstop.get_list_boarding_rids():
                     if i == 0 and self.pax_info.get(rid):
@@ -943,7 +961,8 @@ class VehiclePlan:
                     infeasible_index = i
                     # LOG.debug(f" -> arrival after latest {c_time} > {latest_time}")
                 #LOG.debug(f"-> c nr {c_nr_pax} | cap {veh_obj.max_pax}")
-                if c_nr_pax > veh_obj.max_pax or c_nr_parcels > veh_obj.max_parcels:
+                if (c_nr_pax > veh_obj.max_pax or c_nr_parcels > veh_obj.max_parcels
+                        or c_volume_parcels > veh_obj.max_parcel_volume):
                     # LOG.debug(" -> capacity wrong")
                     is_feasible = False
                     infeasible_index = i

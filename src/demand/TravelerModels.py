@@ -705,6 +705,7 @@ class ParcelRequestBase(RequestBase):
         self.is_parcel = True
         self.rid = f"p_{self.rid}"
         self.parcel_size = rq_row.get(G_RQ_PA_SIZE, 1)
+        self.parcel_volume = rq_row.get(G_RQ_PA_VOLUME, 0)
         self.earliest_start_time = rq_row.get(G_RQ_PA_EPT, None)
         self.latest_start_time = rq_row.get(G_RQ_PA_LPT, None)
         self.earliest_drop_off_time = rq_row.get(G_RQ_PA_EDT, None)

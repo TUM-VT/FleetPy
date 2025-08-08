@@ -89,6 +89,7 @@ class ParcelPlanRequest(PlanRequest):
         self.rid = rq.get_rid_struct()
         self.nr_pax = 0 # no persons
         self.parcel_size = rq.parcel_size
+        self.parcel_volume = rq.parcel_volume
         if sub_rid_id is not None:
             self.sub_rid_struct = (self.rid, sub_rid_id)
         else:
@@ -447,8 +448,12 @@ class RPPFleetControlFullInsertion(FleetControlBase):
                     veh_plan = self.veh_plans[vid]
                     veh_obj = self.sim_vehicles[vid]
                     number_scheduled_parcels = sum([self.rq_dict[x].parcel_size for x in veh_plan.pax_info.keys() if type(x) == str and x.startswith("p")])
+                    scheduled_parcel_volume = sum([self.rq_dict[x].parcel_volume for x in veh_plan.pax_info.keys() if type(x) == str and x.startswith("p")])
                     if number_scheduled_parcels >= self.max_number_parcels_scheduled_per_veh:
                         LOG.debug("too many scheduled parcels! {} {}".format(vid, number_scheduled_parcels))
+                        continue
+                    if scheduled_parcel_volume > veh_obj.max_parcel_volume:
+                        LOG.debug(f"too much scheduled parcel volume for vid {vid}: {scheduled_parcel_volume} / {veh_obj.max_parcel_volume}")
                         continue
                     if not self._pre_test_insertion(parcel_prq, vid):
                         continue
@@ -715,8 +720,12 @@ class RPPFleetControlSingleStopInsertion(RPPFleetControlFullInsertion):
                 for vid in self.vehicle_assignment_changed.keys():
                     veh_plan = self.veh_plans[vid]
                     number_scheduled_parcels = sum([self.rq_dict[x].parcel_size for x in veh_plan.pax_info.keys() if type(x) == str and x.startswith("p")])
+                    scheduled_parcel_volume = sum([self.rq_dict[x].parcel_volume for x in veh_plan.pax_info.keys() if type(x) == str and x.startswith("p")])
                     if number_scheduled_parcels >= self.max_number_parcels_scheduled_per_veh:
                         LOG.debug("too many scheduled parcels! {} {}".format(vid, number_scheduled_parcels))
+                        continue
+                    if scheduled_parcel_volume > veh_obj.max_parcel_volume:
+                        LOG.debug(f"too much scheduled parcel volume for vid {vid}: {scheduled_parcel_volume} / {veh_obj.max_parcel_volume}")
                         continue
                     if not self._pre_test_insertion(parcel_prq, vid, True):
                         continue
