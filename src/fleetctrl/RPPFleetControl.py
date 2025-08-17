@@ -202,6 +202,7 @@ class RPPFleetControlFullInsertion(FleetControlBase):
         self.parcel_latest_dropoff_time = operator_attributes.get(G_OP_PA_LDT, LARGE_INT)
         self.parcel_const_bt = operator_attributes[G_OP_PA_CONST_BT]
         self.parcel_add_bt = operator_attributes.get(G_OP_PA_ADD_BT, 0)
+        self.parcel_all_remaining_delivery_time = operator_attributes.get(G_OP_PA_REDEL_ALL, LARGE_INT)
         #
         self.parcel_assignment_threshold = operator_attributes[G_OP_PA_ASSTH] # assignment of parcel if additional distance by assignment < self.parcel_assignment_threshold * direct trip of parcel
         self.allow_parcel_pu_with_ob_cust = operator_attributes[G_OP_PA_OBASS]
@@ -426,6 +427,21 @@ class RPPFleetControlFullInsertion(FleetControlBase):
                 LOG.debug(f"activate {base_rid} with epa {epa} for global optimisation at time {sim_time}!")
                 del self.reserved_base_rids[base_rid]
 
+    def _check_capacity_constraints_parcel(self, vid):
+        """This method checks if the vehicle plan of a vehicle has enough capacity to schedule a parcel."""
+        veh_plan = self.veh_plans[vid]
+        veh_obj = self.sim_vehicles[vid]
+        number_scheduled_parcels = sum([self.rq_dict[x].parcel_size for x in veh_plan.pax_info.keys() if type(x) == str and x.startswith("p")])
+        scheduled_parcel_volume = sum([self.rq_dict[x].parcel_volume for x in veh_plan.pax_info.keys() if type(x) == str and x.startswith("p")])
+        possibility = True
+        if number_scheduled_parcels >= self.max_number_parcels_scheduled_per_veh:
+            LOG.debug("too many scheduled parcels! {} {}".format(vid, number_scheduled_parcels))
+            possibility = False
+        if scheduled_parcel_volume > veh_obj.max_parcel_volume:
+            LOG.debug(f"too much scheduled parcel volume for vid {vid}: {scheduled_parcel_volume} / {veh_obj.max_parcel_volume}")
+            possibility = False
+        return possibility
+
     def _call_time_trigger_request_batch(self, simulation_time):
         """this is the main functionality for the rpp assignment control
         it checks for all unassigned parcels all new assigned vehicle plans
@@ -447,13 +463,7 @@ class RPPFleetControlFullInsertion(FleetControlBase):
                 for vid in self.vehicle_assignment_changed.keys():
                     veh_plan = self.veh_plans[vid]
                     veh_obj = self.sim_vehicles[vid]
-                    number_scheduled_parcels = sum([self.rq_dict[x].parcel_size for x in veh_plan.pax_info.keys() if type(x) == str and x.startswith("p")])
-                    scheduled_parcel_volume = sum([self.rq_dict[x].parcel_volume for x in veh_plan.pax_info.keys() if type(x) == str and x.startswith("p")])
-                    if number_scheduled_parcels >= self.max_number_parcels_scheduled_per_veh:
-                        LOG.debug("too many scheduled parcels! {} {}".format(vid, number_scheduled_parcels))
-                        continue
-                    if scheduled_parcel_volume > veh_obj.max_parcel_volume:
-                        LOG.debug(f"too much scheduled parcel volume for vid {vid}: {scheduled_parcel_volume} / {veh_obj.max_parcel_volume}")
+                    if self._check_capacity_constraints_parcel(vid):
                         continue
                     if not self._pre_test_insertion(parcel_prq, vid):
                         continue
@@ -483,6 +493,36 @@ class RPPFleetControlFullInsertion(FleetControlBase):
             for p_rid in new_assigned_parcel.keys():
                 del self.unassigned_parcel_dict[p_rid]
             self.vehicle_assignment_changed = {}
+
+    def _call_time_trigger_additional_tasks(self, simulation_time):
+        super()._call_time_trigger_additional_tasks(simulation_time)
+        if simulation_time >= self.parcel_all_remaining_delivery_time:
+            self.deliver_remaining_parcels(simulation_time)
+
+    def deliver_remaining_parcels(self, simulation_time):
+        LOG.info(f"Forced delivering of remaining parcels started at {self.parcel_all_remaining_delivery_time}. "
+                 f"Remaining unassigned parcels: {len(self.unassigned_parcel_dict)}")
+        for p_rid, parcel_prq in list(self.unassigned_parcel_dict.items()):
+            best_option = None
+            for vid, veh_obj in self.sim_vehicles.items():
+                veh_plan = self.veh_plans[vid]
+                if not self._check_capacity_constraints_parcel(vid):
+                    continue
+                res = insert_parcel_prq_in_selected_veh_list([veh_obj], {vid: veh_plan}, parcel_prq, self.vr_ctrl_f,
+                                                             self.routing_engine, self.rq_dict, simulation_time,
+                                                             self.parcel_const_bt, self.parcel_add_bt,
+                                                             allow_parcel_pu_with_ob_cust=self.allow_parcel_pu_with_ob_cust
+                                                             )
+                if len(res) > 0:
+                    option = res[0]
+                    if best_option is None or option[2] < best_option[2]:
+                        best_option = option
+            if best_option:
+                best_vid, best_plan, _ = best_option
+                self.assign_vehicle_plan(self.sim_vehicles[best_vid], best_plan, simulation_time)
+                del self.unassigned_parcel_dict[p_rid]
+            else:
+                LOG.warning(f"No delivery option for parcel {p_rid} at simulation time {simulation_time}.")
                     
     def compute_VehiclePlan_utility(self, simulation_time, veh_obj, vehicle_plan):
         """This method computes the utility of a given plan and returns the value.

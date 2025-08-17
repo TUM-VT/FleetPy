@@ -316,7 +316,8 @@ G_SUMO_SIM_TIME_OFFSET = "sumo_sim_time_offset" # offset between fleetpy and sum
 # RPP fleetcontrol
 G_OP_PA_ASSTH = "op_parcel_assignment_threshold"
 G_OP_PA_OBASS = "op_parcel_passenger_ob_assignment"
-G_OP_PA_REDEL = "op_parcel_remaining_delivery_time"
+G_OP_PA_REDEL = "op_parcel_onboard_remaining_delivery_time"
+G_OP_PA_REDEL_ALL = "op_parcel_all_remaining_delivery_time"     # The time for delivering all remaining parcels at the end of simulation
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Charging Stations/Depots
