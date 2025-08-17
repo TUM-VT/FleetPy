@@ -463,7 +463,7 @@ class RPPFleetControlFullInsertion(FleetControlBase):
                 for vid in self.vehicle_assignment_changed.keys():
                     veh_plan = self.veh_plans[vid]
                     veh_obj = self.sim_vehicles[vid]
-                    if self._check_capacity_constraints_parcel(vid):
+                    if self._check_capacity_constraints_parcel(vid) is False:
                         continue
                     if not self._pre_test_insertion(parcel_prq, vid):
                         continue
