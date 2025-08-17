@@ -19,6 +19,7 @@ import logging
 # ------------------------------------------
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 # src imports
 # -----------
@@ -74,7 +75,7 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         """
         self.tt_table = None
         self.dis_table = None
-        self.max_preprocessed_index = -1
+        self._table_keys = set()
 
         super().__init__(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
 
@@ -88,13 +89,32 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         else:
             f = str(self.travel_time_file_infos[scenario_time])
         try:
-            self.tt_table = np.load(os.path.join(network_name_dir, f, "tt_matrix.npy"))
-            self.dis_table = np.load(os.path.join(network_name_dir, f, "dis_matrix.npy"))
-            self.max_preprocessed_index = self.tt_table.shape[0]
-            LOG.info(" ... travel time tables loaded until index {}".format(self.max_preprocessed_index))
-            print(" ... travel time tables loaded until index {}".format(self.max_preprocessed_index))
+            dist_df = Path(network_name_dir).joinpath(f, "travel_distance_df.csv")
+            dist_table = Path(network_name_dir).joinpath(f, "dis_matrix.npy")
+            if dist_df.exists():
+                df = pd.read_csv(os.path.join(network_name_dir, f, "travel_distance_df.csv"), index_col=0)
+                df.columns = df.columns.astype(int)
+                self.dis_table = df.to_dict(orient="index")
+                time_df = Path(network_name_dir).joinpath(f, "travel_time_df.csv")
+                df = pd.read_csv(time_df, index_col=0)
+                df.columns = df.columns.astype(int)
+                self.tt_table = df.to_dict(orient="index")
+                LOG.info(f"Loaded travel distance and time from csv tables {dist_df} and {time_df}")
+                print(f"Loaded travel distance and time from csv tables {dist_df} and {time_df}")
+            elif dist_table.exists():
+                array = np.load(str(dist_table))
+                self.dis_table = {i: {j: array[i, j] for j in range(array.shape[1])} for i in range(array.shape[0])}
+                time_table = Path(network_name_dir).joinpath(f, "tt_matrix.npy")
+                array = np.load(str(time_table))
+                self.tt_table = {i: {j: array[i, j] for j in range(array.shape[1])} for i in range(array.shape[0])}
+                LOG.info(f"Loaded travel distance and time from numpy tables {dist_table} and {time_table}")
+                print(f"Loaded travel distance and time from numpy tables {dist_table} and {time_table}")
         except FileNotFoundError:
             LOG.warning(" ... no preprocessing files found!")
+        if self.tt_table is not None and len(self.tt_table) > 0:
+            for key, dest_dict in self.tt_table.items():
+                for dest_key in dest_dict.keys():
+                    self._table_keys.add((key, dest_key))
 
     def update_network(self, simulation_time, update_state = True):
         """This method can be called during simulations to update travel times (dynamic networks).
@@ -104,7 +124,6 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         :return: new_tt_flag True, if new travel times found; False if not
         :rtype: bool
         """
-        LOG.debug(f"update network {simulation_time} | preproc index {self.max_preprocessed_index}")
         self.sim_time = simulation_time
         if update_state:
             if self.travel_time_file_infos.get(simulation_time, None) is not None:
@@ -124,7 +143,7 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
             
     def _return_node_to_node_travel_costs_1to1(self, origin_node, destination_node):
         s = None
-        if origin_node < self.max_preprocessed_index and destination_node < self.max_preprocessed_index:
+        if origin_node in self.tt_table and destination_node in self.tt_table[origin_node]:
             tt, dis = self.tt_table[origin_node][destination_node], self.dis_table[origin_node][destination_node]
             if self._current_tt_factor is not None:
                 tt = tt * self._current_tt_factor
@@ -173,9 +192,8 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         if destination_position[1] is not None:
             destination_overhead = self.get_section_overhead(destination_position, from_start=True)
         s = None
-        #LOG.warning("get1to1: {} -> {} table: {} dict {}".format(origin_node, destination_node, self.max_preprocessed_index, self.travel_time_infos.get( (origin_node, destination_node) , None)))
         if customized_section_cost_function is None:
-            if origin_node < self.max_preprocessed_index and destination_node < self.max_preprocessed_index:
+            if origin_node in self.tt_table and destination_node in self.tt_table[origin_node]:
                 tt, dis = self.tt_table[origin_node][destination_node], self.dis_table[origin_node][destination_node]
                 if self._current_tt_factor is not None:
                     tt = tt * self._current_tt_factor
@@ -210,8 +228,6 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
                 origin_node = origin_position[1]
                 origin_overhead = self.get_section_overhead(origin_position, from_start=False)
             destination_node = destination_position[0]
-            if self.max_preprocessed_index >= origin_node and self.max_preprocessed_index >= destination_node:
-                continue
             if self.travel_time_infos.get( (origin_node, destination_node) ) is not None:
                 continue
             destination_overhead = (0.0, 0.0, 0.0)
@@ -225,14 +241,10 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         if self._tt_infos_from_folder:
             self.tt_table = None
             self.dis_table = None
-            self.max_preprocessed_index = -1
 
     def _add_to_database(self, o_node, d_node, cfv, tt, dis):
         """ this function is call when new routing results have been computed
         depending on the class the function can be overwritten to store certain results in the database
         """
-        #LOG.warning("add to db: {} -> {} tt {}".format(o_node, d_node, tt ))
-        if self.max_preprocessed_index < o_node or self.max_preprocessed_index < d_node:
-            if self.travel_time_infos.get( (o_node, d_node) ) is None:
-                #LOG.warning("done")
-                self.travel_time_infos[ (o_node, d_node) ] = (cfv, tt, dis)
+        if self.travel_time_infos.get( (o_node, d_node) ) is None:
+            self.travel_time_infos[ (o_node, d_node) ] = (cfv, tt, dis)
