@@ -427,18 +427,16 @@ class RPPFleetControlFullInsertion(FleetControlBase):
                 LOG.debug(f"activate {base_rid} with epa {epa} for global optimisation at time {sim_time}!")
                 del self.reserved_base_rids[base_rid]
 
-    def _check_capacity_constraints_parcel(self, vid):
+    def _check_capacity_constraints_parcel(self, parcel_prq, vid):
         """This method checks if the vehicle plan of a vehicle has enough capacity to schedule a parcel."""
         veh_plan = self.veh_plans[vid]
         veh_obj = self.sim_vehicles[vid]
         number_scheduled_parcels = sum([self.rq_dict[x].parcel_size for x in veh_plan.pax_info.keys() if type(x) == str and x.startswith("p")])
         scheduled_parcel_volume = sum([self.rq_dict[x].parcel_volume for x in veh_plan.pax_info.keys() if type(x) == str and x.startswith("p")])
         possibility = True
-        if number_scheduled_parcels >= self.max_number_parcels_scheduled_per_veh:
-            LOG.debug("too many scheduled parcels! {} {}".format(vid, number_scheduled_parcels))
+        if number_scheduled_parcels + parcel_prq.parcel_size >= self.max_number_parcels_scheduled_per_veh:
             possibility = False
-        if scheduled_parcel_volume > veh_obj.max_parcel_volume:
-            LOG.debug(f"too much scheduled parcel volume for vid {vid}: {scheduled_parcel_volume} / {veh_obj.max_parcel_volume}")
+        if scheduled_parcel_volume + parcel_prq.parcel_volume > veh_obj.max_parcel_volume:
             possibility = False
         return possibility
 
@@ -463,7 +461,7 @@ class RPPFleetControlFullInsertion(FleetControlBase):
                 for vid in self.vehicle_assignment_changed.keys():
                     veh_plan = self.veh_plans[vid]
                     veh_obj = self.sim_vehicles[vid]
-                    if self._check_capacity_constraints_parcel(vid) is False:
+                    if self._check_capacity_constraints_parcel(parcel_prq, vid) is False:
                         continue
                     if not self._pre_test_insertion(parcel_prq, vid):
                         continue
@@ -506,7 +504,7 @@ class RPPFleetControlFullInsertion(FleetControlBase):
             best_option = None
             for vid, veh_obj in enumerate(self.sim_vehicles):
                 veh_plan = self.veh_plans[vid]
-                if self._check_capacity_constraints_parcel(vid) is False:
+                if self._check_capacity_constraints_parcel(parcel_prq, vid) is False:
                     continue
                 res = insert_parcel_prq_in_selected_veh_list([veh_obj], {vid: veh_plan}, parcel_prq, self.vr_ctrl_f,
                                                              self.routing_engine, self.rq_dict, simulation_time,
