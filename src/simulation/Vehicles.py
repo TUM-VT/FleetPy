@@ -293,7 +293,9 @@ class SimulationVehicle:
                 record_dict[G_VR_CHARGING_UNIT] = ""
             record_dict[G_VR_TOLL] = self.cl_toll_costs
             record_dict[G_VR_OB_RID] = ";".join([str(rq.get_rid_struct()) for rq in self.pax])
-            record_dict[G_VR_NR_PAX] = sum([rq.nr_pax for rq in self.pax])
+            record_dict[G_VR_NR_PAX] = sum([rq.nr_pax for rq in self.pax if rq.is_parcel is False])
+            record_dict[G_VR_NR_PARCELS] = sum([rq.parcel_size for rq in self.pax if rq.is_parcel is True])
+            record_dict[G_VR_VOL_PARCELS] = round(sum([rq.parcel_volume for rq in self.pax if rq.is_parcel is True]), 2)
             # remove and record alighting passengers
             list_boarding_pax = [rq.get_rid_struct() for rq in ca.rq_dict.get(1, [])]
             list_alighting_pax = [rq.get_rid_struct() for rq in ca.rq_dict.get(-1, [])]
