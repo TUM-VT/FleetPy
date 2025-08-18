@@ -50,7 +50,7 @@ class SimulationVehicle:
         self.veh_type = veh_data[G_VTYPE_NAME]
         self.max_pax = int(veh_data[G_VTYPE_MAX_PAX])
         self.max_parcels = int(veh_data.get(G_VTYPE_MAX_PARCELS, 0))
-        self.max_parcel_volume = float(veh_data.get(G_VTYPE_MAX_PARCELS, 1000))
+        self.max_parcel_volume = float(veh_data.get(G_VTYPE_MAX_PARCEL_VOL, 1000))
         self.daily_fix_cost = float(veh_data[G_VTYPE_FIX_COST])
         self.distance_cost = float(veh_data[G_VTYPE_DIST_COST])/1000.0
         self.battery_size = float(veh_data[G_VTYPE_BATTERY_SIZE])

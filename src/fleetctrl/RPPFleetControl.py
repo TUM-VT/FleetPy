@@ -504,9 +504,9 @@ class RPPFleetControlFullInsertion(FleetControlBase):
                  f"Remaining unassigned parcels: {len(self.unassigned_parcel_dict)}")
         for p_rid, parcel_prq in list(self.unassigned_parcel_dict.items()):
             best_option = None
-            for vid, veh_obj in self.sim_vehicles.items():
+            for vid, veh_obj in enumerate(self.sim_vehicles):
                 veh_plan = self.veh_plans[vid]
-                if not self._check_capacity_constraints_parcel(vid):
+                if self._check_capacity_constraints_parcel(vid) is False:
                     continue
                 res = insert_parcel_prq_in_selected_veh_list([veh_obj], {vid: veh_plan}, parcel_prq, self.vr_ctrl_f,
                                                              self.routing_engine, self.rq_dict, simulation_time,
