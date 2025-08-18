@@ -500,6 +500,8 @@ class RPPFleetControlFullInsertion(FleetControlBase):
     def deliver_remaining_parcels(self, simulation_time):
         LOG.info(f"Forced delivering of remaining parcels started at {self.parcel_all_remaining_delivery_time}. "
                  f"Remaining unassigned parcels: {len(self.unassigned_parcel_dict)}")
+        LOG.info(f"Deactivating the repositioning by increasing the repositioning period to one week.")
+        self.repo_time_step = 7*24*3600
         for p_rid, parcel_prq in list(self.unassigned_parcel_dict.items()):
             best_option = None
             for vid, veh_obj in enumerate(self.sim_vehicles):
