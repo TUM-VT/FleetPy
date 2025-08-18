@@ -143,7 +143,7 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
             
     def _return_node_to_node_travel_costs_1to1(self, origin_node, destination_node):
         s = None
-        if origin_node in self.tt_table and destination_node in self.tt_table[origin_node]:
+        if self.tt_table is not None and origin_node in self.tt_table and destination_node in self.tt_table[origin_node]:
             tt, dis = self.tt_table[origin_node][destination_node], self.dis_table[origin_node][destination_node]
             if self._current_tt_factor is not None:
                 tt = tt * self._current_tt_factor
@@ -193,7 +193,7 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
             destination_overhead = self.get_section_overhead(destination_position, from_start=True)
         s = None
         if customized_section_cost_function is None:
-            if origin_node in self.tt_table and destination_node in self.tt_table[origin_node]:
+            if self.tt_table is not None and origin_node in self.tt_table and destination_node in self.tt_table[origin_node]:
                 tt, dis = self.tt_table[origin_node][destination_node], self.dis_table[origin_node][destination_node]
                 if self._current_tt_factor is not None:
                     tt = tt * self._current_tt_factor
