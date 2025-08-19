@@ -59,7 +59,7 @@ def decode_offer_str(offer_str):
                 key, value = item.split(":")
                 if op_id not in result:
                     result[op_id] = {}
-                result[op_id][key] = int(value)
+                result[op_id][key] = round(float(value), 2)
     return result
 
 def create_vehicle_type_db(vehicle_data_dir):
