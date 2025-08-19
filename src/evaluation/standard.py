@@ -28,18 +28,8 @@ def read_op_output_file(output_dir, op_id, evaluation_start_time = None, evaluat
         op_df = op_df[op_df[G_VR_LEG_START_TIME] >= evaluation_start_time]
     if evaluation_end_time is not None:
         op_df = op_df[op_df[G_VR_LEG_START_TIME] < evaluation_end_time]
-    # test for correct datatypes
-    def convert_str(val):
-        if val != val:
-            return val
-        if type(val) == str:
-            return val
-        else:
-            return str(int(val))
-    test_convert = [G_VR_ALIGHTING_RID, G_VR_BOARDING_RID, G_VR_OB_RID]
-    for col in test_convert:
-        if op_df.dtypes[col] != str:
-            op_df[col] = op_df[col].apply(convert_str)
+    for col in [G_VR_ALIGHTING_RID, G_VR_BOARDING_RID, G_VR_OB_RID]:
+        op_df[col] = op_df[col].astype(str)
     return op_df
 
 def read_user_output_file(output_dir, evaluation_start_time = None, evaluation_end_time = None) -> pd.DataFrame:
@@ -58,34 +48,19 @@ def read_user_output_file(output_dir, evaluation_start_time = None, evaluation_e
     return user_stats
 
 def decode_offer_str(offer_str):
-    """ create a dictionary from offer_str in outputfile """
-    offer_dict = {}
-    try:
-        offer_strs = offer_str.split("|")
-    except:
-        return {}
-    for offer_str in offer_strs:
-        x = offer_str.split(":")
-        op = int(x[0])
-        vals = ":".join(x[1:])
-        if len(vals) == 0:
-            continue
-        offer_dict[op] = {}
-        for offer_entries in vals.split(";"):
-            try:
-                offer_at, v2 = offer_entries.split(":")
-            except:
-                continue
-            try:
-                v2 = int(v2)
-            except:
-                try:
-                    v2 = float(v2)
-                except:
-                    pass
-            offer_dict[op][offer_at] = v2
-    return offer_dict
-
+    """ this method decodes the offer string from the user stats file into a dictionary """
+    result = {}
+    for op_entry in offer_str.split("|"):
+        parts = op_entry.split(":")
+        op_id = int(parts[0])
+        values = ":".join(parts[1:])
+        for item in values.split(";"):
+            if item:
+                key, value = item.split(":")
+                if op_id not in result:
+                    result[op_id] = {}
+                result[op_id][key] = int(value)
+    return result
 
 def create_vehicle_type_db(vehicle_data_dir):
     list_veh_data_f = glob.glob(f"{vehicle_data_dir}/*csv")
