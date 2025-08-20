@@ -3,6 +3,7 @@ import sys
 import glob
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 MAIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(MAIN_DIR)
@@ -136,7 +137,8 @@ def shared_rides(op_df):
     return 100.0*N_shared/N
 
 
-def calculate_user_stats_for_operator(op_id, select_op_users, all_users, op_offers, operator_attributes, prefix=""):
+def calculate_user_stats_for_operator(op_id, select_op_users, all_users, op_offers, operator_attributes,
+                                      print_comments=False, prefix=""):
     op_reservation_horizon = operator_attributes.get(G_RA_OPT_HOR, 0)
     number_users = len(all_users)
     number_total_travelers = all_users[G_RQ_PAX].sum()
@@ -169,7 +171,8 @@ def calculate_user_stats_for_operator(op_id, select_op_users, all_users, op_offe
 
     all_select_rid = set(select_op_users[G_RQ_ID].to_list())
     select_offers = len([rid for rid in op_offers if rid in all_select_rid])
-    print(f"For operator : {op_id}, {prefix} {select_offers} offers created")
+    if print_comments:
+        print(f"For operator : {op_id}, {prefix} {select_offers} offers created")
 
     result_dict = {prefix + "number users": op_number_users,
                    prefix + "number travelers": op_number_pax,
@@ -239,7 +242,6 @@ def calculate_user_stats_for_operator(op_id, select_op_users, all_users, op_offe
         prefix + "mod revenue": op_revenue,
     })
 
-
     return result_dict
 
 
@@ -260,10 +262,8 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         dir_names = dir_names_in
 
     # evaluation interval
-    if evaluation_start_time is None and scenario_parameters.get(G_EVAL_INT_START) is not None:
-        evaluation_start_time = int(scenario_parameters[G_EVAL_INT_START])
-    if evaluation_end_time is None and scenario_parameters.get(G_EVAL_INT_END) is not None:
-        evaluation_end_time = int(scenario_parameters[G_EVAL_INT_END])
+    eval_start_time = scenario_parameters.get(G_EVAL_INT_START) if evaluation_start_time is None else evaluation_start_time
+    eval_end_time = scenario_parameters.get(G_EVAL_INT_END) if evaluation_end_time is None else evaluation_end_time
 
     # vehicle type data
     veh_type_db = create_vehicle_type_db(dir_names[G_DIR_VEH])
@@ -271,7 +271,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
     if print_comments:
         print(f"Evaluating {scenario_parameters[G_SCENARIO_NAME]}\nReading user stats ...")
-    user_stats = read_user_output_file(output_dir, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
+    user_stats = read_user_output_file(output_dir, evaluation_start_time=eval_start_time, evaluation_end_time=eval_end_time)
     if print_comments:
         print(f"\t shape of user stats: {user_stats.shape}")
 
@@ -306,13 +306,13 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         result_dict = {"operator_id": op_id}
         if len(rq_types) > 0:
             all_dict = calculate_user_stats_for_operator(op_id, op_users, user_stats, operator_offers,
-                                                         operator_attributes, prefix="[ALL] ")
+                                                         operator_attributes, print_comments, prefix="[ALL] ")
             result_dict.update(all_dict)
             for rq_type in rq_types:
                 select_users = op_users[op_users[G_RQ_TYPE] == rq_type].copy()
                 selected_all_users = user_stats[user_stats[G_RQ_TYPE] == rq_type]
                 rq_dict = calculate_user_stats_for_operator(op_id, select_users, selected_all_users, operator_offers,
-                                                            operator_attributes, prefix=f"[{rq_type}] ")
+                                                            operator_attributes, print_comments, prefix=f"[{rq_type}] ")
                 result_dict.update(rq_dict)
         else:
             all_dict = calculate_user_stats_for_operator(op_id, op_users, user_stats, operator_offers,
@@ -353,7 +353,8 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
             if print_comments:
                 print("Loading AMoD vehicle data ...")
             try:
-                op_vehicle_df = read_op_output_file(output_dir, op_id, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
+                op_vehicle_df = read_op_output_file(output_dir, op_id, evaluation_start_time=eval_start_time,
+                                                    evaluation_end_time=eval_end_time)
             except FileNotFoundError:
                 op_vehicle_df = pd.DataFrame([], columns=[G_V_OP_ID, G_V_VID, G_VR_STATUS, G_VR_LOCKED, G_VR_LEG_START_TIME,
                                                         G_VR_LEG_END_TIME, G_VR_LEG_START_POS, G_VR_LEG_END_POS,
@@ -563,7 +564,13 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
     # combine and save
     result_df = pd.DataFrame(result_dict_list, index=operator_names)
     result_df = result_df.transpose()
-    result_df.to_csv(os.path.join(output_dir, "standard_eval.csv"))
+    file_name = "standard_eval"
+    if evaluation_start_time is not None:
+        file_name = f"standard_eval_{evaluation_start_time}"
+    if evaluation_end_time is not None:
+        file_name += f"_{evaluation_end_time}"
+    file_name += ".csv"
+    result_df.to_csv(os.path.join(output_dir, file_name))
 
     return result_df
 
@@ -574,7 +581,7 @@ def evaluate_folder(path, evaluation_start_time = None, evaluation_end_time = No
     :param evaluation_end_time: end time of evaluation interval in s   (if None, then evalation ountil sim end)
     :param print_comments: print comments
     """
-    for f in os.listdir(path):
+    for f in tqdm(os.listdir(path)):
         sc_path = os.path.join(path, f)
         if os.path.isdir(sc_path):
             if os.path.isfile(os.path.join(sc_path, "1_user-stats.csv")):
