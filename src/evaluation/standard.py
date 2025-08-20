@@ -414,7 +414,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
                 op_vehicle_df["weighted_ob_pax"] = op_vehicle_df.apply(weight_ob_pax, axis=1)
                 op_distance_avg_rq = op_vehicle_df["weighted_ob_rq"].sum() / op_vehicle_df[G_VR_LEG_DISTANCE].sum()
                 op_distance_avg_occupancy = op_vehicle_df["weighted_ob_pax"].sum() / op_vehicle_df[G_VR_LEG_DISTANCE].sum()
-                empty_df = op_vehicle_df[op_vehicle_df[G_VR_OB_RID].isnull()]
+                empty_df = op_vehicle_df[op_vehicle_df[G_VR_OB_RID] == "nan"]
                 op_empty_vkm = empty_df[G_VR_LEG_DISTANCE].sum()/1000.0/op_total_km*100.0
                 op_repositioning_vkm = empty_df[empty_df[G_VR_STATUS] == "reposition"][G_VR_LEG_DISTANCE].sum()/op_total_km*100.0/1000.0
                 if G_VR_TOLL in op_vehicle_df.columns:
