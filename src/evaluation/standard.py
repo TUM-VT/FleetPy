@@ -254,7 +254,8 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
             result_dict.update(all_dict)
             for rq_type in rq_types:
                 select_users = op_users[op_users[G_RQ_TYPE] == rq_type]
-                rq_dict = calculate_user_stats_for_operator(op_id, select_users, user_stats, operator_offers,
+                selected_all_users = user_stats[user_stats[G_RQ_TYPE] == rq_type]
+                rq_dict = calculate_user_stats_for_operator(op_id, select_users, selected_all_users, operator_offers,
                                                             op_reservation_horizon, prefix=f"[{rq_type}] ")
                 result_dict.update(rq_dict)
         else:
