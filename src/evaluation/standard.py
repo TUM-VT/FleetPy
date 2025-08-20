@@ -136,6 +136,57 @@ def shared_rides(op_df):
     return 100.0*N_shared/N
 
 
+def calculate_user_stats_for_operator(op_id, select_op_users, all_users, op_offers, op_reservation_horizon, prefix=""):
+    number_users = len(all_users)
+    number_total_travelers = all_users[G_RQ_PAX].sum()
+    op_number_users = len(select_op_users)
+    op_number_pax = select_op_users[G_RQ_PAX].sum()
+
+    op_modal_split_rq = float(op_number_users) / number_users
+    op_modal_split = float(op_number_pax) / number_total_travelers
+
+    op_avg_utility = np.nan
+    if G_RQ_C_UTIL in select_op_users.columns:
+        op_avg_utility = select_op_users[G_RQ_C_UTIL].sum() / op_number_users
+
+    op_reservation_users = select_op_users[select_op_users[G_RQ_EPT] - select_op_users[G_RQ_TIME] > op_reservation_horizon]
+    total_reservation_users = all_users[all_users[G_RQ_EPT] - all_users[G_RQ_TIME] > op_reservation_horizon]
+    op_number_reservation_users = len(op_reservation_users)
+    op_number_reservation_pax = op_reservation_users[G_RQ_PAX].sum()
+    op_frac_served_reservation_users = 100.0
+    op_frac_served_reservation_pax = 100.0
+    if len(total_reservation_users) > 0:
+        op_frac_served_reservation_users = op_number_reservation_users / total_reservation_users.shape[0] * 100.0
+        op_frac_served_reservation_pax = op_number_reservation_pax / total_reservation_users[G_RQ_PAX].sum() * 100.0
+    op_number_online_users = op_number_users - op_number_reservation_users
+    op_number_online_pax = op_number_pax - op_number_reservation_pax
+    op_frac_served_online_users = 100.0
+    op_frac_served_online_pax = 100.0
+    if number_users - len(total_reservation_users) > 0:
+        op_frac_served_online_users = op_number_online_users / (number_users - total_reservation_users.shape[0]) * 100.0
+        op_frac_served_online_pax = op_number_online_pax / (number_total_travelers - total_reservation_users[G_RQ_PAX].sum()) * 100.0
+
+    all_select_rid = set(select_op_users[G_RQ_ID].to_list())
+    select_offers = len([rid for rid in op_offers if rid in all_select_rid])
+    print(f"For operator : {op_id}, {prefix} {select_offers} offers created")
+
+    result_dict = {prefix + "number users": op_number_users,
+                   prefix + "number travelers": op_number_pax,
+                   prefix + "modal split": round(op_modal_split, 2),
+                   prefix + "modal split rq": round(op_modal_split_rq, 2),
+                   prefix + "reservation users": op_number_reservation_users,
+                   prefix + "reservation pax": op_number_reservation_pax,
+                   prefix + "served reservation users [%]": round(op_frac_served_reservation_users, 1),
+                   prefix + "served reservation pax [%]": round(op_frac_served_reservation_pax, 1),
+                   prefix + "online users": op_number_online_users,
+                   prefix + "online pax": op_number_online_pax,
+                   prefix + "served online users [%]": round(op_frac_served_online_users, 1),
+                   prefix + "served online pax [%]": round(op_frac_served_online_pax, 1),
+                   prefix + r'% created offers': round(select_offers / number_users * 100.0, 1),
+                   prefix + "utility": round(op_avg_utility, 2)}
+    return result_dict
+
+
 def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end_time = None, print_comments=False, dir_names_in = {}):
     """This function runs a standard evaluation over a scenario output directory.
 
@@ -179,73 +230,40 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
     op_id_to_offer_dict = {}    # op_id -> user_stats_row_id -> offer
     active_offer_parameters = {}
     for key, entries in user_stats.iterrows():
-        row_id_to_offer_dict[key] = entries[G_RQ_PAX]
         offer_entry = entries[G_RQ_OFFERS]
         offer = decode_offer_str(offer_entry)
         row_id_to_offer_dict[key] = offer
         rid = entries[G_RQ_ID]
         for op_id, op_offer in offer.items():
-            try:
-                op_id_to_offer_dict[op_id][rid] = op_offer
-            except KeyError:
-                op_id_to_offer_dict[op_id] = {rid : op_offer}
+            if op_id not in op_id_to_offer_dict:
+                op_id_to_offer_dict[op_id] = {}
+            op_id_to_offer_dict[op_id][rid] = op_offer
             for offer_param in op_offer.keys():
                 active_offer_parameters[offer_param] = 1
-    
-    number_users = user_stats.shape[0]
-    number_total_travelers = user_stats[G_RQ_PAX].sum()
 
     for op_id, op_users in user_stats.groupby(G_RQ_OP_ID):
         op_name = "?"
         
         op_reservation_horizon = list_operator_attributes[int(op_id)].get(G_RA_OPT_HOR,0)
+        operator_offers = op_id_to_offer_dict[op_id]
+        rq_types = op_users[G_RQ_TYPE].unique()
+        result_dict = {"operator_id": op_id}
+        if len(rq_types) > 0:
+            all_dict = calculate_user_stats_for_operator(op_id, op_users, user_stats, operator_offers,
+                                                         op_reservation_horizon, prefix="[ALL] ")
+            result_dict.update(all_dict)
+            for rq_type in rq_types:
+                select_users = op_users[op_users[G_RQ_TYPE] == rq_type]
+                rq_dict = calculate_user_stats_for_operator(op_id, select_users, user_stats, operator_offers,
+                                                            op_reservation_horizon, prefix=f"[{rq_type}] ")
+                result_dict.update(rq_dict)
+        else:
+            all_dict = calculate_user_stats_for_operator(op_id, op_users, user_stats, operator_offers,
+                                                         op_reservation_horizon)
+            result_dict.update(all_dict)
 
-        op_number_users = op_users.shape[0]
+        op_number_users = len(op_users)
         op_number_pax = op_users[G_RQ_PAX].sum()
-        op_created_offers = len(op_id_to_offer_dict.get(op_id, {}).keys())
-        op_modal_split_rq = float(op_number_users)/number_users
-        op_modal_split = float(op_number_pax)/number_total_travelers
-        if print_comments:
-            print(op_created_offers)
-        op_rel_created_offers = float(op_created_offers)/number_users*100.0
-        op_avg_utility = np.nan
-        if G_RQ_C_UTIL in op_users.columns:
-            op_avg_utility = op_users[G_RQ_C_UTIL].sum()/op_number_users  
-            
-        op_reservation_users = op_users[op_users[G_RQ_EPT] - op_users[G_RQ_TIME] > op_reservation_horizon]
-        total_reservation_users = user_stats[user_stats[G_RQ_EPT] - user_stats[G_RQ_TIME] > op_reservation_horizon]
-        op_number_reservation_users = op_reservation_users.shape[0]
-        op_number_reservation_pax = op_reservation_users[G_RQ_PAX].sum()
-        try:
-            op_frac_served_reservation_users = op_number_reservation_users/total_reservation_users.shape[0]*100.0
-            op_frac_served_reservation_pax = op_number_reservation_pax/total_reservation_users[G_RQ_PAX].sum()*100.0
-        except ZeroDivisionError:
-            op_frac_served_reservation_users = 100.0
-            op_frac_served_reservation_pax = 100.0
-        op_number_online_users = op_number_users - op_number_reservation_users
-        op_number_online_pax = op_number_pax - op_number_reservation_pax
-        try:
-            op_frac_served_online_users = op_number_online_users/(number_users - total_reservation_users.shape[0])*100.0
-            op_frac_served_online_pax = op_number_online_pax/(number_total_travelers - total_reservation_users[G_RQ_PAX].sum())*100.0
-        except ZeroDivisionError:
-            op_frac_served_online_users = 100.0
-            op_frac_served_online_pax = 100.0
-
-        result_dict = {"operator_id": op_id, 
-                       "number users": op_number_users,
-                       "number travelers": op_number_pax,
-                       "modal split": op_modal_split,
-                       "modal split rq": op_modal_split_rq,
-                       "reservation users": op_number_reservation_users,
-                       "reservation pax" : op_number_reservation_pax,
-                       "served reservation users [%]": op_frac_served_reservation_users,
-                       "served reservation pax [%]": op_frac_served_reservation_pax,
-                       "online users" : op_number_online_users,
-                       "online pax" : op_number_online_pax,
-                       "served online users [%]": op_frac_served_online_users,
-                       "served online pax [%]": op_frac_served_online_pax,
-                       r'% created offers': op_rel_created_offers,
-                       "utility" : op_avg_utility}
 
         # base user_values
         op_user_sum_travel_time = np.nan
