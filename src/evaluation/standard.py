@@ -136,7 +136,8 @@ def shared_rides(op_df):
     return 100.0*N_shared/N
 
 
-def calculate_user_stats_for_operator(op_id, select_op_users, all_users, op_offers, op_reservation_horizon, prefix=""):
+def calculate_user_stats_for_operator(op_id, select_op_users, all_users, op_offers, operator_attributes, prefix=""):
+    op_reservation_horizon = operator_attributes.get(G_RA_OPT_HOR, 0)
     number_users = len(all_users)
     number_total_travelers = all_users[G_RQ_PAX].sum()
     op_number_users = len(select_op_users)
@@ -184,6 +185,61 @@ def calculate_user_stats_for_operator(op_id, select_op_users, all_users, op_offe
                    prefix + "served online pax [%]": round(op_frac_served_online_pax, 1),
                    prefix + r'% created offers': round(select_offers / number_users * 100.0, 1),
                    prefix + "utility": round(op_avg_utility, 2)}
+
+    boarding_time = operator_attributes.get(G_OP_CONST_BT, 0)
+    op_revenue = np.nan
+    op_avg_wait_time = np.nan
+    op_med_wait_time = np.nan
+    op_90perquant_wait_time = np.nan
+    op_avg_wait_from_ept = np.nan
+    op_avg_detour_time = np.nan
+    op_avg_rel_detour = np.nan
+    op_sum_direct_travel_distance = np.nan
+
+    if G_RQ_DO in select_op_users.columns and G_RQ_PU in select_op_users.columns:
+        # total travel time
+        op_user_sum_travel_time = select_op_users[G_RQ_DO].sum() - select_op_users[G_RQ_PU].sum()
+
+        if G_RQ_DRT in select_op_users.columns:
+            # avg abs detour time
+            op_avg_detour_time = (op_user_sum_travel_time - select_op_users[G_RQ_DRT].sum()) / op_number_users - \
+                                 boarding_time
+            rel_det_series = (select_op_users[G_RQ_DO] - select_op_users[G_RQ_PU] - boarding_time -
+                              select_op_users[G_RQ_DRT]) / select_op_users[G_RQ_DRT]
+            # avg rel detour time
+            op_avg_rel_detour = rel_det_series.sum() / op_number_users * 100.0
+
+    # sum fare
+    if G_RQ_FARE in select_op_users.columns:
+        op_revenue = select_op_users[G_RQ_FARE].sum()
+
+    # avg waiting time
+    if G_RQ_PU in select_op_users.columns and G_RQ_TIME in select_op_users.columns:
+        select_op_users["wait time"] = select_op_users[G_RQ_PU] - select_op_users[G_RQ_TIME]
+        op_avg_wait_time = select_op_users["wait time"].mean()
+        op_med_wait_time = select_op_users["wait time"].median()
+        op_90perquant_wait_time = select_op_users["wait time"].quantile(q=0.9)
+
+    # avg waiting time from earliest pickup time
+    if G_RQ_PU in select_op_users.columns and G_RQ_EPT in select_op_users.columns:
+        op_avg_wait_from_ept = (select_op_users[G_RQ_PU].sum() - select_op_users[G_RQ_EPT].sum()) / op_number_users
+
+    # direct travel time and distance
+    if G_RQ_DRD in select_op_users.columns:
+        op_sum_direct_travel_distance = select_op_users[G_RQ_DRD].sum() / 1000.0
+
+    result_dict.update({
+        prefix + "waiting time": op_avg_wait_time,
+        prefix + "waiting time from ept": op_avg_wait_from_ept,
+        prefix + "waiting time (median)": op_med_wait_time,
+        prefix + "waiting time (90% quantile)": op_90perquant_wait_time,
+        prefix + "detour time": op_avg_detour_time,
+        prefix + "rel detour": op_avg_rel_detour,
+        prefix + "customer direct distance [km]": op_sum_direct_travel_distance,
+        prefix + "mod revenue": op_revenue,
+    })
+
+
     return result_dict
 
 
@@ -244,23 +300,23 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
     for op_id, op_users in user_stats.groupby(G_RQ_OP_ID):
         op_name = "?"
         
-        op_reservation_horizon = list_operator_attributes[int(op_id)].get(G_RA_OPT_HOR,0)
+        operator_attributes = list_operator_attributes[int(op_id)]
         operator_offers = op_id_to_offer_dict[op_id]
         rq_types = op_users[G_RQ_TYPE].unique()
         result_dict = {"operator_id": op_id}
         if len(rq_types) > 0:
             all_dict = calculate_user_stats_for_operator(op_id, op_users, user_stats, operator_offers,
-                                                         op_reservation_horizon, prefix="[ALL] ")
+                                                         operator_attributes, prefix="[ALL] ")
             result_dict.update(all_dict)
             for rq_type in rq_types:
-                select_users = op_users[op_users[G_RQ_TYPE] == rq_type]
+                select_users = op_users[op_users[G_RQ_TYPE] == rq_type].copy()
                 selected_all_users = user_stats[user_stats[G_RQ_TYPE] == rq_type]
                 rq_dict = calculate_user_stats_for_operator(op_id, select_users, selected_all_users, operator_offers,
-                                                            op_reservation_horizon, prefix=f"[{rq_type}] ")
+                                                            operator_attributes, prefix=f"[{rq_type}] ")
                 result_dict.update(rq_dict)
         else:
             all_dict = calculate_user_stats_for_operator(op_id, op_users, user_stats, operator_offers,
-                                                         op_reservation_horizon)
+                                                         operator_attributes)
             result_dict.update(all_dict)
 
         op_number_users = len(op_users)
@@ -268,17 +324,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
         # base user_values
         op_user_sum_travel_time = np.nan
-        op_revenue = np.nan
-        op_avg_wait_time = np.nan
-        op_med_wait_time = np.nan
-        op_90perquant_wait_time = np.nan
-        op_avg_wait_from_ept = np.nan
-        op_avg_travel_time = np.nan
         op_avg_travel_distance = np.nan
-        op_sum_direct_travel_distance = np.nan
-        op_avg_detour_time = np.nan 
-        op_avg_rel_detour = np.nan  
-        op_shared_rids = np.nan
 
         # base fleet values
         op_fleet_utilization = np.nan
@@ -304,8 +350,6 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
         if op_id >= 0:  #AMoD
             op_name = "MoD_{}".format(int(op_id))
-            operator_attributes = list_operator_attributes[int(op_id)]
-            boarding_time = operator_attributes["op_const_boarding_time"]
             if print_comments:
                 print("Loading AMoD vehicle data ...")
             try:
@@ -319,37 +363,12 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
             if print_comments:
                 print(f"\t shape of vehicle stats: {op_vehicle_df.shape}\n\t ... processing AMoD vehicle data")
-            
-            # sum travel time
+
+            # # sum travel time
             if G_RQ_DO in op_users.columns and G_RQ_PU in op_users.columns:
                 op_user_sum_travel_time = op_users[G_RQ_DO].sum() - op_users[G_RQ_PU].sum()
-            # avg travel time
-            if not np.isnan(op_user_sum_travel_time):
+                # avg travel time
                 op_avg_travel_time = op_user_sum_travel_time / op_number_users
-            # sum fare
-            if G_RQ_FARE in op_users.columns:
-                op_revenue = op_users[G_RQ_FARE].sum()
-            # avg waiting time
-            if G_RQ_PU in op_users.columns and G_RQ_TIME in op_users.columns:
-                op_users["wait time"] = op_users[G_RQ_PU] - op_users[G_RQ_TIME]
-                op_avg_wait_time = op_users["wait time"].mean()
-                op_med_wait_time = op_users["wait time"].median()
-                op_90perquant_wait_time = op_users["wait time"].quantile(q=0.9)
-            # avg waiting time from earliest pickup time
-            if G_RQ_PU in op_users.columns and G_RQ_EPT in op_users.columns:
-                op_avg_wait_from_ept = (op_users[G_RQ_PU].sum() - op_users[G_RQ_EPT].sum()) / op_number_users
-            # avg abs detour time
-            if not np.isnan(op_user_sum_travel_time) and G_RQ_DRT in op_users.columns:
-                op_avg_detour_time = (op_user_sum_travel_time - op_users[G_RQ_DRT].sum())/op_number_users - \
-                                     boarding_time
-            # avg rel detour time
-            if not np.isnan(op_user_sum_travel_time) and G_RQ_DRT in op_users.columns:
-                rel_det_series = (op_users[G_RQ_DO] - op_users[G_RQ_PU] - boarding_time -
-                                  op_users[G_RQ_DRT])/op_users[G_RQ_DRT]
-                op_avg_rel_detour = rel_det_series.sum()/op_number_users * 100.0
-            # direct travel time and distance
-            if G_RQ_DRD in op_users.columns:
-                op_sum_direct_travel_distance = op_users[G_RQ_DRD].sum() / 1000.0
 
             # multiple boarding points
             result_dict.update(multiple_boarding_points(op_users, operator_attributes, scenario_parameters, dir_names, op_var_costs))
@@ -410,6 +429,10 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
                 op_toll = 0
 
             # saved distance
+            op_sum_direct_travel_distance = np.nan
+            if G_RQ_DRD in op_users.columns:
+                op_sum_direct_travel_distance = op_users[G_RQ_DRD].sum() / 1000.0
+
             trip_direct_distance = None
             if not np.isnan(op_total_km) and result_dict.get("bp_sum_direct_distance") is not None: # direct distances between pu and do
                 bp_sum_direct_distance = result_dict["bp_sum_direct_distance"]
@@ -473,8 +496,6 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
             if active_offer_parameters.get(G_OFFER_DRIVE):
                 op_avg_travel_time = sum([op_id_to_offer_dict[op_id][rq_id][G_OFFER_DRIVE]
                                     for rq_id in op_users[G_RQ_ID]])/op_number_users
-            if G_RQ_FARE in op_users.columns:
-                op_revenue = op_users[G_RQ_FARE].sum()
 
         elif op_id == G_MC_DEC_PV:
             # 3) private vehicle:
@@ -512,12 +533,6 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         # ------"travel distance": pv_distance,  "parking cost": pv_parking_cost, "toll": pv_toll
         result_dict["travel time"] = op_avg_travel_time
         result_dict["travel distance"] = op_avg_travel_distance
-        result_dict["waiting time"] = op_avg_wait_time
-        result_dict["waiting time from ept"] = op_avg_wait_from_ept
-        result_dict["waiting time (median)"] = op_med_wait_time
-        result_dict["waiting time (90% quantile)"] = op_90perquant_wait_time
-        result_dict["detour time"] = op_avg_detour_time
-        result_dict["rel detour"] = op_avg_rel_detour
         result_dict[r"% fleet utilization"] = op_fleet_utilization
         result_dict["rides per veh rev hours"] = op_ride_per_veh_rev_hours
         result_dict["rides per veh rev hours rq"] = op_ride_per_veh_rev_hours_rq
@@ -526,7 +541,6 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         result_dict["occupancy rq"] = op_distance_avg_rq
         result_dict[r"% empty vkm"] = op_empty_vkm
         result_dict[r"% repositioning vkm"] = op_repositioning_vkm
-        result_dict["customer direct distance [km]"] = op_sum_direct_travel_distance
         result_dict["saved distance [%]"] = op_saved_distance
         result_dict["trip distance per fleet distance"] = op_ride_distance_per_vehicle_distance
         result_dict["trip distance per fleet distance (no reloc)"] = op_ride_distance_per_vehicle_distance_no_rel
@@ -534,7 +548,6 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         result_dict["avg trip velocity [km/h]"] = op_trip_velocity
         result_dict["vehicle revenue hours [Fzg h]"] = op_vehicle_revenue_hours
         result_dict["total toll"] = op_toll
-        result_dict["mod revenue"] = op_revenue
         result_dict["mod fix costs"] = op_fix_costs
         result_dict["mod var costs"] = op_var_costs
         result_dict["total CO2 emissions [t]"] = op_co2 / 10**6
