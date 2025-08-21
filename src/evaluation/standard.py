@@ -245,12 +245,14 @@ def calculate_user_stats_for_operator(op_id, select_op_users, all_users, op_offe
     return result_dict
 
 
-def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end_time = None, print_comments=False, dir_names_in = {}):
+def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end_time = None, print_comments=False,
+                        separate_rq_types=True, dir_names_in = {}):
     """This function runs a standard evaluation over a scenario output directory.
 
     :param output_dir: scenario output directory
     :param start_time: start time of evaluation interval in s (if None, then evaluation of all data from sim start)
     :param end_time: end time of evaluation interval in s   (if None, then evalation of all data until sim end)
+    :param separate_rq_types: if True, then a separate evaluation of user stats is included for each request type
     :param print_comments: print some comments about status in between
     """
     if not os.path.isdir(output_dir):
@@ -304,7 +306,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         operator_offers = op_id_to_offer_dict[op_id]
         rq_types = op_users[G_RQ_TYPE].unique()
         result_dict = {"operator_id": op_id}
-        if len(rq_types) > 1:
+        if separate_rq_types is True:
             all_dict = calculate_user_stats_for_operator(op_id, op_users, user_stats, operator_offers,
                                                          operator_attributes, print_comments, prefix="[ALL] ")
             result_dict.update(all_dict)
@@ -575,17 +577,22 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
     return result_df
 
 
-def evaluate_folder(path, evaluation_start_time = None, evaluation_end_time = None, print_comments = False):
+def evaluate_folder(path, evaluation_start_time = None, evaluation_end_time = None, separate_rq_types=True,
+                    print_comments = False):
     """ this function calls standard_valuation on all simulation results found in the given path 
+    :param path: path to the folder containing the simulation results
     :param evaluation_start_time: start time of evaluation interval in s (if None, then evaluation from sim start)
     :param evaluation_end_time: end time of evaluation interval in s   (if None, then evalation ountil sim end)
+    :param separate_rq_types: if True, then a separate evaluation of user stats is included for each request type
     :param print_comments: print comments
     """
     for f in tqdm(os.listdir(path)):
         sc_path = os.path.join(path, f)
         if os.path.isdir(sc_path):
             if os.path.isfile(os.path.join(sc_path, "1_user-stats.csv")):
-                standard_evaluation(sc_path, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time, print_comments=print_comments)
+                standard_evaluation(sc_path, evaluation_start_time=evaluation_start_time,
+                                    evaluation_end_time=evaluation_end_time, separate_rq_types=separate_rq_types,
+                                    print_comments=print_comments)
 
 
 if __name__ == "__main__":
