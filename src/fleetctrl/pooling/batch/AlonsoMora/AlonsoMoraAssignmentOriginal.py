@@ -101,8 +101,8 @@ class AlonsoMoraAssignmentOriginal(BatchAssignmentAlgorithmBase):
         self._computeRR(self.rid_to_consider_for_global_optimisation.keys())
         
         #3) build RTV graph
+        self._predict_rv_connections()
         for vid, r_dict in self.v2r.items():
-            # TODO hoda: use ML to prune the rids to build on with vr graph predictions
             self._buildTreeForVid(vid, r_dict.keys())
             
         #4) solve assignment
@@ -149,6 +149,12 @@ class AlonsoMoraAssignmentOriginal(BatchAssignmentAlgorithmBase):
                         if rr_comp:
                             self.rr[getRRKey(rid1, rid2)] = 1
     
+    def _predict_rv_connections(self):
+        """ this function predicts the rv-connections for all requests in self.rid_to_consider_for_global_optimisation
+        """
+        pass
+
+
     def _buildTreeForVid(self, vid : int, rids_to_build):
         """ this method builds new V2RBS for all requests_to_compute for a single vehicle
         param vid : vehicle_id for vid to be build
@@ -163,11 +169,6 @@ class AlonsoMoraAssignmentOriginal(BatchAssignmentAlgorithmBase):
         t_all_vid = time.time()
         #LOG.debug("build tree for vid {} with rids {} | locked {}".format(vid, rids_to_build_with_hierarchy, self.r2v_locked))
         for rid in rids_to_build:
-            # TODO hoda: use ML to prune the rids to build on with vr graph predictions
-            # TODO hoda check ML model prediction for feasibility
-            # TODO pseudocode: concatenate vid features and rid features to generate a feature vector
-            # TODO pseudocode: load pretrained vr model
-            # TODO pseudocode: if model.predict_proba(X) < self.rr_threshold: continue
             t_c = time.time() - t_all_vid
             ## LOG.debug(f"build {rid} h {h}")
             if self.veh_tree_build_timeout and  t_c > self.veh_tree_build_timeout:
@@ -248,12 +249,9 @@ class AlonsoMoraAssignmentOriginal(BatchAssignmentAlgorithmBase):
                 rr_test = True
                 for o_rid in unsorted_rid_list:
                     rr_test = self.rr.get(getRRKey(o_rid, rid))
-                    # TODO hoda check ML model prediction for feasibility
-                    # TODO pseudocode: concatenate o_rid features and rid features to generate a feature vector
-                    # TODO pseudocode: load pretrained model
-                    # TODO pseudocode: if model.predict_proba(X) < self.rr_threshold:
-                    # TODO pseudocode: rr_test = False
-                    # # LOG.debug(f"check rr {o_rid} {rid} -> {rr_test}")
+                    score = self._get_predicted_score(vid, rid, edge_type='rr_graph')
+                    if score is not None:
+                        rr_test = score > self.rr_threshold
                     if rr_test != 1:
                         rr_test = False
                         break
@@ -296,6 +294,17 @@ class AlonsoMoraAssignmentOriginal(BatchAssignmentAlgorithmBase):
             vehplan, obj = solve_single_vehicle_DARP_exhaustive(self.veh_objs[vid], self.routing_engine, [self.active_requests[rid]], self.fleetcontrol, self.sim_time, self.fleetcontrol.veh_plans[vid])
             if vehplan is not None:
                 self._addRtvKey(rtv_key, vehplan, obj)
+
+    def _get_predicted_score(self, vid: int, rid: int, edge_type: str) -> float:
+        """This method returns the predicted score for a given rid and vid.
+        If no prediction is available, it returns None.
+        
+        :param vid: vehicle_id
+        :param rid: plan_request_id
+        :return: predicted score or None
+        """
+        # For now, we return None as a placeholder
+        return None
                 
     def _addRtvKey(self, rtv_key, veh_plan, obj):
         """this function adds entries to all necessery database dictionaries

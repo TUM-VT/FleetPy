@@ -37,8 +37,16 @@ def get_edge_predictions(data, graph_idx, model, device):
             return None
 
 
-def visualize_graph(data, graph_idx=0, model=None, device=None):
-    """Visualize a heterogeneous graph with vehicle-request assignments"""
+def visualize_graph(data, graph_idx=0, model=None, device=None, subset_nodes=None):
+    """Visualize a heterogeneous graph with vehicle-request assignments.
+    Optionally, only include a subset of nodes and their corresponding edges.
+    Args:
+        data: List of HeteroData graphs
+        graph_idx: Index of the graph to visualize
+        model: Optional model for predictions
+        device: Device for model
+        subset_nodes: Optional dict {node_type: set/list of node indices to include}
+    """
     G = nx.DiGraph()  # Use directed graph
 
     # Color scheme
@@ -61,6 +69,12 @@ def visualize_graph(data, graph_idx=0, model=None, device=None):
         for i in range(edge_index.size(1)):
             connected_nodes[src_type].add(edge_index[0][i].item())
             connected_nodes[dst_type].add(edge_index[1][i].item())
+
+    # If subset_nodes is provided, filter connected_nodes accordingly
+    if subset_nodes is not None:
+        for node_type in connected_nodes:
+            if node_type in subset_nodes:
+                connected_nodes[node_type] = set(subset_nodes[node_type]) & connected_nodes[node_type]
 
     # Add only connected nodes
     node_colors = []
@@ -93,12 +107,20 @@ def visualize_graph(data, graph_idx=0, model=None, device=None):
         edge_y = graph[edge_type].y
 
         for i in range(edge_index.size(1)):
-            src = f'{src_type}_{edge_index[0][i].item()}'
-            dst = f'{dst_type}_{edge_index[1][i].item()}'
+            src_idx = edge_index[0][i].item()
+            dst_idx = edge_index[1][i].item()
+            # Only include edge if both nodes are in the subset (if subset_nodes is set)
+            if subset_nodes is not None:
+                if (src_type in connected_nodes and src_idx not in connected_nodes[src_type]) or \
+                   (dst_type in connected_nodes and dst_idx not in connected_nodes[dst_type]):
+                    continue
+            src = f'{src_type}_{src_idx}'
+            dst = f'{dst_type}_{dst_idx}'
             G.add_edge(src, dst)
 
             # Add ground truth
             if edge_y is not None and edge_y[i].item() == 1:
+                print(f"Adding true edge: {src} -> {dst}")
                 true_edges.append((src, dst))
                 true_colors.append('#FF9999')  # Light red for assignments
                 true_styles.append('solid')
@@ -109,6 +131,9 @@ def visualize_graph(data, graph_idx=0, model=None, device=None):
                 pred_edges.append((src, dst))
                 pred_labels[(src, dst)] = f'{prob:.2f}'
                 edge_count += 1
+
+    print(f"Visualizing graph {graph_idx} with {len(G.nodes)} nodes and {len(G.edges)} edges.")
+    print(f"True edges: {len(true_edges)}, Predicted edges: {len(pred_edges)}")
 
     # Create plot
     plt.figure(figsize=(12, 8))

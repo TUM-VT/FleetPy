@@ -18,23 +18,31 @@ class DataProcessingConfig:
     raw_dir: str = 'raw'
     train_dir: str = 'train'
     models_dir: str = 'models'
-    
+
+    REQUEST_FEATURES = 'request_features'
+    VEHICLE_FEATURES = 'vehicle_features'
+    REQUEST_REQUEST_GRAPH = 'request_request_graph'
+    VEHICLE_REQUEST_GRAPH = 'vehicle_request_graph'
+    LABEL = 'opt_assign'
+
     # Simulation parameters
     sim_duration: int = 86400  # seconds (24h)
-    sim_step: int = 60  # seconds (1min)
-    
+    sim_step: int = 30  # seconds (30s)
+
     # Data splitting
-    train_ratio: float = 1/3
-    val_ratio: float = 1/3
-    test_ratio: float = 1/3
+    train_ratio: float = 1/3 # 3/7
+    val_ratio: float = 1/3 # 2/7
+    test_ratio: float = 1/3 # 2/7
     
     # Model parameters
     device: torch.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     random_seed = 42
-    test_mode : bool = False  # If True, use a smaller dataset for quick testing
+    test_mode : bool = True  # If True, use a smaller dataset for quick testing
     max_graphs_test: int = 24
     start_graph : int = 480
+
+    SERVICE_DURATION = 30 # seconds
 
     # Feature processing
     categorical_features: Dict[str, List[str]] = None
@@ -43,8 +51,8 @@ class DataProcessingConfig:
         """Initialize derived attributes after instance creation."""
         if self.categorical_features is None:
             self.categorical_features = {
-                'req_features': ['status'],
-                'veh_features': ['type', 'status']
+                self.REQUEST_FEATURES: ['status'],
+                self.VEHICLE_FEATURES: ['type', 'status']
             }
         
         # Validate ratios
