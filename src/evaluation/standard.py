@@ -304,7 +304,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         operator_offers = op_id_to_offer_dict[op_id]
         rq_types = op_users[G_RQ_TYPE].unique()
         result_dict = {"operator_id": op_id}
-        if len(rq_types) > 0:
+        if len(rq_types) > 1:
             all_dict = calculate_user_stats_for_operator(op_id, op_users, user_stats, operator_offers,
                                                          operator_attributes, print_comments, prefix="[ALL] ")
             result_dict.update(all_dict)
