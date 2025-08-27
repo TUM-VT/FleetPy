@@ -24,9 +24,11 @@ class DataProcessingConfig:
     REQUEST_REQUEST_GRAPH = 'request_request_graph'
     VEHICLE_REQUEST_GRAPH = 'vehicle_request_graph'
     LABEL = 'opt_assign'
+    INIT_LABEL = 'init_assign'
 
     # Simulation parameters
-    sim_duration: int = 86400  # seconds (24h)
+    sim_start: int = 0  # seconds
+    sim_end: int = 86400  # seconds (24h)
     sim_step: int = 30  # seconds (30s)
 
     # Data splitting

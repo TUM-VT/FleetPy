@@ -345,6 +345,7 @@ class GNNDataLoader:
         for feature_type, categories in self.config.categorical_features.items():
             if feature_type in data and not data[feature_type].empty:
                 if categories:
+                    categories = [cat for cat in categories if cat in data[feature_type].columns]
                     data[feature_type] = pd.get_dummies(
                         data=data[feature_type],
                         columns=categories,
@@ -422,6 +423,8 @@ class GNNDataLoader:
     def _calculate_feature_dimensions(self, data: Dict) -> None:
         """Calculate edge feature dimensions."""
         if cfg.REQUEST_REQUEST_GRAPH in data and not data[cfg.REQUEST_REQUEST_GRAPH].empty:
+            print("Request-Request graph edge feature dimension:", end=" ")
+            print(len(data[cfg.REQUEST_REQUEST_GRAPH].columns) - len(self.EXCLUDED_EDGE_FEATURES))
             self.rr_edge_feature_dim = len(
                 data[cfg.REQUEST_REQUEST_GRAPH].columns) - len(self.EXCLUDED_EDGE_FEATURES)
         if cfg.VEHICLE_REQUEST_GRAPH in data and not data[cfg.VEHICLE_REQUEST_GRAPH].empty:

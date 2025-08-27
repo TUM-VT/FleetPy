@@ -95,14 +95,14 @@ class DataProcessor:
         all_data = []
         failed_timesteps = []
 
-        total_steps = self.config.sim_duration // self.config.sim_step
+        total_steps = (self.config.sim_end - self.config.sim_start) // self.config.sim_step
         print(f"Processing {total_steps} timesteps...")
-        print(f"Simulation duration: {self.config.sim_duration} seconds")
+        print(f"Simulation duration: {self.config.sim_end} seconds")
         print(f"Simulation step: {self.config.sim_step} seconds")
 
-        for timestep in range(0, self.config.sim_duration,
+        for timestep in range(self.config.sim_start, self.config.sim_end,
                               self.config.sim_step):
-            print(f"Processing timestep {timestep}/{self.config.sim_duration}")
+            print(f"Processing timestep {timestep}/{self.config.sim_end}")
             try:
                 data = self._load_timestep_data(timestep)
 
@@ -921,8 +921,8 @@ class DataProcessor:
     def _add_assignment_features(self, data: Dict) -> None:
         """Add assignment labels to edges."""
         self._add_assignment_sequence(
-            data, data['init_assignments'], 'init_assign', complete_graph=True)
-        self._add_assignment_sequence(data, data['assignments'], 'opt_assign', complete_graph=True)
+            data, data['init_assignments'], cfg.INIT_LABEL, complete_graph=True)
+        self._add_assignment_sequence(data, data['assignments'], cfg.LABEL, complete_graph=True)
 
     def _add_assignment_sequence(self, data: Dict, assignments: Dict,
                                  feature_name: str, complete_graph: bool = True) -> None:
@@ -1006,6 +1006,9 @@ class DataProcessor:
                 if data[feature_type]:
                     df = pd.DataFrame.from_dict(
                         data[feature_type], orient='index')
+                    # df = df.fillna(0.0)
+                    # Remove columns with one unique value
+                    df = df.loc[:, df.nunique() > 1]
                     df['timestep'] = timestep
                     dfs.append(df)
                     total_samples += len(df)
@@ -1053,7 +1056,8 @@ class DataProcessor:
             if dfs:
                 # Combine all timesteps and save raw data
                 combined_df = pd.concat(dfs)
-
+                combined_df = combined_df.fillna(0.0)
+                combined_df = combined_df.loc[:, combined_df.nunique() > 1]
                 # Save raw edge data
                 save_path = os.path.join(process_dir, f'{graph_type}.parquet')
                 combined_df.to_parquet(save_path)

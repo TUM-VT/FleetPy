@@ -15,39 +15,270 @@ class SamplingStrategy(Enum):
 
 
 class BalancedBatchSampler:
-    """Samples batches with balanced class distribution."""
-    def __init__(self, data: List, batch_size: int, balance_ratio: float = 1.0):
+    """Samples batches with balanced class distribution at edge level within each graph."""
+
+    def __init__(self, data: List, batch_size: int, edge_percentage: float = 0.2):
+        """
+        Initialize the sampler with percentage-based edge sampling.
+        
+        Args:
+            data: List of graph data
+            batch_size: Number of graphs per batch
+            edge_percentage: Percentage of edges to sample from each graph (default: 0.2)
+        """
         self.data = data
         self.batch_size = batch_size
-        self.balance_ratio = balance_ratio
-        self.pos_indices, self.neg_indices = self._split_by_class()
-        
-    def _split_by_class(self) -> tuple[list, list]:
-        """Split indices by class label."""
-        pos_indices, neg_indices = [], []
+        self.edge_percentage = edge_percentage
+        self.graph_info = self._analyze_graphs()
+        self.pos_weighted_indices = self._create_weighted_indices(
+            positive=True)
+        self.neg_weighted_indices = self._create_weighted_indices(
+            positive=False)
+
+    def _analyze_graphs(self) -> Dict[int, Dict]:
+        """Analyze each graph's edge label distribution and store edge indices by class."""
+        graph_info = {}
         for idx, graph in enumerate(self.data):
-            # Get all labels from the graph
-            all_labels = []
+            pos_edges = []
+            neg_edges = []
+            total_edges = 0
+
+            # Store edge indices by their class for each edge type
             for edge_type in graph.y_dict:
-                all_labels.extend(graph.y_dict[edge_type].tolist())
+                labels = graph.y_dict[edge_type]
+                edge_indices = torch.arange(len(labels))
                 
-            # TODO fix: If graph has any positive labels, consider it positive
-            if any(label == 1 for label in all_labels):
-                pos_indices.append(idx)
+                pos_mask = labels == 1
+                neg_mask = labels == 0
+                
+                pos_indices = edge_indices[pos_mask].tolist()
+                neg_indices = edge_indices[neg_mask].tolist()
+                
+                pos_edges.extend([(edge_type, idx) for idx in pos_indices])
+                neg_edges.extend([(edge_type, idx) for idx in neg_indices])
+                total_edges += len(labels)
+
+            if total_edges > 0:  # Only include graphs with edges
+                graph_info[idx] = {
+                    'pos_edges': pos_edges,
+                    'neg_edges': neg_edges,
+                    'total_edges': total_edges,
+                    'pos_count': len(pos_edges),
+                    'neg_count': len(neg_edges),
+                    'pos_ratio': len(pos_edges) / total_edges if total_edges > 0 else 0,
+                    'neg_ratio': len(neg_edges) / total_edges if total_edges > 0 else 0
+                }
+
+        return graph_info
+
+    def _create_weighted_indices(self, positive: bool) -> List[int]:
+        """Create a list of indices weighted by their positive or negative edge counts."""
+        weighted_indices = []
+        for idx, info in self.graph_info.items():
+            # Add the index based on the count of edges of each class
+            count = info['pos_count'] if positive else info['neg_count']
+            if count > 0:
+                weighted_indices.append(idx)
+        return weighted_indices
+
+    def _calculate_edges_for_graph(self, graph_idx: int) -> int:
+        """Calculate number of edges to sample based on the percentage of total edges."""
+        info = self.graph_info[graph_idx]
+        total_edges = info['total_edges']
+        return max(10, int(total_edges * self.edge_percentage))
+
+    def _sample_balanced_edges_from_graph(self, graph_idx: int) -> Dict[str, List[int]]:
+        """Sample a balanced set of edges from a single graph."""
+        info = self.graph_info[graph_idx]
+        total_edges = self._calculate_edges_for_graph(graph_idx)
+        edges_per_class = total_edges // 2  # Split evenly between positive and negative
+
+        sampled_edges = {}
+        for edge_type in self.data[graph_idx].y_dict.keys():
+            pos_edges_type = [(et, idx) for et, idx in info['pos_edges'] if et == edge_type]
+            neg_edges_type = [(et, idx) for et, idx in info['neg_edges'] if et == edge_type]
+
+            # Sample from positive edges
+            pos_sample_size = min(len(pos_edges_type), edges_per_class)
+            pos_samples = random.sample(pos_edges_type, pos_sample_size) if pos_sample_size > 0 else []
+
+            # Sample from negative edges
+            neg_sample_size = min(len(neg_edges_type), edges_per_class)
+            neg_samples = random.sample(neg_edges_type, neg_sample_size) if neg_sample_size > 0 else []
+
+            if pos_samples or neg_samples:
+                sampled_edges[edge_type] = {
+                    'pos': [idx for _, idx in pos_samples],
+                    'neg': [idx for _, idx in neg_samples]
+                }
+
+        return sampled_edges
+
+    def _create_balanced_graph(self, graph_idx: int, sampled_edges: Dict[str, Dict[str, List[int]]]):
+        """Create a new graph with balanced edge samples."""
+        original_graph = self.data[graph_idx]
+        balanced_graph = original_graph.clone()  # Create a shallow copy
+
+        # Get edge types from original graph
+        edge_types = list(original_graph.edge_index_dict.keys())
+
+        # Process each edge type
+        for edge_type in edge_types:
+            if edge_type in sampled_edges and sampled_edges[edge_type]:
+                pos_indices = sampled_edges[edge_type]['pos']
+                neg_indices = sampled_edges[edge_type]['neg']
+                
+                # Ensure we have at least some edges
+                if pos_indices or neg_indices:
+                    all_indices = pos_indices + neg_indices
+                    
+                    # Update edge indices
+                    if len(all_indices) > 0:
+                        edge_index = original_graph.edge_index_dict[edge_type]
+                        if edge_index.size(1) > 0:  # Check if there are any edges
+                            balanced_graph.edge_index_dict[edge_type] = edge_index[:, all_indices]
+                            
+                            # Update edge attributes if they exist
+                            if edge_type in original_graph.edge_attr_dict:
+                                edge_attr = original_graph.edge_attr_dict[edge_type]
+                                if edge_attr is not None and len(edge_attr) > 0:
+                                    balanced_graph.edge_attr_dict[edge_type] = edge_attr[all_indices]
+                            
+                            # Update labels
+                            new_labels = torch.zeros(len(all_indices), dtype=torch.float)
+                            new_labels[:len(pos_indices)] = 1.0
+                            balanced_graph.y_dict[edge_type] = new_labels
             else:
-                neg_indices.append(idx)
-        return pos_indices, neg_indices
-    
+                # If no edges were sampled for this type, create empty tensors
+                balanced_graph.edge_index_dict[edge_type] = torch.zeros((2, 0), dtype=torch.long)
+                if edge_type in original_graph.edge_attr_dict:
+                    attr_size = original_graph.edge_attr_dict[edge_type].size(1)
+                    balanced_graph.edge_attr_dict[edge_type] = torch.zeros((0, attr_size))
+                balanced_graph.y_dict[edge_type] = torch.zeros(0, dtype=torch.float)
+
+        return balanced_graph
+
     def sample_batch_indices(self) -> list:
-        """Sample a balanced batch based on the balance ratio."""
-        pos_samples_count = int(self.batch_size / (1 + self.balance_ratio))
-        neg_samples_count = self.batch_size - pos_samples_count
-        
-        pos_samples = random.sample(self.pos_indices, min(pos_samples_count, len(self.pos_indices)))
-        neg_samples = random.sample(self.neg_indices, min(neg_samples_count, len(self.neg_indices)))
-        
-        # Combine and shuffle
-        batch_indices = pos_samples + neg_samples
+        """Sample a balanced batch and create balanced graphs."""
+        if not self.pos_weighted_indices or not self.neg_weighted_indices:
+            # Fallback to random sampling if either class is empty
+            selected_indices = random.sample(list(self.graph_info.keys()),
+                                min(self.batch_size, len(self.graph_info)))
+        else:
+            # Sample graphs that have both positive and negative edges
+            available_indices = list(set(self.pos_weighted_indices) & set(self.neg_weighted_indices))
+            if not available_indices:
+                available_indices = list(self.graph_info.keys())
+            
+            selected_indices = random.sample(available_indices,
+                                min(self.batch_size, len(available_indices)))
+
+        # Create balanced versions of the selected graphs
+        balanced_graphs = []
+        for idx in selected_indices:
+            sampled_edges = self._sample_balanced_edges_from_graph(idx)
+            balanced_graph = self._create_balanced_graph(idx, sampled_edges)
+            balanced_graphs.append(balanced_graph)
+
+        # Update the data with balanced graphs
+        for i, idx in enumerate(selected_indices):
+            self.data[idx] = balanced_graphs[i]
+
+        return selected_indices
+
+
+class DynamicBatchSampler:
+    def __init__(self, data, batch_size: int, hard_mining_ratio: float = 0.5):
+        """
+        Initialize dynamic batch sampler with hard example mining.
+
+        Args:
+            data: List of graph data objects
+            batch_size: Size of each batch
+            hard_mining_ratio: Ratio of hard examples to include in each batch
+        """
+        self.data = data
+        self.batch_size = batch_size
+        self.hard_mining_ratio = hard_mining_ratio
+        self.sample_weights = None
+        self.hard_indices = []
+        self.easy_indices = []
+        self.loss_history = {}  # Keep track of losses for each sample
+
+    def update_mining_weights(self, indices: list, losses: torch.Tensor):
+        """Update the loss history and recalculate mining weights."""
+        for idx, loss in zip(indices, losses):
+            self.loss_history[idx] = loss.item()
+
+        # Sort indices by loss
+        sorted_indices = sorted(self.loss_history.items(),
+                                key=lambda x: x[1], reverse=True)
+        n_hard = int(len(sorted_indices) * self.hard_mining_ratio)
+
+        self.hard_indices = [idx for idx, _ in sorted_indices[:n_hard]]
+        self.easy_indices = [idx for idx, _ in sorted_indices[n_hard:]]
+
+    def sample_batch_indices(self) -> list:
+        """Sample a batch with a mix of hard and easy examples."""
+        n_hard = int(self.batch_size * self.hard_mining_ratio)
+        n_easy = self.batch_size - n_hard
+
+        # Handle empty indices case
+        if not self.hard_indices:
+            if not self.easy_indices:
+                # If both empty (e.g., first batch), initialize with all indices
+                all_indices = list(range(len(self.data)))
+                return random.sample(all_indices, min(self.batch_size, len(all_indices)))
+            else:
+                # If only hard indices are empty, use all easy indices
+                n_easy = self.batch_size
+
+        if not self.easy_indices:
+            # If only easy indices are empty, use all hard indices
+            n_hard = self.batch_size
+
+        # Sample indices
+        hard_samples = np.random.choice(
+            self.hard_indices or [0],
+            size=min(n_hard, len(self.hard_indices or [])),
+            replace=len(self.hard_indices or [0]) < n_hard
+        )
+
+        easy_samples = np.random.choice(
+            self.easy_indices or [0],
+            size=min(n_easy, len(self.easy_indices or [])),
+            replace=len(self.easy_indices or [0]) < n_easy
+        )
+
+        # If we're missing samples due to empty lists, adjust by sampling from the other list
+        missing = self.batch_size - len(hard_samples) - len(easy_samples)
+        additional_samples = []
+
+        if missing > 0:
+            if len(self.hard_indices or []) > len(hard_samples):
+                # Sample more from hard if available
+                additional_hard = np.random.choice(
+                    [i for i in self.hard_indices if i not in hard_samples],
+                    size=min(missing, len(self.hard_indices) -
+                             len(hard_samples)),
+                    replace=False
+                )
+                additional_samples.extend(additional_hard)
+                missing -= len(additional_hard)
+
+            if missing > 0 and len(self.easy_indices or []) > len(easy_samples):
+                # Sample more from easy if needed and available
+                additional_easy = np.random.choice(
+                    [i for i in self.easy_indices if i not in easy_samples],
+                    size=min(missing, len(self.easy_indices) -
+                             len(easy_samples)),
+                    replace=False
+                )
+                additional_samples.extend(additional_easy)
+
+        # Combine all samples
+        batch_indices = list(hard_samples) + \
+            list(easy_samples) + list(additional_samples)
         random.shuffle(batch_indices)
         return batch_indices
 
@@ -68,118 +299,39 @@ class FocalLoss(torch.nn.Module):
         self.eps = 1e-7
 
     def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        # Get probabilities
+        """
+        Compute Focal Loss with alpha balancing.
+
+        Args:
+            inputs: Raw logits from the model
+            targets: Binary target values (0 or 1)
+
+        Returns:
+            Focal loss value
+        """
+        # Get probabilities with numerical stability
         probs = torch.sigmoid(inputs)
         probs = torch.clamp(probs, self.eps, 1.0 - self.eps)
-        
-        # Calculate focal weights
-        focal_weight = targets * (1 - probs).pow(self.gamma) + (1 - targets) * probs.pow(self.gamma)
-        
-        # Calculate losses for positive and negative classes
-        bce = -(targets * torch.log(probs) + (1 - targets) * torch.log(1 - probs))
-        
-        # Apply class balancing
+
+        # Compute p_t (probability for target class)
+        p_t = targets * probs + (1 - targets) * (1 - probs)
+
+        # Compute alpha_t (alpha weight for target class)
         if self.pos_weight is not None:
-            alpha_weight = targets * self.pos_weight + (1 - targets)
+            alpha_t = targets * self.pos_weight + (1 - targets)
         else:
-            alpha_weight = targets * self.alpha + (1 - targets) * (1 - self.alpha)
-            
+            alpha_t = targets * self.alpha + (1 - targets) * (1 - self.alpha)
+
+        # Compute modulating factor
+        focal_weight = (1 - p_t).pow(self.gamma)
+
+        # Compute CE loss
+        ce_loss = -torch.log(p_t)
+
         # Combine all terms
-        focal_loss = alpha_weight * focal_weight * bce
-        
+        focal_loss = alpha_t * focal_weight * ce_loss
+
         return focal_loss.mean()
-
-
-class DynamicBatchSampler:
-    def __init__(self, data, batch_size: int, hard_mining_ratio: float = 0.5):
-        """
-        Initialize dynamic batch sampler with hard example mining.
-        
-        Args:
-            data: List of graph data objects
-            batch_size: Size of each batch
-            hard_mining_ratio: Ratio of hard examples to include in each batch
-        """
-        self.data = data
-        self.batch_size = batch_size
-        self.hard_mining_ratio = hard_mining_ratio
-        self.sample_weights = None
-        self.hard_indices = []
-        self.easy_indices = []
-        self.loss_history = {}  # Keep track of losses for each sample
-        
-    def update_mining_weights(self, indices: list, losses: torch.Tensor):
-        """Update the loss history and recalculate mining weights."""
-        for idx, loss in zip(indices, losses):
-            self.loss_history[idx] = loss.item()
-        
-        # Sort indices by loss
-        sorted_indices = sorted(self.loss_history.items(), key=lambda x: x[1], reverse=True)
-        n_hard = int(len(sorted_indices) * self.hard_mining_ratio)
-        
-        self.hard_indices = [idx for idx, _ in sorted_indices[:n_hard]]
-        self.easy_indices = [idx for idx, _ in sorted_indices[n_hard:]]
-        
-    def sample_batch_indices(self) -> list:
-        """Sample a batch with a mix of hard and easy examples."""
-        n_hard = int(self.batch_size * self.hard_mining_ratio)
-        n_easy = self.batch_size - n_hard
-        
-        # Handle empty indices case
-        if not self.hard_indices:
-            if not self.easy_indices:
-                # If both empty (e.g., first batch), initialize with all indices
-                all_indices = list(range(len(self.data)))
-                return random.sample(all_indices, min(self.batch_size, len(all_indices)))
-            else:
-                # If only hard indices are empty, use all easy indices
-                n_easy = self.batch_size
-                
-        if not self.easy_indices:
-            # If only easy indices are empty, use all hard indices
-            n_hard = self.batch_size
-            
-        # Sample indices
-        hard_samples = np.random.choice(
-            self.hard_indices or [0], 
-            size=min(n_hard, len(self.hard_indices or [])), 
-            replace=len(self.hard_indices or [0]) < n_hard
-        )
-        
-        easy_samples = np.random.choice(
-            self.easy_indices or [0], 
-            size=min(n_easy, len(self.easy_indices or [])), 
-            replace=len(self.easy_indices or [0]) < n_easy
-        )
-        
-        # If we're missing samples due to empty lists, adjust by sampling from the other list
-        missing = self.batch_size - len(hard_samples) - len(easy_samples)
-        additional_samples = []
-        
-        if missing > 0:
-            if len(self.hard_indices or []) > len(hard_samples):
-                # Sample more from hard if available
-                additional_hard = np.random.choice(
-                    [i for i in self.hard_indices if i not in hard_samples],
-                    size=min(missing, len(self.hard_indices) - len(hard_samples)),
-                    replace=False
-                )
-                additional_samples.extend(additional_hard)
-                missing -= len(additional_hard)
-                
-            if missing > 0 and len(self.easy_indices or []) > len(easy_samples):
-                # Sample more from easy if needed and available
-                additional_easy = np.random.choice(
-                    [i for i in self.easy_indices if i not in easy_samples],
-                    size=min(missing, len(self.easy_indices) - len(easy_samples)),
-                    replace=False
-                )
-                additional_samples.extend(additional_easy)
-                
-        # Combine all samples
-        batch_indices = list(hard_samples) + list(easy_samples) + list(additional_samples)
-        random.shuffle(batch_indices)
-        return batch_indices
 
 
 class Trainer:
@@ -188,7 +340,7 @@ class Trainer:
                  hard_mining_ratio: float = 0.5, balance_ratio: float = 1.0):
         """
         Initialize the trainer with configurable sampling strategy
-        
+
         Args:
             data: Input data
             device: torch device
@@ -208,7 +360,7 @@ class Trainer:
         os.makedirs(self.model_dir, exist_ok=True)
         self.epochs = epochs
         self.batch_size = batch_size
-        self.threshold = 0.5  # Fixed threshold for binary classification
+        self.threshold = 0.5
         self.sampling_strategy = sampling_strategy
         self.hard_mining_ratio = hard_mining_ratio
         self.balance_ratio = balance_ratio
@@ -335,34 +487,31 @@ class Trainer:
         all_probs = []
         all_targets = []
         num_batches = 0
-        
+
         # Get all data first
         all_data = list(self.train_loader.dataset)
-        
-        # Debug: Print learning rate
-        # for param_group in optimizer.param_groups:
-        #     print(f"[DEBUG] Learning rate: {param_group['lr']}")
-        #     break
-            
+
         # Number of iterations equivalent to full dataset coverage
         num_iterations = len(all_data) // self.batch_size
         if len(all_data) % self.batch_size > 0:
             num_iterations += 1  # Add one more batch for the remainder
-            
+
         for batch_idx in range(num_iterations):
             # Sample batch indices using configured sampler
             batch_indices = self.sampler.sample_batch_indices()
             batch_data = [all_data[i] for i in batch_indices]
-            
+
             # Create a batch directly
-            batch = DataLoader(batch_data, batch_size=len(batch_data), shuffle=False).__iter__().next()
+            loader = DataLoader(batch_data, batch_size=len(
+                batch_data), shuffle=False)
+            batch = next(loader.__iter__())
             batch = batch.to(self.device)
-            
+
             optimizer.zero_grad()
-            
+
             # Forward pass
             logits = model(batch.x_dict, batch.edge_index_dict,
-                          batch.edge_attr_dict)
+                           batch.edge_attr_dict)
             target = torch.cat([batch.y_dict[edge_type].float()
                                for edge_type in batch.edge_index_dict.keys()])
 
@@ -376,7 +525,7 @@ class Trainer:
             loss = criterion(logits, target)
             loss.backward()
             optimizer.step()
-            
+
             # Update the dynamic sampler with loss information for hard example mining
             if self.sampling_strategy == SamplingStrategy.DYNAMIC:
                 individual_losses = []
@@ -387,12 +536,14 @@ class Trainer:
                         # This is a simplified approach - in practice, you might need to compute
                         # the loss per sample more precisely
                         if i < len(logits) and i < len(target):
-                            individual_loss = criterion(logits[i:i+1], target[i:i+1])
+                            individual_loss = criterion(
+                                logits[i:i+1], target[i:i+1])
                             individual_losses.append(individual_loss)
-                
+
                 if individual_losses:
                     # Update sampling weights for hard example mining
-                    self.sampler.update_mining_weights(batch_indices, torch.tensor(individual_losses))
+                    self.sampler.update_mining_weights(
+                        batch_indices, torch.tensor(individual_losses))
 
             # Get predictions
             with torch.no_grad():
@@ -410,21 +561,14 @@ class Trainer:
                 batch_idx, loss.item(), logits, probs, target, pred_labels)
 
         # Compute epoch metrics
-        print('preds', all_preds)
-        print('probs', all_probs)
-        print('targets', all_targets)
         metrics = self._compute_metrics(all_preds, all_probs, all_targets)
         metrics['loss'] = total_loss / \
-                          num_batches if num_batches > 0 else float('inf')
+            num_batches if num_batches > 0 else float('inf')
         return metrics
 
     def evaluate(self, model, loader):
         """Evaluate model with all metrics including AUC-ROC"""
         model.eval()
-        print(f"[DEBUG] Model in eval mode: {model.training}")  # Should be False
-        for module in model.modules():
-            if isinstance(module, torch.nn.Dropout):
-                print(f"[DEBUG] Dropout active? training={module.training}, p={module.p}")
         all_preds = []
         all_probs = []
         all_targets = []
@@ -432,10 +576,6 @@ class Trainer:
         with torch.no_grad():
             for batch in loader:
                 batch = batch.to(self.device)
-                print(f"[DEBUG] Val edge types: {list(batch.edge_index_dict.keys())}")
-                print(f"[DEBUG] Val y_dict keys: {list(batch.y_dict.keys())}")
-                for k, v in batch.edge_attr_dict.items():
-                    print(f"[VAL EDGE ATTR] {k}: mean={v.mean():.4f}, std={v.std():.4f}, shape={v.shape}")
                 logits = model(
                     batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
                 target = torch.cat([batch.y_dict[edge_type].float()
@@ -447,29 +587,14 @@ class Trainer:
                 else:
                     logits = logits.squeeze(-1)  # Remove any extra dimensions
 
-                print(f"[VAL LOGITS] mean={logits.mean():.4f}, std={logits.std():.4f}, min={logits.min():.4f}, max={logits.max():.4f}")
                 probs = torch.sigmoid(logits)
-                print(f"[VAL PROBS] mean={probs.mean():.4f}, std={probs.std():.4f}, min={probs.min():.4f}, max={probs.max():.4f}")
-                # Optional: visualize probability distribution
-                try:
-                    import matplotlib.pyplot as plt
-                    plt.hist(probs.cpu().numpy(), bins=50)
-                    plt.title("Validation Probability Distribution")
-                    plt.xlabel("Probability")
-                    plt.ylabel("Frequency")
-                    plt.show()
-                except Exception as e:
-                    print(f"[DEBUG] Could not plot histogram: {e}")
                 pred_labels = (probs > self.threshold).float()
 
                 all_preds.append(pred_labels.cpu())
                 all_probs.append(probs.cpu())
                 all_targets.append(target.cpu())
 
-        print('val preds', all_preds)
-        print('val probs', all_probs)
-        print('val targets', all_targets)
-        # Calculate metrics
+       # Calculate metrics
         return self._compute_metrics(all_preds, all_probs, all_targets)
 
     def _compute_metrics(self, all_preds, all_probs, all_targets):
@@ -501,7 +626,7 @@ class Trainer:
         filtered_data = []
         total_graphs = sum(mask)
         filtered_indices = []
-        
+
         for i in range(len(data)):
             if mask[i]:
                 has_edges = any(
@@ -513,29 +638,31 @@ class Trainer:
         filtered_out = total_graphs - len(filtered_data)
         if filtered_out > 0:
             print(f"Filtered {filtered_out} empty graphs from dataset")
-            
+
         if shuffle:  # Training loader
             if self.sampling_strategy == SamplingStrategy.DYNAMIC:
                 self.sampler = DynamicBatchSampler(
-                    filtered_data, 
-                    batch_size=batch_size, 
+                    filtered_data,
+                    batch_size=batch_size,
                     hard_mining_ratio=self.hard_mining_ratio
                 )
                 # Initialize with all indices in easy examples to start
                 # Only after first few batches will the hard examples be identified
                 self.sampler.easy_indices = list(range(len(filtered_data)))
                 self.sampler.hard_indices = []  # Start with no hard examples
-                
-                print(f"Initialized DynamicBatchSampler with {len(self.sampler.easy_indices)} easy examples")
-                
+
+                print(
+                    f"Initialized DynamicBatchSampler with {len(self.sampler.easy_indices)} easy examples")
+
             else:  # BALANCED
                 self.sampler = BalancedBatchSampler(
                     filtered_data,
                     batch_size=batch_size,
-                    balance_ratio=self.balance_ratio
+                    edge_percentage=1.0
                 )
-                print(f"Initialized BalancedBatchSampler with {len(self.sampler.pos_indices)} positive and {len(self.sampler.neg_indices)} negative examples")
-                
+                print(
+                    f"Initialized BalancedBatchSampler with {len(self.sampler.pos_weighted_indices)} positive and {len(self.sampler.neg_weighted_indices)} negative examples")
+
             # We don't need the DataLoader's shuffling since our custom sampler handles that
             return DataLoader(filtered_data, batch_size=batch_size, shuffle=False)
         else:  # Validation/Test loader

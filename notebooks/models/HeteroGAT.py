@@ -45,13 +45,12 @@ class HeteroGAT(torch.nn.Module):
             torch.nn.init.zeros_(self.lin2.bias)
 
     def forward(self, x_dict, edge_index_dict, edge_attr_dict):
-        print(f"[DEBUG] Model mode: {'train' if self.training else 'eval'}, Dropout p: {self.dropout.p}")
         # Debug: Print input node and edge feature stats
         # for key, x in x_dict.items():
         #     print(f"[MODEL DEBUG] Input node '{key}' features: mean={x.mean().item():.4f}, std={x.std().item():.4f}, min={x.min().item():.4f}, max={x.max().item():.4f}")
         # for key, attr in edge_attr_dict.items():
         #     print(f"[MODEL DEBUG] Input edge '{key}' attr: mean={attr.mean().item():.4f}, std={attr.std().item():.4f}, min={attr.min().item():.4f}, max={attr.max().item():.4f}")
-        
+
         # Check if there are any edges in the graph
         has_edges = any(len(edges[0]) > 0 for edges in edge_index_dict.values())
         
