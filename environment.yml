@@ -20,5 +20,7 @@ dependencies:
     - shapely==2.0.6
     - tqdm==4.67.1
     - dill==0.3.9
+    - matplotlib
+    - requests
     - ipykernel
     - nbformat>=4.2.0
