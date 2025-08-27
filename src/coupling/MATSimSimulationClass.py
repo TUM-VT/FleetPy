@@ -105,7 +105,8 @@ class MATSimSimulationClass(FleetSimulationBase):
         rq_obj = self.demand.add_request(request_series, self.routing_engine, self.fs_time)
         self.broker.inform_request(rq_obj.rid, rq_obj, self.fs_time)
             
-    def update_veh_state(self, sim_time, vid, op_id, veh_pos, rids_picked_up, rids_dropped_off, status, earliest_diverge_pos, earliest_diverge_time, finished_leg_ids):
+    def update_veh_state(self, sim_time, vid, op_id, veh_pos, rids_picked_up, rids_dropped_off, status, earliest_diverge_pos, earliest_diverge_time, finished_leg_ids,
+                         current_pick_up, current_drop_off):
         """
         Update the vehicle state in the simulation.
         :param veh_id: Vehicle ID
@@ -116,6 +117,8 @@ class MATSimSimulationClass(FleetSimulationBase):
         :param earliest_diverge_pos: Earliest diverge position
         :param earliest_diverge_time: Earliest diverge time
         :param finished_leg_ids: list of leg ids that the vehicle finished since the last update
+        :param rids_picked_up: List of requests that are currently being picked up
+        :param rids_dropped_off: List of requests that are currently being dropped off
         """
         veh_obj: ExternallyControlledVehicle = self.sim_vehicles[(op_id, vid)]
         for rid in rids_picked_up:
@@ -127,7 +130,7 @@ class MATSimSimulationClass(FleetSimulationBase):
             self.demand.user_ends_alighting(rid, vid, op_id, sim_time)
             self.broker.acknowledge_user_alighting(op_id, rid, vid, sim_time)
         done_VRLS = veh_obj.update_state(sim_time, veh_pos, rids_picked_up, rids_dropped_off, status,
-                             earliest_diverge_pos, earliest_diverge_time, finished_leg_ids)
+                             earliest_diverge_pos, earliest_diverge_time, finished_leg_ids, current_pick_up, current_drop_off)
         # send update to operator
         if len(rids_picked_up) > 0 or len(rids_dropped_off) > 0:
             self.broker.receive_status_update(op_id, vid, sim_time, done_VRLS, True)
@@ -172,14 +175,14 @@ class MATSimSimulationClass(FleetSimulationBase):
 
         self.evaluate()
         
-    def get_current_assignments(self):
+    def get_current_assignments(self, sim_time):
         """
         Get new assignments from the simulation.
         :return: dict of new assignments
         """
         new_assignments = {}
         for vid, veh in self.sim_vehicles.items():
-            new_assignment = veh.get_new_assignment()
+            new_assignment = veh.get_new_assignment(sim_time)
             if new_assignment is not None:
                 new_assignments[vid] = new_assignment
         return new_assignments

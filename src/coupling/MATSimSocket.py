@@ -5,6 +5,7 @@ import traceback
 import datetime
 import pandas as pd
 from typing import TYPE_CHECKING, Dict, List, Tuple, Any
+import logging
 
 to_del = []
 for p in os.sys.path:
@@ -21,6 +22,8 @@ from src.FleetSimulationBase import build_operator_attribute_dicts
 
 if TYPE_CHECKING:
     from src.fleetctrl.planning.VehiclePlan import VehiclePlan
+    
+LOG = logging.getLogger(__name__)
 
 STAT_INT = 60
 ENCODING = "utf-8"
@@ -215,7 +218,7 @@ class MATSimSocket:
         
         self.fs_obj.step(self.scenario_parameters[G_SIM_START_TIME])
 
-        new_assignments = self.fs_obj.get_current_assignments() # dict (op_id, vid) -> VehPlan
+        new_assignments = self.fs_obj.get_current_assignments(self.scenario_parameters[G_SIM_START_TIME]) # dict (op_id, vid) -> VehPlan
         
         assignment_message = self._create_assignment_message(new_assignments)
         self.format_object_and_send_msg(assignment_message)
@@ -226,6 +229,9 @@ class MATSimSocket:
         """
         new_sim_time = response_obj["time"]
         print(" -> new sim time: ", new_sim_time)
+        LOG.info(f"Socked new state: {new_sim_time}")
+        LOG.info(f"matsim vid to vid: {self.matsim_to_fleetpy_vid}")
+        LOG.info(f"matsim rid to rid: {self.matsim_to_fleetpy_rid}")
         
         picked_up_requests = response_obj["pickedUp"] # dict { "req1": "veh1" }
         dropped_off_requests = response_obj["droppedOff"] # { "req5": "veh10", "req7": "veh12" }
@@ -243,6 +249,23 @@ class MATSimSocket:
                 veh_drop_off_requests[veh_id].append(rq_id)
             except KeyError:
                 veh_drop_off_requests[veh_id] = [rq_id]
+                
+        picking_up_requests = response_obj["pickingUp"] # dict { "req1": "veh1" }
+        dropping_off_requests = response_obj["droppingOff"] # { "req5": "veh10", "req7": "veh12" }
+        veh_current_pick_up_requests = {}
+        veh_current_drop_off_requests = {}
+        for rq_id, veh_id in picking_up_requests.items():
+            veh_id = self.matsim_to_fleetpy_vid[veh_id]
+            try:
+                veh_current_pick_up_requests[veh_id].append(rq_id)
+            except KeyError:
+                veh_current_pick_up_requests[veh_id] = [rq_id]
+        for rq_id, veh_id in dropping_off_requests.items():
+            veh_id = self.matsim_to_fleetpy_vid[veh_id]
+            try:
+                veh_current_drop_off_requests[veh_id].append(rq_id)
+            except KeyError:
+                veh_current_drop_off_requests[veh_id] = [rq_id]
                 
         
         list_vehicle_states = response_obj["vehicles"] # list of dicts
@@ -265,7 +288,11 @@ class MATSimSocket:
             picked_up = veh_pick_up_requests.get(vid, [])
             dropped_off = veh_drop_off_requests.get(vid, [])
             
-            self.fs_obj.update_veh_state(new_sim_time, vid, 0, veh_pos, picked_up, dropped_off, state, earliest_diverge_pos, earliest_diverge_time, finished_leg_ids)
+            current_pick_up = veh_current_pick_up_requests.get(vid, [])
+            current_drop_off = veh_current_drop_off_requests.get(vid, [])
+            
+            self.fs_obj.update_veh_state(new_sim_time, vid, 0, veh_pos, picked_up, dropped_off, state, earliest_diverge_pos, earliest_diverge_time, finished_leg_ids,
+                                         current_pick_up, current_drop_off)
         
         list_requests = response_obj["submitted"] # list of dicts
         print(" -> number of new requests: ", len(list_requests))
@@ -284,7 +311,7 @@ class MATSimSocket:
             
         self.fs_obj.step(new_sim_time)
         
-        new_assignments = self.fs_obj.get_current_assignments() # dict (op_id, vid) -> VehPlan
+        new_assignments = self.fs_obj.get_current_assignments(new_sim_time) # dict (op_id, vid) -> VehPlan
         
         assignment_message = self._create_assignment_message(new_assignments)
         self.format_object_and_send_msg(assignment_message)
