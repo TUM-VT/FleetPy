@@ -1,4 +1,3 @@
-
 # Standard library imports
 import os
 from collections import defaultdict
@@ -18,11 +17,14 @@ from torch_geometric.data import HeteroData
 from notebooks.data_processing.config import DataProcessingConfig as cfg
 from notebooks.data_processing.data_processor import DataProcessor
 from notebooks.dataloaders.normalization import (
-    load_normalization_statistics, 
+    load_normalization_statistics,
     normalize_features,
     clean_normalization_directory,
     get_feature_type
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class GNNDataLoader:
@@ -33,7 +35,7 @@ class GNNDataLoader:
     a format suitable for graph neural networks, and managing data splits.
     """
     EXCLUDED_EDGE_FEATURES = ['source', 'target',
-                              cfg.LABEL]  # Features to exclude from edge attributes
+                              cfg.LABEL, 'timestep']  # Features to exclude from edge attributes
 
     def __init__(self, scenarios: List[str], config: Optional[cfg] = None, overwrite: bool = False):
         """Initialize the DataLoader.
@@ -48,7 +50,7 @@ class GNNDataLoader:
         self.config = config or cfg()
         self.overwrite = overwrite
         self.scenarios = scenarios
-        
+
         # Set up normalization directory
         self.stats_dir = os.path.join(self.config.base_data_dir, 'normalization_stats')
         if self.overwrite:
@@ -69,16 +71,16 @@ class GNNDataLoader:
                 - List of processed HeteroData objects
                 - List of corresponding data masks
         """
-        print("\n=== Starting GNNDataLoader.load_data() ===")
+        logger.debug("\n=== Starting GNNDataLoader.load_data() ===")
         scenario_data = []
         scenario_sizes = []  # Keep track of number of timesteps per scenario
 
         # First determine train/val/test split
         num_scenarios = len(self.scenarios)
-        print(f"Total number of scenarios: {num_scenarios}")
+        logger.debug(f"Total number of scenarios: {num_scenarios}")
         train_size = int(self.config.train_ratio * num_scenarios)
         val_size = int(self.config.val_ratio * num_scenarios)
-        print(f"Train size: {train_size}, Val size: {val_size}")
+        logger.debug(f"Train size: {train_size}, Val size: {val_size}")
 
         # Set up central statistics directory
         self.stats_dir = os.path.join(
@@ -89,7 +91,7 @@ class GNNDataLoader:
         if not stats_exist:
             # First pass: Process training scenarios without normalization to collect statistics
             training_data = []
-            print("\nFirst pass: Processing training scenarios without normalization...")
+            logger.debug("\nFirst pass: Processing training scenarios without normalization...")
             for i, scenario_path in enumerate(tqdm(self.scenarios[:train_size], desc="Collecting training data")):
                 scenario_name = self._get_scenario_name(scenario_path)
                 data = self._load_or_process_scenario(
@@ -99,13 +101,13 @@ class GNNDataLoader:
                     training_data.append((scenario_name, data))
 
             # Compute global statistics from all training scenarios
-            print("\nComputing global statistics across all training scenarios...")
+            logger.debug("\nComputing global statistics across all training scenarios...")
             self._compute_global_statistics(training_data)
         else:
-            print("\nUsing existing normalization statistics from", self.stats_dir)
+            logger.debug("\nUsing existing normalization statistics from", self.stats_dir)
 
         # Process all scenarios using global statistics
-        print("\nProcessing all scenarios with global statistics...")
+        logger.debug("\nProcessing all scenarios with global statistics...")
 
         # Process all scenarios (both training and val/test)
         for i, scenario_path in enumerate(tqdm(self.scenarios, desc="Processing scenarios")):
@@ -114,9 +116,6 @@ class GNNDataLoader:
             data = self._load_or_process_scenario(
                 scenario_path, scenario_name
             )
-
-            data = data[self.config.start_graph:self.config.start_graph +
-                        self.config.max_graphs_test] if self.config.test_mode else data
 
             if data is not None:
                 scenario_data.extend(data)
@@ -147,7 +146,7 @@ class GNNDataLoader:
         Args:
             training_data: List of (scenario_name, data) tuples from training scenarios
         """
-        print("\n=== Computing global statistics ===")
+        logger.debug("\n=== Computing global statistics ===")
 
         # Collect feature data across all scenarios
         feature_collections = defaultdict(list)
@@ -183,12 +182,12 @@ class GNNDataLoader:
             if not dfs:
                 continue
 
-            print(f"\nProcessing {collection_name}")
+            logger.debug(f"\nProcessing {collection_name}")
             combined_df = pd.concat(dfs, ignore_index=True)
 
             # Get numerical columns and categorize them
             numeric_cols = combined_df.select_dtypes(include=[np.number]).columns
-            
+
             # Organize columns by feature type
             feature_types = {
                 'continuous': [],
@@ -196,39 +195,39 @@ class GNNDataLoader:
                 'categorical': [],
                 'metadata': []
             }
-            
+
             # Categorize each column
             for col in numeric_cols:
                 feature_type = get_feature_type(combined_df[col], col)
                 feature_types[feature_type].append(col)
-            
-            # Print information about feature categories
+
+            # logger.debug information about feature categories
             for feature_type, cols in feature_types.items():
                 if cols and feature_type != 'continuous':
-                    print(f"\n{feature_type.capitalize()} features (will be excluded from normalization):")
-                    print(f"  {cols}")
-            
+                    logger.debug(f"\n{feature_type.capitalize()} features (will be excluded from normalization):")
+                    logger.debug(f"  {cols}")
+
             # Only normalize continuous features
             numeric_cols = feature_types['continuous']
             if numeric_cols:
-                print(f"\nContinuous features to be normalized:")
-                print(f"  {numeric_cols}")
-            
+                logger.debug(f"\nContinuous features to be normalized:")
+                logger.debug(f"  {numeric_cols}")
+
             if not numeric_cols:
                 continue
-                
-            print(f"Numeric columns for {collection_name}: {list(numeric_cols)}")
+
+            logger.debug(f"Numeric columns for {collection_name}: {list(numeric_cols)}")
 
             # Add prefix to column names to avoid collisions
-            prefix = collection_name.replace(cfg.REQUEST_FEATURES, 'req_')\
-                                 .replace(cfg.VEHICLE_FEATURES, 'veh_')\
-                                 .replace(cfg.REQUEST_REQUEST_GRAPH, 'rr_')\
-                                 .replace(cfg.VEHICLE_REQUEST_GRAPH, 'vr_')\
-                                 .lower()
-            
+            prefix = collection_name.replace(cfg.REQUEST_FEATURES, 'req_') \
+                .replace(cfg.VEHICLE_FEATURES, 'veh_') \
+                .replace(cfg.REQUEST_REQUEST_GRAPH, 'rr_') \
+                .replace(cfg.VEHICLE_REQUEST_GRAPH, 'vr_') \
+                .lower()
+
             # Create prefixed column names
             prefixed_cols = {col: f"{prefix}{col}" for col in numeric_cols}
-            
+
             # Compute statistics for each numeric column
             means = combined_df[numeric_cols].mean().rename(prefixed_cols)
             stds = combined_df[numeric_cols].std().fillna(1.0).rename(prefixed_cols)  # Replace 0 std with 1
@@ -251,7 +250,7 @@ class GNNDataLoader:
         pd.DataFrame.from_dict(all_maxs, orient='index').to_parquet(
             os.path.join(self.stats_dir, "maxs.parquet"))
 
-        print("\nSaved global normalization statistics to", self.stats_dir)
+        logger.debug("\nSaved global normalization statistics to", self.stats_dir)
 
     def _load_or_process_scenario(self, scenario_path: str, scenario_name: str) -> Optional[List[HeteroData]]:
         """Load pre-processed data or process raw data for a scenario.
@@ -259,23 +258,21 @@ class GNNDataLoader:
         Args:
             scenario_path: Path to the scenario directory
             scenario_name: Name of the scenario
-            is_train: Whether this is a training scenario
-            stats_dir: Directory containing normalization statistics (required for non-training scenarios)
 
         If self.overwrite is True, skips loading preprocessed data and forces reprocessing.
         """
-        print(f"\n=== Processing scenario: {scenario_name} ===")
-        print(f"Scenario path: {scenario_path}")
-        print(f"Overwrite mode: {self.overwrite}")
+        logger.debug(f"\n=== Processing scenario: {scenario_name} ===")
+        logger.debug(f"Scenario path: {scenario_path}")
+        logger.debug(f"Overwrite mode: {self.overwrite}")
 
         # Skip loading preprocessed data if overwrite is True
         if not self.overwrite:
-            print("Attempting to load preprocessed data...")
+            logger.debug("Attempting to load preprocessed data...")
             data = self._try_load_preprocessed(scenario_name)
             if data is not None:
-                print("Successfully loaded preprocessed data")
+                logger.debug("Successfully loaded preprocessed data")
                 return data
-            print("No preprocessed data found or failed to load")
+            logger.debug("No preprocessed data found or failed to load")
 
         # Process raw data (either because preprocessed doesn't exist or overwrite=True)
         return self._process_raw_data(scenario_path, scenario_name)
@@ -295,7 +292,7 @@ class GNNDataLoader:
         try:
             return torch.load(graph_path, weights_only=False)
         except Exception as e:
-            print(f"Error loading preprocessed data: {e}")
+            logger.error(f"Error loading preprocessed data: {e}")
             return None
 
     def _process_raw_data(self, scenario_path: str, scenario_name: str) -> List[HeteroData]:
@@ -305,38 +302,38 @@ class GNNDataLoader:
             scenario_path: Path to the scenario directory
             scenario_name: Name of the scenario
         """
-        print("\n=== Processing raw data ===")
+        logger.debug("\n=== Processing raw data ===")
         # Initialize paths
         train_dir = os.path.join(scenario_path, self.config.train_dir)
         raw_dir = os.path.join(self.config.base_data_dir, self.config.raw_dir)
 
-        print(f"Train directory: {train_dir}")
-        print(f"Raw directory: {raw_dir}")
-        print("Checking directories exist:")
-        print(f"- Train dir exists: {os.path.exists(train_dir)}")
-        print(f"- Raw dir exists: {os.path.exists(raw_dir)}")
+        logger.debug(f"Train directory: {train_dir}")
+        logger.debug(f"Raw directory: {raw_dir}")
+        logger.debug("Checking directories exist:")
+        logger.debug(f"- Train dir exists: {os.path.exists(train_dir)}")
+        logger.debug(f"- Raw dir exists: {os.path.exists(raw_dir)}")
 
         # Process data through pipeline
-        print("\nInitializing DataProcessor...")
+        logger.debug("\nInitializing DataProcessor...")
         processor = DataProcessor(
             train_dir, raw_dir, self.config, prefer_processed=False)
 
-        print("\nProcessing data through pipeline...")
+        logger.debug("\nProcessing data through pipeline...")
         try:
             data = processor.process_data(scenario_name)
-            print("Data processing completed successfully")
-            print(
+            logger.debug("Data processing completed successfully")
+            logger.debug(
                 f"Data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dictionary'}")
 
-            print("\nTransforming features...")
+            logger.debug("\nTransforming features...")
             data = self._transform_features(data)
-            print("Feature transformation completed")
+            logger.debug("Feature transformation completed")
 
             return self._transform_and_save_data(data, scenario_name)
         except Exception as e:
-            print(f"\nError during data processing: {str(e)}")
+            logger.error(f"\nError during data processing: {str(e)}")
             import traceback
-            print("Full traceback:")
+            logger.error("Full traceback:")
             traceback.print_exc()
             raise
 
@@ -358,10 +355,10 @@ class GNNDataLoader:
         # Load normalization statistics if they exist
         try:
             means, stds, mins, maxs = load_normalization_statistics(self.stats_dir)
-            
+
             # Columns to exclude from normalization
             exclude_cols = ['id', 'timestep', 'source', 'target', 'label']
-            
+
             # Apply normalization with prefixed stats to each dataframe
             data_mappings = [
                 (cfg.REQUEST_FEATURES, 'req_'),
@@ -369,11 +366,11 @@ class GNNDataLoader:
                 (cfg.REQUEST_REQUEST_GRAPH, 'rr_'),
                 (cfg.VEHICLE_REQUEST_GRAPH, 'vr_')
             ]
-            
+
             for feature_key, prefix in data_mappings:
                 if feature_key in data and isinstance(data[feature_key], pd.DataFrame):
                     df = data[feature_key]
-                    
+
                     # Organize features by type
                     feature_types = {
                         'continuous': [],
@@ -381,40 +378,41 @@ class GNNDataLoader:
                         'categorical': [],
                         'metadata': []
                     }
-                    
+
                     # Categorize numeric columns
                     numeric_cols = df.select_dtypes(include=[np.number]).columns
                     for col in numeric_cols:
                         feature_type = get_feature_type(df[col], col)
                         feature_types[feature_type].append(col)
-                    
-                    # Print feature categorization
-                    print(f"\nFeature categorization for {feature_key}:")
+
+                    # logger.debug feature categorization
+                    logger.debug(f"\nFeature categorization for {feature_key}:")
                     for ftype, cols in feature_types.items():
                         if cols:
-                            print(f"{ftype.capitalize()} features: {cols}")
-                    
+                            logger.debug(f"{ftype.capitalize()} features: {cols}")
+
                     # Create feature-specific statistics by filtering the global stats
                     clean_prefix = prefix.replace('_', '')  # Remove underscore for stats
                     feature_means = {k.replace(prefix, ''): v for k, v in means.items() if k.startswith(prefix)}
                     feature_stds = {k.replace(prefix, ''): v for k, v in stds.items() if k.startswith(prefix)}
-                    
+
                     # Apply normalization only to continuous features
                     data[feature_key] = normalize_features(
                         df,
                         feature_means,
                         feature_stds,
-                        exclude_columns=feature_types['binary'] + feature_types['categorical'] + feature_types['metadata'],
+                        exclude_columns=feature_types['binary'] + feature_types['categorical'] + feature_types[
+                            'metadata'],
                         prefix=clean_prefix
                     )
 
-                    print('Normalization sample:')
-                    print(data[feature_key].head())
+                    logger.debug('Normalization sample:')
+                    logger.debug(data[feature_key].head())
                     data[feature_key].to_csv(f"normalized_{feature_key}.csv", index=False)
 
         except FileNotFoundError:
-            print("Warning: Normalization statistics not found. Proceeding without normalization.")
-            
+            logger.warning("Warning: Normalization statistics not found. Proceeding without normalization.")
+
         self._calculate_feature_dimensions(data)
         graphs = self._create_heterogeneous_graphs(data)
         self._save_processed_graphs(graphs, scenario_name)
@@ -423,8 +421,8 @@ class GNNDataLoader:
     def _calculate_feature_dimensions(self, data: Dict) -> None:
         """Calculate edge feature dimensions."""
         if cfg.REQUEST_REQUEST_GRAPH in data and not data[cfg.REQUEST_REQUEST_GRAPH].empty:
-            print("Request-Request graph edge feature dimension:", end=" ")
-            print(len(data[cfg.REQUEST_REQUEST_GRAPH].columns) - len(self.EXCLUDED_EDGE_FEATURES))
+            logger.debug("Request-Request graph edge feature dimension:")
+            logger.debug(len(data[cfg.REQUEST_REQUEST_GRAPH].columns) - len(self.EXCLUDED_EDGE_FEATURES))
             self.rr_edge_feature_dim = len(
                 data[cfg.REQUEST_REQUEST_GRAPH].columns) - len(self.EXCLUDED_EDGE_FEATURES)
         if cfg.VEHICLE_REQUEST_GRAPH in data and not data[cfg.VEHICLE_REQUEST_GRAPH].empty:
@@ -433,13 +431,13 @@ class GNNDataLoader:
 
     def _create_heterogeneous_graphs(self, data: Dict) -> List[HeteroData]:
         """Create heterogeneous graphs directly as PyG HeteroData objects."""
-        print("\n=== Creating heterogeneous graphs ===")
-        print(f"Data keys available: {list(data.keys())}")
-        print(f"Type of req_features: {type(data.get(cfg.REQUEST_FEATURES))}")
+        logger.debug("\n=== Creating heterogeneous graphs ===")
+        logger.debug(f"Data keys available: {list(data.keys())}")
+        logger.debug(f"Type of req_features: {type(data.get(cfg.REQUEST_FEATURES))}")
 
         # Handle request features as DataFrame (not dict)
         if isinstance(data.get(cfg.REQUEST_FEATURES), pd.DataFrame):
-            print("Sample of req_features DataFrame:", data[cfg.REQUEST_FEATURES].head(2))
+            logger.debug("Sample of req_features DataFrame:", data[cfg.REQUEST_FEATURES].head(2))
             # Get all unique timesteps from the DataFrame
             if 'timestep' in data[cfg.REQUEST_FEATURES].columns:
                 max_timestep = data[cfg.REQUEST_FEATURES]['timestep'].max()
@@ -448,7 +446,7 @@ class GNNDataLoader:
         else:
             max_timestep = 0  # Default value if request features are missing
 
-        print(f"Max timestep determined: {max_timestep}")
+        logger.debug(f"Max timestep determined: {max_timestep}")
         graphs = []
 
         # Process each timestep
@@ -466,7 +464,7 @@ class GNNDataLoader:
                                 include=[np.number])
                             numeric_features = numeric_features.drop(
                                 columns=['timestep'])
-                            
+
                             # Use node IDs from the DataFrame
                             if 'id' in features.columns:
                                 node_ids = features['id'].values
@@ -489,7 +487,7 @@ class GNNDataLoader:
                         graph[node_type].node_ids = torch.zeros(
                             (0,), dtype=torch.long)
                 except KeyError as e:
-                    print(f"KeyError in node features for {node_type}: {e}")
+                    logger.error(f"KeyError in node features for {node_type}: {e}")
                     # Handle case where no data exists for this timestep
                     graph[node_type].x = torch.zeros(
                         (0, 1), dtype=torch.float32)
@@ -499,9 +497,9 @@ class GNNDataLoader:
             # Add edge features
             edge_configs = [
                 (cfg.REQUEST_REQUEST_GRAPH, ('request',
-                 'connects', 'request'), self.rr_edge_feature_dim),
+                                             'connects', 'request'), self.rr_edge_feature_dim),
                 (cfg.VEHICLE_REQUEST_GRAPH, ('vehicle',
-                 'connects', 'request'), self.vr_edge_feature_dim)
+                                             'connects', 'request'), self.vr_edge_feature_dim)
             ]
 
             for name, edge_type, feat_dim in edge_configs:
@@ -545,6 +543,10 @@ class GNNDataLoader:
                         (0, feat_dim), dtype=torch.float32)
                     graph[edge_type].y = torch.zeros((0,), dtype=torch.long)
 
+            # Make the graph undirected
+            undirected_transform = T.ToUndirected(merge=True)  # merge=True will combine edge features
+            graph = undirected_transform(graph)
+            graph = T.NormalizeFeatures()(graph)
             graphs.append(graph)
 
         return graphs
@@ -559,9 +561,10 @@ class GNNDataLoader:
         )
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         torch.save(graphs, save_path)
-        print(f"Processed graphs saved to {save_path}")
+        logger.debug(f"Processed graphs saved to {save_path}")
 
-    def _create_scenario_based_masks(self, scenario_sizes: List[int]) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
+    def _create_scenario_based_masks(self, scenario_sizes: List[int]) -> Tuple[
+        List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
         """Create train/val/test masks at the scenario level.
 
         Args:
@@ -615,9 +618,9 @@ class GNNDataLoader:
         val_timesteps = sum(1 for m in val_masks if m)
         test_timesteps = sum(1 for m in test_masks if m)
 
-        print(
+        logger.debug(
             f"Scenario split: Train={len(train_indices)}, Val={len(val_indices)}, Test={len(test_indices)} scenarios")
-        print(
+        logger.debug(
             f"Timestep split: Train={train_timesteps}, Val={val_timesteps}, Test={test_timesteps} timesteps")
 
         return train_masks, val_masks, test_masks
@@ -633,5 +636,5 @@ class GNNDataLoader:
     def _log_split_info(train_size: int, val_size: int, total_size: int) -> None:
         """Log information about the data split."""
         test_size = total_size - train_size - val_size
-        print(
+        logger.debug(
             f"Data split: Train={train_size}, Val={val_size}, Test={test_size}")

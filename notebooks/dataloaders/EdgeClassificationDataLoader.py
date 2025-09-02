@@ -154,20 +154,6 @@ class EdgeClassificationDataLoader(DataLoader):
             req_df = pd.read_parquet(req_parquet_path)
             veh_df = pd.read_parquet(veh_parquet_path)
 
-            # Filter by timestep if test_mode is enabled
-            if hasattr(self.config, 'test_mode') and getattr(self.config, 'test_mode', False):
-                start = getattr(self.config, 'start_graph', 0)
-                max_graphs = getattr(self.config, 'max_graphs_test', 1)
-                end = start + max_graphs
-                edge_df = edge_df[(edge_df['timestep'] >= start)
-                                  & (edge_df['timestep'] < end)]
-                req_df = req_df[(req_df['timestep'] >= start)
-                                & (req_df['timestep'] < end)]
-                veh_df = veh_df[(veh_df['timestep'] >= start)
-                                & (veh_df['timestep'] < end)]
-                print(
-                    f"After filtering by timestep: edge_df shape: {edge_df.shape}, req_df shape: {req_df.shape}, veh_df shape: {veh_df.shape}")
-
             # --- Restore mapping logic for request/vehicle ids ---
             # Build node_mapping and reverse_node_mapping for this scenario from req_df
             node_mapping = {}

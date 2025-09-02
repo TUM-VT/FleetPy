@@ -19,7 +19,6 @@ from notebooks.models.EdgeClassifier import XGBClassifier
 import torch
 from torch_geometric.data import HeteroData
 from notebooks.models.HeteroGAT import HeteroGAT
-from notebooks.dataloaders.GNNDataLoader import GNNDataLoader
 
 class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
     """Extension of Alonso-Mora Assignment Class that can optionally use ML for assignment predictions.
@@ -117,7 +116,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
                   G_TRAIN_FEATURE_DIRECT_TD: req.init_direct_td,
                   G_TRAIN_FEATURE_MAX_TRIP_TIME: req.max_trip_time, 
                   G_TRAIN_FEATURE_STATUS: req.status, 
-                  G_TRAIN_FEATURE_LOCKED: 1 if req.locked else 0
+                  G_TRAIN_FEATURE_LOCKED: 1 if self.r2v_locked.get(rid, None) else 0
                   # TODO add other request features as needed
                   }
             for rid, req in self.active_requests.items()}

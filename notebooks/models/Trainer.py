@@ -1,19 +1,28 @@
+import pandas as pd
 import torch
 from torch_geometric.loader import DataLoader
 import os
 from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
 import numpy as np
-from data_processing.config import DataProcessingConfig
+from data_processing.config import DataProcessingConfig as cfg
 from typing import Optional, List, Dict
 from enum import Enum
 import random
+import logging
+
+
+# logging.basicConfig(level=cfg.LOG_LEVEL)
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 class SamplingStrategy(Enum):
+    NONE = "none"  # No special sampling, use standard DataLoader
     DYNAMIC = "dynamic"  # Uses hard example mining
     BALANCED = "balanced"  # Uses class-balanced sampling
 
 
+# TODO debug
 class BalancedBatchSampler:
     """Samples batches with balanced class distribution at edge level within each graph."""
 
@@ -47,13 +56,13 @@ class BalancedBatchSampler:
             for edge_type in graph.y_dict:
                 labels = graph.y_dict[edge_type]
                 edge_indices = torch.arange(len(labels))
-                
+
                 pos_mask = labels == 1
                 neg_mask = labels == 0
-                
+
                 pos_indices = edge_indices[pos_mask].tolist()
                 neg_indices = edge_indices[neg_mask].tolist()
-                
+
                 pos_edges.extend([(edge_type, idx) for idx in pos_indices])
                 neg_edges.extend([(edge_type, idx) for idx in neg_indices])
                 total_edges += len(labels)
@@ -127,23 +136,23 @@ class BalancedBatchSampler:
             if edge_type in sampled_edges and sampled_edges[edge_type]:
                 pos_indices = sampled_edges[edge_type]['pos']
                 neg_indices = sampled_edges[edge_type]['neg']
-                
+
                 # Ensure we have at least some edges
                 if pos_indices or neg_indices:
                     all_indices = pos_indices + neg_indices
-                    
+
                     # Update edge indices
                     if len(all_indices) > 0:
                         edge_index = original_graph.edge_index_dict[edge_type]
                         if edge_index.size(1) > 0:  # Check if there are any edges
                             balanced_graph.edge_index_dict[edge_type] = edge_index[:, all_indices]
-                            
+
                             # Update edge attributes if they exist
                             if edge_type in original_graph.edge_attr_dict:
                                 edge_attr = original_graph.edge_attr_dict[edge_type]
                                 if edge_attr is not None and len(edge_attr) > 0:
                                     balanced_graph.edge_attr_dict[edge_type] = edge_attr[all_indices]
-                            
+
                             # Update labels
                             new_labels = torch.zeros(len(all_indices), dtype=torch.float)
                             new_labels[:len(pos_indices)] = 1.0
@@ -163,15 +172,15 @@ class BalancedBatchSampler:
         if not self.pos_weighted_indices or not self.neg_weighted_indices:
             # Fallback to random sampling if either class is empty
             selected_indices = random.sample(list(self.graph_info.keys()),
-                                min(self.batch_size, len(self.graph_info)))
+                                             min(self.batch_size, len(self.graph_info)))
         else:
             # Sample graphs that have both positive and negative edges
             available_indices = list(set(self.pos_weighted_indices) & set(self.neg_weighted_indices))
             if not available_indices:
                 available_indices = list(self.graph_info.keys())
-            
+
             selected_indices = random.sample(available_indices,
-                                min(self.batch_size, len(available_indices)))
+                                             min(self.batch_size, len(available_indices)))
 
         # Create balanced versions of the selected graphs
         balanced_graphs = []
@@ -187,6 +196,7 @@ class BalancedBatchSampler:
         return selected_indices
 
 
+# TODO debug
 class DynamicBatchSampler:
     def __init__(self, data, batch_size: int, hard_mining_ratio: float = 0.5):
         """
@@ -278,7 +288,7 @@ class DynamicBatchSampler:
 
         # Combine all samples
         batch_indices = list(hard_samples) + \
-            list(easy_samples) + list(additional_samples)
+                        list(easy_samples) + list(additional_samples)
         random.shuffle(batch_indices)
         return batch_indices
 
@@ -335,7 +345,7 @@ class FocalLoss(torch.nn.Module):
 
 
 class Trainer:
-    def __init__(self, data, device, masks, config: Optional[DataProcessingConfig] = None, batch_size=32, epochs=200,
+    def __init__(self, data, device, masks, config: Optional[cfg] = None, batch_size=32, epochs=200,
                  pos_weight: Optional[float] = None, sampling_strategy: SamplingStrategy = SamplingStrategy.DYNAMIC,
                  hard_mining_ratio: float = 0.5, balance_ratio: float = 1.0):
         """
@@ -354,7 +364,7 @@ class Trainer:
             balance_ratio: Ratio of negative to positive samples in balanced sampling
         """
         self.device = device
-        self.config = config or DataProcessingConfig()
+        self.config = config or cfg()
         self.model_dir = os.path.join(
             self.config.base_data_dir, self.config.models_dir)
         os.makedirs(self.model_dir, exist_ok=True)
@@ -379,14 +389,14 @@ class Trainer:
         else:
             self.pos_weight = torch.tensor(pos_weight, device=self.device)
 
-        print(f"\n{'=' * 80}")
-        print(f"Training Configuration")
-        print(f"{'-' * 80}")
-        print(f"{'Batch Size:':<20} {batch_size}")
-        print(f"{'Max Epochs:':<20} {epochs}")
-        print(f"{'Device:':<20} {device}")
-        print(f"{'Pos Weight:':<20} {self.pos_weight:.4f}")
-        print(f"{'-' * 80}")
+        logger.debug(f"\n{'=' * 80}")
+        logger.debug(f"Training Configuration")
+        logger.debug(f"{'-' * 80}")
+        logger.debug(f"{'Batch Size:':<20} {batch_size}")
+        logger.debug(f"{'Max Epochs:':<20} {epochs}")
+        logger.debug(f"{'Device:':<20} {device}")
+        logger.debug(f"{'Pos Weight:':<20} {self.pos_weight:.4f}")
+        logger.debug(f"{'-' * 80}")
 
     def _calculate_pos_weight(self, data, mask):
         """Calculate weight for positive class to handle class imbalance"""
@@ -401,7 +411,7 @@ class Trainer:
 
     def train(self, model, optimizer):
         """Train the model with improved monitoring and class balance handling"""
-        best_val_f1 = 0
+        best_val_f1 = None
         patience = 15
         no_improve_epochs = 0
 
@@ -417,7 +427,7 @@ class Trainer:
             val_metrics = self.evaluate(model, self.val_loader)
 
             # Update best model
-            if val_metrics['f1'] > best_val_f1:
+            if best_val_f1 is None or val_metrics['f1'] > best_val_f1:
                 best_val_f1 = val_metrics['f1']
                 no_improve_epochs = 0
                 # Save best model
@@ -428,31 +438,31 @@ class Trainer:
             else:
                 no_improve_epochs += 1
 
-            # Print epoch metrics in a clean tabular format
-            print(f"\n{'=' * 80}")
-            print(f"Epoch {epoch + 1}/{self.epochs}")
-            print(f"{'-' * 80}")
-            print(f"{'Metric':<15} {'Training':<15} {'Validation':<15}")
-            print(f"{'-' * 80}")
-            print(f"{'Loss':<15} {train_metrics['loss']:<15.4f} {'-':<15}")
-            print(
+            # print epoch metrics in a clean tabular format
+            logger.info(f"\n{'=' * 80}")
+            logger.info(f"Epoch {epoch + 1}/{self.epochs}")
+            logger.info(f"{'-' * 80}")
+            logger.info(f"{'Metric':<15} {'Training':<15} {'Validation':<15}")
+            logger.info(f"{'-' * 80}")
+            logger.info(f"{'Loss':<15} {train_metrics['loss']:<15.4f} {'-':<15}")
+            logger.info(
                 f"{'Accuracy':<15} {train_metrics['accuracy']:<15.4f} {val_metrics['accuracy']:<15.4f}")
-            print(
+            logger.info(
                 f"{'F1':<15} {train_metrics['f1']:<15.4f} {val_metrics['f1']:<15.4f}")
-            print(
+            logger.info(
                 f"{'Precision':<15} {train_metrics['precision']:<15.4f} {val_metrics['precision']:<15.4f}")
-            print(
+            logger.info(
                 f"{'Recall':<15} {train_metrics['recall']:<15.4f} {val_metrics['recall']:<15.4f}")
-            print(
+            logger.info(
                 f"{'AUC-ROC':<15} {train_metrics['auc_roc']:<15.4f} {val_metrics['auc_roc']:<15.4f}")
-            print(f"{'-' * 80}")
+            logger.info(f"{'-' * 80}")
 
-            # Print improvement status
+            # print improvement status
             if val_metrics['f1'] > best_val_f1:
-                print("✓ New best model saved!")
+                logger.info("✓ New best model saved!")
 
             if no_improve_epochs >= patience:
-                print(f'Early stopping triggered after {epoch + 1} epochs')
+                logger.info(f'Early stopping triggered after {epoch + 1} epochs')
                 break
 
         # Load best model and evaluate on test set
@@ -460,24 +470,24 @@ class Trainer:
             checkpoint = torch.load(
                 f'{self.model_dir}/best_model.pt', weights_only=False)
         except Exception as e:
-            print(
+            logger.warning(
                 f"Warning: Could not load checkpoint with weights_only=False: {str(e)}")
             checkpoint = torch.load(
                 f'{self.model_dir}/best_model.pt', weights_only=True)
 
         model.load_state_dict(checkpoint['model_state_dict'])
         test_metrics = self.evaluate(model, self.test_loader)
-        print(f"\n{'=' * 80}")
-        print(f"Final Test Results")
-        print(f"{'-' * 80}")
-        print(f"{'Metric':<15} {'Score':<15}")
-        print(f"{'-' * 80}")
-        print(f"{'Accuracy':<15} {test_metrics['accuracy']:<15.4f}")
-        print(f"{'F1':<15} {test_metrics['f1']:<15.4f}")
-        print(f"{'Precision':<15} {test_metrics['precision']:<15.4f}")
-        print(f"{'Recall':<15} {test_metrics['recall']:<15.4f}")
-        print(f"{'AUC-ROC':<15} {test_metrics['auc_roc']:<15.4f}")
-        print(f"{'=' * 80}")
+        logger.info(f"\n{'=' * 80}")
+        logger.info(f"Final Test Results")
+        logger.info(f"{'-' * 80}")
+        logger.info(f"{'Metric':<15} {'Score':<15}")
+        logger.info(f"{'-' * 80}")
+        logger.info(f"{'Accuracy':<15} {test_metrics['accuracy']:<15.4f}")
+        logger.info(f"{'F1':<15} {test_metrics['f1']:<15.4f}")
+        logger.info(f"{'Precision':<15} {test_metrics['precision']:<15.4f}")
+        logger.info(f"{'Recall':<15} {test_metrics['recall']:<15.4f}")
+        logger.info(f"{'AUC-ROC':<15} {test_metrics['auc_roc']:<15.4f}")
+        logger.info(f"{'=' * 80}")
 
     def train_epoch(self, model, optimizer, criterion):
         """Train for one epoch with configurable sampling strategy"""
@@ -491,29 +501,54 @@ class Trainer:
         # Get all data first
         all_data = list(self.train_loader.dataset)
 
-        # Number of iterations equivalent to full dataset coverage
-        num_iterations = len(all_data) // self.batch_size
-        if len(all_data) % self.batch_size > 0:
-            num_iterations += 1  # Add one more batch for the remainder
+        if self.sampling_strategy == SamplingStrategy.NONE:
+            # For NONE strategy, use the train_loader directly
+            data_iterator = self.train_loader
+            num_iterations = len(self.train_loader)
+        else:
+            # For DYNAMIC and BALANCED strategies, calculate iterations based on dataset size
+            num_iterations = len(all_data) // self.batch_size
+            if len(all_data) % self.batch_size > 0:
+                num_iterations += 1  # Add one more batch for the remainder
 
+        data_iterator = iter(self.train_loader)
         for batch_idx in range(num_iterations):
-            # Sample batch indices using configured sampler
-            batch_indices = self.sampler.sample_batch_indices()
-            batch_data = [all_data[i] for i in batch_indices]
+            if self.sampler is not None:
+                # Sample batch indices using configured sampler
+                batch_indices = self.sampler.sample_batch_indices()
+                batch_data = [all_data[i] for i in batch_indices]
 
-            # Create a batch directly
-            loader = DataLoader(batch_data, batch_size=len(
-                batch_data), shuffle=False)
-            batch = next(loader.__iter__())
+                # Create a batch directly
+                loader = DataLoader(batch_data, batch_size=len(
+                    batch_data), shuffle=False)
+                batch = next(iter(loader))
+            else:
+                try:
+                    # For NONE strategy, use batches from data_iterator
+                    batch = next(data_iterator)
+                    # Calculate batch indices based on position in dataset
+                    start_idx = batch_idx * self.batch_size
+                    end_idx = min((batch_idx + 1) * self.batch_size, len(all_data))
+                    batch_indices = list(range(start_idx, end_idx))
+                except StopIteration:
+                    logger.warning("Data iterator exhausted, reinitializing.")
+                    # If we've exhausted the iterator, reinitialize it
+                    data_iterator = iter(self.train_loader)
+                    batch = next(data_iterator)
+                    # Recalculate indices for the new batch
+                    start_idx = batch_idx * self.batch_size
+                    end_idx = min((batch_idx + 1) * self.batch_size, len(all_data))
+                    batch_indices = list(range(start_idx, end_idx))
+
             batch = batch.to(self.device)
 
             optimizer.zero_grad()
 
-            # Forward pass
+            # Backward pass
             logits = model(batch.x_dict, batch.edge_index_dict,
                            batch.edge_attr_dict)
             target = torch.cat([batch.y_dict[edge_type].float()
-                               for edge_type in batch.edge_index_dict.keys()])
+                                for edge_type in batch.edge_index_dict.keys()])
 
             # Ensure logits and target have compatible shapes
             if logits.dim() > 1 and logits.size(1) > 1:
@@ -524,10 +559,11 @@ class Trainer:
             # Compute loss and backprop
             loss = criterion(logits, target)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
 
             # Update the dynamic sampler with loss information for hard example mining
-            if self.sampling_strategy == SamplingStrategy.DYNAMIC:
+            if self.sampling_strategy == SamplingStrategy.DYNAMIC and self.sampler is not None:
                 individual_losses = []
                 with torch.no_grad():
                     # Calculate per-sample losses for updating the sampler
@@ -537,7 +573,7 @@ class Trainer:
                         # the loss per sample more precisely
                         if i < len(logits) and i < len(target):
                             individual_loss = criterion(
-                                logits[i:i+1], target[i:i+1])
+                                logits[i:i + 1], target[i:i + 1])
                             individual_losses.append(individual_loss)
 
                 if individual_losses:
@@ -556,14 +592,14 @@ class Trainer:
             total_loss += loss.item()
             num_batches += 1
 
-            # Print batch statistics periodically
+            # print batch statistics periodically
             self._print_batch_stats(
                 batch_idx, loss.item(), logits, probs, target, pred_labels)
 
         # Compute epoch metrics
         metrics = self._compute_metrics(all_preds, all_probs, all_targets)
         metrics['loss'] = total_loss / \
-            num_batches if num_batches > 0 else float('inf')
+                          num_batches if num_batches > 0 else float('inf')
         return metrics
 
     def evaluate(self, model, loader):
@@ -594,7 +630,7 @@ class Trainer:
                 all_probs.append(probs.cpu())
                 all_targets.append(target.cpu())
 
-       # Calculate metrics
+        # Calculate metrics
         return self._compute_metrics(all_preds, all_probs, all_targets)
 
     def _compute_metrics(self, all_preds, all_probs, all_targets):
@@ -604,7 +640,7 @@ class Trainer:
 
         preds = torch.cat(all_preds).numpy()
         targets = torch.cat(all_targets).numpy()
-        probs = torch.cat(all_probs).numpy()
+        probs = torch.cat(all_probs).nan_to_num().numpy()
 
         return {
             'f1': f1_score(targets, preds, zero_division=0),
@@ -618,8 +654,8 @@ class Trainer:
         """Print detailed batch statistics"""
         target_dist = torch.bincount(target.long())
         pred_dist = torch.bincount(pred_labels.long())
-        print(f"\r[Batch {batch_idx:3d}] Loss: {loss:.4f} | "
-              f"Class dist - Target: {target_dist.tolist()} Pred: {pred_dist.tolist()}")
+        # logger.debug(f"\r[Batch {batch_idx:3d}] Loss: {loss:.4f} | "
+        #       f"Class dist - Target: {target_dist.tolist()} Pred: {pred_dist.tolist()}")
 
     def _create_loader(self, data, mask, batch_size, shuffle):
         """Create data loader with configurable sampling strategy"""
@@ -637,7 +673,7 @@ class Trainer:
 
         filtered_out = total_graphs - len(filtered_data)
         if filtered_out > 0:
-            print(f"Filtered {filtered_out} empty graphs from dataset")
+            logger.debug(f"Filtered {filtered_out} empty graphs from dataset")
 
         if shuffle:  # Training loader
             if self.sampling_strategy == SamplingStrategy.DYNAMIC:
@@ -651,19 +687,23 @@ class Trainer:
                 self.sampler.easy_indices = list(range(len(filtered_data)))
                 self.sampler.hard_indices = []  # Start with no hard examples
 
-                print(
+                logger.debug(
                     f"Initialized DynamicBatchSampler with {len(self.sampler.easy_indices)} easy examples")
-
-            else:  # BALANCED
+                # We don't need the DataLoader's shuffling since our custom sampler handles that
+                return DataLoader(filtered_data, batch_size=batch_size, shuffle=False)
+            elif self.sampling_strategy == SamplingStrategy.BALANCED:  # BALANCED
                 self.sampler = BalancedBatchSampler(
                     filtered_data,
                     batch_size=batch_size,
                     edge_percentage=1.0
                 )
-                print(
+                logger.debug(
                     f"Initialized BalancedBatchSampler with {len(self.sampler.pos_weighted_indices)} positive and {len(self.sampler.neg_weighted_indices)} negative examples")
-
-            # We don't need the DataLoader's shuffling since our custom sampler handles that
-            return DataLoader(filtered_data, batch_size=batch_size, shuffle=False)
+                # We don't need the DataLoader's shuffling since our custom sampler handles that
+                return DataLoader(filtered_data, batch_size=batch_size, shuffle=False)
+            else:  # NONE
+                self.sampler = None
+                # For NONE strategy, use standard DataLoader with shuffle
+                return DataLoader(filtered_data, batch_size=batch_size, shuffle=True)
         else:  # Validation/Test loader
             return DataLoader(filtered_data, batch_size=batch_size, shuffle=False)
