@@ -73,6 +73,8 @@ def return_position_str(position_tuple):
 
 def return_position_from_str(position_str):
     entries = position_str.split(";")
+    if len(entries) == 1:
+        return (int(entries[0]), None, None)
     first_entry = int(entries[0])
     second_entry = int(entries[1])
     if second_entry < 0:
@@ -420,7 +422,7 @@ class NetworkBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def move_along_route(self, route, last_position, time_step, sim_vid_id=None, new_sim_time=None,
+    def move_along_route(self, route, last_position, time_step, target_position=None, sim_vid_id=None, new_sim_time=None,
                          record_node_times=False):
         """This method computes the new position of a (vehicle) on a given route (node_index_list) from it's
         last_position (position_tuple). The first entry of route has to be the same as the first entry of last_position!
@@ -431,6 +433,8 @@ class NetworkBase(metaclass=ABCMeta):
         :type last_position: list
         :param time_step: time [s] passed since last observed at last_position
         :type time_step: float
+        :param target_position: network position to reach (target_position[0] and target_position[1] are the last entries in the route); if None, the vehicle will drive until the end of the route
+        :type target_position: tuple or None
         :param sim_vid_id: id of simulation vehicle; required for simulation environments with external traffic simulator
         :type sim_vid_id: int
         :param new_sim_time: new time to coordinate simulation times

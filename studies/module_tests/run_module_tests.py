@@ -270,6 +270,13 @@ def run_module_test_simulations(N_PARALLEL_SIM=1):
     run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Forecasting Modules completed!")
     
+    # Test Rq Starting on edges
+    print("Test Simulation RQ Edge start/end ...")
+    sc = os.path.join(scs_path, "sc_config_rq_pos.csv")
+    log_level="debug"
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    print(" => Test Simulation RQ Edge start/end completed!")
+    
     # Test SoD Max Modules
     # TODO test after upgrade
     # print("Test SoD Max Modules ...")

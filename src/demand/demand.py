@@ -2,6 +2,7 @@
 # standard distribution imports
 # -----------------------------
 import logging
+from typing import TYPE_CHECKING, Dict, Tuple, List, Any
 
 # additional module imports (> requirements)
 # ------------------------------------------
@@ -17,6 +18,10 @@ from src.misc.init_modules import load_request_module
 # global variables
 # ----------------
 from src.misc.globals import *
+
+if TYPE_CHECKING:
+    from src.routing.NetworkBasic import NetworkBasic
+    from src.demand.TravelerModels import RequestBase
 
 LOG = logging.getLogger(__name__)
 BUFFER_SIZE = 10
@@ -51,16 +56,16 @@ def create_traveler(rq_row, rq_node_type_distr, zone_definition, routing_engine,
 
 # TODO # write more efficient create_traveler; just-in-time creation?
 class Demand:
-    def __init__(self, scenario_parameters, output_f, routing_engine=None, zone_system=None):
+    def __init__(self, scenario_parameters, output_f, routing_engine: 'NetworkBasic'=None, zone_system=None):
         self.scenario_parameters = scenario_parameters
         # prepare output
         self.output_f = output_f
         self.user_stat_buffer = []  # list of dictionaries
         # request data bases
-        self.rq_db = {}  # rid > rq
-        self.undecided_rq = {} # rid > rq
-        self.waiting_rq = {} # rid > rq
-        self.future_requests = {}
+        self.rq_db: Dict[Any, RequestBase] = {}  # rid > rq
+        self.undecided_rq: Dict[Any, RequestBase] = {} # rid > rq
+        self.waiting_rq: Dict[Any, RequestBase] = {} # rid > rq
+        self.future_requests: Dict[Any, RequestBase] = {}
         # optional
         self.zone_definition = zone_system
         self.routing_engine = routing_engine
@@ -92,7 +97,7 @@ class Demand:
             raise IOError("No valid traveler type found")
         # read input
         abs_req_f = os.path.join(rq_file_dir, rq_file_name)
-        tmp_df = pd.read_csv(abs_req_f, dtype={"start": int, "end": int})
+        tmp_df = pd.read_csv(abs_req_f)
         number_rq_0 = tmp_df.shape[0]
         future_requests = tmp_df[(tmp_df[G_RQ_TIME] >= start_time) & (tmp_df[G_RQ_TIME] < end_time)]
         number_rq_1 = future_requests.shape[0]
@@ -292,7 +297,7 @@ class SlaveDemand(Demand):
     """This class can be used when request are added from an external demand module."""
     rq_class = load_request_module("SlaveRequest")
     rq_parcel_class = load_request_module("SlaveParcelRequest")
-    def add_request(self, rq_info_dict, routing_engine, sim_time, modal_state = G_RQ_STATE_MONOMODAL, offer_id=0):
+    def add_request(self, rq_info_dict, routing_engine: 'NetworkBasic', sim_time, modal_state = G_RQ_STATE_MONOMODAL, offer_id=0):
         """ this function is used to add a new (person) request to the demand class
         :param rq_info_dict: dictionary with all information regarding the request input
         :param offer_id: used if there are different subrequests (TODO make optional? needed for moia)
@@ -314,10 +319,10 @@ class SlaveDemand(Demand):
                 parent_request = self.rq_db[rq_info_dict[G_RQ_ID]]
             else:
                 parent_request = self.rq_class(rq_info_dict, routing_engine, 1, self.scenario_parameters)
-            mod_o_node = rq_info_dict[G_RQ_ORIGIN]
-            mod_d_node = rq_info_dict[G_RQ_DESTINATION]
+            mod_o_pos = routing_engine.return_position_from_str(rq_info_dict[G_RQ_ORIGIN])
+            mod_d_pos = routing_engine.return_position_from_str(rq_info_dict[G_RQ_DESTINATION])
             mod_start_time = rq_info_dict[G_RQ_EPT]
-            rq_obj = parent_request.create_SubTripRequest(offer_id, mod_o_node, mod_d_node, mod_start_time, modal_state = modal_state)
+            rq_obj = parent_request.create_SubTripRequest(offer_id, mod_o_pos, mod_d_pos, mod_start_time, modal_state = modal_state)
             rq_obj.set_direct_route_travel_infos(routing_engine)
         # use rid-struct as key
         self.rq_db[rq_obj.get_rid_struct()] = rq_obj

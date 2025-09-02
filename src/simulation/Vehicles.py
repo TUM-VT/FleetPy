@@ -546,10 +546,11 @@ class SimulationVehicle:
         :param update_start_time: time when update step started
         :return: arrival in time step (-1 if still moving at end of update step, time of arrival at end of route otherwise"""        
         (new_pos, driven_distance, arrival_in_time_step, passed_nodes, passed_node_times) = \
-            self.routing_engine.move_along_route(self.cl_remaining_route, self.pos, remaining_step_time,
+            self.routing_engine.move_along_route(self.cl_remaining_route, self.pos, remaining_step_time, target_position=self.assigned_route[0].destination_pos,
                                                     sim_vid_id=(self.op_id, self.vid),
                                                     new_sim_time=c_time,
                                                     record_node_times=self.replay_flag)
+        LOG.debug(f"veh {self.vid} move {self.pos} -> {new_pos} driven {driven_distance} m in {remaining_step_time} s to {arrival_in_time_step} passed nodes {passed_nodes}")
         last_node = self.pos[0]
         self.pos = new_pos
         self.cl_driven_distance += driven_distance
