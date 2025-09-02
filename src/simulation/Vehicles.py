@@ -829,33 +829,33 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
             LOG.info(f" -> remove start_next_leg_first flag")
         
         done_VRLs = []
-        for finished_leg_id in finished_leg_ids:
-            if self.assigned_route[0].id == finished_leg_id:
-                self.update_vehicle_position(self.assigned_route[0].destination_pos, sim_time)
-                done_VRL = self.end_current_leg(sim_time)[1]
-                if type(done_VRL) == dict and len(done_VRL) == 0:
-                    pass
-                else:
-                    done_VRLs.append(done_VRL)
-                self.start_next_leg(sim_time)
-            elif self.assigned_route[1].id == finished_leg_id:
-                self.update_vehicle_position(self.assigned_route[0].destination_pos, sim_time)
-                done_VRL = self.end_current_leg(sim_time)[1]
-                if type(done_VRL) == dict and len(done_VRL) == 0:
-                    pass
-                else:
-                    done_VRLs.append(done_VRL)
-                LOG.debug(f" -> start next leg because previous finished")
-                self.start_next_leg(sim_time)
-                self.update_vehicle_position(self.assigned_route[0].destination_pos, sim_time)
-                done_VRL = self.end_current_leg(sim_time)[1]
-                if type(done_VRL) == dict and len(done_VRL) == 0:
-                    pass
-                else:
-                    done_VRLs.append(done_VRL)
-                self.start_next_leg(sim_time)
-            else:
-                raise_error_msg()
+        # for finished_leg_id in finished_leg_ids:
+        #     if self.assigned_route[0].id == finished_leg_id:
+        #         self.update_vehicle_position(self.assigned_route[0].destination_pos, sim_time)
+        #         done_VRL = self.end_current_leg(sim_time)[1]
+        #         if type(done_VRL) == dict and len(done_VRL) == 0:
+        #             pass
+        #         else:
+        #             done_VRLs.append(done_VRL)
+        #         self.start_next_leg(sim_time)
+        #     elif self.assigned_route[1].id == finished_leg_id:
+        #         self.update_vehicle_position(self.assigned_route[0].destination_pos, sim_time)
+        #         done_VRL = self.end_current_leg(sim_time)[1]
+        #         if type(done_VRL) == dict and len(done_VRL) == 0:
+        #             pass
+        #         else:
+        #             done_VRLs.append(done_VRL)
+        #         LOG.debug(f" -> start next leg because previous finished")
+        #         self.start_next_leg(sim_time)
+        #         self.update_vehicle_position(self.assigned_route[0].destination_pos, sim_time)
+        #         done_VRL = self.end_current_leg(sim_time)[1]
+        #         if type(done_VRL) == dict and len(done_VRL) == 0:
+        #             pass
+        #         else:
+        #             done_VRLs.append(done_VRL)
+        #         self.start_next_leg(sim_time)
+        #     else:
+        #         raise_error_msg()
                 
         if len(rids_picked_up) != 0 or len(rids_dropped_off) != 0:
             if self.status != VRL_STATES.BOARDING:
@@ -878,6 +878,7 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                 planned_drop_off = [rq.get_rid() for rq in self.assigned_route[0].rq_dict.get(-1, [])]
                 if tuple(sorted(planned_pick_up)) != tuple(sorted(rids_picked_up)) or tuple(sorted(planned_drop_off)) != tuple(sorted(planned_drop_off)):
                     raise_error_msg()
+                    
         if status in G_DRIVING_STATUS:
             if self.status in G_DRIVING_STATUS:
                 self.update_vehicle_position(veh_pos, sim_time)
@@ -891,8 +892,18 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                 self.start_next_leg(sim_time)
                 if self.status not in G_DRIVING_STATUS:
                     raise_error_msg()
+        elif status == VRL_STATES.IDLE:
+            LOG.debug(f" -> currently idle")
+            if self.status != VRL_STATES.IDLE:
+                done_VRL = self.end_current_leg(sim_time)[1]
+                if type(done_VRL) == dict and len(done_VRL) == 0:
+                    pass
+                else:
+                    done_VRLs.append(done_VRL)
+                if len(self.assigned_route) > 0:
+                    raise_error_msg()
         else:
-            LOG.debug(f" -> currently not driving")
+            LOG.debug(f" -> currently boarding")
             if self.status in G_DRIVING_STATUS:
                 self.update_vehicle_position(veh_pos, sim_time)
                 done_VRL = self.end_current_leg(sim_time)[1]
@@ -900,15 +911,15 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                     pass
                 else:
                     done_VRLs.append(done_VRL)
-            if len(self.assigned_route) > 0:
-                LOG.debug(f" -> start next leg because not driving anymore")
-                self.start_next_leg(sim_time)
-                if (len(current_pick_up) != 0 or len(current_drop_off) != 0):
-                    LOG.info(f"current boarding process! pu {current_pick_up} | do {current_drop_off}")
-                    LOG.info(f"current leg: {self.assigned_route[0]}")
-                    if self.status != VRL_STATES.BOARDING:
-                        raise_error_msg()
-            elif len(current_pick_up) != 0 or len(current_drop_off) != 0:
+                if len(self.assigned_route) > 0:
+                    LOG.debug(f" -> start next leg because not driving anymore")
+                    self.start_next_leg(sim_time)
+                    if (len(current_pick_up) != 0 or len(current_drop_off) != 0):
+                        LOG.info(f"current boarding process! pu {current_pick_up} | do {current_drop_off}")
+                        LOG.info(f"current leg: {self.assigned_route[0]}")
+                        if self.status != VRL_STATES.BOARDING:
+                            raise_error_msg()
+            if len(self.assigned_route) == 0 and (len(current_pick_up) != 0 or len(current_drop_off) != 0):
                 LOG.error(f"current boarding process but not route assigned! pu {current_pick_up} | do {current_drop_off}")
                 LOG.error(f"current leg: {self.assigned_route[0]}")
                 LOG.error(f"{self}")

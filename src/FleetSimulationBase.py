@@ -713,7 +713,7 @@ class FleetSimulationBase:
         """
         # The op_id/chosen_operator should be clearly defined: 
         # 0-n are amod operators, -1 is the rejection, -2 is the pt operator, None is undecided
-        chosen_operator = rq_obj.choose_offer(self.scenario_parameters, sim_time)
+        chosen_operator = rq_obj.choose_offer(sim_time)
         LOG.debug(f" -> chosen operator: {chosen_operator}")
         if chosen_operator is None: # undecided
             if rq_obj.leaves_system(sim_time):

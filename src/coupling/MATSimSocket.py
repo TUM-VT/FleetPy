@@ -238,12 +238,14 @@ class MATSimSocket:
         veh_pick_up_requests = {}
         veh_drop_off_requests = {}
         for rq_id, veh_id in picked_up_requests.items():
+            rq_id = self._from_matsim_to_fleetpy_rid(rq_id)
             veh_id = self.matsim_to_fleetpy_vid[veh_id]
             try:
                 veh_pick_up_requests[veh_id].append(rq_id)
             except KeyError:
                 veh_pick_up_requests[veh_id] = [rq_id]
         for rq_id, veh_id in dropped_off_requests.items():
+            rq_id = self._from_matsim_to_fleetpy_rid(rq_id)
             veh_id = self.matsim_to_fleetpy_vid[veh_id]
             try:
                 veh_drop_off_requests[veh_id].append(rq_id)
@@ -255,12 +257,14 @@ class MATSimSocket:
         veh_current_pick_up_requests = {}
         veh_current_drop_off_requests = {}
         for rq_id, veh_id in picking_up_requests.items():
+            rq_id = self._from_matsim_to_fleetpy_rid(rq_id)
             veh_id = self.matsim_to_fleetpy_vid[veh_id]
             try:
                 veh_current_pick_up_requests[veh_id].append(rq_id)
             except KeyError:
                 veh_current_pick_up_requests[veh_id] = [rq_id]
         for rq_id, veh_id in dropping_off_requests.items():
+            rq_id = self._from_matsim_to_fleetpy_rid(rq_id)
             veh_id = self.matsim_to_fleetpy_vid[veh_id]
             try:
                 veh_current_drop_off_requests[veh_id].append(rq_id)
@@ -297,9 +301,13 @@ class MATSimSocket:
         list_requests = response_obj["submitted"] # list of dicts
         print(" -> number of new requests: ", len(list_requests))
         for rq_entry in list_requests:
-            rq_info_dict = {G_RQ_ID: self._from_matsim_to_fleetpy_rid(rq_entry["id"]), # TODO convert to int
-                            G_RQ_ORIGIN: self.from_matsim_to_fleetpy_position(int(rq_entry["originLink"]))[0], 
-                            G_RQ_DESTINATION: self.from_matsim_to_fleetpy_position(int(rq_entry["destinationLink"]))[0], 
+            org_pos = self.from_matsim_to_fleetpy_position(int(rq_entry["originLink"]))
+            org_str = f"{org_pos[0]};{org_pos[1]};{org_pos[2]}"
+            dest_pos = self.from_matsim_to_fleetpy_position(int(rq_entry["destinationLink"]))
+            dest_str = f"{dest_pos[0]};{dest_pos[1]};{dest_pos[2]}"
+            rq_info_dict = {G_RQ_ID: self._from_matsim_to_fleetpy_rid(rq_entry["id"]),
+                            G_RQ_ORIGIN: org_str, 
+                            G_RQ_DESTINATION: dest_str, 
                             G_RQ_TIME: new_sim_time,
                             G_RQ_EPT: int(rq_entry["earliestPickupTime"]), # TODO optional
                             G_RQ_LPT: int(rq_entry["latestPickupTime"]), # TODO optional
@@ -384,7 +392,7 @@ class MATSimSocket:
         """
         if remaining_time is None:
             fp_edge = self.matsim_edge_to_fp_edge[int(matsim_link)]
-            return (fp_edge[0], None, None)
+            return (fp_edge[0], fp_edge[1], 0)  # at the beginning of the edge
         else:
             #print("WARNING MATSimSocket: remaining_time is not None, but not implemented yet")
             fp_edge = self.matsim_edge_to_fp_edge[int(matsim_link)]
@@ -400,6 +408,7 @@ class MATSimSocket:
         """
         # TODO think about this
         if fleetpy_position[-1] is None:
+            LOG.warning("fleetpy position is on node, assuming arbitrary outgoing edge")
             any_target = list(self.fp_edge_to_matsim_edge[fleetpy_position[0]].keys())[0]
             matsim_edge = self.fp_edge_to_matsim_edge[fleetpy_position[0]][any_target]
             return matsim_edge

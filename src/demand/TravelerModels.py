@@ -668,6 +668,19 @@ class SlaveRequest(RequestBase):
     def choose_offer(self, scenario_parameters, simulation_time):
         # method is not used
         raise AssertionError(f"Request class {self.type} cannot be used for choice decisions!")
+    
+    def set_chosen_offer(self, simulation_time):
+        """request selects the available offer (if any)
+        -> for MATSim coupling (travelers dont give feedback if they accepted an offer or not (they always do in MATSim but might choose differently in next iteration))"""
+        if len(self.offer) == 0:
+            return None
+        if len(self.offer) > 1:
+            raise NotImplementedError("More than one offer?")
+        op_id = list(self.offer.keys())[0]
+        if self.offer[op_id].service_declined():
+            return -1
+        else:
+            return op_id
 
     def user_boards_vehicle(self, simulation_time, op_id, vid, pu_pos, t_access):
         #LOG.info(f"user boards vehicle: {self.rid} | {self.sub_rid_struct} | {self.offer}")

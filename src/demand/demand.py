@@ -326,6 +326,7 @@ class SlaveDemand(Demand):
             rq_obj.set_direct_route_travel_infos(routing_engine)
         # use rid-struct as key
         self.rq_db[rq_obj.get_rid_struct()] = rq_obj
+        self.undecided_rq[rq_obj.get_rid_struct()] = rq_obj
         return rq_obj
 
     def add_parcel_request(self, rq_info_dict, offer_id, routing_engine, sim_time):
