@@ -142,6 +142,7 @@ class MATSimSocket:
                 
                 if self._simulation_terminated:
                     stay_online = False
+                    await_response = False
                     
         self.socket.close()
         self.context.term()

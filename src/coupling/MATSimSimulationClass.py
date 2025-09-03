@@ -238,7 +238,7 @@ class MATSimSimulationClass(FleetSimulationBase):
         self.record_stats()
         self.demand.record_remaining_users()
 
-        self.evaluate()
+        #self.evaluate()    # TODO standard eval not working because of missing veh_type definitions
         
     def get_current_assignments(self, sim_time):
         """
