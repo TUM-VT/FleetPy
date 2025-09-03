@@ -54,15 +54,19 @@ class NetworkBasicCpp(NetworkBasic):
         self.cpp_router = PyNetwork(nodes_f.encode(), edges_f.encode())
         super().loadNetwork(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
 
-    def load_tt_file(self, scenario_time):
+    def load_tt_file(self, scenario_time, ext_path=None):
         """
         loads new travel time files for scenario_time
         """
         super().load_tt_file(scenario_time)
-        if self._tt_infos_from_folder:
-            f = self.travel_time_file_infos[scenario_time]
-            tt_file = os.path.join(f, "edges_td_att.csv")
+        if ext_path is not None:
+            tt_file = ext_path
             self.cpp_router.updateEdgeTravelTimes(tt_file.encode())
+        else:
+            if self._tt_infos_from_folder:
+                f = self.travel_time_file_infos[scenario_time]
+                tt_file = os.path.join(f, "edges_td_att.csv")
+                self.cpp_router.updateEdgeTravelTimes(tt_file.encode())
 
     def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None):
         """

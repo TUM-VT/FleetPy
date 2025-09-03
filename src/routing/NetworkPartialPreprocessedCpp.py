@@ -114,13 +114,16 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
                 return True
         return False
 
-    def load_tt_file(self, scenario_time):
+    def load_tt_file(self, scenario_time, ext_path=None):
         """
         loads new travel time files for scenario_time
         """
         super().load_tt_file(scenario_time)
-        if self._tt_infos_from_folder:
-            self._load_travel_info_tables(self.network_name_dir, scenario_time=scenario_time)
+        if ext_path is not None:
+            LOG.warning("loading travel time file from external path not implemented for NetworkPartialPreprocessed -> no processing done")
+        else:
+            if self._tt_infos_from_folder:
+                self._load_travel_info_tables(self.network_name_dir, scenario_time=scenario_time)
             
     def _return_node_to_node_travel_costs_1to1(self, origin_node, destination_node):
         s = None

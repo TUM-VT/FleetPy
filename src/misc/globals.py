@@ -316,6 +316,9 @@ G_AIMSUN_VEH_TYPE_NAME = "aimsun_vehicle_type_name"
 G_SUMO_STAT_INT = "sumo_statistics_interval"    # interval in which new network statistics are gathered and sent to FleetPy to updated network (if not given, no statistics are gathered)
 G_SUMO_SIM_TIME_OFFSET = "sumo_sim_time_offset" # offset between fleetpy and sumo simulation time (fleetpy simtime = sumo simtim + offset; if not given, 0)
 
+# matsim api
+G_MATSIM_STAT_INT = "matsim_statistics_interval"    # interval in which new network statistics are gathered and sent to FleetPy to updated network (if not given, no statistics are gathered)
+
 # RPP fleetcontrol
 G_OP_PA_ASSTH = "op_parcel_assignment_threshold"
 G_OP_PA_OBASS = "op_parcel_passenger_ob_assignment"

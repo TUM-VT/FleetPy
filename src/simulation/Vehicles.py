@@ -863,7 +863,7 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                     raise_error_msg()
                 next_planned_pos = self.assigned_route[1].destination_pos
                 if next_planned_pos != veh_pos:
-                    raise_error_msg()
+                    LOG.warning(f"boarding/drop off but not at next planned pos? {self} | {veh_pos} | {next_planned_pos}")
                 self.update_vehicle_position(next_planned_pos, sim_time)
                 done_VRL = self.end_current_leg(sim_time)[1]
                 if type(done_VRL) == dict and len(done_VRL) == 0:

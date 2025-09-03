@@ -235,7 +235,7 @@ class MATSimSimulationClass(FleetSimulationBase):
 
         # save final state, record remaining travelers and vehicle tasks
         self.save_final_state()
-        self.record_remaining_assignments()
+        self.record_stats()
         self.demand.record_remaining_users()
 
         self.evaluate()

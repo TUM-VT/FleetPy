@@ -184,11 +184,13 @@ class NetworkBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def load_tt_file(self, scenario_time):
+    def load_tt_file(self, scenario_time, ext_path=None):
         """Loads new edge travel times from a file
 
         :param scenario_time: applying travel times for a certain scenario at a given time in the scenario
         :type scenario_time: str
+        :param ext_path: if given, the file will be loaded from this path instead of the network directory
+        :type ext_path: str
         """
         pass
 

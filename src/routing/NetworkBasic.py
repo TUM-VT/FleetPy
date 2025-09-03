@@ -262,20 +262,29 @@ class NetworkBasic(NetworkBase):
                 self.update_network(sorted_tts[-1])
                 return
 
-    def load_tt_file(self, scenario_time):
+    def load_tt_file(self, scenario_time, ext_path=None):
         """
         loads new travel time files for scenario_time
+        :param ext_path: if given, the file will be loaded from this path instead of the network directory
+        :type ext_path: str
         """
         self._reset_internal_attributes_after_travel_time_update()
-        f = self.travel_time_file_infos[scenario_time]
-        if self._tt_infos_from_folder:
-            tt_file = os.path.join(f, "edges_td_att.csv")
+        if ext_path is not None:
+            tt_file = ext_path
             tmp_df = pd.read_csv(tt_file)
             tmp_df.set_index(["from_node","to_node"], inplace=True)
             for edge_index_tuple, new_tt in tmp_df["edge_tt"].items():
                 self._set_edge_tt(edge_index_tuple[0], edge_index_tuple[1], new_tt)
         else:
-            self._current_tt_factor = f
+            f = self.travel_time_file_infos[scenario_time]
+            if self._tt_infos_from_folder:
+                tt_file = os.path.join(f, "edges_td_att.csv")
+                tmp_df = pd.read_csv(tt_file)
+                tmp_df.set_index(["from_node","to_node"], inplace=True)
+                for edge_index_tuple, new_tt in tmp_df["edge_tt"].items():
+                    self._set_edge_tt(edge_index_tuple[0], edge_index_tuple[1], new_tt)
+            else:
+                self._current_tt_factor = f
 
     def _set_edge_tt(self, o_node_index, d_node_index, new_travel_time):
         o_node = self.nodes[o_node_index]

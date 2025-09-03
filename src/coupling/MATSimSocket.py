@@ -67,12 +67,20 @@ class MATSimSocket:
         self.fs_obj = MATSimSimulationClass(scenario_parameters)
         self.dir_names = self.fs_obj.dir_names
         
+        self._network_update_interval = scenario_parameters.get(G_MATSIM_STAT_INT, None)
+        if self._network_update_interval is not None:
+            self._network_update_interval = int(self._network_update_interval)
+        self._last_network_update_time = None
+        self._stored_matsim_response = None # need to store updated state response if network update is requested
+        
         # create communication log
         self._output_dir = self.fs_obj.dir_names[G_DIR_OUTPUT]
         self.log_f = os.path.join(self._output_dir, "00_socket_com.txt")
         self.last_stat_report_time = datetime.datetime.now()
         with open(self.log_f, "w") as fh_touch:
             fh_touch.write(f"{self.last_stat_report_time}: Opening socket communication ...\n")
+            
+        self._simulation_terminated = False
                 
     def log_com(self, msg):
         with open(self.log_f, "a") as fhout:
@@ -132,22 +140,14 @@ class MATSimSocket:
                 #print("RECEIVED:", response_obj)
                 self._treat_matsim_response(response_obj)
                 
-                # c_stream_msg = byte_stream_msg.decode(ENCODING)
-                # if "\n" in c_stream_msg:
-                #     tmp = c_stream_msg.split("\n")
-                #     full_msg = current_msg + tmp[0]
-                #     current_msg = tmp[1]
-                #     if LOG_COMMUNICATION:
-                #         prt_str = f"full_msg:{full_msg}\ncurrent_msg:{current_msg}\n" + "-"*20 + "\n"
-                #         self.log_com(prt_str)
-                # else:
-                #     full_msg = None
-                #     current_msg += c_stream_msg
-                # # full_msg can be longer than msg-len!!!
-                # if full_msg is not None:
-                #     # full message received
-                #     response_obj = json.loads(full_msg)
-                #     self._treat_matsim_response(response_obj)
+                if self._simulation_terminated:
+                    stay_online = False
+                    
+        self.socket.close()
+        self.context.term()
+        
+        print(" -> Socket closed")
+        LOG.info("Socket closed")        
                     
     def _treat_matsim_response(self, response_obj):
         """
@@ -157,26 +157,27 @@ class MATSimSocket:
         if response_obj["@message"] == "iteration":
             self._new_iteration(response_obj)
         elif response_obj["@message"] == "state":
+            new_sim_time = response_obj["time"]
+            if self._network_update_interval is not None:
+                if (self._last_network_update_time is None) or (new_sim_time - self._last_network_update_time >= self._network_update_interval):
+                    LOG.info(f"querry travel time updates at {new_sim_time}")
+                    self._last_network_update_time = new_sim_time
+                    tt_update_request = {"@message": "travel_time_query", "links": []} # empty list means all links (maybe TODO in the future)
+                    self._stored_matsim_response = response_obj
+                    self.format_object_and_send_msg(tt_update_request)
+                    return
             self._new_state_update(response_obj)
-        elif response_obj["@message"] == "traveltimes_update":
-            self._new_edge_traveltimes(response_obj)
+        elif response_obj["@message"] == "travel_time_response":
+            self._new_edge_traveltimes(response_obj, self._last_network_update_time)
+            if self._stored_matsim_response is not None:
+                self._new_state_update(self._stored_matsim_response)
+                self._stored_matsim_response = None
         elif response_obj["@message"] == "finalization":
             self._end_simulation(response_obj)
-        elif response_obj["@message"] == "error":
-            self._handle_error(response_obj)
-            
-        # if response_obj["type"] == "start_simulation":
-        #     self._start_simulation(response_obj)
-        # elif response_obj["type"] == "new_iteration":
-        #     self._new_iteration(response_obj)
-        # elif response_obj["type"] == "new_time_step":
-        #     self._new_time_step(response_obj)
-        # elif response_obj["type"] == "new_edge_traveltimes":
-        #     self._new_edge_traveltimes(response_obj)
-        # elif response_obj["type"] == "end_simulation":
-        #     self._end_simulation(response_obj)
-        # elif response_obj["type"] == "error":
+        # elif response_obj["@message"] == "error":
         #     self._handle_error(response_obj)
+        else:
+            raise KeyError(f"Unknown message type {response_obj['@message']}!")
 
     def _start_simulation(self, response_obj):
         list_vehicle_attributes = response_obj["vehicle_attributes"]
@@ -185,6 +186,15 @@ class MATSimSocket:
             
         response = {"type": "start_simulation", "status": 0}
         self.format_object_and_send_msg(response)
+        
+    def _end_simulation(self, response_obj):
+        """
+        Handle the end of the simulation.
+        """
+        print(" -> Simulation ended")
+        LOG.info("Simulation ended")
+        self.fs_obj.terminate()
+        self._simulation_terminated = True
         
     def _initialize_vehicles(self, list_vehicle_attributes):
         self.matsim_to_fleetpy_vid = {}
@@ -392,7 +402,7 @@ class MATSimSocket:
         """
         if remaining_time is None:
             fp_edge = self.matsim_edge_to_fp_edge[int(matsim_link)]
-            return (fp_edge[0], fp_edge[1], 0)  # at the beginning of the edge
+            return (fp_edge[0], fp_edge[1], 1.0)  # at the end of the edge
         else:
             #print("WARNING MATSimSocket: remaining_time is not None, but not implemented yet")
             fp_edge = self.matsim_edge_to_fp_edge[int(matsim_link)]
@@ -433,6 +443,23 @@ class MATSimSocket:
             matsim_edge = self.fp_edge_to_matsim_edge[fleetpy_route[i]][fleetpy_route[i + 1]]
             matsim_route.append(matsim_edge)
         return matsim_route
+    
+    def _new_edge_traveltimes(self, response_obj, sim_time):
+        """
+        Update edge travel times based on MATSim response.
+        """
+        list_link_times = response_obj["travelTimes"]
+        edge_tt_df_list = []
+        for matsim_link, travel_time in list_link_times.items():
+            fp_edge = self.matsim_edge_to_fp_edge[int(matsim_link)]
+            edge_tt_df_list.append({
+                "from_node" : fp_edge[0],
+                "to_node" : fp_edge[1],
+                "edge_tt" : travel_time
+            })
+        tt_f_p = os.path.join(self._output_dir, f"matsim_edge_traveltimes_{int(sim_time)}.csv")
+        pd.DataFrame(edge_tt_df_list).to_csv(tt_f_p, index=False)
+        self.fs_obj.routing_engine.load_tt_file(sim_time, ext_path=tt_f_p)   
     
     
 if __name__ == "__main__":
