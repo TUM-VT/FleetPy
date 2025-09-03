@@ -652,10 +652,12 @@ class Trainer:
 
     def _print_batch_stats(self, batch_idx, loss, logits, probs, target, pred_labels):
         """Print detailed batch statistics"""
+        if batch_idx % 10 != 0:
+            return
         target_dist = torch.bincount(target.long())
         pred_dist = torch.bincount(pred_labels.long())
-        # logger.debug(f"\r[Batch {batch_idx:3d}] Loss: {loss:.4f} | "
-        #       f"Class dist - Target: {target_dist.tolist()} Pred: {pred_dist.tolist()}")
+        logger.debug(f"\r[Batch {batch_idx:3d}] Loss: {loss:.4f} | "
+              f"Class dist - Target: {target_dist.tolist()} Pred: {pred_dist.tolist()}")
 
     def _create_loader(self, data, mask, batch_size, shuffle):
         """Create data loader with configurable sampling strategy"""

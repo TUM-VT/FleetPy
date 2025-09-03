@@ -26,6 +26,7 @@ class DataProcessingConfig:
     VEHICLE_REQUEST_GRAPH = 'vehicle_request_graph'
     LABEL = 'opt_assign'
     INIT_LABEL = 'init_assign'
+    LABEL_THRESHOLD = 0.5
 
     # Simulation parameters
     sim_start: int = 0  # seconds

@@ -1,8 +1,13 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
+from data_processing.config import DataProcessingConfig as cfg
 
 import torch
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def get_edge_predictions(data, graph_idx, model, device):
@@ -33,7 +38,7 @@ def get_edge_predictions(data, graph_idx, model, device):
             logits = model(x_dict, edge_index_dict, edge_attr_dict)
             return torch.sigmoid(logits).cpu().numpy()
         except Exception as e:
-            print(f"Error during prediction: {str(e)}")
+            logger.error(f"Error during prediction: {str(e)}")
             return None
 
 
@@ -74,7 +79,8 @@ def visualize_graph(data, graph_idx=0, model=None, device=None, subset_nodes=Non
     if subset_nodes is not None:
         for node_type in connected_nodes:
             if node_type in subset_nodes:
-                connected_nodes[node_type] = set(subset_nodes[node_type]) & connected_nodes[node_type]
+                connected_nodes[node_type] = set(
+                    subset_nodes[node_type]) & connected_nodes[node_type]
 
     # Add only connected nodes
     node_colors = []
@@ -120,11 +126,11 @@ def visualize_graph(data, graph_idx=0, model=None, device=None, subset_nodes=Non
 
             # Add ground truth
             if edge_y is not None and edge_y[i].item() == 1:
-                print(f"Adding true edge: {src} -> {dst}")
+                logger.info(f"Adding true edge: {src} -> {dst}")
                 true_edges.append((src, dst))
                 true_colors.append('#FF9999')  # Light red for assignments
                 true_styles.append('solid')
-            
+
             # Add predictions
             if predictions is not None and edge_count < len(predictions):
                 prob = predictions[edge_count][0]
@@ -132,8 +138,10 @@ def visualize_graph(data, graph_idx=0, model=None, device=None, subset_nodes=Non
                 pred_labels[(src, dst)] = f'{prob:.2f}'
                 edge_count += 1
 
-    print(f"Visualizing graph {graph_idx} with {len(G.nodes)} nodes and {len(G.edges)} edges.")
-    print(f"True edges: {len(true_edges)}, Predicted edges: {len(pred_edges)}")
+    logging.info(
+        f"Visualizing graph {graph_idx} with {len(G.nodes)} nodes and {len(G.edges)} edges.")
+    logging.info(
+        f"True edges: {len(true_edges)}, Predicted edges: {len(pred_edges)}")
 
     # Create plot
     plt.figure(figsize=(12, 8))
@@ -162,8 +170,9 @@ def visualize_graph(data, graph_idx=0, model=None, device=None, subset_nodes=Non
             # Offset the label position
             mid_x = (pos_u[0] + pos_v[0]) / 2 + perpx * edge_offset
             mid_y = (pos_u[1] + pos_v[1]) / 2 + perpy * edge_offset
-            if edge in pred_labels:
-                plt.annotate(pred_labels[edge],
+            prob = float(pred_labels[edge]) if edge in pred_labels else 0.0
+            if prob > cfg.LABEL_THRESHOLD:
+                plt.annotate(prob,
                              (mid_x, mid_y),
                              bbox=dict(facecolor='white',
                                        edgecolor='none', alpha=0.7),
@@ -175,7 +184,7 @@ def visualize_graph(data, graph_idx=0, model=None, device=None, subset_nodes=Non
         for edge in pred_edges:
             u, v = edge
             prob = float(pred_labels[edge]) if edge in pred_labels else 0.0
-            if prob > 0.5:  # Change threshold as needed
+            if prob > cfg.LABEL_THRESHOLD:  # Change threshold as needed
                 pos_u, pos_v = np.array(pos[u]), np.array(pos[v])
                 dx = pos_v[0] - pos_u[0]
                 dy = pos_v[1] - pos_u[1]

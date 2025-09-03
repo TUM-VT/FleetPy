@@ -326,7 +326,10 @@ class GNNDataLoader:
                 f"Data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dictionary'}")
 
             logger.debug("\nTransforming features...")
-            data = self._transform_features(data)
+            # Determine if this scenario is part of training by checking if stats exist
+            stats_exist = len(os.listdir(self.stats_dir)) > 0
+            is_training = not stats_exist
+            data = self._transform_features(data, is_training=is_training)
             logger.debug("Feature transformation completed")
 
             return self._transform_and_save_data(data, scenario_name)
@@ -337,17 +340,29 @@ class GNNDataLoader:
             traceback.print_exc()
             raise
 
-    def _transform_features(self, data: Dict) -> Dict:
-        """Transform categorical features to one-hot encoded features."""
+    # Store one-hot columns for each feature type after first transform (training)
+    _onehot_columns = {}
+
+    def _transform_features(self, data: Dict, is_training: bool = False) -> Dict:
+        """Transform categorical features to one-hot encoded features, ensuring consistent columns."""
         for feature_type, categories in self.config.categorical_features.items():
             if feature_type in data and not data[feature_type].empty:
                 if categories:
                     categories = [cat for cat in categories if cat in data[feature_type].columns]
-                    data[feature_type] = pd.get_dummies(
-                        data=data[feature_type],
-                        columns=categories,
-                        dtype=float
-                    )
+                    # During training, record one-hot columns
+                    if is_training or feature_type not in self._onehot_columns:
+                        temp = pd.get_dummies(data[feature_type], columns=categories, dtype=float)
+                        self._onehot_columns[feature_type] = temp.columns.tolist()
+                        data[feature_type] = temp
+                    else:
+                        # For val/test, enforce same columns as training
+                        temp = pd.get_dummies(data[feature_type], columns=categories, dtype=float)
+                        for col in self._onehot_columns[feature_type]:
+                            if col not in temp.columns:
+                                temp[col] = 0.0
+                        # Reorder columns to match training
+                        temp = temp[self._onehot_columns[feature_type]]
+                        data[feature_type] = temp
         return data
 
     def _transform_and_save_data(self, data: Dict, scenario_name: str) -> List[HeteroData]:
@@ -408,7 +423,7 @@ class GNNDataLoader:
 
                     logger.debug('Normalization sample:')
                     logger.debug(data[feature_key].head())
-                    data[feature_key].to_csv(f"normalized_{feature_key}.csv", index=False)
+                    data[feature_key].to_csv(f"{scenario_name}_{feature_key}.csv", index=False)
 
         except FileNotFoundError:
             logger.warning("Warning: Normalization statistics not found. Proceeding without normalization.")
