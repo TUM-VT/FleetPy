@@ -360,7 +360,13 @@ class SUMOFleetPyServer():
             arrivedVehicles_internal = self._update_routes_and_add_vehicles(sim_time)
             # 3) sumo time step
             LOG.info(f"---- Traci Step ----- {sim_time}")
-            traci.simulationStep()
+            try:
+                traci.simulationStep()
+            except Exception as e:
+                print("Crash at simtime:", traci.simulation.getTime())
+                raise
+
+
             
             #print(f"---- Traci Step ----- {sim_time}")
 
