@@ -140,7 +140,7 @@ class SUMOFleetPyServer():
 
         
     def setup_hybrid_router(self):
-        if self.fp_sim_env.scenario_parameters.get("hybrid_router") == True:
+        if self.fp_sim_env.scenario_parameters.get("hybrid_router") == 1:
             
             print("Setting up hybrid router")
             breakpoint()
@@ -626,7 +626,7 @@ class SUMOFleetPyServer():
         return sim_pos_dict,res_list
 
     def _get_hybrid_router_tt(self,tt_df,sim_time):
-        if self.fp_sim_env.scenario_parameters.get("hybrid_router") == False:
+        if self.fp_sim_env.scenario_parameters.get("hybrid_router") == 0:
             return tt_df
         
         sim_hour = int(sim_time/3600)

@@ -75,8 +75,8 @@ class SimulationRunner:
             sc_df['op_routing_mode'] = [row['op_routing_mode']]
             sc_df['random_seed'] = [row['random_seed']]
             sc_df["rerouting_sc"] = [row["rerouting_sc"]]
-            sc_df["sumo_sim"] = [bool(row["sumo_sim"])]
-            sc_df["hybrid_router"] = [bool( row["hybrid_router"])]
+            sc_df["sumo_sim"] = [int(row["sumo_sim"])]
+            sc_df["hybrid_router"] = [int(row["hybrid_router"])]
             sc_df["p_opt"] = [float(row["p_opt"])]
 
             self.sc_config_file_dict.update({sc_index:sc_df.squeeze()})
