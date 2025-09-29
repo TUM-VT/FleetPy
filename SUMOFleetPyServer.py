@@ -370,10 +370,21 @@ class SUMOFleetPyServer():
                 print("Vehicles in Simulation:", len(traci.vehicle.getIDList()))
                 print("Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()))
                 print("Pending Vehicles:", len(traci.simulation.getPendingVehicles()))
+                veh_speeds = []
+                for veh_id in traci.vehicle.getIDList():
+                    veh_speeds.append(traci.vehicle.getSpeed(veh_id))
+                print("Average Speed of Vehicles in Simulation:", np.mean(veh_speeds))
                 raise
 
 
-            
+            # 4) get current vehicle positions and update travel time statistics (if needed)
+            if sim_time%1==0 and self.g_update_fleetsim_traveltimes==True:
+                sim_pos_dict,res_list = self._get_current_edge_tt(sim_time=sim_time,sim_pos_dict=sim_pos_dict,res_list=res_list)
+
+            # 5) send new travel times to fleetsim
+            if (sim_time%self.g_update_travel_statistics_time_step==0) and self.g_update_fleetsim_traveltimes==True:
+                time_df = self._process_tt_data(res_list=res_list,sim_time=sim_time)
+                time_update_dict = dict(zip(zip(list(time_df["from_node"]),list(time_df["to_node"])),zip(list(time_df["edge_tt"]),list(time_df["edge_var"]))))
             #print(f"---- Traci Step ----- {sim_time}")
 
             # 4) get current vehicle positions and update travel time statistics (if needed)
