@@ -194,6 +194,7 @@ class SimulationVehicle:
             self.cl_driven_distance = 0.0
             self.cl_driven_route = []
             ca = self.assigned_route[0]
+            ca.started = True
             self.status = ca.status
             if self.pos != ca.destination_pos:
                 if ca.route and self.pos[0] == ca.route[0]:
@@ -708,6 +709,8 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                         LOG.error("new additional infos: {}".format(list_route_legs[0].additional_str_infos()))
                         raise AssertionError("assign_vehicle_plan(): Trying to assign new VRLs instead of a locked VRL.")
             else:
+                if list_route_legs and list_route_legs[0] == self.assigned_route[0]:
+                    list_route_legs[0].started = self.assigned_route[0].started
                 start_flag = False
 
         self.assigned_route = list_route_legs
@@ -913,6 +916,9 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                     done_VRLs.append(done_VRL)
                 if len(self.assigned_route) > 0:
                     LOG.debug(f" -> start next leg because not driving anymore")
+                    if self.pos != self.assigned_route[0].destination_pos:
+                        LOG.warning(f"boarding but not at planned pos? {veh_pos} <-> {self.assigned_route[0].destination_pos} | {self}")
+                        self.pos = self.assigned_route[0].destination_pos
                     self.start_next_leg(sim_time)
                     if (len(current_pick_up) != 0 or len(current_drop_off) != 0):
                         LOG.info(f"current boarding process! pu {current_pick_up} | do {current_drop_off}")
@@ -947,7 +953,7 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
             for i, leg in enumerate(self.assigned_route):
                 if leg.status in G_DRIVING_STATUS:
                     continue
-                if i == 0 and leg.status not in G_DRIVING_STATUS: # skip currently ongoing stop tasks
+                if i == 0 and leg.status not in G_DRIVING_STATUS and leg.started: # skip currently ongoing stop tasks
                     LOG.debug(f"skip current ongoing stop leg : {leg}")
                     continue
                 assignment_list.append({

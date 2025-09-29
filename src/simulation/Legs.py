@@ -37,6 +37,7 @@ class VehicleRouteLeg:
         self.duration = duration
         self.route = route
         self.locked = locked
+        self.started = False
         if duration is not None:
             try:
                 x = int(duration)

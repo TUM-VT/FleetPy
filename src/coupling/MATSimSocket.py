@@ -56,6 +56,13 @@ class MATSimSocket:
         self.scenario_parameters: dict = scenario_parameters
         
         self.matsim_edge_to_fp_edge, self.fp_edge_to_matsim_edge = self._create_fleetpy_network(scenario_parameters["matsim_network_path"])
+        # check unique mapping
+        self._non_unique_matsim_links = []
+        for matsim_link, fp_edge in self.matsim_edge_to_fp_edge.items():
+            rev_matsim_link = self.fp_edge_to_matsim_edge[fp_edge[0]][fp_edge[1]]
+            if rev_matsim_link != matsim_link:
+                LOG.warning(f"Mapping between MATSim and FleetPy edges is not unique! {matsim_link} -> {fp_edge} -> {rev_matsim_link}")
+                self._non_unique_matsim_links.append(matsim_link)
         
         self.matsim_to_fleetpy_vid = {}
         self.fleetpy_to_matsim_vid = {}
@@ -316,6 +323,9 @@ class MATSimSocket:
             org_str = f"{org_pos[0]};{org_pos[1]};{org_pos[2]}"
             dest_pos = self.from_matsim_to_fleetpy_position(int(rq_entry["destinationLink"]))
             dest_str = f"{dest_pos[0]};{dest_pos[1]};{dest_pos[2]}"
+            if int(rq_entry["originLink"]) in self._non_unique_matsim_links or int(rq_entry["destinationLink"]) in self._non_unique_matsim_links:
+                LOG.warning(f"Request {rq_entry['id']} has origin or destination on non-uniquely mapped link! -> set for automatic decline")
+                dest_str = org_str  # just to have a valid destination, will be declined anyway
             rq_info_dict = {G_RQ_ID: self._from_matsim_to_fleetpy_rid(rq_entry["id"]),
                             G_RQ_ORIGIN: org_str, 
                             G_RQ_DESTINATION: dest_str, 
@@ -467,7 +477,7 @@ if __name__ == "__main__":
     # Example usage of MATSimSocket class
     scenario_parameters = {}
     host = "localhost"
-    port = 9001
+    port = 1234
     
     from src.misc.config import ConstantConfig, ScenarioConfig
     
