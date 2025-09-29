@@ -375,7 +375,7 @@ class SUMOFleetPyServer():
                     print("Teleporting Vehicle:", veh_id, traci.vehicle.getRoute(veh_id), "at: ",traci.vehicle.getRoadID(veh_id))
                 raise(e)
             if sim_time == 21680:
-                if "pv_5_6477_0" in traci.vehicle.getIDList():
+                if "pv_5_6477_0" in traci.vehicle.getIDList() or "pv_5_6477_0" in traci.vehicle.getTeleportingIDList() or "pv_5_6477_0" in traci.simulation.getPendingVehicles():
                     traci.vehicle.remove("pv_5_6477_0")
                     print("Removed pv_5_6477_0 at t=21680 due to SUMO bug")
             # 4) get current vehicle positions and update travel time statistics (if needed)
