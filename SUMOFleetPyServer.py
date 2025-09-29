@@ -384,8 +384,7 @@ class SUMOFleetPyServer():
                 except Exception as e:
                     print("Average Speed of Vehicles in Simulation:", np.mean(veh_speeds))
                     for veh_id in traci.vehicle.getTeleportingIDList():
-                        if not veh_id.startswith("fp_"):
-                            traci.vehicle.remove(veh_id)
+                        traci.vehicle.remove(veh_id)
                     try:
                         traci.simulationStep()
                     except Exception as e:
