@@ -351,7 +351,7 @@ class SUMOFleetPyServer():
                 
             if sim_time % 120 == 0:
                 print("{}: current simtime: {}/{}".format(self.fp_sim_env.scenario_parameters[G_SCENARIO_NAME], sim_time, end_time))
-
+                print("Vehicles in Simulation:", len(traci.vehicle.getIDList()),"Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),"Pending Vehicles:", len(traci.simulation.getPendingVehicles()))
             #if sim_time%60==0:
             #for (op_id, veh_id) in fleetsim.sim_vehicles:
                 #print((op_id, veh_id),fleetsim.sim_vehicles[(op_id, veh_id)])
@@ -366,10 +366,7 @@ class SUMOFleetPyServer():
             try:
                 traci.simulationStep()
             except Exception as e:
-                print("Crash at simtime:", traci.simulation.getTime())
-                print("Vehicles in Simulation:", len(traci.vehicle.getIDList()))
-                print("Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()))
-                print("Pending Vehicles:", len(traci.simulation.getPendingVehicles()))
+                print("Crash at simtime:", traci.simulation.getTime(),"Vehicles in Simulation:", len(traci.vehicle.getIDList()),"Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),"Pending Vehicles:", len(traci.simulation.getPendingVehicles()))
                 veh_speeds = []
                 for veh_id in traci.vehicle.getIDList():
                     veh_speeds.append(traci.vehicle.getSpeed(veh_id))
@@ -377,7 +374,6 @@ class SUMOFleetPyServer():
                 for veh_id in traci.vehicle.getTeleportingIDList():
                     if not veh_id.startswith("fp_"):
                         traci.vehicle.remove(veh_id)
-
                 print("Teleporting Private vehicles removed. Retrying simulation step...")
                 try:
                     traci.simulationStep()
