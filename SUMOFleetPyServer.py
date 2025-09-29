@@ -372,20 +372,8 @@ class SUMOFleetPyServer():
                     veh_speeds.append(traci.vehicle.getSpeed(veh_id))
                 print("Average Speed of Vehicles in Simulation:", np.mean(veh_speeds))
                 for veh_id in traci.vehicle.getTeleportingIDList():
-                    if not veh_id.startswith("fp_"):
-                        traci.vehicle.remove(veh_id)
-                print("Teleporting Private vehicles removed. Retrying simulation step...")
-                try:
-                    traci.simulationStep()
-                except Exception as e:
-                    print("Average Speed of Vehicles in Simulation:", np.mean(veh_speeds))
-                    for veh_id in traci.vehicle.getTeleportingIDList():
-                        traci.vehicle.remove(veh_id)
-                    try:
-                        traci.simulationStep()
-                    except Exception as e:
-                        print("Fatal Error: Simulation crashed twice in a row. Most likely a vehicle is teleporting infinitely. Please check the network connectivity of the following junctions:")
-
+                    print("Teleporting Vehicle:", veh_id, traci.vehicle.getRoute(veh_id), traci.vehicle.getRoadID(veh_id))
+                raise(e)
             # 4) get current vehicle positions and update travel time statistics (if needed)
             if sim_time%1==0 and self.g_update_fleetsim_traveltimes==True:
                 sim_pos_dict,res_list = self._get_current_edge_tt(sim_time=sim_time,sim_pos_dict=sim_pos_dict,res_list=res_list)
