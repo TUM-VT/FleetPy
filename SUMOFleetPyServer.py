@@ -367,6 +367,9 @@ class SUMOFleetPyServer():
                 traci.simulationStep()
             except Exception as e:
                 print("Crash at simtime:", traci.simulation.getTime())
+                print("Vehicles in Simulation:", len(traci.vehicle.getIDList()))
+                print("Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()))
+                print("Pending Vehicles:", len(traci.simulation.getPendingVehicles()))
                 raise
 
 
