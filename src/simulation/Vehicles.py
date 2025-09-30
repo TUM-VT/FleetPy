@@ -879,7 +879,7 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                     raise_error_msg()
                 planned_pick_up = [rq.get_rid() for rq in self.assigned_route[0].rq_dict.get(1, [])]
                 planned_drop_off = [rq.get_rid() for rq in self.assigned_route[0].rq_dict.get(-1, [])]
-                if tuple(sorted(planned_pick_up)) != tuple(sorted(rids_picked_up)) or tuple(sorted(planned_drop_off)) != tuple(sorted(planned_drop_off)):
+                if tuple(sorted(planned_pick_up)) != tuple(sorted(current_pick_up)) or tuple(sorted(planned_drop_off)) != tuple(sorted(planned_drop_off)): # pickups are sent a the end of the boarding process / drop off at the beginning
                     raise_error_msg()
                     
         if status in G_DRIVING_STATUS:
