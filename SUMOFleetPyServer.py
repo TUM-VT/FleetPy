@@ -363,6 +363,9 @@ class SUMOFleetPyServer():
             arrivedVehicles_internal = self._update_routes_and_add_vehicles(sim_time)
             # 3) sumo time step
             LOG.info(f"---- Traci Step ----- {sim_time}")
+            for veh_id in traci.vehicle.getTeleportingIDList():
+                LOG.info("Teleporting Vehicle:", veh_id, "Route: ", traci.vehicle.getRoute(veh_id), "at: ",traci.vehicle.getRoadID(veh_id), "pos: ", traci.vehicle.getPosition(veh_id))
+                veh_fp_pos = self.fp_sim_env     
             try:
                 traci.simulationStep()
             except Exception as e:
@@ -378,6 +381,8 @@ class SUMOFleetPyServer():
                # if "fp_0_356" in traci.vehicle.getIDList() or "fp_0_356" in traci.vehicle.getTeleportingIDList() or "fp_0_356" in traci.simulation.getPendingVehicles():
                    # traci.vehicle.remove("fp_0_356")
                    # print("Removed fp_0_356 at t=21680 due to SUMO bug")
+
+            """
             # 4) get current vehicle positions and update travel time statistics (if needed)
             if sim_time%1==0 and self.g_update_fleetsim_traveltimes==True:
                 sim_pos_dict,res_list = self._get_current_edge_tt(sim_time=sim_time,sim_pos_dict=sim_pos_dict,res_list=res_list)
@@ -386,8 +391,7 @@ class SUMOFleetPyServer():
             if (sim_time%self.g_update_travel_statistics_time_step==0) and self.g_update_fleetsim_traveltimes==True:
                 time_df = self._process_tt_data(res_list=res_list,sim_time=sim_time)
                 time_update_dict = dict(zip(zip(list(time_df["from_node"]),list(time_df["to_node"])),zip(list(time_df["edge_tt"]),list(time_df["edge_var"]))))
-            #print(f"---- Traci Step ----- {sim_time}")
-
+            """
             # 4) get current vehicle positions and update travel time statistics (if needed)
             if sim_time%1==0 and self.g_update_fleetsim_traveltimes==True:
                 sim_pos_dict,res_list = self._get_current_edge_tt(sim_time=sim_time,sim_pos_dict=sim_pos_dict,res_list=res_list)
