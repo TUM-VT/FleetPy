@@ -368,7 +368,7 @@ class SUMOFleetPyServer():
                 if veh_id.startswith("fp_"):
                     veh_id_fp = self._sumo_v_id_to_fleetpy_v_id(veh_id)
                     print(f"Teleporting SUMO Veh {veh_id} --> FleetPy Veh {veh_id_fp}")
-                    LOG.info(vehicle_to_position_dict)
+                    print(vehicle_to_position_dict.get(veh_id_fp, "not in dict"))
             try:
                 traci.simulationStep()
             except Exception as e:
