@@ -364,9 +364,9 @@ class SUMOFleetPyServer():
             # 3) sumo time step
             LOG.info(f"---- Traci Step ----- {sim_time}")
             for veh_id in traci.vehicle.getTeleportingIDList():
-                LOG.info("Teleporting Vehicle:", veh_id, "Route: ", traci.vehicle.getRoute(veh_id), "at: ",traci.vehicle.getRoadID(veh_id), "pos: ", traci.vehicle.getPosition(veh_id))
+                #LOG.info("Teleporting Vehicle:", veh_id, "Route: ", traci.vehicle.getRoute(veh_id), "at: ",traci.vehicle.getRoadID(veh_id), "pos: ", traci.vehicle.getPosition(veh_id))
                 veh_id_fp = self._sumo_v_id_to_fleetpy_v_id(veh_id)
-                print(f"SUMO Veh {veh_id} --> FleetPy Veh {veh_id_fp} at {vehicle_to_position_dict.get(veh_id_fp)}")
+                print(f"Teleporting SUMO Veh {veh_id} --> FleetPy Veh {veh_id_fp} at {vehicle_to_position_dict.get(veh_id_fp)}")
             try:
                 traci.simulationStep()
             except Exception as e:
