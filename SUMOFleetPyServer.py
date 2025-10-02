@@ -367,7 +367,7 @@ class SUMOFleetPyServer():
             
             # 3) sumo time step
             LOG.info(f"---- Traci Step ----- {sim_time}")
-            if sim_time == 21683:
+            if sim_time == 21682:
                     print("Crash at simtime:", traci.simulation.getTime(),
                     "Vehicles in Simulation:", len(traci.vehicle.getIDList()),
                     "Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),
@@ -395,8 +395,6 @@ class SUMOFleetPyServer():
                         print(traci.vehicle.getLanePosition(veh_id))
                         traci.vehicle.remove(veh_id)
 
-            if sim_time == 21683:
-                breakpoint()
 
             """
             # 4) get current vehicle positions and update travel time statistics (if needed)
