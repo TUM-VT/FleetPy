@@ -368,13 +368,15 @@ class SUMOFleetPyServer():
             # 3) sumo time step
             LOG.info(f"---- Traci Step ----- {sim_time}")
             if sim_time == 21683:
-                    LOG.info("Removal at simtime:", traci.simulation.getTime(),
-                    "Vehicles in Simulation:", len(traci.vehicle.getIDList()),
-                    "Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),
-                    "Pending Vehicles:", len(traci.simulation.getPendingVehicles()),
-                    f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
+                    LOG.info(f"Removal at simtime: {traci.simulation.getTime()}")
+                    LOG.info(f"Vehicles in Teleportation: {traci.vehicle.getTeleportingIDList()}")
+                    LOG.info( f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
+                    LOG.info(f"Vehicle fp_0_356 in SUMO: {traci.vehicle.getRoadID('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}, {traci.vehicle.getLanePosition('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}")
+                    breakpoint()                
                     traci.vehicle.remove("fp_0_356")
                     arrivedVehicles_internal.update({'fp_0_356': 1740})
+            
+            
             try:
                 traci.simulationStep()
             except Exception as e:
