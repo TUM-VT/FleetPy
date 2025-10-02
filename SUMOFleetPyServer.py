@@ -359,6 +359,9 @@ class SUMOFleetPyServer():
             LOG.info(f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
             LOG.info(f"Vehicles Ending Teleportation: {traci.simulation.getEndingTeleportIDList()}")
             LOG.info(f"Vehicles in Teleportation: {traci.vehicle.getTeleportingIDList()}")
+            LOG.info(f"Vehicle fp_0_356 in SUMO: {traci.vehicle.getRoadID('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}")
+            LOG.info("Vehicles on Edge -140737948#2: "+str(traci.edge.getLastStepVehicleIDs("-140737948#2")))
+
             # 3) sumo time step
             LOG.info(f"---- Traci Step ----- {sim_time}")
 
@@ -376,10 +379,6 @@ class SUMOFleetPyServer():
                         veh_id_fp = self._sumo_v_id_to_fleetpy_v_id(veh_id)
                         print(vehicle_to_position_dict.get(veh_id_fp, "not in dict"))
                 raise(e)
-           # if sim_time == 21680:
-               # if "fp_0_356" in traci.vehicle.getIDList() or "fp_0_356" in traci.vehicle.getTeleportingIDList() or "fp_0_356" in traci.simulation.getPendingVehicles():
-                   # traci.vehicle.remove("fp_0_356")
-                   # print("Removed fp_0_356 at t=21680 due to SUMO bug")
 
             """
             # 4) get current vehicle positions and update travel time statistics (if needed)
