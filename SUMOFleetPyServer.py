@@ -352,6 +352,7 @@ class SUMOFleetPyServer():
             if sim_time % 120 == 0:
                 print("{}: current simtime: {}/{}".format(self.fp_sim_env.scenario_parameters[G_SCENARIO_NAME], sim_time, end_time))
                 print("Vehicles in Simulation:", len(traci.vehicle.getIDList()),"Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),"Pending Vehicles:", len(traci.simulation.getPendingVehicles()))
+                
             #if sim_time%60==0:
             #for (op_id, veh_id) in fleetsim.sim_vehicles:
                 #print((op_id, veh_id),fleetsim.sim_vehicles[(op_id, veh_id)])
@@ -361,13 +362,15 @@ class SUMOFleetPyServer():
             
             # 2) check for new routes and finished boarding processes
             arrivedVehicles_internal = self._update_routes_and_add_vehicles(sim_time)
+            LOG.info(f"Arrived Vehicles: {arrivedVehicles_internal}")
+            LOG.info(f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
             # 3) sumo time step
             LOG.info(f"---- Traci Step ----- {sim_time}")
 
             try:
                 traci.simulationStep()
             except Exception as e:
-                print("Crash at simtime:", traci.simulation.getTime(),"Vehicles in Simulation:", len(traci.vehicle.getIDList()),"Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),"Pending Vehicles:", len(traci.simulation.getPendingVehicles()))
+                print("Crash at simtime:", traci.simulation.getTime(),"Vehicles in Simulation:", len(traci.vehicle.getIDList()),"Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),"Pending Vehicles:", len(traci.simulation.getPendingVehicles()),f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
                 veh_speeds = []
                 for veh_id in traci.vehicle.getIDList():
                     veh_speeds.append(traci.vehicle.getSpeed(veh_id))
