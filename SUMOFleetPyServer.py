@@ -351,19 +351,14 @@ class SUMOFleetPyServer():
                 
             if sim_time % 120 == 0:
                 print("{}: current simtime: {}/{}".format(self.fp_sim_env.scenario_parameters[G_SCENARIO_NAME], sim_time, end_time))
-                print("Vehicles in Simulation:", len(traci.vehicle.getIDList()),"Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),"Pending Vehicles:", len(traci.simulation.getPendingVehicles()))
-                
-            #if sim_time%60==0:
-            #for (op_id, veh_id) in fleetsim.sim_vehicles:
-                #print((op_id, veh_id),fleetsim.sim_vehicles[(op_id, veh_id)])
-                #if len(fleetsim.sim_vehicles[(op_id, veh_id)].pax)>0:
-                    # for passenger in fleetsim.sim_vehicles[(op_id, veh_id)].pax:
-                        # print(f"id: {passenger.rid} {passenger.o_node} --> {passenger.d_node}")
-            
+                           
             # 2) check for new routes and finished boarding processes
             arrivedVehicles_internal = self._update_routes_and_add_vehicles(sim_time)
+            LOG.info(f"t={sim_time} Vehicles in Simulation: {len(traci.vehicle.getIDList())}, Vehicles in Teleportation: {len(traci.vehicle.getTeleportingIDList())}, Pending Vehicles: {len(traci.simulation.getPendingVehicles())}")
             LOG.info(f"Arrived Vehicles: {arrivedVehicles_internal}")
             LOG.info(f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
+            LOG.info(f"Vehicles Ending Teleportation: {traci.simulation.getEndingTeleportIDList()}")
+            LOG.info(f"Vehicles in Teleportation: {traci.vehicle.getTeleportingIDList()}")
             # 3) sumo time step
             LOG.info(f"---- Traci Step ----- {sim_time}")
 
@@ -376,9 +371,10 @@ class SUMOFleetPyServer():
                     veh_speeds.append(traci.vehicle.getSpeed(veh_id))
                 print("Average Speed of Vehicles in Simulation:", np.mean(veh_speeds))
                 for veh_id in traci.vehicle.getTeleportingIDList():
-                    print("Teleporting Vehicle:", veh_id, traci.vehicle.getRoute(veh_id), "at: ",traci.vehicle.getRoadID(veh_id))
-                    veh_id_fp = self._sumo_v_id_to_fleetpy_v_id(veh_id)
-                    print(vehicle_to_position_dict.get(veh_id_fp, "not in dict"))
+                    print("Teleporting Vehicle:", veh_id, traci.vehicle.getRoute(veh_id))
+                    if veh_id.startswith("fp_"):
+                        veh_id_fp = self._sumo_v_id_to_fleetpy_v_id(veh_id)
+                        print(vehicle_to_position_dict.get(veh_id_fp, "not in dict"))
                 raise(e)
            # if sim_time == 21680:
                # if "fp_0_356" in traci.vehicle.getIDList() or "fp_0_356" in traci.vehicle.getTeleportingIDList() or "fp_0_356" in traci.simulation.getPendingVehicles():
