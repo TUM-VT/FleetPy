@@ -360,8 +360,10 @@ class SUMOFleetPyServer():
             LOG.info(f"Vehicles Ending Teleportation: {traci.simulation.getEndingTeleportIDList()}")
             LOG.info(f"Vehicles in Teleportation: {traci.vehicle.getTeleportingIDList()}")
             LOG.info(f"Vehicle fp_0_356 in SUMO: {traci.vehicle.getRoadID('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}, {traci.vehicle.getLanePosition('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}")
+            LOG.info(f"Speed of Vehicle fp_0_356 in SUMO: {traci.vehicle.getSpeed('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}")
             LOG.info(f"Vehicle fp_0_356 in FleetPy: {vehicle_to_position_dict.get((0, 356), 'not in dict')}")
             LOG.info("Vehicles on Edge -140737948#2: "+str(traci.edge.getLastStepVehicleIDs("-140737948#2")))
+            LOG.info("Vehicles on Edge -140738047#2: "+str(traci.edge.getLastStepVehicleIDs("-140738047#2")))
 
             # 3) sumo time step
             LOG.info(f"---- Traci Step ----- {sim_time}")
@@ -369,19 +371,35 @@ class SUMOFleetPyServer():
             try:
                 traci.simulationStep()
             except Exception as e:
-                print("Crash at simtime:", traci.simulation.getTime(),"Vehicles in Simulation:", len(traci.vehicle.getIDList()),"Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),"Pending Vehicles:", len(traci.simulation.getPendingVehicles()),f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
-                veh_speeds = []
-                for veh_id in traci.vehicle.getIDList():
-                    veh_speeds.append(traci.vehicle.getSpeed(veh_id))
+                print("Crash at simtime:", traci.simulation.getTime(),
+                    "Vehicles in Simulation:", len(traci.vehicle.getIDList()),
+                    "Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),
+                    "Pending Vehicles:", len(traci.simulation.getPendingVehicles()),
+                    f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
+
+                veh_speeds = [traci.vehicle.getSpeed(veh_id) for veh_id in traci.vehicle.getIDList()]
                 print("Average Speed of Vehicles in Simulation:", np.mean(veh_speeds))
+
                 for veh_id in traci.vehicle.getTeleportingIDList():
                     print("Teleporting Vehicle:", veh_id, traci.vehicle.getRoute(veh_id))
                     if veh_id.startswith("fp_"):
                         veh_id_fp = self._sumo_v_id_to_fleetpy_v_id(veh_id)
                         print(vehicle_to_position_dict.get(veh_id_fp, "not in dict"))
                         print(traci.vehicle.getLanePosition(veh_id))
-                raise(e)
+                        try:
+                            traci.vehicle.remove(veh_id)
+                            print(f"Vehicle {veh_id} removed")
+                        except Exception as remove_error:
+                            print(f"Failed to remove vehicle {veh_id}: {remove_error}")
 
+                # Retry simulation step after cleanup
+                try:
+                    traci.simulationStep()
+                    print("Simulation step successful after vehicle removal.")
+                    breakpoint()
+                except Exception as retry_error:
+                    print("Retry failed:", retry_error)
+                    raise retry_error
             """
             # 4) get current vehicle positions and update travel time statistics (if needed)
             if sim_time%1==0 and self.g_update_fleetsim_traveltimes==True:
