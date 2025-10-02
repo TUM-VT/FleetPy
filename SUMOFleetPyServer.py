@@ -386,17 +386,14 @@ class SUMOFleetPyServer():
                         veh_id_fp = self._sumo_v_id_to_fleetpy_v_id(veh_id)
                         print(vehicle_to_position_dict.get(veh_id_fp, "not in dict"))
                         print(traci.vehicle.getLanePosition(veh_id))
-                        try:
-                            traci.vehicle.remove(veh_id)
-                            print(f"Vehicle {veh_id} removed")
-                        except Exception as remove_error:
-                            print(f"Failed to remove vehicle {veh_id}: {remove_error}")
+                        traci.vehicle.remove(veh_id)
+                        print(f"Vehicle {veh_id} removed")
+
 
                 # Retry simulation step after cleanup
                 try:
                     traci.simulationStep()
                     print("Simulation step successful after vehicle removal.")
-                    breakpoint()
                 except Exception as retry_error:
                     print("Retry failed:", retry_error)
                     raise retry_error
