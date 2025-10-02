@@ -363,10 +363,17 @@ class SUMOFleetPyServer():
             LOG.info(f"Speed of Vehicle fp_0_356 in SUMO: {traci.vehicle.getSpeed('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}")
             LOG.info(f"Vehicle fp_0_356 in FleetPy: {vehicle_to_position_dict.get((0, 356), 'not in dict')}")
             LOG.info("Vehicles on Edge -140737948#2: "+str(traci.edge.getLastStepVehicleIDs("-140737948#2")))
-            LOG.info("Vehicles on Edge -140738047#2: "+str(traci.edge.getLastStepVehicleIDs("-140738047#2")))
-
+            LOG.info("Vehicles on Edge -140738047#2: "+str(traci.edge.getLastStepVehicleIDs("-140738047#2"))) 
+            
             # 3) sumo time step
             LOG.info(f"---- Traci Step ----- {sim_time}")
+            if sim_time == 21683:
+                    print("Crash at simtime:", traci.simulation.getTime(),
+                    "Vehicles in Simulation:", len(traci.vehicle.getIDList()),
+                    "Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),
+                    "Pending Vehicles:", len(traci.simulation.getPendingVehicles()),
+                    f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
+                    traci.vehicle.remove("fp_0_356")
 
             try:
                 traci.simulationStep()
@@ -387,16 +394,10 @@ class SUMOFleetPyServer():
                         print(vehicle_to_position_dict.get(veh_id_fp, "not in dict"))
                         print(traci.vehicle.getLanePosition(veh_id))
                         traci.vehicle.remove(veh_id)
-                        print(f"Vehicle {veh_id} removed")
 
+            if sim_time == 21683:
+                breakpoint()
 
-                # Retry simulation step after cleanup
-                try:
-                    traci.simulationStep()
-                    print("Simulation step successful after vehicle removal.")
-                except Exception as retry_error:
-                    print("Retry failed:", retry_error)
-                    raise retry_error
             """
             # 4) get current vehicle positions and update travel time statistics (if needed)
             if sim_time%1==0 and self.g_update_fleetsim_traveltimes==True:
