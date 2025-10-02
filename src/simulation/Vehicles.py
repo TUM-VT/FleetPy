@@ -832,55 +832,6 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
             LOG.info(f" -> remove start_next_leg_first flag")
         
         done_VRLs = []
-        # for finished_leg_id in finished_leg_ids:
-        #     if self.assigned_route[0].id == finished_leg_id:
-        #         self.update_vehicle_position(self.assigned_route[0].destination_pos, sim_time)
-        #         done_VRL = self.end_current_leg(sim_time)[1]
-        #         if type(done_VRL) == dict and len(done_VRL) == 0:
-        #             pass
-        #         else:
-        #             done_VRLs.append(done_VRL)
-        #         self.start_next_leg(sim_time)
-        #     elif self.assigned_route[1].id == finished_leg_id:
-        #         self.update_vehicle_position(self.assigned_route[0].destination_pos, sim_time)
-        #         done_VRL = self.end_current_leg(sim_time)[1]
-        #         if type(done_VRL) == dict and len(done_VRL) == 0:
-        #             pass
-        #         else:
-        #             done_VRLs.append(done_VRL)
-        #         LOG.debug(f" -> start next leg because previous finished")
-        #         self.start_next_leg(sim_time)
-        #         self.update_vehicle_position(self.assigned_route[0].destination_pos, sim_time)
-        #         done_VRL = self.end_current_leg(sim_time)[1]
-        #         if type(done_VRL) == dict and len(done_VRL) == 0:
-        #             pass
-        #         else:
-        #             done_VRLs.append(done_VRL)
-        #         self.start_next_leg(sim_time)
-        #     else:
-        #         raise_error_msg()
-                
-        if len(rids_picked_up) != 0 or len(rids_dropped_off) != 0:
-            if self.status != VRL_STATES.BOARDING:
-                if len(self.assigned_route) < 2:
-                    raise_error_msg()
-                next_planned_pos = self.assigned_route[1].destination_pos
-                if next_planned_pos != veh_pos:
-                    LOG.warning(f"boarding/drop off but not at next planned pos? {self} | {veh_pos} | {next_planned_pos}")
-                self.update_vehicle_position(next_planned_pos, sim_time)
-                done_VRL = self.end_current_leg(sim_time)[1]
-                if type(done_VRL) == dict and len(done_VRL) == 0:
-                    pass
-                else:
-                    done_VRLs.append(done_VRL)
-                LOG.debug(f" -> start next leg because there has been a boarding")
-                self.start_next_leg(sim_time)
-                if self.status != VRL_STATES.BOARDING:
-                    raise_error_msg()
-                planned_pick_up = [rq.get_rid() for rq in self.assigned_route[0].rq_dict.get(1, [])]
-                planned_drop_off = [rq.get_rid() for rq in self.assigned_route[0].rq_dict.get(-1, [])]
-                if tuple(sorted(planned_pick_up)) != tuple(sorted(current_pick_up)) or tuple(sorted(planned_drop_off)) != tuple(sorted(planned_drop_off)): # pickups are sent a the end of the boarding process / drop off at the beginning
-                    raise_error_msg()
                     
         if status in G_DRIVING_STATUS:
             if self.status in G_DRIVING_STATUS:
@@ -909,6 +860,9 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
             LOG.debug(f" -> currently boarding")
             if self.status in G_DRIVING_STATUS:
                 self.update_vehicle_position(veh_pos, sim_time)
+                next_planned_pos = self.assigned_route[1].destination_pos
+                if next_planned_pos != veh_pos:
+                    LOG.warning(f"boarding/drop off but not at next planned pos? {self} | {veh_pos} | {next_planned_pos}")
                 done_VRL = self.end_current_leg(sim_time)[1]
                 if type(done_VRL) == dict and len(done_VRL) == 0:
                     pass
@@ -921,17 +875,40 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                         self.pos = self.assigned_route[0].destination_pos
                     self.start_next_leg(sim_time)
                     if (len(current_pick_up) != 0 or len(current_drop_off) != 0):
-                        LOG.info(f"current boarding process! pu {current_pick_up} | do {current_drop_off}")
-                        LOG.info(f"current leg: {self.assigned_route[0]}")
+                        LOG.debug(f"current boarding process! pu {current_pick_up} | do {current_drop_off}")
+                        LOG.debug(f"current leg: {self.assigned_route[0]}")
                         if self.status != VRL_STATES.BOARDING:
                             raise_error_msg()
+            elif self.status == VRL_STATES.BOARDING:
+                scheduled_pick_up = [rq.get_rid() for rq in self.assigned_route[0].rq_dict.get(1, [])]
+                scheduled_drop_off = [rq.get_rid() for rq in self.assigned_route[0].rq_dict.get(-1, [])]
+                if set(sorted(scheduled_pick_up)) != set(sorted(current_pick_up)) or set(sorted(scheduled_drop_off)) != set(sorted(current_drop_off)):
+                    problem_fixed = False
+                    if len(self.assigned_route) > 1 and self.assigned_route[1].status == VRL_STATES.BOARDING:
+                        next_scheduled_pick_up = [rq.get_rid() for rq in self.assigned_route[1].rq_dict.get(1, [])]
+                        next_scheduled_drop_off = [rq.get_rid() for rq in self.assigned_route[1].rq_dict.get(-1, [])]
+                        if (set(sorted(next_scheduled_pick_up)) == set(sorted(current_pick_up)) and set(sorted(next_scheduled_drop_off)) == set(sorted(current_drop_off))):
+                            LOG.debug(f" -> two boardings at same location: next boarding has started")
+                            done_VRL = self.end_current_leg(sim_time)[1]
+                            if type(done_VRL) == dict and len(done_VRL) == 0:
+                                pass
+                            else:
+                                done_VRLs.append(done_VRL)
+                            self.start_next_leg(sim_time)
+                            if self.status != VRL_STATES.BOARDING:
+                                raise_error_msg()
+                            problem_fixed = True
+                    if not problem_fixed:
+                        LOG.error(f"boarding/drop off but not matching planned requests? {self} | {veh_pos} | planned pu {scheduled_pick_up} do {scheduled_drop_off} | current pu {current_pick_up} do {current_drop_off}")
+                        raise_error_msg()
+                
             if len(self.assigned_route) == 0 and (len(current_pick_up) != 0 or len(current_drop_off) != 0):
                 LOG.error(f"current boarding process but not route assigned! pu {current_pick_up} | do {current_drop_off}")
                 LOG.error(f"current leg: {self.assigned_route[0]}")
                 LOG.error(f"{self}")
                 raise_error_msg()
         
-        LOG.info(f"new state: {self}")
+        LOG.debug(f"new state: {self}")
                     
         return done_VRLs
                 
