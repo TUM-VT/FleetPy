@@ -382,21 +382,21 @@ class SUMOFleetPyServer():
             try:
                 traci.simulationStep()
             except Exception as e:
-                print("Crash at simtime:", traci.simulation.getTime(),
+                LOG.info("Crash at simtime:", traci.simulation.getTime(),
                     "Vehicles in Simulation:", len(traci.vehicle.getIDList()),
                     "Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),
                     "Pending Vehicles:", len(traci.simulation.getPendingVehicles()),
                     f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
 
                 veh_speeds = [traci.vehicle.getSpeed(veh_id) for veh_id in traci.vehicle.getIDList()]
-                print("Average Speed of Vehicles in Simulation:", np.mean(veh_speeds))
+                LOG.info("Average Speed of Vehicles in Simulation:", np.mean(veh_speeds))
 
                 for veh_id in traci.vehicle.getTeleportingIDList():
-                    print("Teleporting Vehicle:", veh_id, traci.vehicle.getRoute(veh_id))
+                    LOG.info("Teleporting Vehicle:", veh_id, " Route: ", traci.vehicle.getRoute(veh_id))
                     if veh_id.startswith("fp_"):
                         veh_id_fp = self._sumo_v_id_to_fleetpy_v_id(veh_id)
-                        print(vehicle_to_position_dict.get(veh_id_fp, "not in dict"))
-                        print(traci.vehicle.getLanePosition(veh_id))
+                        LOG.info("FP Position: ", vehicle_to_position_dict.get(veh_id_fp, "not in dict"))
+                        LOG.info("Lane Position: ", traci.vehicle.getLanePosition(veh_id))
                         traci.vehicle.remove(veh_id)
                 raise e
 
