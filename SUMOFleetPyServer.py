@@ -354,15 +354,16 @@ class SUMOFleetPyServer():
                            
             # 2) check for new routes and finished boarding processes
             arrivedVehicles_internal = self._update_routes_and_add_vehicles(sim_time)
-            LOG.info(f"t={sim_time} Vehicles in Simulation: {len(traci.vehicle.getIDList())}, Vehicles in Teleportation: {len(traci.vehicle.getTeleportingIDList())}, Pending Vehicles: {len(traci.simulation.getPendingVehicles())}")
+            LOG.info(f"t={sim_time} Vehicles in Simulation: {len(traci.vehicle.getIDList())}, Vehicles in Teleportation: {len(traci.vehicle.getTeleportingIDList())}, Pending Vehicles: {traci.simulation.getPendingVehicles()}")
             LOG.info(f"Arrived Vehicles: {arrivedVehicles_internal}")
             LOG.info(f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
             LOG.info(f"Vehicles Ending Teleportation: {traci.simulation.getEndingTeleportIDList()}")
             LOG.info(f"Vehicles in Teleportation: {traci.vehicle.getTeleportingIDList()}")
-            """
             LOG.info(f"Vehicle fp_0_356 in SUMO: {traci.vehicle.getRoadID('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}, {traci.vehicle.getLanePosition('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}")
             LOG.info(f"Speed of Vehicle fp_0_356 in SUMO: {traci.vehicle.getSpeed('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}")
             LOG.info(f"Vehicle fp_0_356 in FleetPy: {vehicle_to_position_dict.get((0, 356), 'not in dict')}")
+
+            """
             LOG.info("Vehicles on Edge -140737948#2: "+str(traci.edge.getLastStepVehicleIDs("-140737948#2")))
             LOG.info("Vehicles on Edge -140738047#2: "+str(traci.edge.getLastStepVehicleIDs("-140738047#2"))) 
             """
