@@ -383,11 +383,11 @@ class SUMOFleetPyServer():
             try:
                 traci.simulationStep()
             except Exception as e:
-                LOG.info("Crash at simtime:", traci.simulation.getTime(),
-                    "Vehicles in Simulation:", len(traci.vehicle.getIDList()),
-                    "Vehicles in Teleportation:", len(traci.vehicle.getTeleportingIDList()),
-                    "Pending Vehicles:", traci.simulation.getPendingVehicles(),
-                    f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
+                LOG.info(f"Crash at simtime: {traci.simulation.getTime()}")
+                LOG.info(f"Vehicles in Simulation: {len(traci.vehicle.getIDList())}")
+                LOG.info(f"Vehicles in Teleportation: {len(traci.vehicle.getTeleportingIDList())}")
+                LOG.info(f"Pending Vehicles: {traci.simulation.getPendingVehicles()}")
+                LOG.info(f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
 
                 veh_speeds = [traci.vehicle.getSpeed(veh_id) for veh_id in traci.vehicle.getIDList()]
                 LOG.info(f"Average Speed of Vehicles in Simulation: {np.mean(veh_speeds)}")
