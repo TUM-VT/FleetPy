@@ -632,9 +632,9 @@ class FleetSimulationBase:
                 # alternative 2: just break loop
                 LOG.warning(f"remaining assignments could not finish! Break Loop")
                 break
-        self.record_stats()
+        self.record_stats(force=True)
 
-    def record_stats(self, force=True):
+    def record_stats(self, force=False):
         """This method records the stats at the end of the simulation."""
         if self.skip_output:
             return

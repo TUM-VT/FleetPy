@@ -312,8 +312,9 @@ class FleetControlBase(metaclass=ABCMeta):
         veh_obj = self.sim_vehicles[vid]
         # the vehicle plans should be up to date from assignments of previous time steps
         if list_finished_VRL or force_update:
-            LOG.debug(f"vid {vid} at time {simulation_time} recieves status update: {[str(x) for x in list_finished_VRL]}")
-            LOG.debug(f"   with current vehicle plan {self.veh_plans[vid]}")
+            if logging.DEBUG >= LOG.getEffectiveLevel():
+                LOG.debug(f"vid {vid} at time {simulation_time} recieves status update: {[str(x) for x in list_finished_VRL]}")
+                LOG.debug(f"   with current vehicle plan {self.veh_plans[vid]}")
             self.veh_plans[vid].update_plan(veh_obj, simulation_time, self.routing_engine, list_finished_VRL)
             if self._vid_to_assigned_charging_process.get(vid) is not None:
                 finished_charging_task_id = None

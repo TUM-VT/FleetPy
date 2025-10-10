@@ -342,9 +342,10 @@ class SimulationVehicle:
             boarding_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(1,[])]
             alighting_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(-1,[])]
             vrl.rq_dict = {1:boarding_list, -1:alighting_list}
-        LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
-        LOG.debug(f"  -> current assignment: {[str(x) for x in self.assigned_route]}")
-        LOG.debug(f" -> force: {force_ignore_lock}")
+        if logging.DEBUG  >= LOG.getEffectiveLevel():
+            LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
+            LOG.debug(f"  -> current assignment: {[str(x) for x in self.assigned_route]}")
+            LOG.debug(f" -> force: {force_ignore_lock}")
         start_flag = True
         if self.assigned_route:
             if not list_route_legs or list_route_legs[0] != self.assigned_route[0]:
@@ -391,7 +392,8 @@ class SimulationVehicle:
         :return:(dict of boarding requests -> (time, position), dict of alighting request objects -> (time, position), list of passed VRL, dict_start_alighting)
         :rtype: list
         """
-        LOG.debug(f"update veh state {current_time} -> {next_time} : {self}")
+        if logging.DEBUG  >= LOG.getEffectiveLevel():
+            LOG.debug(f"update veh state {current_time} -> {next_time} : {self}")
         dict_boarding_requests = {}
         dict_start_alighting = {}
         dict_alighting_requests = {}
@@ -551,7 +553,8 @@ class SimulationVehicle:
                                                     sim_vid_id=(self.op_id, self.vid),
                                                     new_sim_time=c_time,
                                                     record_node_times=self.replay_flag)
-        LOG.debug(f"veh {self.vid} move {self.pos} -> {new_pos} driven {driven_distance} m in {remaining_step_time} s to {arrival_in_time_step} passed nodes {passed_nodes}")
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(f"veh {self.vid} move {self.pos} -> {new_pos} driven {driven_distance} m in {remaining_step_time} s to {arrival_in_time_step} passed nodes {passed_nodes}")
         last_node = self.pos[0]
         self.pos = new_pos
         self.cl_driven_distance += driven_distance
@@ -598,7 +601,8 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
         #LOG.debug(f"update pos {self} -> {veh_pos}")
         if self.status in G_DRIVING_STATUS:
             if veh_pos is None:
-                LOG.debug("non moving vehicle registered? {}".format(self))
+                if logging.DEBUG >= LOG.getEffectiveLevel():
+                    LOG.debug("non moving vehicle registered? {}".format(self))
                 self._route_update_needed = True
             else:
                 self.pos = veh_pos
@@ -639,7 +643,8 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
     def _compute_new_route(self, target_pos):
         """ a new route has to be computed -> set also flag that this route will be sent to vehicle controller """
         self._route_update_needed = True
-        LOG.debug(" -> compute new route for {}".format(self))
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(" -> compute new route for {}".format(self))
         return super()._compute_new_route(target_pos)
 
     def _move(self, c_time, remaining_step_time, update_start_time):
@@ -824,8 +829,8 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
         def raise_error_msg():
             raise EnvironmentError(f"Error in incoming state: {veh_pos} |{rids_picked_up} | {rids_dropped_off} | {status} | {finished_leg_ids} \n <-> \n {self} \n {[x.id for x in self.assigned_route]}")
         
-        LOG.info(f"update state veh {self}")
-        LOG.info(f"new: veh pos {veh_pos} | picked up {rids_picked_up} | dropped off {rids_dropped_off} | status {status} | finished leg ids {finished_leg_ids} | current pick up {current_pick_up} | current drop off {current_drop_off}")
+        #LOG.info(f"update state veh {self}")
+        #LOG.info(f"new: veh pos {veh_pos} | picked up {rids_picked_up} | dropped off {rids_dropped_off} | status {status} | finished leg ids {finished_leg_ids} | current pick up {current_pick_up} | current drop off {current_drop_off}")
         if self.start_next_leg_first:
             self.start_next_leg(sim_time)
             self.start_next_leg_first = False
@@ -908,7 +913,8 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                 LOG.error(f"{self}")
                 raise_error_msg()
         
-        LOG.debug(f"new state: {self}")
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(f"new state: {self}")
                     
         return done_VRLs
                 
@@ -922,7 +928,8 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
         return r
     
     def get_new_assignment(self, sim_time):
-        LOG.debug(f"get new assignment: {self}")
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(f"get new assignment: {self}")
         if not self._new_assignment_available:
             return None
         else:
@@ -941,4 +948,5 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                     "alighting_rids" : [rq.get_rid() for rq in leg.rq_dict.get(-1, [])],
                     "id" : leg.id
                 })
+            self._new_assignment_available = False
             return assignment_list

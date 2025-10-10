@@ -128,7 +128,8 @@ class MATSimSimulationClass(FleetSimulationBase):
         :param rids_picked_up: List of requests that are currently being picked up
         :param rids_dropped_off: List of requests that are currently being dropped off
         """
-        LOG.debug(f"update_veh_state op_id {op_id} vid {vid} pos {veh_pos} pu {rids_picked_up} do {rids_dropped_off} status {status} edp {earliest_diverge_pos} edt {earliest_diverge_time} fl {finished_leg_ids} cpu {current_pick_up} cdo {current_drop_off}")
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(f"update_veh_state op_id {op_id} vid {vid} pos {veh_pos} pu {rids_picked_up} do {rids_dropped_off} status {status} edp {earliest_diverge_pos} edt {earliest_diverge_time} fl {finished_leg_ids} cpu {current_pick_up} cdo {current_drop_off}")
         veh_obj: ExternallyControlledVehicle = self.sim_vehicles[(op_id, vid)]
         for rid in current_pick_up:# rids_picked_up:
             if self._registered_boardings.get(rid) is None:
@@ -170,7 +171,7 @@ class MATSimSimulationClass(FleetSimulationBase):
         if len(rids_picked_up) > 0 or len(rids_dropped_off) > 0:
             self.broker.receive_status_update(op_id, vid, sim_time, done_VRLS, True)
         else:
-            self.broker.receive_status_update(op_id, vid, sim_time, done_VRLS, True) # TODO force update plan
+            self.broker.receive_status_update(op_id, vid, sim_time, done_VRLS, False) # TODO force update plan
     
     def step(self, sim_time):
         """

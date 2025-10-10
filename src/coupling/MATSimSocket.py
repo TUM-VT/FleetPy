@@ -71,6 +71,9 @@ class MATSimSocket:
         self.fleetpy_to_matsim_rid = {}
         self._fp_rid_counter = 0
         
+        self._last_veh_state = {}   # vid -> [state, [list_current_boarding], [list_current_alighting]]
+        self._force_veh_pos_update_interval = scenario_parameters.get("force_veh_pos_update_interval", 1)
+        
         self.fs_obj = MATSimSimulationClass(scenario_parameters)
         self.dir_names = self.fs_obj.dir_names
         
@@ -161,7 +164,7 @@ class MATSimSocket:
         """
         Process the response from MATSim.
         """
-        print("get meassage: ", response_obj["@message"])
+        #print("get meassage: ", response_obj["@message"])
         if response_obj["@message"] == "iteration":
             self._new_iteration(response_obj)
         elif response_obj["@message"] == "state":
@@ -217,18 +220,49 @@ class MATSimSocket:
             
             self.matsim_to_fleetpy_vid[matsim_vehicle_id] = vehicle_id
             self.fleetpy_to_matsim_vid[vehicle_id] = matsim_vehicle_id
+            
+            self._last_veh_state[vehicle_id] = [VRL_STATES.IDLE, [], []]
         
     def _new_iteration(self, response_obj):
         """
         Handle new iteration request from MATSim.
         """
         # end FP simulation
-        if self.matsim_iteration > 0:
+        iteration = int(response_obj["iteration"])
+        if iteration > 0:
             self.fs_obj.terminate()
         
-            scenario_parameters["matsim_iteration"] = response_obj["iteration"]
+            scenario_parameters = self.scenario_parameters.copy()
+            scenario_parameters["matsim_iteration"] = iteration
+            
+            self.list_op_dicts = build_operator_attribute_dicts(scenario_parameters, scenario_parameters[G_NR_OPERATORS],
+                                                                                prefix="op_")
+            self.list_ch_op_dicts  = build_operator_attribute_dicts(scenario_parameters, scenario_parameters.get(G_NR_CH_OPERATORS, 0),
+                                                                                    prefix="ch_op_")
+            
+            self.dir_names = get_directory_dict(scenario_parameters, self.list_op_dicts)
+            self.scenario_parameters: dict = scenario_parameters
+            
             self.fs_obj = MATSimSimulationClass(self.scenario_parameters)
             self.fs_obj.dir_names = self.dir_names
+            
+            # create communication log
+            self._output_dir = self.fs_obj.dir_names[G_DIR_OUTPUT]
+            self.log_f = os.path.join(self._output_dir, "00_socket_com.txt")
+            self.last_stat_report_time = datetime.datetime.now()
+            with open(self.log_f, "w") as fh_touch:
+                fh_touch.write(f"{self.last_stat_report_time}: Opening socket communication ...\n")
+                
+            self._simulation_terminated = False
+            
+            self.matsim_to_fleetpy_vid = {}
+            self.fleetpy_to_matsim_vid = {}
+            
+            self.matsim_to_fleetpy_rid = {}
+            self.fleetpy_to_matsim_rid = {}
+            self._fp_rid_counter = 0
+            
+            self._last_veh_state = {}   # vid -> [state, [list_current_boarding], [list_current_alighting]]
         
         list_vehicle_attributes = response_obj["vehicles"]
         
@@ -246,10 +280,13 @@ class MATSimSocket:
         Handle new time step request from MATSim.
         """
         new_sim_time = response_obj["time"]
-        print(" -> new sim time: ", new_sim_time)
-        LOG.info(f"Socked new state: {new_sim_time}")
-        LOG.info(f"matsim vid to vid: {self.matsim_to_fleetpy_vid}")
-        LOG.info(f"matsim rid to rid: {self.matsim_to_fleetpy_rid}")
+        if new_sim_time % 300 == 0:
+            print(" -> new sim time: ", new_sim_time)
+            
+        force_update = (new_sim_time % self._force_veh_pos_update_interval == 0)
+        # LOG.info(f"Socked new state: {new_sim_time}")
+        # LOG.info(f"matsim vid to vid: {self.matsim_to_fleetpy_vid}")
+        # LOG.info(f"matsim rid to rid: {self.matsim_to_fleetpy_rid}")
         
         picked_up_requests = response_obj["pickedUp"] # dict { "req1": "veh1" }
         dropped_off_requests = response_obj["droppedOff"] # { "req5": "veh10", "req7": "veh12" }
@@ -294,21 +331,6 @@ class MATSimSocket:
         
         for veh_state in list_vehicle_states:
             vid = self.matsim_to_fleetpy_vid[veh_state["id"]]
-            matsim_link = veh_state["currentLink"]
-            matsim_link_exit_time = veh_state["currentExitTime"]
-            
-            veh_pos = self.from_matsim_to_fleetpy_position(matsim_link, remaining_time=matsim_link_exit_time - new_sim_time)
-            
-            matsim_diverge_link = veh_state["divergeLink"]
-            matsim_diverge_link_exit_time = veh_state["divergeTime"]
-            if type(matsim_diverge_link_exit_time) == str and matsim_diverge_link_exit_time == "Infinity":
-                LOG.warning("MATSim diverge link exit time 'Infinity' mapped to LARGE_INT")
-                matsim_diverge_link_exit_time = LARGE_INT
-            earliest_diverge_pos = self.from_matsim_to_fleetpy_position(matsim_diverge_link)
-            earliest_diverge_time = matsim_diverge_link_exit_time
-            
-            state = self._from_matsim_to_fleetpy_veh_state(veh_state["state"])
-            finished_leg_ids = [int(x) for x in veh_state["finished"]]
             
             picked_up = veh_pick_up_requests.get(vid, [])
             dropped_off = veh_drop_off_requests.get(vid, [])
@@ -316,11 +338,36 @@ class MATSimSocket:
             current_pick_up = veh_current_pick_up_requests.get(vid, [])
             current_drop_off = veh_current_drop_off_requests.get(vid, [])
             
-            self.fs_obj.update_veh_state(new_sim_time, vid, 0, veh_pos, picked_up, dropped_off, state, earliest_diverge_pos, earliest_diverge_time, finished_leg_ids,
-                                         current_pick_up, current_drop_off)
+            state = self._from_matsim_to_fleetpy_veh_state(veh_state["state"])
+            finished_leg_ids = [int(x) for x in veh_state["finished"]]
+            
+            last_state, last_current_pick_up, last_current_drop_off = self._last_veh_state[vid]
+            if force_update or state != last_state or set(sorted(current_pick_up)) != set(sorted(last_current_pick_up)) or set(sorted(current_drop_off)) != set(sorted(last_current_drop_off)):
+                LOG.debug(f"veh {vid} state changed from {last_state} to {state} | current pick up from {last_current_pick_up} to {current_pick_up} | current drop off from {last_current_drop_off} to {current_drop_off}")
+                self._last_veh_state[vid] = [state, current_pick_up, current_drop_off]
+            
+                matsim_link = veh_state["currentLink"]
+                matsim_link_exit_time = veh_state["currentExitTime"]
+                
+                if type(matsim_link_exit_time) == str and matsim_link_exit_time == "Infinity":
+                    LOG.warning("MATSim diverge link exit time 'Infinity' mapped to LARGE_INT")
+                    matsim_link_exit_time = LARGE_INT
+                
+                veh_pos = self.from_matsim_to_fleetpy_position(matsim_link, remaining_time=matsim_link_exit_time - new_sim_time)
+                
+                matsim_diverge_link = veh_state["divergeLink"]
+                matsim_diverge_link_exit_time = veh_state["divergeTime"]
+                if type(matsim_diverge_link_exit_time) == str and matsim_diverge_link_exit_time == "Infinity":
+                    LOG.warning("MATSim diverge link exit time 'Infinity' mapped to LARGE_INT")
+                    matsim_diverge_link_exit_time = LARGE_INT
+                earliest_diverge_pos = self.from_matsim_to_fleetpy_position(matsim_diverge_link)
+                earliest_diverge_time = matsim_diverge_link_exit_time
+                
+                self.fs_obj.update_veh_state(new_sim_time, vid, 0, veh_pos, picked_up, dropped_off, state, earliest_diverge_pos, earliest_diverge_time, finished_leg_ids,
+                                            current_pick_up, current_drop_off)
         
         list_requests = response_obj["submitted"] # list of dicts
-        print(" -> number of new requests: ", len(list_requests))
+        #print(" -> number of new requests: ", len(list_requests))
         for rq_entry in list_requests:
             org_pos = self.from_matsim_to_fleetpy_position(int(rq_entry["originLink"]))
             org_str = f"{org_pos[0]};{org_pos[1]};{org_pos[2]}"
@@ -491,7 +538,9 @@ if __name__ == "__main__":
     
     from src.misc.config import ConstantConfig, ScenarioConfig
     
-    matsim_network_path = r"C:\Users\ge37ser\Documents\Projekte\MINGA\AP5\IRTSystemX\KopplungMATSimFleetPy\matsim-fleetpy\scenario\network.xml.gz"
+    #matsim_network_path = r"C:\Users\ge37ser\Documents\Projekte\MINGA\AP5\IRTSystemX\KopplungMATSimFleetPy\matsim-fleetpy\scenario\network.xml.gz"
+    
+    matsim_network_path = r"C:\Users\ge37ser\Documents\Projekte\MINGA\AP5\IRTSystemX\KopplungMATSimFleetPy\MATSim Populations\muenchen_1pct\test_cut\cut_network.xml.gz"
     
     const_cfg = ConstantConfig(r"C:\Users\ge37ser\Documents\Coding\FleetPy\studies\test_matsim_coupling\scenarios\constant_config_pool.csv")
     print(const_cfg)
@@ -501,8 +550,31 @@ if __name__ == "__main__":
     whole_config = const_cfg + scenarios_cfg[0]
     whole_config["matsim_network_path"] = matsim_network_path
     whole_config["study_name"] = "test_matsim_coupling"
-    whole_config["log_level"] = "debug"
+    whole_config["log_level"] = "info"
     whole_config["n_cpu_per_sim"] = 1
+    whole_config["force_veh_pos_update_interval"] = 15
     
-    matsim_socket = MATSimSocket(host, port, whole_config, log_communication=True)
-    matsim_socket.keep_socket_alive()
+    profile = False
+    
+    if not profile:
+        matsim_socket = MATSimSocket(host, port, whole_config, log_communication=LOG_COMMUNICATION)
+        matsim_socket.keep_socket_alive()
+    
+    else:
+        import sys
+        import cProfile, pstats, io
+        
+        profiler = cProfile.Profile()
+        profiler.enable()
+        
+        try:
+            matsim_socket = MATSimSocket(host, port, whole_config, log_communication=LOG_COMMUNICATION)
+            matsim_socket.keep_socket_alive()
+            
+        finally:
+            profiler.disable()
+            s = io.StringIO()
+            #sortby = SortKey.CUMULATIVE
+            ps = pstats.Stats(profiler, stream=s).sort_stats('cumtime') #tottime cumtime
+            ps.print_stats(150)
+            print(s.getvalue())

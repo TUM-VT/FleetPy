@@ -40,6 +40,8 @@ def create_fleetpy_network_from_matsim(matsim_network_path, fleetpy_data_path, n
     matsim_edge_to_fp_edge, fp_edge_to_matsim_edge = {}, {}
     #from_node,to_node,distance,travel_time,source_edge_id
     for link in root.find("links").findall("link"):
+        if link.get("id").startswith("pt"):
+            continue
         links.append({
             "source_edge_id": link.get("id"),
             "from_node": source_node_id_to_index[link.get("from")],

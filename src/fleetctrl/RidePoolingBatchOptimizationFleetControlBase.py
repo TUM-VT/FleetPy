@@ -166,7 +166,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
             self.vid_finished_VRLs[vid] += list_finished_VRL
         except KeyError:
             self.vid_finished_VRLs[vid] = list_finished_VRL
-        LOG.debug(f"veh {veh_obj} | after status update: {self.veh_plans[vid]}")
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(f"veh {veh_obj} | after status update: {self.veh_plans[vid]}")
 
     def user_request(self, rq : RequestBase, sim_time : int):
         """This method is triggered for a new incoming request. It generally adds the rq to the database.
@@ -395,7 +396,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         :param add_arg: set to True, if the vehicle plan is assigned internally by AM-assignment
         :type add_arg: not defined here
         """
-        LOG.debug(f"assign vehicle plan for {veh_obj} addarg {add_arg} : {vehicle_plan}")
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(f"assign vehicle plan for {veh_obj} addarg {add_arg} : {vehicle_plan}")
         super().assign_vehicle_plan(veh_obj, vehicle_plan, sim_time, force_assign=force_assign, assigned_charging_task=assigned_charging_task, add_arg=add_arg)
         if add_arg is None:
             veh_plan_without_rel = vehicle_plan.copy_and_remove_empty_planstops(veh_obj, sim_time, self.routing_engine)
