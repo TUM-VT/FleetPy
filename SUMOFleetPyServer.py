@@ -2,11 +2,17 @@
 # IN Traci conda env
 from abc import abstractmethod
 import os, sys
+
+# Fix libsumo DLL loading issue by adding SUMO bin directory to DLL search path
+#sumo_bin = r"C:\Program Files (x86)\Eclipse\Sumo\bin"
+#if hasattr(os, 'add_dll_directory'):
+    #os.add_dll_directory(sumo_bin)
+
+import libsumo as traci
 import pandas as pd
 import csv
 import logging 
 from operator import itemgetter
-import sys, getopt
 from time import perf_counter
 from typing import Tuple
 from datetime import datetime
@@ -22,6 +28,7 @@ import src.misc.config as config
 from src.misc.globals import *
 import src.evaluation.standard as eval
 from run_examples import run_scenarios
+import random
 
 
 """ 
@@ -35,11 +42,11 @@ Additionally, the vehicle_types (str-names) used in the FleetPy have to be defin
 """
 
 LOG = logging.getLogger(__name__)
-if 'SUMO_HOME' in os.environ:
-    tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
-    sys.path.append(tools)
-else:
-    sys.exit("please declare environment variable 'SUMO_HOME'")
+#if 'SUMO_HOME' in os.environ:
+   # tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
+    #sys.path.append(tools)
+#else:
+    #sys.exit("please declare environment variable 'SUMO_HOME'")
 
 t1_start = perf_counter()
 
@@ -369,7 +376,16 @@ class SUMOFleetPyServer():
             """
             # 3) sumo time step
             LOG.info(f"---- Traci Step ----- {sim_time}")
-            
+            if sim_time == 22026:
+                LOG.info(traci.simulation.getAllSubscriptionResults())
+                LOG.info(f"Vehicles in Simulation: {len(traci.vehicle.getIDList())}")
+                vehicle_ids = traci.vehicle.getIDList()
+                if vehicle_ids:
+                    random_vehicle = random.choice(vehicle_ids)
+                    LOG.info(f"Randomly selected vehicle: {random_vehicle} for removal")
+                traci.vehicle.remove(random_vehicle)
+                LOG.info(traci.simulation.getAllSubscriptionResults())
+
             """
             if sim_time == 21682:
                     LOG.info(f"Removal at simtime: {traci.simulation.getTime()}")
@@ -420,9 +436,11 @@ class SUMOFleetPyServer():
                 time_df = self._process_tt_data(res_list=res_list,sim_time=sim_time)
                 time_update_dict = dict(zip(zip(list(time_df["from_node"]),list(time_df["to_node"])),zip(list(time_df["edge_tt"]),list(time_df["edge_var"]))))
                 self._save_tt_to_csv(time_df, sim_time)
+                # Clear data structures to prevent memory accumulation
                 veh_edge_start_time_count ={}
                 veh_start_time_dict ={}
-                veh_edge_dict ={}         
+                veh_edge_dict ={}
+                res_list = []  # Clear res_list to prevent unlimited growth
                 if self.g_update_fleetsim_traveltimes==True:
                     self.fp_sim_env.update_network_travel_times(time_update_dict, sim_time)
                     self.fp_sim_env.routing_engine.load_tt_file_SUMO(resultsPath,sim_time)  
@@ -892,11 +910,12 @@ if __name__ == "__main__":
         if SUMOFleetPyCoupling.sumo_sim == True:
             import traci._simulation
             import traci.constants as tc
-            if sumoBinary == "sumo-gui":
-                import traci
-            else: 
-                import libsumo as traci
-                print("No GUI Needed. Using libsumo instead of traci for better performance.")
+            #if sumoBinary == "sumo-gui":
+                #import traci
+           # else: 
+               # breakpoint()  
+                #import libsumo as traci
+                #print("No GUI Needed. Using libsumo instead of traci for better performance.")
         SUMOFleetPyCoupling.setup_fleetsimulation()
         SUMOFleetPyCoupling.setup_traci()
         SUMOFleetPyCoupling.setup_network_translation()
