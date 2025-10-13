@@ -375,6 +375,7 @@ class SUMOFleetPyServer():
             LOG.info("Vehicles on Edge -140738047#2: "+str(traci.edge.getLastStepVehicleIDs("-140738047#2"))) 
             """
             # 3) sumo time step
+            """
             LOG.info(f"---- Traci Step ----- {sim_time}")
             if sim_time == 22026:
                 LOG.info(traci.simulation.getAllSubscriptionResults())
@@ -385,7 +386,7 @@ class SUMOFleetPyServer():
                     LOG.info(f"Randomly selected vehicle: {random_vehicle} for removal")
                 traci.vehicle.remove(random_vehicle)
                 LOG.info(traci.simulation.getAllSubscriptionResults())
-
+            """
             """
             if sim_time == 21682:
                     LOG.info(f"Removal at simtime: {traci.simulation.getTime()}")
