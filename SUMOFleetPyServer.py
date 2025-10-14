@@ -361,42 +361,9 @@ class SUMOFleetPyServer():
                            
             # 2) check for new routes and finished boarding processes
             arrivedVehicles_internal = self._update_routes_and_add_vehicles(sim_time)
-            LOG.info(f"t={sim_time} Vehicles in Simulation: {len(traci.vehicle.getIDList())}, Vehicles in Teleportation: {len(traci.vehicle.getTeleportingIDList())}, Pending Vehicles: {traci.simulation.getPendingVehicles()}")
-            LOG.info(f"Arrived Vehicles: {arrivedVehicles_internal}")
-            LOG.info(f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
-            LOG.info(f"Vehicles Ending Teleportation: {traci.simulation.getEndingTeleportIDList()}")
-            LOG.info(f"Vehicles in Teleportation: {traci.vehicle.getTeleportingIDList()}")
-            LOG.info(f"Vehicle fp_0_356 in SUMO: {traci.vehicle.getRoadID('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}, {traci.vehicle.getLanePosition('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}")
-            LOG.info(f"Speed of Vehicle fp_0_356 in SUMO: {traci.vehicle.getSpeed('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}")
-            LOG.info(f"Vehicle fp_0_356 in FleetPy: {vehicle_to_position_dict.get((0, 356), 'not in dict')}")
 
-            """
-            LOG.info("Vehicles on Edge -140737948#2: "+str(traci.edge.getLastStepVehicleIDs("-140737948#2")))
-            LOG.info("Vehicles on Edge -140738047#2: "+str(traci.edge.getLastStepVehicleIDs("-140738047#2"))) 
-            """
             # 3) sumo time step
-            """
-            LOG.info(f"---- Traci Step ----- {sim_time}")
-            if sim_time == 22026:
-                LOG.info(traci.simulation.getAllSubscriptionResults())
-                LOG.info(f"Vehicles in Simulation: {len(traci.vehicle.getIDList())}")
-                vehicle_ids = traci.vehicle.getIDList()
-                if vehicle_ids:
-                    random_vehicle = random.choice(vehicle_ids)
-                    LOG.info(f"Randomly selected vehicle: {random_vehicle} for removal")
-                traci.vehicle.remove(random_vehicle)
-                LOG.info(traci.simulation.getAllSubscriptionResults())
-            """
-            """
-            if sim_time == 21682:
-                    LOG.info(f"Removal at simtime: {traci.simulation.getTime()}")
-                    LOG.info(f"Vehicles in Teleportation: {traci.vehicle.getTeleportingIDList()}")
-                    LOG.info( f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
-                    LOG.info(f"Vehicle fp_0_356 in SUMO: {traci.vehicle.getRoadID('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}, {traci.vehicle.getLanePosition('fp_0_356') if 'fp_0_356' in traci.vehicle.getIDList() else 'not in SUMO'}")            
-                    traci.vehicle.remove("fp_0_356")
-                    arrivedVehicles_internal.update({'fp_0_356': 1740})
-            """
-            
+
             try:
                 traci.simulationStep()
             except Exception as e:
@@ -405,10 +372,8 @@ class SUMOFleetPyServer():
                 LOG.info(f"Vehicles in Teleportation: {traci.vehicle.getTeleportingIDList()}")
                 LOG.info(f"Pending Vehicles: {traci.simulation.getPendingVehicles()}")
                 LOG.info(f"Vehicles Starting Teleportation: {traci.simulation.getStartingTeleportIDList()}")
-
                 veh_speeds = [traci.vehicle.getSpeed(veh_id) for veh_id in traci.vehicle.getIDList()]
                 LOG.info(f"Average Speed of Vehicles in Simulation: {np.mean(veh_speeds)}")
-                print(e)
                 for veh_id in traci.vehicle.getTeleportingIDList():
                     LOG.info(f"Teleporting Vehicle: {veh_id} Route: {traci.vehicle.getRoute(veh_id)}")
                     if veh_id.startswith("fp_"):
@@ -418,16 +383,6 @@ class SUMOFleetPyServer():
                         traci.vehicle.remove(veh_id)
                 raise e
 
-            """
-            # 4) get current vehicle positions and update travel time statistics (if needed)
-            if sim_time%1==0 and self.g_update_fleetsim_traveltimes==True:
-                sim_pos_dict,res_list = self._get_current_edge_tt(sim_time=sim_time,sim_pos_dict=sim_pos_dict,res_list=res_list)
-
-            # 5) send new travel times to fleetsim
-            if (sim_time%self.g_update_travel_statistics_time_step==0) and self.g_update_fleetsim_traveltimes==True:
-                time_df = self._process_tt_data(res_list=res_list,sim_time=sim_time)
-                time_update_dict = dict(zip(zip(list(time_df["from_node"]),list(time_df["to_node"])),zip(list(time_df["edge_tt"]),list(time_df["edge_var"]))))
-            """
             # 4) get current vehicle positions and update travel time statistics (if needed)
             if sim_time%1==0 and self.g_update_fleetsim_traveltimes==True:
                 sim_pos_dict,res_list = self._get_current_edge_tt(sim_time=sim_time,sim_pos_dict=sim_pos_dict,res_list=res_list)
