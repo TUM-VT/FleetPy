@@ -826,7 +826,10 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
         :param current_pick_up: list of requests that are currently being picked up
         :param current_drop_off: list of requests are currently being dropped off
         """
+        
         def raise_error_msg():
+            LOG.error(f" -> error in state update! {self} | {veh_pos} | {rids_picked_up} | {rids_dropped_off} | {status} | {finished_leg_ids} | current pu {current_pick_up} do {current_drop_off}")
+            LOG.error(f"{[x for x in self.assigned_route]}")
             raise EnvironmentError(f"Error in incoming state: {veh_pos} |{rids_picked_up} | {rids_dropped_off} | {status} | {finished_leg_ids} \n <-> \n {self} \n {[x.id for x in self.assigned_route]}")
         
         #LOG.info(f"update state veh {self}")
@@ -842,11 +845,12 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
             if self.status in G_DRIVING_STATUS:
                 self.update_vehicle_position(veh_pos, sim_time)
             else:
-                done_VRL = self.end_current_leg(sim_time)[1]
-                if type(done_VRL) == dict and len(done_VRL) == 0:
-                    pass
-                else:
-                    done_VRLs.append(done_VRL)
+                if self.status != VRL_STATES.IDLE:
+                    done_VRL = self.end_current_leg(sim_time)[1]
+                    if type(done_VRL) == dict and len(done_VRL) == 0:
+                        pass
+                    else:
+                        done_VRLs.append(done_VRL)
                 LOG.debug(f" -> start next leg because driving again")
                 self.start_next_leg(sim_time)
                 if self.status not in G_DRIVING_STATUS:
@@ -906,6 +910,10 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                     if not problem_fixed:
                         LOG.error(f"boarding/drop off but not matching planned requests? {self} | {veh_pos} | planned pu {scheduled_pick_up} do {scheduled_drop_off} | current pu {current_pick_up} do {current_drop_off}")
                         raise_error_msg()
+            else:
+                self.start_next_leg(sim_time)
+                if self.status != VRL_STATES.BOARDING:
+                    raise_error_msg()
                 
             if len(self.assigned_route) == 0 and (len(current_pick_up) != 0 or len(current_drop_off) != 0):
                 LOG.error(f"current boarding process but not route assigned! pu {current_pick_up} | do {current_drop_off}")
@@ -921,6 +929,7 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
     def assign_vehicle_plan(self, list_route_legs, sim_time, force_ignore_lock=False):
         r = super().assign_vehicle_plan(list_route_legs, sim_time, force_ignore_lock=force_ignore_lock)
         self._new_assignment_available = True
+        self.start_next_leg_first = False
         for leg in self.assigned_route:
             if leg.id is None:
                 leg.set_id(self._current_leg_id_counter)

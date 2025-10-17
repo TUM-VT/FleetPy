@@ -89,6 +89,10 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
             else:
                 assigned_plan = VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])
                 self.assign_vehicle_plan(veh_obj, assigned_plan, simulation_time, force_assign=True)
+        if self.unassigned_requests_1.get(rid) is not None:
+            del self.unassigned_requests_1[rid]
+        if self.unassigned_requests_2.get(rid) is not None:
+            del self.unassigned_requests_2[rid]
         super().user_cancels_request(rid, simulation_time)
 
     def user_confirms_booking(self, rid, simulation_time):

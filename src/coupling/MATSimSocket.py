@@ -231,6 +231,9 @@ class MATSimSocket:
         iteration = int(response_obj["iteration"])
         if iteration > 0:
             self.fs_obj.terminate()
+            
+            self.fs_obj = None
+
         
             scenario_parameters = self.scenario_parameters.copy()
             scenario_parameters["matsim_iteration"] = iteration
@@ -240,11 +243,11 @@ class MATSimSocket:
             self.list_ch_op_dicts  = build_operator_attribute_dicts(scenario_parameters, scenario_parameters.get(G_NR_CH_OPERATORS, 0),
                                                                                     prefix="ch_op_")
             
-            self.dir_names = get_directory_dict(scenario_parameters, self.list_op_dicts)
+            #self.dir_names = get_directory_dict(scenario_parameters, self.list_op_dicts)
             self.scenario_parameters: dict = scenario_parameters
             
             self.fs_obj = MATSimSimulationClass(self.scenario_parameters)
-            self.fs_obj.dir_names = self.dir_names
+            self.dir_names = self.fs_obj.dir_names
             
             # create communication log
             self._output_dir = self.fs_obj.dir_names[G_DIR_OUTPUT]
@@ -253,7 +256,15 @@ class MATSimSocket:
             with open(self.log_f, "w") as fh_touch:
                 fh_touch.write(f"{self.last_stat_report_time}: Opening socket communication ...\n")
                 
+            level = logging.DEBUG
+            logger = logging.getLogger()
+            logger.setLevel(level)
+            for handler in logger.handlers:
+                handler.setLevel(level)
+                
             self._simulation_terminated = False
+            self._last_network_update_time = None
+            self._stored_matsim_response = None # need to store updated state response if network update is requested
             
             self.matsim_to_fleetpy_vid = {}
             self.fleetpy_to_matsim_vid = {}
@@ -382,7 +393,7 @@ class MATSimSocket:
                             G_RQ_TIME: new_sim_time,
                             G_RQ_EPT: int(rq_entry["earliestPickupTime"]), # TODO optional
                             G_RQ_LPT: int(rq_entry["latestPickupTime"]), # TODO optional
-                            G_RQ_LDT: int(rq_entry["latestArrivalTime"]), # TODO where does it come from?
+                            G_RQ_LDT: new_sim_time + self.scenario_parameters[G_AR_MAX_DEC_T], 
                             G_RQ_PAX: int(rq_entry["size"])} # TODO to add?
             rq_series = pd.Series(rq_info_dict)
             rq_series.name = rq_info_dict[G_RQ_ID]
