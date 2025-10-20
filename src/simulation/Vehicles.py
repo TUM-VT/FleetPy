@@ -375,10 +375,6 @@ class SimulationVehicle:
         if list_route_legs:
             if start_flag:
                 self.start_next_leg_first = True
-                # print("THIS IS NOT ALLOWED TO HAPPEN HERE IN CASE OF IMIDIATE BOARDINGS/DEBOARDINGS") # TODO #
-                # exit()
-                # self.start_next_leg(sim_time)
-        # LOG.info(f"Vehicle {self.vid} after new assignment: {[str(x) for x in self.assigned_route]} at time {sim_time}")
 
     def update_veh_state(self, current_time:float, next_time:float)->tp.Tuple[tp.Dict[tp.Any, tp.Tuple[float, tuple]], tp.Dict[tp.Any, tp.Tuple[float, tuple]], tp.List[VehicleRouteLeg], tp.Dict[tp.Any, tp.Tuple[float, tuple]]]:
         """This method updates the current state of a simulation vehicle. This includes moving, boarding etc.
@@ -913,7 +909,15 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
             else:
                 self.start_next_leg(sim_time)
                 if self.status != VRL_STATES.BOARDING:
-                    raise_error_msg()
+                    LOG.warning(f"still not boarding after starting next leg? {self}")
+                    done_VRL = self.end_current_leg(sim_time)[1]
+                    if type(done_VRL) == dict and len(done_VRL) == 0:
+                        pass
+                    else:
+                        done_VRLs.append(done_VRL)
+                    self.start_next_leg(sim_time)
+                    if self.status != VRL_STATES.BOARDING:
+                        raise_error_msg()
                 
             if len(self.assigned_route) == 0 and (len(current_pick_up) != 0 or len(current_drop_off) != 0):
                 LOG.error(f"current boarding process but not route assigned! pu {current_pick_up} | do {current_drop_off}")
@@ -927,6 +931,12 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
         return done_VRLs
                 
     def assign_vehicle_plan(self, list_route_legs, sim_time, force_ignore_lock=False):
+        if self.assigned_route and len(list_route_legs) > 0:
+            if list_route_legs[0] != self.assigned_route[0]:
+                if list_route_legs[0].status not in G_DRIVING_STATUS and self.assigned_route[0].status in G_DRIVING_STATUS:
+                    driving_vrl = VehicleRouteLeg(self.assigned_route[0].status, list_route_legs[0].destination_pos, {}) # this vrl will be removed shortly after when the boarding process is triggered outside fleetpy
+                    list_route_legs = [driving_vrl] + list_route_legs[:]
+                    LOG.warning(f"for vid {self.vid}: add driving vrl {driving_vrl} to new assignment {list_route_legs}")
         r = super().assign_vehicle_plan(list_route_legs, sim_time, force_ignore_lock=force_ignore_lock)
         self._new_assignment_available = True
         self.start_next_leg_first = False
