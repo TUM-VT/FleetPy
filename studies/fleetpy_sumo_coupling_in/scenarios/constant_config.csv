@@ -38,4 +38,4 @@ op_reoptimisation_timestep,60
 ##4,PublicTransport
 ##5,DynamicNetwork and PT Crowding
 ##6,Evaluation
-log_level,verbose
+log_level,warning
