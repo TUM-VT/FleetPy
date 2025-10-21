@@ -859,6 +859,15 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                     pass
                 else:
                     done_VRLs.append(done_VRL)
+                
+                if len(self.assigned_route) > 0 and self.assigned_route[0].status == VRL_STATES.REPO_TARGET:
+                    self.start_next_leg(sim_time)
+                    done_VRL = self.end_current_leg(sim_time)[1]
+                    if type(done_VRL) == dict and len(done_VRL) == 0:
+                        pass
+                    else:
+                        done_VRLs.append(done_VRL)
+                        
                 if len(self.assigned_route) > 0:
                     raise_error_msg()
         else:
@@ -873,6 +882,15 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                     pass
                 else:
                     done_VRLs.append(done_VRL)
+                    
+                if len(self.assigned_route) > 0 and self.assigned_route[0].status == VRL_STATES.REPO_TARGET:
+                    self.start_next_leg(sim_time)
+                    done_VRL = self.end_current_leg(sim_time)[1]
+                    if type(done_VRL) == dict and len(done_VRL) == 0:
+                        pass
+                    else:
+                        done_VRLs.append(done_VRL)
+                    
                 if len(self.assigned_route) > 0:
                     LOG.debug(f" -> start next leg because not driving anymore")
                     if self.pos != self.assigned_route[0].destination_pos:
@@ -915,6 +933,9 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                         pass
                     else:
                         done_VRLs.append(done_VRL)
+                    if self.pos != self.assigned_route[0].destination_pos:
+                        LOG.warning(f"boarding but not at planned pos? (2) {veh_pos} <-> {self.assigned_route[0].destination_pos} | {self}")
+                        self.pos = self.assigned_route[0].destination_pos
                     self.start_next_leg(sim_time)
                     if self.status != VRL_STATES.BOARDING:
                         raise_error_msg()

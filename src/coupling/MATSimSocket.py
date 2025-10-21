@@ -362,7 +362,7 @@ class MATSimSocket:
                 matsim_link_exit_time = veh_state["currentExitTime"]
                 
                 if type(matsim_link_exit_time) == str and matsim_link_exit_time == "Infinity":
-                    LOG.warning("MATSim diverge link exit time 'Infinity' mapped to LARGE_INT")
+                    LOG.debug("MATSim diverge link exit time 'Infinity' mapped to LARGE_INT")
                     matsim_link_exit_time = LARGE_INT
                 
                 veh_pos = self.from_matsim_to_fleetpy_position(matsim_link, remaining_time=matsim_link_exit_time - new_sim_time)
@@ -370,7 +370,7 @@ class MATSimSocket:
                 matsim_diverge_link = veh_state["divergeLink"]
                 matsim_diverge_link_exit_time = veh_state["divergeTime"]
                 if type(matsim_diverge_link_exit_time) == str and matsim_diverge_link_exit_time == "Infinity":
-                    LOG.warning("MATSim diverge link exit time 'Infinity' mapped to LARGE_INT")
+                    LOG.debug("MATSim diverge link exit time 'Infinity' mapped to LARGE_INT")
                     matsim_diverge_link_exit_time = LARGE_INT
                 earliest_diverge_pos = self.from_matsim_to_fleetpy_position(matsim_diverge_link)
                 earliest_diverge_time = matsim_diverge_link_exit_time
@@ -455,7 +455,7 @@ class MATSimSocket:
         elif state_str == "stay":
             return VRL_STATES.IDLE
         elif state_str == "inactive":
-            LOG.warning("MATSim vehicle state 'inactive' mapped to FleetPy state 'IDLE'")
+            LOG.debug("MATSim vehicle state 'inactive' mapped to FleetPy state 'IDLE'")
             return VRL_STATES.IDLE
         else:
             raise KeyError(f"Unknown matsim vehicle state {state_str}!")
@@ -480,7 +480,7 @@ class MATSimSocket:
             fp_edge = self.matsim_edge_to_fp_edge[int(matsim_link)]
             return (fp_edge[0], fp_edge[1], 1.0)  # at the end of the edge
         elif type(remaining_time) == str and remaining_time == "Infinity":
-            LOG.warning("MATSim position with remaining_time 'Infinity' mapped to position at the start of the edge")
+            LOG.debug("MATSim position with remaining_time 'Infinity' mapped to position at the start of the edge")
             fp_edge = self.matsim_edge_to_fp_edge[int(matsim_link)]
             return (fp_edge[0], fp_edge[1], 0.0)  # at the start of the edge
         else:

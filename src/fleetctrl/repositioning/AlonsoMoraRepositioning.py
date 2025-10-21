@@ -105,8 +105,11 @@ class AlonsoMoraRepositioning(RepositioningBase):
         
         vid_changed_plans = []
         for vid, target_node in vid_to_repo_target.items():
-            vid_changed_plans.append(vid)
             LOG.debug(f"repo {vid} -> {target_node} with tt {vid_to_origin_to_tt[vid][target_node]}")
+            if vid_to_origin_to_tt[vid][target_node] == 0:
+                LOG.debug(f" -> skip repositioning because tt=0")
+                continue
+            vid_changed_plans.append(vid)
             ps = RoutingTargetPlanStop((target_node, None, None), locked=lock, planstop_state=G_PLANSTOP_STATES.REPO_TARGET)
             veh_plan = self.fleetctrl.veh_plans[vid]
             veh_obj = self.fleetctrl.sim_vehicles[vid]
