@@ -150,7 +150,6 @@ class SUMOFleetPyServer():
         if self.fp_sim_env.scenario_parameters.get("hybrid_router") == 1:
             
             print("Setting up hybrid router")
-            breakpoint()
             fp_path = pathlib.Path(self.fp_sim_env.dir_names.get(G_DIR_MAIN))
             sc_0_data_path = fp_path.parent / "fleetpy_coupling" / "hybrid_router" / "hourly_edge_counts_sc0.csv"
             if not os.path.isfile(sc_0_data_path):
