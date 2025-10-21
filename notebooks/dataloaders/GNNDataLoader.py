@@ -14,9 +14,9 @@ import torch_geometric.transforms as T
 from torch_geometric.data import HeteroData
 
 # Local imports
-from notebooks.data_processing.config import DataProcessingConfig as cfg
-from notebooks.data_processing.data_processor import DataProcessor
-from notebooks.dataloaders.normalization import (
+from data_processing.config import DataProcessingConfig as cfg
+from data_processing.data_processor import DataProcessor
+from dataloaders.normalization import (
     load_normalization_statistics,
     normalize_features,
     clean_normalization_directory,
@@ -36,6 +36,7 @@ class GNNDataLoader:
     """
     EXCLUDED_EDGE_FEATURES = ['source', 'target',
                               cfg.LABEL, 'timestep']  # Features to exclude from edge attributes
+    EXCLUDED_NODE_FEATURES = ['id', 'timestep']  # Features to exclude from node attributes
 
     def __init__(self, scenarios: List[str], config: Optional[cfg] = None, overwrite: bool = False):
         """Initialize the DataLoader.
@@ -50,6 +51,9 @@ class GNNDataLoader:
         self.config = config or cfg()
         self.overwrite = overwrite
         self.scenarios = scenarios
+
+        # Store feature names for each type
+        self.feature_names = {}
 
         # Set up normalization directory
         self.stats_dir = os.path.join(self.config.base_data_dir, 'normalization_stats')
@@ -104,7 +108,7 @@ class GNNDataLoader:
             logger.debug("\nComputing global statistics across all training scenarios...")
             self._compute_global_statistics(training_data)
         else:
-            logger.debug("\nUsing existing normalization statistics from", self.stats_dir)
+            logger.debug(f"\nUsing existing normalization statistics from {self.stats_dir}")
 
         # Process all scenarios using global statistics
         logger.debug("\nProcessing all scenarios with global statistics...")
@@ -250,7 +254,7 @@ class GNNDataLoader:
         pd.DataFrame.from_dict(all_maxs, orient='index').to_parquet(
             os.path.join(self.stats_dir, "maxs.parquet"))
 
-        logger.debug("\nSaved global normalization statistics to", self.stats_dir)
+        logger.debug(f"\nSaved global normalization statistics to {self.stats_dir}")
 
     def _load_or_process_scenario(self, scenario_path: str, scenario_name: str) -> Optional[List[HeteroData]]:
         """Load pre-processed data or process raw data for a scenario.
@@ -315,8 +319,10 @@ class GNNDataLoader:
 
         # Process data through pipeline
         logger.debug("\nInitializing DataProcessor...")
+        preferred = not self.overwrite
+        logger.debug(f"Prefer processed data: {preferred}")
         processor = DataProcessor(
-            train_dir, raw_dir, self.config, prefer_processed=False)
+            train_dir, raw_dir, self.config, prefer_processed=preferred)
 
         logger.debug("\nProcessing data through pipeline...")
         try:
@@ -423,7 +429,7 @@ class GNNDataLoader:
 
                     logger.debug('Normalization sample:')
                     logger.debug(data[feature_key].head())
-                    data[feature_key].to_csv(f"{scenario_name}_{feature_key}.csv", index=False)
+                    # data[feature_key].to_csv(f"{scenario_name}_{feature_key}.csv", index=False)
 
         except FileNotFoundError:
             logger.warning("Warning: Normalization statistics not found. Proceeding without normalization.")
@@ -452,7 +458,7 @@ class GNNDataLoader:
 
         # Handle request features as DataFrame (not dict)
         if isinstance(data.get(cfg.REQUEST_FEATURES), pd.DataFrame):
-            logger.debug("Sample of req_features DataFrame:", data[cfg.REQUEST_FEATURES].head(2))
+            logger.debug(f"Sample of req_features DataFrame:\n{data[cfg.REQUEST_FEATURES].head(2)}")
             # Get all unique timesteps from the DataFrame
             if 'timestep' in data[cfg.REQUEST_FEATURES].columns:
                 max_timestep = data[cfg.REQUEST_FEATURES]['timestep'].max()
@@ -478,7 +484,13 @@ class GNNDataLoader:
                             numeric_features = features.select_dtypes(
                                 include=[np.number])
                             numeric_features = numeric_features.drop(
-                                columns=['timestep'])
+                                columns=self.EXCLUDED_NODE_FEATURES)
+                            numeric_features = numeric_features.fillna(0.0)
+
+                            # Save feature names for this timestep (first graph only)
+                            if name not in self.feature_names:
+                                self.feature_names[name] = numeric_features.columns.tolist()
+                                print(f"Feature names for {name}: {self.feature_names[name]}")
 
                             # Use node IDs from the DataFrame
                             if 'id' in features.columns:
@@ -530,6 +542,13 @@ class GNNDataLoader:
                         # Create edge attributes tensor
                         edge_features = edges.drop(
                             columns=self.EXCLUDED_EDGE_FEATURES + ['timestep'])
+                        edge_features = edge_features.fillna(0.0)
+
+                        # Save edge feature names for this timestep (first graph only)
+                        if name not in self.feature_names:
+                            self.feature_names[name] = edge_features.columns.tolist()
+                            print(f"Feature names for {name}: {self.feature_names[name]}")
+
                         edge_attr = torch.tensor(
                             edge_features.values, dtype=torch.float32)
 

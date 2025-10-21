@@ -457,10 +457,6 @@ class Trainer:
                 f"{'AUC-ROC':<15} {train_metrics['auc_roc']:<15.4f} {val_metrics['auc_roc']:<15.4f}")
             logger.info(f"{'-' * 80}")
 
-            # print improvement status
-            if val_metrics['f1'] > best_val_f1:
-                logger.info("✓ New best model saved!")
-
             if no_improve_epochs >= patience:
                 logger.info(f'Early stopping triggered after {epoch + 1} epochs')
                 break
@@ -500,6 +496,7 @@ class Trainer:
 
         # Get all data first
         all_data = list(self.train_loader.dataset)
+        logger.debug(f"Total training graphs: {len(all_data)}")
 
         if self.sampling_strategy == SamplingStrategy.NONE:
             # For NONE strategy, use the train_loader directly

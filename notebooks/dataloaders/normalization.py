@@ -7,30 +7,9 @@ from data_processing.config import DataProcessingConfig as cfg
 
 def clean_normalization_directory(stats_dir: str) -> None:
     """
-    Safely rem    # Get numeric columns
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-
-    # Determine which columns to normalize based on their type
-    cols_to_normalize = []
-    excluded_cols = {'binary': [], 'categorical': [], 'metadata': []}
-
-    for col in numeric_cols:
-        if col in (exclude_columns or []):
-            continue
-
-        feature_type = get_feature_type(df[col], col)
-        if feature_type == 'continuous':
-            cols_to_normalize.append(col)
-        else:
-            excluded_cols[feature_type].append(col)
-
-    # Print information about excluded columns
-    for feature_type, cols in excluded_cols.items():
-        if cols:
-            print(f"Excluding {feature_type} columns from normalization: {cols}")
-
-    print(f"Columns to normalize: {cols_to_normalize} for {prefix}")rmalization statistics when overwriting.
-
+    Cleans the normalization statistics directory by removing existing files
+    and recreating the directory if it doesn't exist.
+    
     Args:
         stats_dir (str): Path to the directory containing normalization statistics
     """

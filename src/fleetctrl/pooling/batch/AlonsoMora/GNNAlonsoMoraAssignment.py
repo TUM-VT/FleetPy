@@ -153,7 +153,61 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         return rr_graph
 
     def get_v2r_graph_with_features(self):
-        return {vid: {rid: self.get_travel_time_v2r(vid, rid) for rid in rids} for vid, rids in self.v2r.items()}
+        """Return v2r graph with travel-time features.
+
+        This now includes locked v2r connections provided in `self.v2r_locked`.
+        We merge rids from `self.v2r` and `self.v2r_locked`, skip missing vehicles
+        or requests, and only include entries for which travel-time features
+        could be computed.
+        """
+        v2r_graph = {}
+
+        # Safe-get locked map (may not exist on older objects)
+        v2r_locked = getattr(self, 'v2r_locked', {}) or {}
+
+        # Union of vehicle ids present in either map
+        all_vids = set(self.v2r.keys()) | set(v2r_locked.keys())
+
+        for vid in all_vids:
+            # Skip if vehicle object isn't available
+            if vid not in self.veh_objs:
+                continue
+
+            # Collect rids from both maps; handle dict or iterable values
+            rids = set()
+            v2r_entry = self.v2r.get(vid, {})
+            if isinstance(v2r_entry, dict):
+                rids.update(v2r_entry.keys())
+            else:
+                try:
+                    rids.update(v2r_entry)
+                except Exception:
+                    pass
+
+            locked_entry = v2r_locked.get(vid, {})
+            if isinstance(locked_entry, dict):
+                rids.update(locked_entry.keys())
+            else:
+                try:
+                    rids.update(locked_entry)
+                except Exception:
+                    pass
+
+            # Build feature map for this vehicle, skipping missing requests
+            features = {}
+            for rid in rids:
+                if rid not in self.active_requests:
+                    continue
+                try:
+                    features[rid] = self.get_travel_time_v2r(vid, rid)
+                except Exception:
+                    # If travel time computation fails for this pair, skip it
+                    continue
+
+            if features:
+                v2r_graph[vid] = features
+
+        return v2r_graph
 
     @staticmethod
     def write_pickle(path, data: Dict):

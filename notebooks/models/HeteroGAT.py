@@ -6,7 +6,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 class HeteroGAT(torch.nn.Module):
-    EDGE_FEAT_DIM = 96
+    EDGE_STACK_DIM = 96
+    EDGE_DIM = {
+        ('request', 'connects', 'request'): 43,
+        ('vehicle', 'connects', 'request'): 35,
+        ('request', 'rev_connects', 'vehicle'): 35,
+    }
 
     def __init__(self, hidden_channels, out_channels=1, num_layers=2, dropout=0.3, heads=4):
         super().__init__()
@@ -17,6 +22,10 @@ class HeteroGAT(torch.nn.Module):
         self.layernorms = torch.nn.ModuleList()
         # Initialize projection layers for each edge type
         self.edge_projs = torch.nn.ModuleDict()
+        for et, dim in HeteroGAT.EDGE_DIM.items():
+            key = f"edge_proj_{et}"
+            self.edge_projs[key] = Linear(dim, hidden_channels)
+
         for _ in range(num_layers):
             self.layernorms.append(torch.nn.ModuleDict({
                 ntype: torch.nn.LayerNorm(hidden_channels) for ntype in ['request', 'vehicle']
@@ -27,8 +36,6 @@ class HeteroGAT(torch.nn.Module):
                 ('vehicle', 'connects', 'request'): GATConv((-1, -1), hidden_channels, heads=heads, add_self_loops=False, concat=False, dropout=dropout, residual=True),
                 ('request', 'rev_connects', 'vehicle'): GATConv((-1, -1), hidden_channels, heads=heads, add_self_loops=False, concat=False, dropout=dropout, residual=True),
             }
-            # The undirected transform will add these automatically with identical parameters
-            # but we don't need to define them here
             
             conv = HeteroConv(conv_dict, aggr='mean')
             self.convs.append(conv)
@@ -36,7 +43,7 @@ class HeteroGAT(torch.nn.Module):
         # Output layers with intermediate layer
         self.out_channels = out_channels
         self.hidden_channels = hidden_channels
-        self.lin1 = Linear(HeteroGAT.EDGE_FEAT_DIM, hidden_channels)  # src, edge, tgt features concatenated. TODO parameterize
+        self.lin1 = Linear(HeteroGAT.EDGE_STACK_DIM, hidden_channels)
         self.lin2 = Linear(hidden_channels, out_channels)
 
         # Initialize weights properly
@@ -69,8 +76,7 @@ class HeteroGAT(torch.nn.Module):
         # DEBUG: check if there are NaNs in the input
         for key, x in x_dict.items():
             if torch.isnan(x).any():
-                logger.warning(f"NaNs detected in input '{key}'")
-                x_dict[key] = torch.nan_to_num(x)
+                logger.warning(f"NaNs detected in input {key}: {x}")
 
         for i, conv in enumerate(self.convs):
             # Apply GAT convolution
