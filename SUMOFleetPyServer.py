@@ -197,7 +197,7 @@ class SUMOFleetPyServer():
 
         sumoCmd = [self.sumo_binary, "-c", self.sumo_config_path ,"--collision.action","warn","--begin",str(SUMO_start_time),
                 "--step-length","1","--tripinfo-output",TripInfoPath,
-                "--vehroute-output",vehRoutePath,"--vehroute-output.exit-times","--vehroute-output.incomplete","--vehroute-output.write-unfinished",
+                "--vehroute-output",vehRoutePath,"--vehroute-output.exit-times","--vehroute-output.incomplete","--vehroute-output.write-unfinished","--vehroute-output.route-length",
                 "--collision-output",collisionPath,"--statistic-output",statisticsPath,"--start", "--seed", str(seed),"--no-warnings",str(True)]   
         #"+a",EdgeDataCfgPath, Currently not yet working
         #Trajectoriespath = os.path.join(results_path, "SumoDumps", "Trajectories.xml") 
@@ -402,7 +402,7 @@ class SUMOFleetPyServer():
 
             # 6) collect the current positions of all fleet vehicles in SUMO
             vehicle_to_position_dict = self._get_current_vehicle_positions()
-            LOG.info(vehicle_to_position_dict)
+            #LOG.info(vehicle_to_position_dict)
             #print(vehicle_to_position_dict)
             # 7) set the new positions in FleetPy
             self.fp_sim_env.update_vehicle_positions(vehicle_to_position_dict,sim_time)
@@ -481,11 +481,11 @@ class SUMOFleetPyServer():
                         
                         if is_valid_route == False:
                                 LOG.warning(f"Vehicle {sumo_vid} has an invalid route {sumoRoute}")
-                                LOG.info("Use SUMO rerouter")
+                                LOG.debug("Use SUMO rerouter")
                                 try:
                                     traci.vehicle.changeTarget(sumo_vid, sumoRoute[-1])
                                     #traci.vehicle.rerouteTraveltime(sumo_vid)
-                                    LOG.info(f"Vehicle {sumo_vid} has been rerouted to {sumoRoute[-1]} on {traci.vehicle.getRoute(sumo_vid)}")
+                                    LOG.debug(f"Vehicle {sumo_vid} has been rerouted to {sumoRoute[-1]} on {traci.vehicle.getRoute(sumo_vid)}")
                                     #print(f"Vehicle {sumo_vid} has been rerouted to {sumoRoute[-1]} on {traci.vehicle.getRoute(sumo_vid)}")
 
                                 except:
@@ -522,7 +522,7 @@ class SUMOFleetPyServer():
                             traci.vehicle.setParameter(objID=sumo_vid,param="cleg_dest",value=sumoRoute[-1])
                             traci.vehicle.setParameter(objID=sumo_vid,param="cleg",value=sumoRoute)
 
-                            LOG.info(f"Inserted Vehicle to SUMO: {sumo_vid},{route_name},{self.fp_opvid_to_veh_type[opid_vid_tuple]}")
+                            LOG.debug(f"Inserted Vehicle to SUMO: {sumo_vid},{route_name},{self.fp_opvid_to_veh_type[opid_vid_tuple]}")
                             if traci.vehicle.isRouteValid(sumo_vid) is False:
                                 LOG.warning(f'Route of {sumo_vid} is not valid')
                     
@@ -537,11 +537,11 @@ class SUMOFleetPyServer():
             
             ## If the SUMO route is len(0) it consists only of internal edges. The vehicles  are immediately considered to be "arrived" an teleported to the node
             else:  
-                LOG.info(f"veh {veh_obj.vid} @ {veh_obj.pos} gets internal route: {route}")
+                LOG.debug(f"veh {veh_obj.vid} @ {veh_obj.pos} gets internal route: {route}")
                 if veh_obj.pos[0] == route[-1] and veh_obj.pos[1] == None:
                     LOG.debug(f"Vehicle gets Route to own position:{veh_obj.vid} {veh_obj.pos}")
                 elif veh_obj.status == VRL_STATES.IDLE:
-                    LOG.info(f"IDLE Vehicle with new Route found that is only internal: {veh_obj}, {veh_obj.cl_remaining_route} --> No Route Change, Vehicle will be rerouted in next step")
+                    LOG.debug(f"IDLE Vehicle with new Route found that is only internal: {veh_obj}, {veh_obj.cl_remaining_route} --> No Route Change, Vehicle will be rerouted in next step")
                 else:
                     arrivedVehicles_internal.update({sumo_vid:route[-1]})  
 
@@ -752,8 +752,8 @@ class SUMOFleetPyServer():
         if len(arrivedVehicleIDs) == 0 and len(arrivedVehicles_internal)== 0:
             return
   
-        LOG.info(f"Internal Arrivals: {arrivedVehicles_internal}")
-        LOG.info(f"Normal Arrivals: {arrivedVehicleIDs}")
+        LOG.debug(f"Internal Arrivals: {arrivedVehicles_internal}")
+        LOG.debug(f"Normal Arrivals: {arrivedVehicleIDs}")
 
         # This should not happen normally as arrived vehicles should be removed by sumo itself:
         all_arrivedVehicleIDs = arrivedVehicleIDs + list(arrivedVehicles_internal.keys())
@@ -774,7 +774,7 @@ class SUMOFleetPyServer():
             ## Edge Case: Vehicle arrived in SUMO but not yet in FleetPy - happens in some cases with values of relative distance of last edge > 0.95
             else:
                 destination_node = veh_obj.pos[1]
-                LOG.info(f"{veh_obj.vid} Vehicle arrived in SUMO but not yet in FleetPy: Teleported to {(destination_node,None,None)}")
+                LOG.debug(f"{veh_obj.vid} Vehicle arrived in SUMO but not yet in FleetPy: Teleported to {(destination_node,None,None)}")
 
 
             arrival_dict.update({fp_vid:(destination_node,None,None)})
@@ -783,7 +783,7 @@ class SUMOFleetPyServer():
         for sumo_vid,dest in arrivedVehicles_internal.items():
             fp_vid = self._sumo_v_id_to_fleetpy_v_id(sumo_vid)
             veh_obj = self.fp_sim_env.sim_vehicles[fp_vid]
-            LOG.info(f"Internal Arrival: {veh_obj}, {veh_obj.cl_remaining_route},{veh_obj.status}") ##TODO:  Teleport idle vehicles without letting them arrive "reached destination"
+            LOG.debug(f"Internal Arrival: {veh_obj}, {veh_obj.cl_remaining_route},{veh_obj.status}") ##TODO:  Teleport idle vehicles without letting them arrive "reached destination"
 
             arrival_dict.update({fp_vid:(dest,None,None)})
 
