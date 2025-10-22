@@ -119,7 +119,7 @@ class SimulationRunner:
             str(self.py_path.parent/"studies"/self.study_name/"scenarios"/f"{self.sc_config_file_dict[sc_index]['scenario_name']}.csv"),
             str(sumocfg_path),
             "sumo",
-            "info"
+            "warning"
         ]
        # try:
         result = subprocess.run(command)
