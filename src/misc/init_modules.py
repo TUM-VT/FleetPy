@@ -76,6 +76,7 @@ def get_src_request_modules():
     rm_dict = {}  # str -> (module path, class name)
     rm_dict["BasicRequest"] = ("src.demand.TravelerModels", "BasicRequest")
     rm_dict["SoDRequest"] = ("src.demand.SoDTravelerModels", "SoDRequest")
+    rm_dict["UserUtilityRequest"] = ("src.demand.TravelerModels", "UserUtilityRequest")
     rm_dict["IndividualConstraintRequest"] = ("src.demand.TravelerModels", "IndividualConstraintRequest")
     rm_dict["PriceSensitiveIndividualConstraintRequest"] = ("src.demand.TravelerModels", "PriceSensitiveIndividualConstraintRequest")
     rm_dict["MasterRandomChoiceRequest"] = ("src.demand.TravelerModels", "MasterRandomChoiceRequest")

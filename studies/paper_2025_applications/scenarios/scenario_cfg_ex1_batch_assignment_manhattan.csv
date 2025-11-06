@@ -1,0 +1,4 @@
+scenario_name,rq_file,op_fleet_composition,op_rp_batch_optimizer
+ex1_AM,2018-11-12_sample_10_1.csv,default_vehtype:180,AlonsoMora
+ex1_LA,2018-11-12_sample_10_1.csv,default_vehtype:180,SimonettoAssignment
+ex1_IH,2018-11-12_sample_10_1.csv,default_vehtype:180,InsertionHeuristic
