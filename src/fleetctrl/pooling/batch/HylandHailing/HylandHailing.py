@@ -1,0 +1,171 @@
+from __future__ import annotations
+import logging
+
+from typing import Dict, List, TYPE_CHECKING
+
+from src.fleetctrl.planning.VehiclePlan import VehiclePlan
+from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
+from src.fleetctrl.pooling.immediate.insertion import simple_insert_hailing
+from src.fleetctrl.pooling.immediate.searchVehicles import veh_search_for_immediate_request
+from src.misc.globals import *
+if TYPE_CHECKING:
+    from src.simulation.Vehicles import SimulationVehicle
+    from src.simulation.Legs import VehicleRouteLeg
+
+LOG = logging.getLogger(__name__)
+
+INPUT_PARAMETERS_HylandHailing = {
+    "doc" :  """this class uses the ride hailing methods by Hyland & Mahmassani (2018)  """,
+    "inherit" : "BatchAssignmentAlgorithmBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
+class HylandHailing(BatchAssignmentAlgorithmBase):
+    """ this class uses applies the ride hailing methods by Hyland & Mahmassani(2018) Dynamic autonomous vehicle fleet
+    operations: Optimization-based strategies to assign AVs to immediate traveler demand requests"""
+
+    def solve_assignment_problem(self, sim_time, veh_plan_dict: dict[SimulationVehicle, list[VehiclePlan]], n_cpu=1):
+        import gurobipy
+
+        model = gurobipy.Model(f"grb_hailing_{sim_time}")
+        model.setParam('OutputFlag', False)
+        model.setParam(gurobipy.GRB.param.Threads, n_cpu)
+        model.setObjective(gurobipy.GRB.MINIMIZE)
+
+        # Create variables for each vehicle to vehicle-plan combination
+        var_dict = {veh_obj: [] for veh_obj in veh_plan_dict.keys()}
+        for veh, plan_list in veh_plan_dict.items():
+            veh_plan_var = []
+            for inx, plan in enumerate(plan_list):
+                var_name = f"x_{veh}_{inx}"
+                var = model.addVar(vtype=gurobipy.GRB.CONTINUOUS, name=var_name, obj=plan.get_utility())
+                var_dict[veh].append(var)
+
+            # Vehicle constraints: each vehicle can have at most one plan
+            model.addConstr(gurobipy.quicksum(var_dict[veh]) <= 1, name=f"veh_{veh.vid}")
+
+        # Request constraints: each request can be assigned at most once
+        request_to_vars: Dict[int, List[gurobipy.Var]] = {}
+        for veh, plan_list in veh_plan_dict.items():
+            for inx, plan in enumerate(plan_list):
+                var = var_dict[veh][inx]
+                for rid in plan.get_involved_request_ids():
+                    if rid not in request_to_vars:
+                        request_to_vars[rid] = []
+                    request_to_vars[rid].append(var)
+        for rid, vars_list in request_to_vars.items():
+            model.addConstr(gurobipy.quicksum(vars_list) <= 1, name=f"req_{rid}")
+
+        model.update()
+        model.optimize()
+
+        # get the solution
+        assignments = {}
+        if model.status == gurobipy.GRB.Status.OPTIMAL:
+            for veh, plan_list in veh_plan_dict.items():
+                for inx, plan in enumerate(plan_list):
+                    var = var_dict[veh][inx]
+                    if var.X > 0.99:
+                        assert veh not in assignments, f"vehicle {veh.vid} is being assigned multiple plans!"
+                        assignments[veh] = plan
+        else:
+            raise Exception(f"Operator {self.fleetcontrol.op_id}: No Optimal Assignment Solution found for Ride Hailing!")
+
+        return assignments
+
+
+    
+    def compute_new_vehicle_assignments(self, sim_time : int, vid_to_list_passed_VRLs : Dict[int, List[VehicleRouteLeg]],
+                                        veh_objs_to_build : Dict[int, SimulationVehicle] = {},
+                                        new_travel_times : bool = False, build_from_scratch : bool = False):
+        """ this function computes new vehicle assignments based on current fleet information
+        param sim_time : current simulation time
+        param vid_to_list_passed_VRLs : (dict) vid -> list_passed_VRLs; needed to update database and V2RBs
+        :param veh_objs_to_build: only these vehicles will be optimized (all if empty) dict vid -> SimVehicle obj
+                                  only for special cases needed in current alonso mora module
+        :param new_travel_times : bool; if traveltimes changed in the routing engine
+        :param build_from_scratch : only for special cases needed in current alonso mora module
+        """
+
+        self.sim_time = sim_time
+        if len(veh_objs_to_build) != 0:
+            raise NotImplementedError
+
+        if len(list(self.unassigned_requests.keys())) == 0:
+            return
+
+        current_plans = {}
+        for veh_obj in self.fleetcontrol.sim_vehicles:
+            # Get the existing plan or create a new empty one if not present
+            current_veh_p = self.fleetcontrol.veh_plans.get(veh_obj.vid, VehiclePlan(veh_obj, self.sim_time, self.routing_engine, []))
+            current_veh_p.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
+            obj = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, current_veh_p)
+            current_veh_p.set_utility(obj)
+            # The following will remove repositioning stops if they are not locked
+            veh_p = current_veh_p.copy_and_remove_empty_planstops(veh_obj, sim_time, self.routing_engine)
+            obj = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, veh_p)
+            veh_p.set_utility(obj)
+            current_plans[veh_obj.vid] = veh_p
+
+        vobj_plan_dict = {}
+        plan_rid_dict = {}
+        for rid in list(self.unassigned_requests.keys()):
+            if self.rid_to_consider_for_global_optimisation.get(rid) is None:
+                continue
+            rv_vehicles, rv_results_dict = veh_search_for_immediate_request(sim_time, self.active_requests[rid],
+                                                                            self.fleetcontrol)
+            for veh in rv_vehicles:
+                feasible_plans_list = simple_insert_hailing(self.fleetcontrol.routing_engine, sim_time, veh,
+                                                            current_plans[veh.vid], self.active_requests[rid],
+                                                            self.fleetcontrol.const_bt, self.fleetcontrol.add_bt)
+                for next_plan in feasible_plans_list:
+                    utility = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh, next_plan)
+                    next_plan.set_utility(utility)
+                    if veh.vid in vobj_plan_dict:
+                        vobj_plan_dict[veh].append(next_plan)
+                    else:
+                        vobj_plan_dict[veh] = [next_plan]
+                    plan_rid_dict[next_plan] = rid
+
+        # Solve the assignment problem
+        assignments = self.solve_assignment_problem(sim_time, vobj_plan_dict, n_cpu=1)
+        sum_obj = 0
+        for veh_obj, assigned_plan in assignments.items():
+            self.fleetcontrol.assign_vehicle_plan(veh_obj, assigned_plan, sim_time)
+            # update utility
+            upd_utility_val = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, self.fleetcontrol.veh_plans[veh_obj.vid])
+            self.fleetcontrol.veh_plans[veh_obj.vid].set_utility(upd_utility_val)
+            sum_obj += upd_utility_val
+            rid = plan_rid_dict[assigned_plan]
+            LOG.debug(f"request {rid} assigned to vehicle {veh_obj.vid} with ride hailing assignment")
+        LOG.info(f"Objective value at time {sim_time} for ride-hailing assignment: {sum_obj}")
+
+        # The unassigned requests are only considered once and then removed from the list
+        self.unassigned_requests = {}
+            
+    
+    def get_optimisation_solution(self, vid : int) -> VehiclePlan:
+        """ returns optimisation solution for vid
+        :param vid: vehicle id
+        :return: vehicle plan object for the corresponding vehicle
+        """
+        return self.fleetcontrol.veh_plans[vid]
+
+    def set_assignment(self, vid : int, assigned_plan : VehiclePlan, is_external_vehicle_plan : bool = False):
+        """ sets the vehicleplan as assigned in the algorithm database; if the plan is not computed within the this algorithm, the is_external_vehicle_plan flag should be set to true
+        :param vid: vehicle id
+        :param assigned_plan: vehicle plan object that has been assigned
+        :param is_external_vehicle_plan: should be set to True, if the assigned_plan has not been computed within this algorithm
+        """
+        super().set_assignment(vid, assigned_plan, is_external_vehicle_plan=is_external_vehicle_plan)
+
+    def get_current_assignment(self, vid : int) -> VehiclePlan: # TODO same as get_optimisation_solution (delete?)
+        """ returns the vehicle plan assigned to vid currently
+        :param vid: vehicle id
+        :return: vehicle plan
+        """
+        return self.fleetcontrol.veh_plans[vid]

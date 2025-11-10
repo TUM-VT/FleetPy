@@ -539,6 +539,17 @@ class SimulationVehicle:
         else:
             return sum([rq.nr_pax for rq in self.pax if rq.is_parcel])
 
+    def get_rid_list(self, ignore_parcels=False) -> list[str]:
+        """ this method returns the list of all rids currently onboard of vehicle
+        :param ignore_parcels: if true, only passenger requests are considered
+        :return: list of rid
+        :rtype: list of str
+        """
+        if ignore_parcels is True:
+            return [rq.rid for rq in self.pax if not rq.is_parcel]
+        else:
+            return [rq.rid for rq in self.pax]
+
     def _move(self, c_time:float, remaining_step_time:float, update_start_time:float)->float:
         """ this function is used internally to move the vehicle when called in update_veh_state
             -> can be overwritten in case no movement is performed within the simulation framework but externally
