@@ -8,15 +8,88 @@ from src.fleetctrl.pooling.immediate.searchVehicles import veh_search_for_immedi
 from src.fleetctrl.pooling.immediate.SelectRV import filter_directionality, filter_least_number_tasks
 from src.misc.globals import *
 import numpy as np
-from typing import Callable, List, Dict, Any, Tuple
+from typing import Callable, List, Dict, Any, Tuple, Iterator
 
 import logging
 LOG = logging.getLogger(__name__)
 
+
+def simple_insert_hailing(routing_engine : NetworkBase, sim_time : int, veh_obj : SimulationVehicle,
+                          orig_veh_plan : VehiclePlan, new_prq_obj : PlanRequest, std_bt : int, add_bt : int,
+                          skip_first_position_insertion : bool=False) -> list[VehiclePlan]:
+    """ This method is specific for ride hailing. It inserts the consecutive pick-up and drop-off stops for the
+    new request at all possible positions of orig_veh_plan and returns a generator that only yields the feasible
+    solutions and None in the other case."""
+
+    # do not consider inactive vehicles
+    if veh_obj.status == VRL_STATES.OUT_OF_SERVICE:
+        return []
+
+    new_rid_struct = new_prq_obj.get_rid_struct()
+    prq_o_stop_pos, prq_t_pu_earliest, prq_t_pu_latest = new_prq_obj.get_o_stop_info()
+    new_o_stop = BoardingPlanStop(prq_o_stop_pos, boarding_dict={1: [new_rid_struct]},
+                                  earliest_pickup_time_dict={new_rid_struct: prq_t_pu_earliest},
+                                  latest_pickup_time_dict={new_rid_struct: prq_t_pu_latest},
+                                  change_nr_pax=new_prq_obj.nr_pax,
+                                  duration=std_bt)
+
+    d_stop_pos, prq_t_do_latest, prq_max_trip_time = new_prq_obj.get_d_stop_info()
+    new_d_stop = BoardingPlanStop(d_stop_pos, boarding_dict={-1: [new_rid_struct]},
+                                  max_trip_time_dict={new_rid_struct: prq_max_trip_time},
+                                  change_nr_pax=-new_prq_obj.nr_pax,
+                                  duration=std_bt)
+
+    number_stops = len(orig_veh_plan.list_plan_stops)
+    feasible_plans = []
+
+    # Parcels can be ignored when checking if the vehicle is empty as parcels and passengers have sperate spaces
+    so_far_onboard_rids = set(veh_obj.get_rid_list(ignore_parcels=True))
+    so_far_alighting_rids = set()
+
+    # Note that the new requests stops are added at index i and i+1 respectively. This means that the rest of
+    # the planned stops are pushed forward, and therefore the oonboard and alighted customers are updated at the end
+    # of the look
+
+    for i, old_ps in enumerate(orig_veh_plan.list_plan_stops):
+        # If the plan stop is locked it means that it cannot be pushed forward
+        if old_ps.is_locked() or old_ps.is_infeasible_locked() or (i == 0 and skip_first_position_insertion):
+            so_far_onboard_rids.update(old_ps.get_list_boarding_rids())
+            so_far_alighting_rids.update(old_ps.get_list_alighting_rids())
+            continue
+
+        # Since it's ride-hailing we need to ensure that the vehicle is empty when this planstop is carried out
+        if len(so_far_onboard_rids.difference(so_far_alighting_rids)) == 0:
+            # Vehicle is empty at this plan stop, so we can try to insert the new request here
+            new_plan = orig_veh_plan.copy()
+            new_plan.list_plan_stops.insert(i, new_o_stop)
+            new_plan.list_plan_stops.insert(i + 1, new_d_stop)
+
+            # Check if the new plan is feasible
+            is_feasible = new_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
+            if is_feasible is True:
+                feasible_plans.append(new_plan)
+
+        so_far_onboard_rids.update(old_ps.get_list_boarding_rids())
+        so_far_alighting_rids.update(old_ps.get_list_alighting_rids())
+
+    # Also insert it after the last stop and when there is nothing planned
+    if number_stops == 0 or not orig_veh_plan.list_plan_stops[-1].is_locked_end():
+        assert len(so_far_onboard_rids.difference(so_far_alighting_rids)) == 0, ("Vehicle must be empty after last "
+                                                                                 "stop for ride hailing")
+        new_plan = orig_veh_plan.copy()
+        new_plan.list_plan_stops.append(new_o_stop)
+        new_plan.list_plan_stops.append(new_d_stop)
+
+        # Check if the new plan is feasible
+        is_feasible = new_plan.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
+        if is_feasible:
+            feasible_plans.append(new_plan)
+
+    return feasible_plans
                     
 def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : SimulationVehicle, orig_veh_plan : VehiclePlan, 
                   new_prq_obj : PlanRequest, std_bt : int, add_bt : int,
-                  skip_first_position_insertion : bool=False) -> List[VehiclePlan]:
+                  skip_first_position_insertion : bool=False) -> Iterator[VehiclePlan]:
     """This method inserts the stops for the new request at all possible positions of orig_veh_plan and returns a
     generator that only yields the feasible solutions and None in the other case.
 
@@ -28,6 +101,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
     :param std_bt: standard boarding time
     :param add_bt: additional boarding time for an extra request
     :param skip_first_position_insertion: if true, an insertion at the first position of the list_plan_stops is not tried
+    :param pool_requests: if true, multiple requests can be pooled, i.e. on-board at the same time
     :return: generator with feasible new routes
     """
     # LOG.debug("simple_insert: sim_time {} veh {}".format(sim_time, veh_obj))
