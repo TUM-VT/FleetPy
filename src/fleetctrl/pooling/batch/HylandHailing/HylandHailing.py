@@ -3,7 +3,7 @@ import logging
 
 from typing import Dict, List, TYPE_CHECKING
 
-from src.fleetctrl.planning.VehiclePlan import VehiclePlan
+from src.fleetctrl.planning.VehiclePlan import VehiclePlan, RoutingTargetPlanStop
 from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
 from src.fleetctrl.pooling.immediate.insertion import simple_insert_hailing
 from src.fleetctrl.pooling.immediate.searchVehicles import veh_search_for_immediate_request
@@ -34,7 +34,7 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
         super().__init__(fleetcontrol, routing_engine, sim_time, obj_function, operator_attributes,
                          optimisation_cores=optimisation_cores, seed=seed, veh_objs_to_build=veh_objs_to_build)
         self.vehicle_inclusion_policy = operator_attributes.get(G_OP_RH_VEH_SEARCH, "all-vehicles")
-        possible_policies = {"idle-only", "all-vehicles"}
+        possible_policies = {"idle-only", "repo-and-idle-only", "all-vehicles"}
         assert self.vehicle_inclusion_policy in possible_policies, (f" HylandHailing vehicle exclusion policy "
                                                                     f"{self.vehicle_inclusion_policy} not in possible policies {possible_policies}")
 
@@ -93,15 +93,21 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
         :return: list of vehicle objects to exclude from the ride hailing search
         """
         vehicles_to_include = []
-        if self.vehicle_inclusion_policy == "idle-only":
-            for veh_obj in self.fleetcontrol.sim_vehicles:
-                veh_plan = self.fleetcontrol.veh_plans.get(veh_obj.vid, None)
-                # Only include vehicles that are idle or repositioning and have no assigned tasks
-                if veh_obj.status in {VRL_STATES.IDLE, VRL_STATES.REPOSITION} and (veh_plan is None or len(veh_plan.list_plan_stops) == 0):
+        for veh_obj in self.fleetcontrol.sim_vehicles:
+            num_plan_stops = 0
+            veh_plan = self.fleetcontrol.veh_plans.get(veh_obj.vid, None)
+            if veh_plan is not None:
+                num_plan_stops = len([ps for ps in veh_plan.list_plan_stops if type(ps) != RoutingTargetPlanStop])
+            if self.vehicle_inclusion_policy == "idle-only":
+                # Only include vehicles that are idle and have no assigned tasks
+                if veh_obj.status in VRL_STATES.IDLE and num_plan_stops == 0:
                     vehicles_to_include.append(veh_obj)
-        elif self.vehicle_inclusion_policy == "all-vehicles":
-            vehicles_to_include = self.fleetcontrol.sim_vehicles
-
+            elif self.vehicle_inclusion_policy == "repo-and-idle-only":
+                # Include vehicles that are idle or repositioning and have no assigned tasks
+                if veh_obj.status in {VRL_STATES.IDLE, VRL_STATES.REPOSITION} and num_plan_stops == 0:
+                    vehicles_to_include.append(veh_obj)
+            elif self.vehicle_inclusion_policy == "all-vehicles":
+                vehicles_to_include.append(veh_obj)
         return vehicles_to_include
     
     def compute_new_vehicle_assignments(self, sim_time : int, vid_to_list_passed_VRLs : Dict[int, List[VehicleRouteLeg]],
