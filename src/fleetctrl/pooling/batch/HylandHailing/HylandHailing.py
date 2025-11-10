@@ -28,6 +28,16 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
     """ this class uses applies the ride hailing methods by Hyland & Mahmassani(2018) Dynamic autonomous vehicle fleet
     operations: Optimization-based strategies to assign AVs to immediate traveler demand requests"""
 
+    def __init__(self, fleetcontrol, routing_engine, sim_time, obj_function, operator_attributes,
+                 optimisation_cores = 1, seed = 6061992, veh_objs_to_build = {}):
+
+        super().__init__(fleetcontrol, routing_engine, sim_time, obj_function, operator_attributes,
+                         optimisation_cores=optimisation_cores, seed=seed, veh_objs_to_build=veh_objs_to_build)
+        self.vehicle_inclusion_policy = operator_attributes.get(G_OP_RH_VEH_SEARCH, "all-vehicles")
+        possible_policies = {"idle-only", "all-vehicles"}
+        assert self.vehicle_inclusion_policy in possible_policies, (f" HylandHailing vehicle exclusion policy "
+                                                                    f"{self.vehicle_inclusion_policy} not in possible policies {possible_policies}")
+
     def solve_assignment_problem(self, sim_time, veh_plan_dict: dict[SimulationVehicle, list[VehiclePlan]], n_cpu=1):
         import gurobipy
 
@@ -77,7 +87,22 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
 
         return assignments
 
+    def select_vehicles_to_include(self, sim_time : int) -> List[SimulationVehicle]:
+        """ selects vehicles to include from the ride hailing search based on the vehicle inclusion policy
+        :param sim_time: current simulation time
+        :return: list of vehicle objects to exclude from the ride hailing search
+        """
+        vehicles_to_include = []
+        if self.vehicle_inclusion_policy == "idle-only":
+            for veh_obj in self.fleetcontrol.sim_vehicles:
+                veh_plan = self.fleetcontrol.veh_plans.get(veh_obj.vid, None)
+                # Only include vehicles that are idle or repositioning and have no assigned tasks
+                if veh_obj.status in {VRL_STATES.IDLE, VRL_STATES.REPOSITION} and (veh_plan is None or len(veh_plan.list_plan_stops) == 0):
+                    vehicles_to_include.append(veh_obj)
+        elif self.vehicle_inclusion_policy == "all-vehicles":
+            vehicles_to_include = self.fleetcontrol.sim_vehicles
 
+        return vehicles_to_include
     
     def compute_new_vehicle_assignments(self, sim_time : int, vid_to_list_passed_VRLs : Dict[int, List[VehicleRouteLeg]],
                                         veh_objs_to_build : Dict[int, SimulationVehicle] = {},
@@ -98,8 +123,12 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
         if len(list(self.unassigned_requests.keys())) == 0:
             return
 
+        # Calculate if some vehicles should be excluded from the ride hailing search
+        vehicles_to_include = self.select_vehicles_to_include(sim_time)
+        vehicles_to_exclude = [veh.vid for veh in self.fleetcontrol.sim_vehicles if veh not in vehicles_to_include]
+
         current_plans = {}
-        for veh_obj in self.fleetcontrol.sim_vehicles:
+        for veh_obj in vehicles_to_include:
             # Get the existing plan or create a new empty one if not present
             current_veh_p = self.fleetcontrol.veh_plans.get(veh_obj.vid, VehiclePlan(veh_obj, self.sim_time, self.routing_engine, []))
             current_veh_p.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
@@ -117,7 +146,7 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
             if self.rid_to_consider_for_global_optimisation.get(rid) is None:
                 continue
             rv_vehicles, rv_results_dict = veh_search_for_immediate_request(sim_time, self.active_requests[rid],
-                                                                            self.fleetcontrol)
+                                                                            self.fleetcontrol, vehicles_to_exclude)
             for veh in rv_vehicles:
                 feasible_plans_list = simple_insert_hailing(self.fleetcontrol.routing_engine, sim_time, veh,
                                                             current_plans[veh.vid], self.active_requests[rid],
@@ -144,7 +173,7 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
             LOG.debug(f"request {rid} assigned to vehicle {veh_obj.vid} with ride hailing assignment")
         LOG.info(f"Objective value at time {sim_time} for ride-hailing assignment: {sum_obj}")
 
-        # The unassigned requests are only considered once and then removed from the list
+        # The unassigned requests are immediately rejected and removed from future consideration
         self.unassigned_requests = {}
             
     
@@ -163,7 +192,7 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
         """
         super().set_assignment(vid, assigned_plan, is_external_vehicle_plan=is_external_vehicle_plan)
 
-    def get_current_assignment(self, vid : int) -> VehiclePlan: # TODO same as get_optimisation_solution (delete?)
+    def get_current_assignment(self, vid : int) -> VehiclePlan:
         """ returns the vehicle plan assigned to vid currently
         :param vid: vehicle id
         :return: vehicle plan

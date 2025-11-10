@@ -209,6 +209,9 @@ G_RA_OP_NW_TYPE = "op_network_type"    # if given, operator loads a different ne
 G_RA_OP_NW_NAME = "op_network_name"     # if given, operator loads a different network for its usage
 G_RA_OP_NW_DYN_F = "op_network_dynamics_file" # if given, operator loads a different network for its usage
 
+G_OP_RH_VEH_SEARCH = "op_hyland_hailing_vehicle_inclusion_policy"  # vehicle inclusion method for Hyland's Ride-Hailing method
+
+
 # forecast attributes
 G_RA_OP_ZONE_SYSTEM = "op_zone_system"  # the zone system used by the operator for forecasting
 G_RA_FC_TYPE = "op_fc_type"
