@@ -100,7 +100,7 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
                 num_plan_stops = len([ps for ps in veh_plan.list_plan_stops if type(ps) != RoutingTargetPlanStop])
             if self.vehicle_inclusion_policy == "idle-only":
                 # Only include vehicles that are idle and have no assigned tasks
-                if veh_obj.status in VRL_STATES.IDLE and num_plan_stops == 0:
+                if veh_obj.status == VRL_STATES.IDLE and num_plan_stops == 0:
                     vehicles_to_include.append(veh_obj)
             elif self.vehicle_inclusion_policy == "repo-and-idle-only":
                 # Include vehicles that are idle or repositioning and have no assigned tasks
