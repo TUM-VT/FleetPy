@@ -223,15 +223,16 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
             first_available_pos, last_available_pos = veh.pos[0], None
             first_available_time, last_available_time = sim_time, None
 
-            veh_plan = current_plans[veh.vid]
-            for ps in veh_plan.list_plan_stops:
-                if ps.is_locked() is False:
-                    first_available_pos = ps.pos[0]
-                    first_available_time = round(ps.get_planned_arrival_and_departure_time()[1], 1)
-                    break
-            if len(veh_plan.list_plan_stops) > 0:
-                last_available_time = round(veh_plan.list_plan_stops[-1].get_planned_arrival_and_departure_time()[1], 1)
-                last_available_pos = veh_plan.list_plan_stops[-1].pos[0]
+            veh_plan = current_plans.get(veh.vid, None)
+            if veh_plan is not None:
+                for ps in veh_plan.list_plan_stops:
+                    if ps.is_locked() is False:
+                        first_available_pos = ps.pos[0]
+                        first_available_time = round(ps.get_planned_arrival_and_departure_time()[1], 1)
+                        break
+                if len(veh_plan.list_plan_stops) > 0:
+                    last_available_time = round(veh_plan.list_plan_stops[-1].get_planned_arrival_and_departure_time()[1], 1)
+                    last_available_pos = veh_plan.list_plan_stops[-1].pos[0]
 
             new_plan = assignments.get(veh, None)
             new_rid = None
@@ -247,7 +248,7 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
                 "sim_time": sim_time,
                 "vid": veh.vid,
                 "status": veh.status.display_name,
-                "current_total_stops": len(veh_plan.list_plan_stops),
+                "current_total_stops": len(veh_plan.list_plan_stops) if veh_plan is not None else 0,
                 "first_unlocked_pos": first_available_pos,
                 "first_unlocked_time": first_available_time,
                 "last_pos": last_available_pos,
