@@ -45,7 +45,7 @@ INPUT_PARAMETERS_AlonsoMoraAssignment = {
 
 class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
     def __init__(self, fleetcontrol: FleetControlBase, routing_engine : NetworkBase, sim_time : int, obj_function : Callable, operator_attributes : dict, 
-                 optimisation_cores : int = 1, seed : int = 6061992, veh_objs_to_build : Dict[int, SimulationVehicle] = {}):
+                 optimisation_cores : int = 1, seed : int = 6061992, veh_objs_to_build : Dict[int, SimulationVehicle] = {}, dir_names=None):
         """This class is used to compute new vehicle assignments with Alonso-Mora-Algorithm
         this class should be initialized when the corresponding fleet controller is initialized
         if parallelization should be enabled, a alonso-mora-parallelization-manager object need to be given (AlonsoMoraParallelization.py)
@@ -58,7 +58,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         :param optimisation_cores: number of cpus/threads used for solving the ILP
         :param seed: random seed
         """
-        super().__init__(fleetcontrol, routing_engine, sim_time, obj_function, operator_attributes, optimisation_cores=optimisation_cores, seed=seed, veh_objs_to_build=veh_objs_to_build)
+        super().__init__(fleetcontrol, routing_engine, sim_time, obj_function, operator_attributes, optimisation_cores=optimisation_cores, seed=seed, veh_objs_to_build=veh_objs_to_build, dir_names=dir_names)
 
         # implemented heuristics: # TODO # adapt description
         # "after_opt_rv_best_v2rb"    -> defined by op_max_rv_connections

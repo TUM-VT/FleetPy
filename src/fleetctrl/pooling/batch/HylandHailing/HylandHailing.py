@@ -1,5 +1,7 @@
 from __future__ import annotations
 import logging
+import pandas as pd
+from pathlib import Path
 
 from typing import Dict, List, TYPE_CHECKING
 
@@ -29,14 +31,20 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
     operations: Optimization-based strategies to assign AVs to immediate traveler demand requests"""
 
     def __init__(self, fleetcontrol, routing_engine, sim_time, obj_function, operator_attributes,
-                 optimisation_cores = 1, seed = 6061992, veh_objs_to_build = {}):
+                 optimisation_cores = 1, seed = 6061992, veh_objs_to_build = {}, dir_names=None):
 
         super().__init__(fleetcontrol, routing_engine, sim_time, obj_function, operator_attributes,
-                         optimisation_cores=optimisation_cores, seed=seed, veh_objs_to_build=veh_objs_to_build)
+                         optimisation_cores=optimisation_cores, seed=seed, veh_objs_to_build=veh_objs_to_build,
+                         dir_names=dir_names)
         self.vehicle_inclusion_policy = operator_attributes.get(G_OP_RH_VEH_SEARCH, "all-vehicles")
         possible_policies = {"idle-only", "repo-and-idle-only", "all-vehicles"}
         assert self.vehicle_inclusion_policy in possible_policies, (f" HylandHailing vehicle exclusion policy "
                                                                     f"{self.vehicle_inclusion_policy} not in possible policies {possible_policies}")
+        # Optional recording of the vehicle stats at the time of optimization
+        self._veh_considered_f = None
+        if operator_attributes.get(G_OP_RH_REC_VEH_OPTM, False):
+            self._veh_considered_f = Path(dir_names[G_DIR_OUTPUT], f"5-{fleetcontrol.op_id}_op-hailing_optim_veh_states.csv")
+
 
     def solve_assignment_problem(self, sim_time, veh_plan_dict: dict[SimulationVehicle, list[VehiclePlan]], n_cpu=1):
         import gurobipy
@@ -192,6 +200,9 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
 
         # Solve the assignment problem
         assignments = self.solve_assignment_problem(sim_time, vobj_plan_dict, n_cpu=1)
+        if self._veh_considered_f is not None:
+            self._record_vehicle_states(sim_time, current_plans, assignments, plan_rid_dict)
+
         sum_obj = 0
         for veh_obj, assigned_plan in assignments.items():
             self.fleetcontrol.assign_vehicle_plan(veh_obj, assigned_plan, sim_time)
@@ -205,7 +216,53 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
 
         # The unassigned requests are immediately rejected and removed from future consideration
         self.unassigned_requests = {}
-            
+
+    def _record_vehicle_states(self, sim_time, current_plans, assignments, plan_rid_dict):
+        record_list = []
+        for veh in self.fleetcontrol.sim_vehicles:
+            first_available_pos, last_available_pos = veh.pos[0], None
+            first_available_time, last_available_time = sim_time, None
+
+            veh_plan = current_plans[veh.vid]
+            for ps in veh_plan.list_plan_stops:
+                if ps.is_locked() is False:
+                    first_available_pos = ps.pos[0]
+                    first_available_time = round(ps.get_planned_arrival_and_departure_time()[1], 1)
+                    break
+            if len(veh_plan.list_plan_stops) > 0:
+                last_available_time = round(veh_plan.list_plan_stops[-1].get_planned_arrival_and_departure_time()[1], 1)
+                last_available_pos = veh_plan.list_plan_stops[-1].pos[0]
+
+            new_plan = assignments.get(veh, None)
+            new_rid = None
+            new_rid_inserted_at = None
+            if new_plan is not None:
+                new_rid = plan_rid_dict[new_plan]
+                for inx, ps in enumerate(new_plan.list_plan_stops):
+                    if len(ps.get_list_boarding_rids()) > 0 and ps.get_list_boarding_rids()[0] == new_rid:
+                        new_rid_inserted_at = inx
+                        break
+
+            record_list.append({
+                "sim_time": sim_time,
+                "vid": veh.vid,
+                "status": veh.status.display_name,
+                "current_total_stops": len(veh_plan.list_plan_stops),
+                "first_unlocked_pos": first_available_pos,
+                "first_unlocked_time": first_available_time,
+                "last_pos": last_available_pos,
+                "last_time": last_available_time,
+                "new_assigned_rid": new_rid,
+                "new_rid_inserted_at_index": new_rid_inserted_at
+            })
+        record_df = pd.DataFrame(record_list)
+        if self._veh_considered_f.exists():
+            write_mode = "a"
+            write_header = False
+        else:
+            write_mode = "w"
+            write_header = True
+        record_df.to_csv(self._veh_considered_f, index=False, mode=write_mode, header=write_header)
     
     def get_optimisation_solution(self, vid : int) -> VehiclePlan:
         """ returns optimisation solution for vid

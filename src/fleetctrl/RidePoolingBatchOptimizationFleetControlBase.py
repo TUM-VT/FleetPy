@@ -102,7 +102,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         n_cores = scenario_parameters[G_SLAVE_CPU]
 
         RPBO_class = load_ride_pooling_batch_optimizer(operator_attributes.get(G_RA_RP_BATCH_OPT, "AlonsoMora"))
-        self.RPBO_Module : BatchAssignmentAlgorithmBase = RPBO_class(self, self.routing_engine, self.sim_time, self.vr_ctrl_f, operator_attributes, optimisation_cores=n_cores, seed=scenario_parameters[G_RANDOM_SEED])
+        self.RPBO_Module : BatchAssignmentAlgorithmBase = RPBO_class(self, self.routing_engine, self.sim_time, self.vr_ctrl_f, operator_attributes, optimisation_cores=n_cores, seed=scenario_parameters[G_RANDOM_SEED], dir_names=dir_names)
 
         self.optimisation_time_step = operator_attributes[G_RA_REOPT_TS]
         self.max_rv_con = operator_attributes.get(G_RA_MAX_VR, None)

@@ -147,7 +147,8 @@ INPUT_PARAMETERS_BatchAssignmentAlgorithmBase = {
 class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
 
     def __init__(self, fleetcontrol : FleetControlBase, routing_engine : NetworkBase, sim_time : int, obj_function : Callable,
-                 operator_attributes : dict, optimisation_cores : int=1, seed :int = 6061992, veh_objs_to_build : Dict[int, SimulationVehicleStruct]={}):
+                 operator_attributes : dict, optimisation_cores : int=1, seed :int = 6061992, veh_objs_to_build : Dict[int, SimulationVehicleStruct]={},
+                 dir_names = None):
         """This class is used to compute new vehicle assignments with an algorithm
         this class should be initialized when the corresponding fleet controller is initialized
         :param fleetcontrol : fleetcontrol object, which uses this assignment algorithm
@@ -172,6 +173,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         self.objective_function = obj_function
         self.optimisation_cores = optimisation_cores
         self.operator_attributes = operator_attributes
+        self.dir_names = dir_names
 
         np.random.seed(seed)
 

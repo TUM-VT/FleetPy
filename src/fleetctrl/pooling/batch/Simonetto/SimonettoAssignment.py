@@ -37,7 +37,7 @@ INPUT_PARAMETERS_SimonettoAssignment = {
 }
 
 class SimonettoAssignment(BatchAssignmentAlgorithmBase):
-    def __init__(self, fleetcontrol: FleetControlBase, routing_engine: NetworkBase, sim_time: int, obj_function: Callable[..., Any], operator_attributes: dict, optimisation_cores: int = 1, seed: int = 6061992, veh_objs_to_build: Dict[int, SimulationVehicleStruct] = {}):
+    def __init__(self, fleetcontrol: FleetControlBase, routing_engine: NetworkBase, sim_time: int, obj_function: Callable[..., Any], operator_attributes: dict, optimisation_cores: int = 1, seed: int = 6061992, veh_objs_to_build: Dict[int, SimulationVehicleStruct] = {}, dir_names = None):
         """This class implements the assingment algorithm of Simonetto et al. 2019.
         it assigns requests in batches. instead of finding optimal assignments, only schedules for new requests are computed. requests in the same batch cannot be assigned to the same vehicle, resulting in a linear assignment problem.
         Optional parameter : op_max_exhaustive_darp -> maximum number of requests for which the exhaustive DARP is solved. if the number of requests is larger, the requests are inserted into the vehicle plans of the vehicle.  base value: 4 (for speed-up use 1)
@@ -49,7 +49,7 @@ class SimonettoAssignment(BatchAssignmentAlgorithmBase):
         :param seed : random seed
         :param veh_objs_to_build: dict vid -> SimulationVehicleStruct which will be considered in opt. if empty dict, vehicles from fleetcontrol will be taken
         """
-        super().__init__(fleetcontrol, routing_engine, sim_time, obj_function, operator_attributes, optimisation_cores, seed=seed, veh_objs_to_build=veh_objs_to_build)
+        super().__init__(fleetcontrol, routing_engine, sim_time, obj_function, operator_attributes, optimisation_cores, seed=seed, veh_objs_to_build=veh_objs_to_build, dir_names=dir_names)
         
         self._max_prqs_exhaustive_DARP = self.operator_attributes.get(G_RA_MAX_EXH_DARP)
         if self._max_prqs_exhaustive_DARP is None or type(self._max_prqs_exhaustive_DARP) != int:

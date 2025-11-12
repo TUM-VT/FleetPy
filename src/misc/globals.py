@@ -210,6 +210,7 @@ G_RA_OP_NW_NAME = "op_network_name"     # if given, operator loads a different n
 G_RA_OP_NW_DYN_F = "op_network_dynamics_file" # if given, operator loads a different network for its usage
 
 G_OP_RH_VEH_SEARCH = "op_hyland_hailing_vehicle_inclusion_policy"  # vehicle inclusion method for Hyland's Ride-Hailing method
+G_OP_RH_REC_VEH_OPTM = "op_hyland_hailing_record_optimization_vehicle_states"
 
 
 # forecast attributes
