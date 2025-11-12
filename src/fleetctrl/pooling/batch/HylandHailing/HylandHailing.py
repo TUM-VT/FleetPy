@@ -109,6 +109,26 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
             elif self.vehicle_inclusion_policy == "all-vehicles":
                 vehicles_to_include.append(veh_obj)
         return vehicles_to_include
+
+    def lock_on_board_request_dropoffs(self, sim_time: int):
+        """ Locks the drop-off stops of requests that are already on-board vehicles to prevent them from being altered during optimization.
+        :param sim_time: current simulation time
+        """
+        for veh_obj in self.fleetcontrol.sim_vehicles:
+            onboard_rids = veh_obj.get_rid_list(ignore_parcels=True)
+            assert len(onboard_rids) <= 1, f"Vehicle {veh_obj.vid} has multiple requests {onboard_rids} on-board!"
+            if len(onboard_rids) > 0:
+                current_veh_p = self.fleetcontrol.veh_plans.get(veh_obj.vid, None)
+                if current_veh_p is not None:
+                    ps = current_veh_p.list_plan_stops[0]
+                    if ps.get_list_boarding_rids():
+                        assert ps.get_list_boarding_rids()[0] == onboard_rids[0]
+                        ps.set_locked(True)
+                        assert current_veh_p.list_plan_stops[1].get_list_alighting_rids()[0] == onboard_rids[0]
+                        current_veh_p.list_plan_stops[1].set_locked(True)
+                    if ps.get_list_alighting_rids():
+                        assert ps.get_list_alighting_rids()[0] == onboard_rids[0]
+                        ps.set_locked(True)
     
     def compute_new_vehicle_assignments(self, sim_time : int, vid_to_list_passed_VRLs : Dict[int, List[VehicleRouteLeg]],
                                         veh_objs_to_build : Dict[int, SimulationVehicle] = {},
@@ -128,6 +148,10 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
 
         if len(list(self.unassigned_requests.keys())) == 0:
             return
+
+        # Lock the drop-off stops of requests that are already on-board
+        # TODO: investigate why this is not happening already by the fleet controller
+        self.lock_on_board_request_dropoffs(sim_time)
 
         # Calculate if some vehicles should be excluded from the ride hailing search
         vehicles_to_include = self.select_vehicles_to_include(sim_time)
