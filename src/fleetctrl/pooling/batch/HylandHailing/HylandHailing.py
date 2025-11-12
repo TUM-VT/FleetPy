@@ -161,12 +161,8 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
         # TODO: investigate why this is not happening already by the fleet controller
         self.lock_on_board_request_dropoffs(sim_time)
 
-        # Calculate if some vehicles should be excluded from the ride hailing search
-        vehicles_to_include = self.select_vehicles_to_include(sim_time)
-        vehicles_to_exclude = [veh.vid for veh in self.fleetcontrol.sim_vehicles if veh not in vehicles_to_include]
-
         current_plans = {}
-        for veh_obj in vehicles_to_include:
+        for veh_obj in self.fleetcontrol.sim_vehicles:
             # Get the existing plan or create a new empty one if not present
             current_veh_p = self.fleetcontrol.veh_plans.get(veh_obj.vid, VehiclePlan(veh_obj, self.sim_time, self.routing_engine, []))
             current_veh_p.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
@@ -177,6 +173,10 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
             obj = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, veh_p)
             veh_p.set_utility(obj)
             current_plans[veh_obj.vid] = veh_p
+
+        # Calculate if some vehicles should be excluded from the ride hailing search
+        vehicles_to_include = self.select_vehicles_to_include(sim_time)
+        vehicles_to_exclude = [veh.vid for veh in self.fleetcontrol.sim_vehicles if veh not in vehicles_to_include]
 
         vobj_plan_dict = {}
         plan_rid_dict = {}
