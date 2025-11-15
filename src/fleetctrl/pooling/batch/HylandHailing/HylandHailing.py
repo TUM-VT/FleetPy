@@ -20,7 +20,7 @@ INPUT_PARAMETERS_HylandHailing = {
     "doc" :  """this class uses the ride hailing methods by Hyland & Mahmassani (2018)  """,
     "inherit" : "BatchAssignmentAlgorithmBase",
     "input_parameters_mandatory": [],
-    "input_parameters_optional": [
+    "input_parameters_optional": [G_OP_RH_REC_VEH_OPTM
         ],
     "mandatory_modules": [],
     "optional_modules": []
@@ -102,10 +102,15 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
         """
         vehicles_to_include = []
         for veh_obj in self.fleetcontrol.sim_vehicles:
-            num_plan_stops = 0
+            num_plan_stops, first_available_time = 0, sim_time
             veh_plan = self.fleetcontrol.veh_plans.get(veh_obj.vid, None)
             if veh_plan is not None:
                 num_plan_stops = len([ps for ps in veh_plan.list_plan_stops if type(ps) != RoutingTargetPlanStop])
+                for ps in veh_plan.list_plan_stops:
+                    if ps.is_locked() is False:
+                        first_available_time = ps.get_planned_arrival_and_departure_time()[1]
+                        break
+
             if self.vehicle_inclusion_policy == "idle-only":
                 # Only include vehicles that are idle and have no assigned tasks
                 if veh_obj.status == VRL_STATES.IDLE and num_plan_stops == 0:
@@ -113,9 +118,11 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
             elif self.vehicle_inclusion_policy == "repo-and-idle-only":
                 # Include vehicles that are idle or repositioning and have no assigned tasks
                 if veh_obj.status in {VRL_STATES.IDLE, VRL_STATES.REPOSITION} and num_plan_stops == 0:
-                    vehicles_to_include.append(veh_obj)
+                    if first_available_time <= sim_time + self.fleetcontrol.max_wait_time:
+                        vehicles_to_include.append(veh_obj)
             elif self.vehicle_inclusion_policy == "all-vehicles":
-                vehicles_to_include.append(veh_obj)
+                if first_available_time <= sim_time + self.fleetcontrol.max_wait_time:
+                    vehicles_to_include.append(veh_obj)
         return vehicles_to_include
 
     def lock_on_board_request_dropoffs(self, sim_time: int):
