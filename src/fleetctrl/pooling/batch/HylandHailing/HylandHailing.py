@@ -201,7 +201,7 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
         # Solve the assignment problem
         assignments = self.solve_assignment_problem(sim_time, vobj_plan_dict, n_cpu=1)
         if self._veh_considered_f is not None:
-            self._record_vehicle_states(sim_time, current_plans, assignments, plan_rid_dict)
+            self._record_vehicle_states(sim_time, current_plans, assignments, plan_rid_dict, vehicles_to_include)
 
         sum_obj = 0
         for veh_obj, assigned_plan in assignments.items():
@@ -217,8 +217,9 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
         # The unassigned requests are immediately rejected and removed from future consideration
         self.unassigned_requests = {}
 
-    def _record_vehicle_states(self, sim_time, current_plans, assignments, plan_rid_dict):
+    def _record_vehicle_states(self, sim_time, current_plans, assignments, plan_rid_dict, vehicles_to_include):
         record_list = []
+        vehicles_to_include = set(vehicles_to_include)
         for veh in self.fleetcontrol.sim_vehicles:
             first_available_pos, last_available_pos = veh.pos[0], None
             first_available_time, last_available_time = sim_time, None
@@ -253,6 +254,7 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
                 "first_unlocked_time": first_available_time,
                 "last_pos": last_available_pos,
                 "last_time": last_available_time,
+                "vid_included_in_assignment": veh in vehicles_to_include,
                 "new_assigned_rid": new_rid,
                 "new_rid_inserted_at_index": new_rid_inserted_at
             })
