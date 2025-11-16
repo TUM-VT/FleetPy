@@ -3,7 +3,7 @@ import logging
 import pandas as pd
 from pathlib import Path
 
-from typing import Dict, List, TYPE_CHECKING
+from typing import Dict, List, TYPE_CHECKING, Optional
 
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan, RoutingTargetPlanStop
 from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
@@ -96,6 +96,23 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
 
         return assignments
 
+    def calculate_avaiability(self, veh: SimulationVehicle, vehicle_plan: Optional[VehiclePlan] = None):
+        """ Calculates the first and last availability time and position of the vehicle based on its plan."""
+
+        first_available_pos, last_available_pos = veh.pos, None
+        first_available_time, last_available_time = self.sim_time, None
+
+        if vehicle_plan is not None and len(vehicle_plan.list_plan_stops) > 0:
+            last_available_time = vehicle_plan.list_plan_stops[-1].get_planned_arrival_and_departure_time()[1]
+            last_available_pos = vehicle_plan.list_plan_stops[-1].pos
+            first_available_time = last_available_time
+            first_available_pos = last_available_pos
+            inx, ps = vehicle_plan.get_first_unlocked_plan_stop()
+            if ps is not None:
+                first_available_pos = ps.pos
+                first_available_time = ps.get_planned_arrival_and_departure_time()[1]
+        return first_available_time, first_available_pos, last_available_time, last_available_pos
+
     def select_vehicles_to_include(self, sim_time : int) -> List[SimulationVehicle]:
         """ selects vehicles to include from the ride hailing search based on the vehicle inclusion policy
         :param sim_time: current simulation time
@@ -103,14 +120,11 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
         """
         vehicles_to_include = []
         for veh_obj in self.fleetcontrol.sim_vehicles:
-            num_plan_stops, first_available_time = 0, sim_time
             veh_plan = self.fleetcontrol.veh_plans.get(veh_obj.vid, None)
+            first_available_time = self.calculate_avaiability(veh_obj, veh_plan)[0]
+            num_plan_stops = 0
             if veh_plan is not None:
                 num_plan_stops = len([ps for ps in veh_plan.list_plan_stops if type(ps) != RoutingTargetPlanStop])
-                for ps in veh_plan.list_plan_stops:
-                    if ps.is_locked() is False:
-                        first_available_time = ps.get_planned_arrival_and_departure_time()[1]
-                        break
 
             if self.vehicle_inclusion_policy == "idle-only":
                 # Only include vehicles that are idle and have no assigned tasks
@@ -233,19 +247,8 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
         record_list = []
         vehicles_to_include = set(vehicles_to_include)
         for veh in self.fleetcontrol.sim_vehicles:
-            first_available_pos, last_available_pos = veh.pos[0], None
-            first_available_time, last_available_time = sim_time, None
-
             veh_plan = current_plans.get(veh.vid, None)
-            if veh_plan is not None:
-                for ps in veh_plan.list_plan_stops:
-                    if ps.is_locked() is False:
-                        first_available_pos = ps.pos[0]
-                        first_available_time = round(ps.get_planned_arrival_and_departure_time()[1], 1)
-                        break
-                if len(veh_plan.list_plan_stops) > 0:
-                    last_available_time = round(veh_plan.list_plan_stops[-1].get_planned_arrival_and_departure_time()[1], 1)
-                    last_available_pos = veh_plan.list_plan_stops[-1].pos[0]
+            first_available_time, first_available_pos, last_available_time, last_available_pos = self.calculate_avaiability(veh, veh_plan)
 
             new_plan = assignments.get(veh, None)
             new_rid = None
@@ -262,10 +265,10 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
                 "vid": veh.vid,
                 "status": veh.status.display_name,
                 "current_total_stops": len(veh_plan.list_plan_stops) if veh_plan is not None else 0,
-                "first_unlocked_pos": first_available_pos,
-                "first_unlocked_time": first_available_time,
-                "last_pos": last_available_pos,
-                "last_time": last_available_time,
+                "first_unlocked_pos": first_available_pos[0],
+                "first_unlocked_time": round(first_available_time, 2),
+                "last_pos": last_available_pos[0] if last_available_pos is not None else None,
+                "last_time": round(last_available_time, 2) if last_available_time is not None else None,
                 "vid_included_in_assignment": veh in vehicles_to_include,
                 "new_assigned_rid": new_rid,
                 "new_rid_inserted_at_index": new_rid_inserted_at

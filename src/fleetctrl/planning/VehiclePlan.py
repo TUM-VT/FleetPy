@@ -607,6 +607,13 @@ class VehiclePlan:
         :return: list of request ids"""
         return list(self.pax_info.keys())
 
+    def get_first_unlocked_plan_stop(self):
+        """ Returns the first plan stop that is unlocked and its index in the plan  """
+        for idx, ps in enumerate(self.list_plan_stops):
+            if not ps.is_locked():
+                return ps, idx
+        return None, None
+
     def set_utility(self, utility_value : float):
         """ this method is used to set the utility (cost function value) of this plan
         :param utility_value: float of utility value"""
