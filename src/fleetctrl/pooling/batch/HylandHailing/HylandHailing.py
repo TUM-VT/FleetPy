@@ -20,7 +20,7 @@ INPUT_PARAMETERS_HylandHailing = {
     "doc" :  """this class uses the ride hailing methods by Hyland & Mahmassani (2018)  """,
     "inherit" : "BatchAssignmentAlgorithmBase",
     "input_parameters_mandatory": [],
-    "input_parameters_optional": [G_OP_RH_REC_VEH_OPTM
+    "input_parameters_optional": [G_OP_RH_REC_VEH_OPTM,G_OP_RH_IMMEDIATE_LOCK
         ],
     "mandatory_modules": [],
     "optional_modules": []
@@ -42,6 +42,7 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
                                                                     f"{self.vehicle_inclusion_policy} not in possible policies {possible_policies}")
         # Optional recording of the vehicle stats at the time of optimization
         self._veh_considered_f = None
+        self._immediate_plan_lock = operator_attributes.get(G_OP_RH_IMMEDIATE_LOCK, True)
         if operator_attributes.get(G_OP_RH_REC_VEH_OPTM, False):
             self._veh_considered_f = Path(dir_names[G_DIR_OUTPUT], f"5-{fleetcontrol.op_id}_op-hailing_optim_veh_states.csv")
 
@@ -164,7 +165,8 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
         if len(list(self.unassigned_requests.keys())) == 0:
             return
 
-        # Lock the drop-off stops of requests that are already on-board
+        # Lock the drop-off stops of requests that are already on-board.
+        # If self._immediate_plan_lock is True, all plans are already locked and this part is not needed.
         # TODO: investigate why this is not happening already by the fleet controller
         self.lock_on_board_request_dropoffs(sim_time)
 
@@ -212,6 +214,9 @@ class HylandHailing(BatchAssignmentAlgorithmBase):
 
         sum_obj = 0
         for veh_obj, assigned_plan in assignments.items():
+            if self._immediate_plan_lock is True:
+                for ps in assigned_plan.list_plan_stops:
+                        ps.set_locked(True)
             self.fleetcontrol.assign_vehicle_plan(veh_obj, assigned_plan, sim_time)
             # update utility
             upd_utility_val = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, self.fleetcontrol.veh_plans[veh_obj.vid])

@@ -211,6 +211,7 @@ G_RA_OP_NW_DYN_F = "op_network_dynamics_file" # if given, operator loads a diffe
 
 G_OP_RH_VEH_SEARCH = "op_hyland_hailing_vehicle_inclusion_policy"  # vehicle inclusion method for Hyland's Ride-Hailing method
 G_OP_RH_REC_VEH_OPTM = "op_hyland_hailing_record_optimization_vehicle_states"
+G_OP_RH_IMMEDIATE_LOCK = "op_hyland_hailing_lock_all_plans"  # if true, the whole vehicle plan is immediately locked on assignment
 
 
 # forecast attributes
