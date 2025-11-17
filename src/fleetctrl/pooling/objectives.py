@@ -64,6 +64,38 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                     last_pos = pos
             return sum_dist - assignment_reward
 
+    elif func_key == "total_msp_profit":
+        var_fare = vr_control_func_dict["var_fare"]
+        base_fare = vr_control_func_dict["base_fare"]
+        var_cost = vr_control_func_dict["var_cost"]
+
+        def control_f(simulation_time: float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest],
+                      routing_engine:NetworkBase):
+            """This function evaluates the base fare and distance-based Mobility Service Provider's profit."""
+
+            all_distance, in_veh_distance = 0, 0
+            last_pos = veh_obj.pos
+            on_boarded_rids = set(veh_obj.get_rid_list(ignore_parcels=True))
+            for i, ps in enumerate(veh_plan.list_plan_stops):
+                if ps.pos != last_pos:
+                    dist = routing_engine.return_travel_costs_1to1(last_pos, ps.pos)[2]
+                    all_distance += dist
+                    if len(on_boarded_rids) > 0:
+                        # some passengers on board
+                        in_veh_distance += dist
+                    last_pos = ps.pos
+                on_boarded_rids.update(ps.get_list_boarding_rids())
+                on_boarded_rids = on_boarded_rids.difference(set(ps.get_list_alighting_rids()))
+
+            assignment_reward = len(veh_plan.pax_info) * base_fare
+            for rid, boarding_info_list in veh_plan.pax_info.items():
+                prq = rq_dict[rid]
+                if prq.is_locked() or prq.status in {G_PRQS_INIT_OFFER, G_PRQS_ACC_OFFER, G_PRQS_LOCKED, G_PRQS_IN_VEH}:
+                    assignment_reward += LARGE_INT
+
+            profit = - assignment_reward - in_veh_distance*var_fare + all_distance*var_cost
+            return profit
+
     elif func_key == "total_system_time":
         ignore_repo_stop_wt = vr_control_func_dict.get("irswt", False)
         assignment_reward_per_rq = MAX_DELAY * 10
