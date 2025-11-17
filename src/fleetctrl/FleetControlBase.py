@@ -410,6 +410,26 @@ class FleetControlBase(metaclass=ABCMeta):
         if self.repo and not prq.get_reservation_flag():
             self.repo.register_rejected_customer(prq, simulation_time)
         return offer
+    
+    def _is_valid_request(self, sim_time, plan_request: PlanRequest) -> bool:
+        """Check if a request is valid (e.g. feasible o-d-relation).
+
+        :param sim_time: current simulation time
+        :param plan_request: plan request that contains all relevant information
+        :return: True if request is valid, False otherwise
+        """
+        if plan_request.o_pos == plan_request.d_pos:
+            LOG.debug(f"automatic decline for rid {plan_request.get_rid_struct()}!")
+            self._create_rejection(plan_request, sim_time)
+            return False
+        if self.repo and self.repo.zone_system:
+            o_zone = self.repo.zone_system.get_zone_from_pos(plan_request.get_o_stop_info()[0])
+            d_zone = self.repo.zone_system.get_zone_from_pos(plan_request.get_d_stop_info()[0])
+            if o_zone < 0 or d_zone < 0:
+                LOG.debug(f"automatic decline for rid {plan_request.get_rid_struct()} due to out-of-operating-area request!")
+                self._create_rejection(plan_request, sim_time)
+                return False
+        return True
 
     def get_current_offer(self, rid : Any) -> TravellerOffer:
         """ this method returns the currently active offer for the request rid

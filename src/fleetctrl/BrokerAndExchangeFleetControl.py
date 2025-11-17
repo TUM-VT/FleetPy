@@ -101,8 +101,7 @@ class BrokerDecisionCtrl(PoolingIRSAssignmentBatchOptimization):
         self.RPBO_Module.add_new_request(rid_struct, prq)
         self.new_requests[rid_struct] = 1
 
-        if prq.o_pos == prq.d_pos:
-            LOG.debug(f"automatic decline for rid {rid_struct}!")
+        if not self._is_valid_request(sim_time, prq):
             self._create_rejection(prq, sim_time)
             return
 
@@ -278,7 +277,7 @@ class BrokerExChangeCtrl(RidePoolingBatchOptimizationFleetControlBase):
         super().user_request(rq, sim_time)
         rid_struct = rq.get_rid_struct()
         prq = self.rq_dict[rid_struct]
-        if prq.o_pos == prq.d_pos:
+        if not self._is_valid_request(sim_time, prq):
             LOG.debug("automatic decline!")
             return {}
 
@@ -591,8 +590,7 @@ class BrokerBaseCtrl(BrokerExChangeCtrl):
         _ = super().user_request(rq, sim_time)
         rid_struct = rq.get_rid_struct()
         prq = self.rq_dict[rid_struct]
-        if prq.o_pos == prq.d_pos:
-            LOG.debug("automatic decline!")
+        if not self._is_valid_request(sim_time, prq):
             return {}
 
         LOG.debug("new user request {}".format(rid_struct))

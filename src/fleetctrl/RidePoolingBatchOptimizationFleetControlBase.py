@@ -194,8 +194,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
                           boarding_time=self.const_bt)
         rid_struct = rq.get_rid_struct()
 
-        if prq.o_pos == prq.d_pos:
-            LOG.debug(f"automatic decline for rid {rid_struct}!")
+        if not self._is_valid_request(sim_time, prq):
             self._create_rejection(prq, sim_time)
             return
 

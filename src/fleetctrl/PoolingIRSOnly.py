@@ -107,8 +107,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         rid_struct = rq.get_rid_struct()
         self.rq_dict[rid_struct] = prq
 
-        if prq.o_pos == prq.d_pos:
-            LOG.debug(f"automatic decline for rid {rid_struct}!")
+        if not self._is_valid_request(sim_time, prq):
             self._create_rejection(prq, sim_time)
             return
 
