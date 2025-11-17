@@ -14,7 +14,7 @@ for p in os.sys.path:
         to_del.append(p)
 for p in to_del:
     os.sys.path.remove(p)
-os.sys.path.append(r"C:\Users\ge37ser\Documents\Coding\FleetPy")
+os.sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.misc.globals import *
 from src.coupling.misc import *

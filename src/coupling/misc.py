@@ -3,14 +3,47 @@ import os
 import pandas as pd
 import gzip
 
-def create_fleetpy_network_from_matsim(matsim_network_path, fleetpy_data_path, network_name):
+import hashlib
+
+def file_hash(path):
+    hasher = hashlib.sha256()
+    with open(path, 'rb') as file:
+        for chunk in iter(lambda: file.read(4096), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+def check_file_hash(matsim_network_path, fleetpy_data_path, network_name):
+    """ if the fleetpy network was already created from the same matsim network, skip creation """
+    print("Checking file hash for MATSim network...")
+    if not os.path.exists(os.path.join(fleetpy_data_path, "networks", network_name, "matsim_network.hash")):
+        print(" -> No existing hash file found.")
+        return False
+    with open(os.path.join(fleetpy_data_path, "networks", network_name, "matsim_network.hash"), "r") as f:
+        existing_hash = f.read().strip()
+    current_hash = file_hash(matsim_network_path)
+    res = existing_hash == current_hash
+    if res:
+        print(" -> Hashes match. FleetPy network is up to date.")
+    else:
+        print(" -> Hashes do not match. FleetPy network needs to be recreated.")
+    return res
+
+def create_fleetpy_network_from_matsim(matsim_network_path, fleetpy_data_path, network_name, enforce_hash_similarity=True):
     """
     Create FleetPy network based on MATSim network.
     :param matsim_network_path: Path to the MATSim network file.
+    :param fleetpy_data_path: Path to the FleetPy data directory.
+    :param network_name: Name of the network to be created.
+    :param enforce_hash_similarity: If True, raises an error if the MATSim network file has changed since the last creation (might need new preprocessing).
     :return: FleetPy network DataFrame.
     """
     # Load the MATSim network XML file
     print("matsim_network_path:", matsim_network_path)
+    
+    same_hash = check_file_hash(matsim_network_path, fleetpy_data_path, network_name)
+    if enforce_hash_similarity and not same_hash:
+        raise ValueError("The MATSim network file has changed since the last FleetPy network creation. Please re-run preprocessing.")    
+    
     if matsim_network_path.endswith(".gz"):
         with gzip.open(matsim_network_path, 'rb') as f:
             tree = ET.parse(f)
@@ -62,14 +95,21 @@ def create_fleetpy_network_from_matsim(matsim_network_path, fleetpy_data_path, n
     # Convert links to a DataFrame
     links_df = pd.DataFrame(links)
     
-    output_path = os.path.join(fleetpy_data_path, "networks", network_name, "base")
-    os.makedirs(output_path, exist_ok=True)
-    nodes_df.to_csv(os.path.join(output_path, "nodes.csv"), index=False)
-    links_df.to_csv(os.path.join(output_path, "edges.csv"), index=False)
-    crs_str = "MATSIM CRS"
-    with open(os.path.join(output_path, "crs.info"), "w") as f:
-        f.write(crs_str)
-    print("FleetPy network created from MATSim network: {}".format(output_path))
+    if not same_hash:
+        # Save the current hash
+        current_hash = file_hash(matsim_network_path)
+        os.makedirs(os.path.join(fleetpy_data_path, "networks", network_name), exist_ok=True)
+        with open(os.path.join(fleetpy_data_path, "networks", network_name, "matsim_network.hash"), "w") as f:
+            f.write(current_hash)
+            
+        output_path = os.path.join(fleetpy_data_path, "networks", network_name, "base")
+        os.makedirs(output_path, exist_ok=True)
+        nodes_df.to_csv(os.path.join(output_path, "nodes.csv"), index=False)
+        links_df.to_csv(os.path.join(output_path, "edges.csv"), index=False)
+        crs_str = "MATSIM CRS"
+        with open(os.path.join(output_path, "crs.info"), "w") as f:
+            f.write(crs_str)
+        print("FleetPy network created from MATSim network: {}".format(output_path))
     
     return matsim_edge_to_fp_edge, fp_edge_to_matsim_edge
 
