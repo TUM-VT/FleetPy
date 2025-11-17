@@ -1,4 +1,5 @@
 import os
+import sys
 import zmq
 import json
 import traceback
@@ -540,37 +541,47 @@ class MATSimSocket:
         tt_f_p = os.path.join(self._output_dir, f"matsim_edge_traveltimes_{int(sim_time)}.csv")
         pd.DataFrame(edge_tt_df_list).to_csv(tt_f_p, index=False)
         self.fs_obj.routing_engine.load_tt_file(sim_time, ext_path=tt_f_p)   
-    
-    
-if __name__ == "__main__":
-    # Example usage of MATSimSocket class
-    scenario_parameters = {}
-    host = "localhost"
-    port = 1234
-    
+
+def run(fleetpy_config_path, matsim_network_path, port):
     from src.misc.config import ConstantConfig, ScenarioConfig
     
-    #matsim_network_path = r"C:\Users\ge37ser\Documents\Projekte\MINGA\AP5\IRTSystemX\KopplungMATSimFleetPy\matsim-fleetpy\scenario\network.xml.gz"
+    const_cfg = ConstantConfig(fleetpy_config_path)
+    # print(const_cfg)
+    # scenarios_cfg = ScenarioConfig(fleetpy_config_path)
+    # print(scenarios_cfg)
     
-    matsim_network_path = r"C:\Users\ge37ser\Documents\Projekte\MINGA\AP5\IRTSystemX\KopplungMATSimFleetPy\MATSim Populations\muenchen_1pct\test_cut\cut_network.xml.gz"
-    
-    const_cfg = ConstantConfig(r"C:\Users\ge37ser\Documents\Coding\FleetPy\studies\test_matsim_coupling\scenarios\constant_config_pool.csv")
-    print(const_cfg)
-    scenarios_cfg = ScenarioConfig(r"C:\Users\ge37ser\Documents\Coding\FleetPy\studies\test_matsim_coupling\scenarios\example_pool.csv")
-    print(scenarios_cfg)
-    
-    whole_config = const_cfg + scenarios_cfg[0]
+    whole_config = const_cfg # + scenarios_cfg[0]
     whole_config["matsim_network_path"] = matsim_network_path
-    whole_config["study_name"] = "test_matsim_coupling"
+    const_abs = os.path.abspath(fleetpy_config_path)
+    study_name = os.path.basename(os.path.dirname(os.path.dirname(const_abs)))
+    whole_config["study_name"] = study_name
     whole_config["log_level"] = "info"
     whole_config["n_cpu_per_sim"] = 1
     whole_config["force_veh_pos_update_interval"] = 15
     
+    host = "localhost"
+    
+    print("Starting MATSimSocket ...")
+    
+    matsim_socket = MATSimSocket(host, port, whole_config, log_communication=LOG_COMMUNICATION)
+    print(" -> MATSimSocket started")
+    
+    matsim_socket.keep_socket_alive()    
+    
+if __name__ == "__main__":
+    # Example usage of MATSimSocket class
+
+    if len(sys.argv) <= 4:
+        print("Usage: python MATSimSocket.py <fleetpy_config_path> <matsim_network_path> <port> [profile]")
+        sys.exit(1)
+    fleetpy_config_path = sys.argv[1]
+    matsim_network_path = sys.argv[2]
+    port = int(sys.argv[3])
+    
     profile = False
     
     if not profile:
-        matsim_socket = MATSimSocket(host, port, whole_config, log_communication=LOG_COMMUNICATION)
-        matsim_socket.keep_socket_alive()
+        run(fleetpy_config_path, matsim_network_path, port)
     
     else:
         import sys
@@ -580,8 +591,7 @@ if __name__ == "__main__":
         profiler.enable()
         
         try:
-            matsim_socket = MATSimSocket(host, port, whole_config, log_communication=LOG_COMMUNICATION)
-            matsim_socket.keep_socket_alive()
+            run(fleetpy_config_path, matsim_network_path, port)
             
         finally:
             profiler.disable()
