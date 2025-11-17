@@ -2,7 +2,7 @@ import os
 import shutil
 import pandas as pd
 import numpy as np
-from data_processing.config import DataProcessingConfig as cfg
+from gnn_project.config import Config as cfg
 
 
 def clean_normalization_directory(stats_dir: str) -> None:
@@ -18,7 +18,7 @@ def clean_normalization_directory(stats_dir: str) -> None:
     os.makedirs(stats_dir, exist_ok=True)
 
 
-def load_normalization_statistics(stats_dir: str) -> tuple[dict, dict, dict, dict]:
+def load_normalization_statistics(stats_dir: str) -> dict[str, dict]:
     """
     Loads saved normalization statistics from parquet files.
 
@@ -26,7 +26,7 @@ def load_normalization_statistics(stats_dir: str) -> tuple[dict, dict, dict, dic
         stats_dir (str): Path to the directory containing normalization statistics
 
     Returns:
-        tuple: (means, stds, mins, maxs) dictionaries containing statistics for each feature.
+        dict[str, dict]: Dictionary containing 'means', 'stds', 'mins', and 'maxs' dictionaries for each feature.
               The keys in these dictionaries include the feature type prefix (e.g., 'req_feature', 'veh_feature')
     """
     # Read parquet files and convert to dictionaries
@@ -41,7 +41,7 @@ def load_normalization_statistics(stats_dir: str) -> tuple[dict, dict, dict, dic
     mins = mins_df.iloc[:, 0].to_dict()
     maxs = maxs_df.iloc[:, 0].to_dict()
 
-    return means, stds, mins, maxs
+    return {'means': means, 'stds': stds, 'mins': mins, 'maxs': maxs}
 
 
 def get_feature_type(series: pd.Series, column_name: str = None) -> str:
@@ -59,14 +59,14 @@ def get_feature_type(series: pd.Series, column_name: str = None) -> str:
 
     # 1. Metadata columns (always exclude from normalization)
     metadata_patterns = [
-        'id$', 'timestep', 'source', 'target', cfg.LABEL
+        'id$', 'timestep', 'source', 'target', cfg.label_key
     ]
     if column_name and any(re.search(pattern, column_name.lower()) for pattern in metadata_patterns):
         return 'metadata'
 
     # 2. Binary indicators and flags
     binary_patterns = [
-        'locked$', '^is_', 'feasibility', cfg.INIT_LABEL
+        'locked$', '^is_', 'feasibility', cfg.init_label_key
     ]
     if column_name and any(re.search(pattern, column_name.lower()) for pattern in binary_patterns):
         return 'binary'

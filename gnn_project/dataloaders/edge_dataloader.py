@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 
 # Local imports
-from data_processing.config import DataProcessingConfig
-from data_processing.data_processor import DataProcessor
-from .DataLoader import DataLoader
+from gnn_project.config import Config
+from gnn_project.data_processing.data_processor import DataProcessor
+from gnn_project.dataloaders.dataloader import DataLoader
 
 
 class EdgeClassificationDataLoader(DataLoader):
@@ -20,8 +20,8 @@ class EdgeClassificationDataLoader(DataLoader):
     This class extends the base DataLoader to specifically handle edge classification
     tasks by loading edge features and labels, and preparing them for use with classifiers.
     """
-
-    def __init__(self, scenarios: List[str], edge_type='vr_graph', config: Optional[DataProcessingConfig] = None, overwrite: bool = False,  version: str = None, load_dir: str = None):
+    # TODO standardize signature with base class
+    def __init__(self, scenarios: List[str], edge_type='vr_graph', config: Optional[Config] = None, overwrite: bool = False,  version: str = None, load_dir: str = None):
         """Initialize the EdgeClassificationDataLoader.
 
         Args:
@@ -33,7 +33,7 @@ class EdgeClassificationDataLoader(DataLoader):
             load_dir: Optional directory to manually load data from (overrides version search)
         """
         self.scenarios = scenarios
-        self.config = config if config else DataProcessingConfig()
+        self.config = config if config else Config()
         self.overwrite = overwrite
         self.edge_type = edge_type
         self.load_dir = load_dir
@@ -42,13 +42,13 @@ class EdgeClassificationDataLoader(DataLoader):
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         folder_suffix = f"_v{version}" if version else ""
         self.save_dir = os.path.join(
-            self.config.base_data_dir, self.config.train_dir, f"{folder_suffix}_{timestamp}")
+            self.config.base_data_dir, self.config.train_data_dir, f"{folder_suffix}_{timestamp}")
         os.makedirs(self.save_dir, exist_ok=True)
         print('Save directory for edge classification data:', self.save_dir)
 
     def _find_latest_version_dir(self, version: str):
         """Find the latest directory for the given version, if any."""
-        base_dir = os.path.join(self.config.base_data_dir, self.config.train_dir)
+        base_dir = os.path.join(self.config.base_data_dir, self.config.train_data_dir)
         folder_suffix = f"_v{version}" if version else ""
         candidates = []
         if os.path.exists(base_dir):
@@ -61,6 +61,7 @@ class EdgeClassificationDataLoader(DataLoader):
         candidates.sort(reverse=True)
         return os.path.join(base_dir, candidates[0])
 
+    # TODO standardize signature with base class
     def load_data(self):
         suffix = self.edge_type.split('_')[0]
         # Use manual load_dir if provided, else latest versioned dir for loading if not overwriting
@@ -141,11 +142,9 @@ class EdgeClassificationDataLoader(DataLoader):
             if not os.path.exists(edge_parquet_path) or not os.path.exists(req_parquet_path):
                 try:
                     train_dir = os.path.join(
-                        scenario_path, self.config.train_dir)
-                    raw_dir = os.path.join(
-                        self.config.base_data_dir, self.config.raw_dir)
+                        scenario_path, self.config.train_data_dir)
                     processor = DataProcessor(
-                        train_dir, raw_dir, self.config, prefer_processed=True)
+                        train_dir, self.config, prefer_processed=True)
                     processor.process_data(scenario_name)
                 except Exception as e:
                     print(f"Error processing scenario {scenario_name}: {e}")

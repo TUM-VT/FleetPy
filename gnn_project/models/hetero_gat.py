@@ -13,38 +13,39 @@ class HeteroGAT(torch.nn.Module):
         ('request', 'rev_connects', 'vehicle'): 35,
     }
 
-    def __init__(self, hidden_channels, out_channels=1, num_layers=2, dropout=0.3, heads=4):
+    # change signature
+    def __init__(self, config):
         super().__init__()
         torch.manual_seed(42)
         self.convs = torch.nn.ModuleList()
-        self.dropout = Dropout(dropout)
+        self.dropout = Dropout(config.dropout)
         # Add LayerNorms for each layer
         self.layernorms = torch.nn.ModuleList()
         # Initialize projection layers for each edge type
         self.edge_projs = torch.nn.ModuleDict()
         for et, dim in HeteroGAT.EDGE_DIM.items():
             key = f"edge_proj_{et}"
-            self.edge_projs[key] = Linear(dim, hidden_channels)
+            self.edge_projs[key] = Linear(dim, config.hidden_channels)
 
-        for _ in range(num_layers):
+        for _ in range(config.num_layers):
             self.layernorms.append(torch.nn.ModuleDict({
-                ntype: torch.nn.LayerNorm(hidden_channels) for ntype in ['request', 'vehicle']
+                ntype: torch.nn.LayerNorm(config.hidden_channels) for ntype in ['request', 'vehicle']
             }))
             # Create GAT convolutions for original and reversed edge types
             conv_dict = {
-                ('request', 'connects', 'request'): GATConv((-1, -1), hidden_channels, heads=heads, add_self_loops=False, concat=False, dropout=dropout, residual=True),
-                ('vehicle', 'connects', 'request'): GATConv((-1, -1), hidden_channels, heads=heads, add_self_loops=False, concat=False, dropout=dropout, residual=True),
-                ('request', 'rev_connects', 'vehicle'): GATConv((-1, -1), hidden_channels, heads=heads, add_self_loops=False, concat=False, dropout=dropout, residual=True),
+                ('request', 'connects', 'request'): GATConv((-1, -1), config.hidden_channels, heads=config.heads, add_self_loops=False, concat=False, dropout=config.dropout, residual=True),
+                ('vehicle', 'connects', 'request'): GATConv((-1, -1), config.hidden_channels, heads=config.heads, add_self_loops=False, concat=False, dropout=config.dropout, residual=True),
+                ('request', 'rev_connects', 'vehicle'): GATConv((-1, -1), config.hidden_channels, heads=config.heads, add_self_loops=False, concat=False, dropout=config.dropout, residual=True),
             }
             
             conv = HeteroConv(conv_dict, aggr='mean')
             self.convs.append(conv)
             
         # Output layers with intermediate layer
-        self.out_channels = out_channels
-        self.hidden_channels = hidden_channels
-        self.lin1 = Linear(HeteroGAT.EDGE_STACK_DIM, hidden_channels)
-        self.lin2 = Linear(hidden_channels, out_channels)
+        self.out_channels = config.num_classes
+        self.hidden_channels = config.hidden_channels
+        self.lin1 = Linear(HeteroGAT.EDGE_STACK_DIM, config.hidden_channels)
+        self.lin2 = Linear(config.hidden_channels, config.num_classes)
 
         # Initialize weights properly
         self._reset_parameters()

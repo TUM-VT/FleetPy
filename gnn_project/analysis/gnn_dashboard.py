@@ -1,17 +1,15 @@
 import streamlit as st
-import networkx as nx
 import matplotlib.pyplot as plt
 import torch
 from torch_geometric.data import HeteroData
-import numpy as np
-from utils import visualize_graph
+from gnn_project.utils.visualization import visualize_graph
 import logging
 import os
 from glob import glob
 from pathlib import Path
-from models.HeteroGAT import HeteroGAT
-from dataloaders.GNNDataLoader import GNNDataLoader
-from data_processing.config import DataProcessingConfig as cfg
+from gnn_project.models.hetero_gat import HeteroGAT
+from gnn_project.dataloaders.gnn_dataloader import GNNDataLoader
+from gnn_project.config import Config as cfg
 
 # Add BaseStorage class to safe globals for loading
 import torch.serialization
@@ -176,7 +174,7 @@ class GNNDashboard:
                         
                         nodes_list = []
                         for i in range(num_nodes):
-                            is_locked = graph[node_type].x[i][cfg.LOCKED_IDX].item() == 1
+                            is_locked = graph[node_type].x[i][cfg.locked_idx].item() == 1
                             if (is_locked and show_locked) or (not is_locked and show_unlocked):
                                 nodes_list.append(i)
                         subset_nodes[node_type] = nodes_list

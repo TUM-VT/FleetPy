@@ -12,7 +12,11 @@ import networkx as nx
 import pandas as pd
 
 # Local imports
-from .config import DataProcessingConfig as cfg
+from gnn_project.config import Config
+from src.misc.globals import G_TRAIN_FEATURE_O_POS_LAT, G_TRAIN_FEATURE_O_POS_LON, \
+    G_TRAIN_FEATURE_D_POS_LON, G_TRAIN_FEATURE_D_POS_LAT, G_TRAIN_FEATURE_D_POS_LON, \
+    G_TRAIN_FEATURE_DIRECT_TD, G_TRAIN_FEATURE_V_POS_LAT, G_TRAIN_FEATURE_V_POS_LON, \
+    G_TRAIN_FEATURE_TW_PE, G_TRAIN_FEATURE_TW_PL, G_TRAIN_FEATURE_RQ_TIME
 
 logger = logging.getLogger(__name__)
 
@@ -27,44 +31,34 @@ class DataProcessor:
     - Data transformation
     """
 
-    def __init__(self, train_data_dir: str, save_raw_dir: str,
-                 config: Optional[cfg] = None, prefer_processed: bool = True):
+    def __init__(self, train_data_dir, config, prefer_processed: bool = True):
         """Initialize the DataProcessor.
 
         Args:
             train_data_dir: Directory containing training data
-            save_raw_dir: Directory to save raw processed data
             config: Configuration for data processing
             prefer_processed: If True, load processed data if it exists (default). If False, always regenerate.
         """
-        self.config = config or cfg()
         self.train_data_dir = train_data_dir
-        self.save_raw_dir = save_raw_dir
-        self.timestep_n_requests = 0  # Will be set during processing
+        self.config = config
         self.prefer_processed = prefer_processed
+        self.timestep_n_requests = 0  # Will be set during processing
 
     def process_data(self, scenario_name: str) -> dict[Any, Any]:
         """Process raw data and generate feature-rich dataset.
 
         Args:
             scenario_name: Scenario name
+
         Returns:
             List of dictionaries containing processed data for each timestep
         """
-        logger.debug("\n=== DataProcessor.process_data() ===")
-        logger.debug(f"Processing scenario: {scenario_name}")
-
         processed_dir = self._prepare_process_directory(scenario_name)
-        logger.debug(f"Processed directory: {processed_dir}")
 
         # Try to load existing processed data if preferred
         if self.prefer_processed and os.path.exists(processed_dir):
-            logger.debug(f"Loading processed data from {processed_dir}")
             try:
                 data = self.load_processed_data(processed_dir)
-                logger.debug("Successfully loaded processed data")
-                logger.debug(
-                    f"Data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dictionary'}")
                 return data
             except Exception as e:
                 logger.error(f"Error loading processed data: {str(e)}")
@@ -73,12 +67,10 @@ class DataProcessor:
                 # If loading fails, we'll recreate the directory below
 
         # Process new data
-        logger.debug("Processing new data...")
         all_data = self._process_timesteps()
 
         # Clean directory before saving new data
         if os.path.exists(processed_dir):
-            logger.debug("Cleaning existing processed directory...")
             shutil.rmtree(processed_dir)
         os.makedirs(processed_dir)
 
@@ -87,51 +79,23 @@ class DataProcessor:
         # Save raw features and graph data
         self._save_feature_data(processed_dir, all_data)
         self._save_graph_data(all_data, processed_dir, node_mapping)
-
-        # Load and return the processed data
-        all_data = self.load_processed_data(processed_dir)
         return all_data
 
     def _process_timesteps(self) -> List[Dict]:
-        """Process data for each timestep."""
-        logger.debug("\n=== Processing timesteps ===")
+        """Process data for each timestep.
+
+        Returns:
+            List of processed data dictionaries for each timestep
+        """
         all_data = []
         failed_timesteps = []
 
-        total_steps = (self.config.sim_end -
-                       self.config.sim_start) // self.config.sim_step
-        logger.debug(f"Processing {total_steps} timesteps...")
-        logger.debug(f"Simulation duration: {self.config.sim_end} seconds")
-        logger.debug(f"Simulation step: {self.config.sim_step} seconds")
-
         for timestep in range(self.config.sim_start, self.config.sim_end,
                               self.config.sim_step):
-            logger.debug(
-                f"Processing timestep {timestep}/{self.config.sim_end}")
             try:
                 data = self._load_timestep_data(timestep)
-
-                logger.debug("Adding graph features...")
                 data = self._add_graph_features(timestep, data)
-
-                # Validate processed data
-                required_features = [
-                    cfg.VEHICLE_REQUEST_GRAPH, cfg.REQUEST_REQUEST_GRAPH, cfg.VEHICLE_FEATURES, cfg.REQUEST_FEATURES]
-                missing_features = [
-                    f for f in required_features if f not in data]
-                if missing_features:
-                    raise ValueError(
-                        f"Missing required features: {missing_features}")
-
-                logger.debug(
-                    f"\nProcessed data structure for timestep {timestep}:")
-                for key in required_features:
-                    feature_dict = data[key]
-                    logger.debug(f"{key}:")
-                    logger.debug(f"Number of items: {len(feature_dict)}")
-
                 all_data.append(data)
-                logger.debug(f"Successfully processed timestep {timestep}")
             except Exception as e:
                 logger.error(f'Error processing timestep {timestep}: {str(e)}')
                 import traceback
@@ -141,85 +105,78 @@ class DataProcessor:
 
         if failed_timesteps:
             logger.warning(f'Failed timesteps: {failed_timesteps}')
-
         return all_data
 
     def _load_timestep_data(self, timestep: int) -> Dict:
-        """Load data for a specific timestep."""
-        logger.debug(
-            f"\n=== Loading timestep data for timestep {timestep} ===")
-        timestep_dir = os.path.join(self.train_data_dir, str(timestep))
-        logger.debug(f"Looking for data in: {timestep_dir}")
+        """Load data for a specific timestep.
 
+        Args:
+            timestep: The timestep to load data for
+
+        Returns:
+            Dictionary containing data for the timestep
+        """
+        timestep_dir = os.path.join(self.train_data_dir, str(timestep))
         if not os.path.exists(timestep_dir):
             logger.error(f"ERROR: Directory not found: {timestep_dir}")
             raise FileNotFoundError(f"No data for timestep {timestep}")
 
-        logger.debug("\nAvailable files in timestep directory:")
         data = {}
         for file in os.scandir(timestep_dir):
-            logger.debug(f"- {file.name}")
             if file.name.endswith('.pkl'):
                 name = file.name.split('.')[0]
                 try:
                     with open(file.path, 'rb') as f:
                         data[name] = pickle.load(f)
-                    logger.debug(f"Successfully loaded {name}")
                 except Exception as e:
                     logger.error(f"Error loading {file.name}: {str(e)}")
 
         if not data:
             logger.warning("No data was loaded from any files")
             raise FileNotFoundError(f"No valid data for timestep {timestep}")
-
-        logger.debug(f"\nLoaded data keys: {list(data.keys())}")
         return data
 
     def _add_graph_features(self, timestep: int, data: Dict) -> Dict:
-        """Add graph features to the data, including NetworkX-based features."""
-        logger.debug("\n=== Adding graph features ===")
-        logger.debug(f"Initial data keys: {list(data.keys())}")
+        """Add graph features to the data, including NetworkX-based features.
 
+        Args:
+
+            timestep: Current timestep
+            data: Dictionary containing raw data for the timestep
+
+        Returns:
+            Updated data dictionary with added graph features
+        """
         # Check if request_features exists
-        if cfg.REQUEST_FEATURES not in data:
-            logger.error(f"ERROR: '{cfg.REQUEST_FEATURES}' not found in data!")
-            logger.error("Available keys and their types:")
-            for key, value in data.items():
-                logger.error(f"- {key}: {type(value)}")
+        if self.config.request_features_key not in data:
             raise KeyError(
-                "Required key cfg.REQUEST_FEATURES not found in data")
+                f"Required key {self.config.request_features_key} not found in data")
+        self.timestep_n_requests = len(data[self.config.request_features_key])
 
-        self.timestep_n_requests = len(data[cfg.REQUEST_FEATURES])
-        logger.debug(f"Number of requests: {self.timestep_n_requests}")
-
-        logger.debug("\nAdding domain-specific features...")
         # Add domain-specific features first
         try:
-            logger.debug("Adding temporal features...")
             self._add_temporal_features(timestep, data)
-            logger.debug("Adding spatial features...")
             self._add_spatial_features(data)
-            logger.debug("Adding competition features...")
             self._add_competition_features(data)
         except Exception as e:
             logger.error(f"Error adding domain-specific features: {str(e)}")
             import traceback
             traceback.print_exc()
 
-        # --- NetworkX graph construction (once) ---
+        # --- NetworkX graph construction ---
         # Request-Request graph
         G_rr = nx.DiGraph()
-        for src, targets in data[cfg.REQUEST_REQUEST_GRAPH].items():
+        for src, targets in data[self.config.request_request_graph_key].items():
             for tgt in targets:
                 G_rr.add_edge(src, tgt)
 
         # Vehicle-Request graph
         G_vr = nx.DiGraph()
-        for veh, targets in data[cfg.VEHICLE_REQUEST_GRAPH].items():
+        for veh, targets in data[self.config.vehicle_request_graph_key].items():
             for req in targets:
                 G_vr.add_edge(veh, req)
 
-        # Combined graph (created once and reused)
+        # Combined graph
         G_combined = nx.DiGraph()
         G_combined.add_edges_from(G_rr.edges())
         G_combined.add_edges_from(G_vr.edges())
@@ -254,80 +211,56 @@ class DataProcessor:
         """
 
         def calculate_centralities(G):
-            """Calculate centrality measures for the combined graph."""
             centralities = {
                 'degree': nx.degree_centrality(G),
                 'betweenness': nx.betweenness_centrality(G),
                 'pagerank': nx.pagerank(G),
             }
-
             try:
-                # Try to calculate closeness centrality
                 centralities['closeness'] = nx.closeness_centrality(G)
             except Exception as e:
                 logger.warning(
                     f"Warning: Could not calculate closeness centrality: {str(e)}")
                 centralities['closeness'] = {node: 0.0 for node in G.nodes()}
-
             return centralities
 
-        # Calculate centralities for each graph
         centralities = {
             'rr': calculate_centralities(G_rr) if len(G_rr) > 0 else None,
             'vr': calculate_centralities(G_vr) if len(G_vr) > 0 else None,
             'combined': calculate_centralities(G_combined) if len(G_combined) > 0 else None
         }
 
-        # Add centrality measures to request features
-        for req_id, feats in data[cfg.REQUEST_FEATURES].items():
-            # Request-Request graph centralities
-            if centralities['rr']:
+        def update_feats(feats, prefix, cdict, node_id):
+            if cdict:
                 feats.update({
-                    'nx_rr_degree_centrality': centralities['rr']['degree'].get(req_id, 0.0),
-                    'nx_rr_betweenness_centrality': centralities['rr']['betweenness'].get(req_id, 0.0),
-                    'nx_rr_closeness_centrality': centralities['rr']['closeness'].get(req_id, 0.0),
-                    'nx_rr_pagerank': centralities['rr']['pagerank'].get(req_id, 0.0)
+                    f'{prefix}_degree_centrality': cdict['degree'].get(node_id, 0.0),
+                    f'{prefix}_betweenness_centrality': cdict['betweenness'].get(node_id, 0.0),
+                    f'{prefix}_closeness_centrality': cdict['closeness'].get(node_id, 0.0),
+                    f'{prefix}_pagerank': cdict['pagerank'].get(node_id, 0.0)
                 })
 
-            # Combined graph centralities for requests
-            if centralities['combined']:
-                feats.update({
-                    'nx_combined_degree_centrality': centralities['combined']['degree'].get(req_id, 0.0),
-                    'nx_combined_betweenness_centrality': centralities['combined']['betweenness'].get(req_id, 0.0),
-                    'nx_combined_closeness_centrality': centralities['combined']['closeness'].get(req_id, 0.0),
-                    'nx_combined_pagerank': centralities['combined']['pagerank'].get(req_id, 0.0)
-                })
+        for req_id, feats in data[self.config.request_features_key].items():
+            update_feats(feats, 'nx_rr', centralities['rr'], req_id)
+            update_feats(feats, 'nx_combined',
+                         centralities['combined'], req_id)
 
-        # Add centrality measures to vehicle features
-        for veh_id, feats in data[cfg.VEHICLE_FEATURES].items():
-            # Vehicle-Request graph centralities
-            if centralities['vr']:
-                feats.update({
-                    'nx_vr_degree_centrality': centralities['vr']['degree'].get(veh_id, 0.0),
-                    'nx_vr_betweenness_centrality': centralities['vr']['betweenness'].get(veh_id, 0.0),
-                    'nx_vr_closeness_centrality': centralities['vr']['closeness'].get(veh_id, 0.0),
-                    'nx_vr_pagerank': centralities['vr']['pagerank'].get(veh_id, 0.0)
-                })
+        for veh_id, feats in data[self.config.vehicle_features_key].items():
+            update_feats(feats, 'nx_vr', centralities['vr'], veh_id)
+            update_feats(feats, 'nx_combined',
+                         centralities['combined'], veh_id)
 
-            # Combined graph centralities for vehicles
-            if centralities['combined']:
-                feats.update({
-                    'nx_combined_degree_centrality': centralities['combined']['degree'].get(veh_id, 0.0),
-                    'nx_combined_betweenness_centrality': centralities['combined']['betweenness'].get(veh_id, 0.0),
-                    'nx_combined_closeness_centrality': centralities['combined']['closeness'].get(veh_id, 0.0),
-                    'nx_combined_pagerank': centralities['combined']['pagerank'].get(veh_id, 0.0)
-                })
+    def _calculate_node_degrees(self, data: Dict, G_rr: nx.DiGraph, G_vr: nx.DiGraph, G_combined: nx.DiGraph) -> tuple[Dict[int, int], Dict[int, int]]:
+        """Calculate in and out degrees for all nodes using NetworkX
 
-    def _calculate_node_degrees(self, data: Dict, G_rr, G_vr, G_combined) -> tuple[Dict[int, int], Dict[int, int]]:
-        """Calculate in and out degrees for all nodes using NetworkX from different graph views."""
-        logger.debug("\n=== Calculating node degrees ===")
-        logger.debug(
-            f"Total nodes in req_features: {len(data[cfg.REQUEST_FEATURES])}")
-        logger.debug(
-            f"Total nodes in veh_features: {len(data[cfg.VEHICLE_FEATURES])}")
-        logger.debug(
-            f"Total nodes in combined graph: {len(G_combined.nodes())}")
+        Args:
+            data: Dictionary containing raw data for the timestep
+            G_rr: NetworkX DiGraph for request-request edges
+            G_vr: NetworkX DiGraph for vehicle-request edges
+            G_combined: NetworkX DiGraph for combined edges
 
+        Returns:
+            Tuple of two dictionaries: (in_degrees, out_degrees)
+        """
         # Initialize degree dictionaries
         combined_in_degrees = defaultdict(int)
         combined_out_degrees = defaultdict(int)
@@ -337,32 +270,29 @@ class DataProcessor:
         vr_out_degrees = defaultdict(int)
 
         # Calculate degrees from request-request graph
-        logger.debug("\nCalculating request-request degrees...")
         for node in G_rr.nodes():
             rr_in_degrees[node] = G_rr.in_degree(node)
             rr_out_degrees[node] = G_rr.out_degree(node)
 
         # Calculate degrees from vehicle-request graph
-        logger.debug("Calculating vehicle-request degrees...")
         for node in G_vr.nodes():
             vr_in_degrees[node] = G_vr.in_degree(node)
             vr_out_degrees[node] = G_vr.out_degree(node)
 
         # Calculate degrees from combined graph
-        logger.debug("Calculating combined graph degrees...")
         for node in G_combined.nodes():
             try:
                 combined_in_degrees[node] = G_combined.in_degree(node)
                 combined_out_degrees[node] = G_combined.out_degree(node)
 
                 # Add graph-specific degrees
-                if node in data[cfg.REQUEST_FEATURES]:
+                if node in data[self.config.request_features_key]:
                     # For requests, combine RR and VR degrees
                     combined_in_degrees[f"{node}_rr"] = rr_in_degrees[node]
                     combined_out_degrees[f"{node}_rr"] = rr_out_degrees[node]
                     combined_in_degrees[f"{node}_vr"] = vr_in_degrees[node]
                     combined_out_degrees[f"{node}_vr"] = vr_out_degrees[node]
-                elif node in data[cfg.VEHICLE_FEATURES]:
+                elif node in data[self.config.vehicle_features_key]:
                     # For vehicles, only VR degrees are relevant
                     combined_in_degrees[f"{node}_vr"] = vr_in_degrees[node]
                     combined_out_degrees[f"{node}_vr"] = vr_out_degrees[node]
@@ -373,17 +303,18 @@ class DataProcessor:
                 combined_in_degrees[node] = 0
                 combined_out_degrees[node] = 0
 
-        logger.debug(
-            f"\nProcessed degrees for {len(combined_in_degrees)} nodes")
         return combined_in_degrees, combined_out_degrees
 
-    def _add_degree_features(self, data, in_degrees, out_degrees):
-        """Add degree features to node attributes."""
-        logger.debug("\n=== Adding degree features ===")
+    def _add_degree_features(self, data, in_degrees, out_degrees) -> None:
+        """Add degree features to node attributes.
 
+        Args:
+            data: Dictionary containing raw data for the timestep
+            in_degrees: Dictionary of in-degree counts for nodes
+            out_degrees: Dictionary of out-degree counts for nodes
+        """
         # Process requests (have both RR and VR degrees)
-        logger.debug("\nProcessing request nodes...")
-        for req_id, feats in data[cfg.REQUEST_FEATURES].items():
+        for req_id, feats in data[self.config.request_features_key].items():
             try:
                 # Combined graph degrees
                 feats['in_degree_total'] = in_degrees[req_id]
@@ -403,20 +334,18 @@ class DataProcessor:
                 total_out = max(1, feats['out_degree_total'])
                 feats['request_vehicle_in_ratio'] = feats['in_degree_from_vehicles'] / total_in
                 feats['request_vehicle_out_ratio'] = feats['out_degree_to_vehicles'] / total_out
-
             except Exception as e:
                 logger.error(
                     f"Error adding degree features for request {req_id}: {str(e)}")
                 # Initialize all degree features to 0 on error
-                for prefix in ['', '_from_requests', '_from_vehicles', '_to_requests', '_to_vehicles']:
+                for prefix in ['_total', '_from_requests', '_from_vehicles', '_to_requests', '_to_vehicles']:
                     feats[f'in_degree{prefix}'] = 0
                     feats[f'out_degree{prefix}'] = 0
                 feats['request_vehicle_in_ratio'] = 0
                 feats['request_vehicle_out_ratio'] = 0
 
         # Process vehicles (only have VR degrees)
-        logger.debug("\nProcessing vehicle nodes...")
-        for veh_id, feats in data[cfg.VEHICLE_FEATURES].items():
+        for veh_id, feats in data[self.config.vehicle_features_key].items():
             try:
                 # Combined graph degrees (same as VR for vehicles)
                 feats['in_degree'] = in_degrees[veh_id]
@@ -428,7 +357,7 @@ class DataProcessor:
 
                 # Add total connections
                 feats['total_request_connections'] = feats['in_degree_from_requests'] + \
-                                                     feats['out_degree_to_requests']
+                    feats['out_degree_to_requests']
 
             except Exception as e:
                 logger.error(
@@ -445,8 +374,11 @@ class DataProcessor:
         Calculates type-specific neighborhood metrics:
         - For request-request edges: common request neighbors and common vehicle neighbors
         - For vehicle-request edges: common request neighbors and common vehicle neighbors
-        """
 
+        Args:
+            data: Dictionary containing raw data for the timestep
+            G_combined: NetworkX DiGraph representing the combined graph
+        """
         def calculate_type_specific_metrics(src, tgt, G, data):
             """Calculate type-specific neighborhood metrics."""
             if not (G.has_node(src) and G.has_node(tgt)):
@@ -465,13 +397,13 @@ class DataProcessor:
 
             # Split neighbors by type
             src_req_neighbors = {
-                n for n in neighbors_src if n in data[cfg.REQUEST_FEATURES]}
+                n for n in neighbors_src if n in data[self.config.request_features_key]}
             src_veh_neighbors = {
-                n for n in neighbors_src if n in data[cfg.VEHICLE_FEATURES]}
+                n for n in neighbors_src if n in data[self.config.vehicle_features_key]}
             tgt_req_neighbors = {
-                n for n in neighbors_tgt if n in data[cfg.REQUEST_FEATURES]}
+                n for n in neighbors_tgt if n in data[self.config.request_features_key]}
             tgt_veh_neighbors = {
-                n for n in neighbors_tgt if n in data[cfg.VEHICLE_FEATURES]}
+                n for n in neighbors_tgt if n in data[self.config.vehicle_features_key]}
 
             # Calculate common neighbors by type
             common_requests = src_req_neighbors & tgt_req_neighbors
@@ -479,9 +411,9 @@ class DataProcessor:
 
             # Calculate exclusive (uncommon) neighbors by type
             exclusive_src_requests = src_req_neighbors - \
-                                     tgt_req_neighbors  # Only connected to source
+                tgt_req_neighbors  # Only connected to source
             exclusive_tgt_requests = tgt_req_neighbors - \
-                                     src_req_neighbors  # Only connected to target
+                src_req_neighbors  # Only connected to target
             exclusive_src_vehicles = src_veh_neighbors - tgt_veh_neighbors
             exclusive_tgt_vehicles = tgt_veh_neighbors - src_veh_neighbors
 
@@ -528,32 +460,30 @@ class DataProcessor:
 
                 # Competition metrics
                 'request_competition_index': (
-                                                     len(exclusive_src_requests) + len(exclusive_tgt_requests)
-                                             ) / max(1, len(union_requests)),
+                    len(exclusive_src_requests) + len(exclusive_tgt_requests)
+                ) / max(1, len(union_requests)),
                 'vehicle_competition_index': (
-                                                     len(exclusive_src_vehicles) + len(exclusive_tgt_vehicles)
-                                             ) / max(1, len(union_vehicles)),
+                    len(exclusive_src_vehicles) + len(exclusive_tgt_vehicles)
+                ) / max(1, len(union_vehicles)),
 
                 # Service area overlap
                 'service_area_overlap': total_common / max(1, total_common + total_exclusive_src + total_exclusive_tgt)
             }
 
         # Calculate metrics for request-request edges
-        logger.debug("\nProcessing request-request edges...")
-        for src, targets in data[cfg.REQUEST_REQUEST_GRAPH].items():
+        for src, targets in data[self.config.request_request_graph_key].items():
             for tgt, features in targets.items():
                 metrics = calculate_type_specific_metrics(
                     src, tgt, G_combined, data)
                 features.update(metrics)
                 # Add edge-specific ratios
                 features['request_to_vehicle_neighbor_ratio'] = (
-                        metrics['common_request_neighbors'] /
-                        max(1, metrics['common_vehicle_neighbors'])
+                    metrics['common_request_neighbors'] /
+                    max(1, metrics['common_vehicle_neighbors'])
                 )
 
         # Calculate metrics for vehicle-request edges
-        logger.debug("\nProcessing vehicle-request edges...")
-        for veh, targets in data[cfg.VEHICLE_REQUEST_GRAPH].items():
+        for veh, targets in data[self.config.vehicle_request_graph_key].items():
             for req, features in targets.items():
                 metrics = calculate_type_specific_metrics(
                     veh, req, G_combined, data)
@@ -562,8 +492,8 @@ class DataProcessor:
                 features['vehicle_competition'] = metrics['common_vehicle_neighbors']
                 features['request_competition'] = metrics['common_request_neighbors']
                 features['competition_ratio'] = (
-                        metrics['common_vehicle_neighbors'] /
-                        max(0.001, metrics['common_request_neighbors'])
+                    metrics['common_vehicle_neighbors'] /
+                    max(0.001, metrics['common_request_neighbors'])
                 )
 
     def _add_clustering_features(self, data: Dict, G_combined) -> None:
@@ -572,6 +502,10 @@ class DataProcessor:
         Calculate clustering coefficients on the complete heterogeneous graph,
         which represents how well-connected a node's neighbors are in the context
         of the entire system (both vehicles and requests).
+
+        Args:
+            data: Dictionary containing raw data for the timestep
+            G_combined: NetworkX DiGraph representing the combined graph
         """
         # Convert to undirected for clustering calculations
         G_combined_undir = G_combined.to_undirected()
@@ -580,21 +514,27 @@ class DataProcessor:
         clustering_combined = nx.clustering(G_combined_undir)
 
         # Add to all node features
-        for req_id, feats in data[cfg.REQUEST_FEATURES].items():
+        for req_id, feats in data[self.config.request_features_key].items():
             feats['clustering_coeff'] = clustering_combined.get(req_id, 0.0)
 
-        for veh_id, feats in data[cfg.VEHICLE_FEATURES].items():
+        for veh_id, feats in data[self.config.vehicle_features_key].items():
             feats['clustering_coeff'] = clustering_combined.get(veh_id, 0.0)
 
     def _add_temporal_features(self, current_time: int, data: Dict) -> None:
-        """Add temporal features that capture time-based relationships."""
-        # For requests
-        for req_id, feats in data[cfg.REQUEST_FEATURES].items():
-            # Time urgency features
-            time_until_earliest = feats['tw_pe'] - current_time  # currently constant
-            time_until_latest = feats['tw_pl'] - current_time
-            time_window_width = feats['tw_pl'] - feats['tw_pe']  # currently constant
+        """Add temporal features that capture time-related aspects of requests.
 
+        Args:
+            current_time: Current simulation time
+            data: Dictionary containing raw data for the timestep
+        """
+        # For requests
+        for _, feats in data[self.config.request_features_key].items():
+            # Time urgency features
+            time_until_earliest = feats[G_TRAIN_FEATURE_TW_PE] - \
+                current_time  # currently constant
+            time_until_latest = feats[G_TRAIN_FEATURE_TW_PL] - current_time
+            time_window_width = feats[G_TRAIN_FEATURE_TW_PL] - \
+                feats[G_TRAIN_FEATURE_TW_PE]  # currently constant
             feats.update({
                 # How soon can we serve
                 'time_until_earliest': max(0, time_until_earliest),
@@ -605,32 +545,45 @@ class DataProcessor:
                 # Higher for more urgent requests
                 'time_window_urgency': 1.0 / max(1, time_until_latest),
                 # How long has it been waiting
-                'request_age': current_time - feats['rq_time']
+                'request_age': current_time - feats[G_TRAIN_FEATURE_RQ_TIME]
             })
 
     def _add_spatial_features(self, data: Dict) -> None:
-        """Add spatial features that capture geographical relationships."""
+        """Add spatial features that capture geographical relationships.
 
+        Args:
+            data: Dictionary containing raw data for the timestep
+        """
         # For requests
-        for req_id, feats in data[cfg.REQUEST_FEATURES].items():
+        for _, feats in data[self.config.request_features_key].items():
             # Calculate spatial features
             manhattan_distance = abs(
-                feats['d_lat'] - feats['o_lat']) + abs(feats['d_lon'] - feats['o_lon'])
+                feats[G_TRAIN_FEATURE_D_POS_LAT] - feats[G_TRAIN_FEATURE_O_POS_LAT]) + abs(feats[G_TRAIN_FEATURE_D_POS_LON] - feats[G_TRAIN_FEATURE_O_POS_LON])
             # Ratio of actual route distance to manhattan distance indicates route complexity
-            route_directness = feats['direct_td'] / \
-                               max(0.001, manhattan_distance)
+            route_directness = feats[G_TRAIN_FEATURE_DIRECT_TD] / \
+                max(0.001, manhattan_distance)
 
             feats.update({
                 'manhattan_distance': manhattan_distance,
                 'route_directness': route_directness,
                 'origin_dest_bearing': self._calculate_bearing(
-                    feats['o_lat'], feats['o_lon'],
-                    feats['d_lat'], feats['d_lon']
+                    feats[G_TRAIN_FEATURE_O_POS_LAT], feats[G_TRAIN_FEATURE_O_POS_LON],
+                    feats[G_TRAIN_FEATURE_D_POS_LAT], feats[G_TRAIN_FEATURE_D_POS_LON]
                 )
             })
 
     def _calculate_bearing(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """Calculate the bearing (angle) between two points."""
+        """Calculate the bearing (angle) between two points.
+
+        Args:
+            lat1: Latitude of point 1
+            lon1: Longitude of point 1
+            lat2: Latitude of point 2
+            lon2: Longitude of point 2
+
+        Returns:
+            Bearing in degrees from point 1 to point 2
+        """
         # Convert to radians
         lat1, lon1 = math.radians(lat1), math.radians(lon1)
         lat2, lon2 = math.radians(lat2), math.radians(lon2)
@@ -645,7 +598,17 @@ class DataProcessor:
         return math.degrees(bearing)
 
     def _haversine_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """Calculate the great circle distance between two points in kilometers."""
+        """Calculate the great circle distance between two points in kilometers.
+
+        Args:
+            lat1: Latitude of point 1
+            lon1: Longitude of point 1
+            lat2: Latitude of point 2
+            lon2: Longitude of point 2
+
+        Returns:
+            Distance in kilometers
+        """
         R = 6371  # Earth's radius in kilometers
 
         # Convert to radians
@@ -662,25 +625,25 @@ class DataProcessor:
         return R * c
 
     def _add_competition_features(self, data: Dict) -> None:
-        """Add features that capture competition between requests and vehicle availability."""
-        logger.debug("\n=== Adding competition features ===")
+        """Add features that capture competition between requests and vehicle availability.
 
+        Args:
+            data: Dictionary containing raw data for the timestep     
+        """
         # Calculate request density in different regions
         request_locations = {}
-        for req_id, feats in data[cfg.REQUEST_FEATURES].items():
-            if 'o_lat' in feats and 'o_lon' in feats:
-                request_locations[req_id] = (feats['o_lat'], feats['o_lon'])
+        for req_id, feats in data[self.config.request_features_key].items():
+            if G_TRAIN_FEATURE_O_POS_LAT in feats and G_TRAIN_FEATURE_O_POS_LON in feats:
+                request_locations[req_id] = (
+                    feats[G_TRAIN_FEATURE_O_POS_LAT], feats[G_TRAIN_FEATURE_O_POS_LON])
             else:
                 logger.warning(
                     f"Warning: Missing lat/lon for request {req_id}")
                 logger.warning(f"Available features: {list(feats.keys())}")
                 continue
 
-        logger.debug(
-            f"Found {len(request_locations)} requests with valid locations")
-
         # For each request, count nearby requests and vehicles
-        for req_id, feats in data[cfg.REQUEST_FEATURES].items():
+        for req_id, feats in data[self.config.request_features_key].items():
             if req_id not in request_locations:
                 continue
 
@@ -698,11 +661,11 @@ class DataProcessor:
 
             # Count available vehicles nearby
             nearby_vehicles = 0
-            for veh_id, veh_feats in data[cfg.VEHICLE_FEATURES].items():
-                if 'lat' in veh_feats and 'lon' in veh_feats:  # if vehicle location available
+            for _, veh_feats in data[self.config.vehicle_features_key].items():
+                if G_TRAIN_FEATURE_V_POS_LAT in veh_feats and G_TRAIN_FEATURE_V_POS_LON in veh_feats:  # if vehicle location available
                     dist = self._haversine_distance(
                         req_loc[0], req_loc[1],
-                        veh_feats['lat'], veh_feats['lon']
+                        veh_feats[G_TRAIN_FEATURE_V_POS_LAT], veh_feats[G_TRAIN_FEATURE_V_POS_LON]
                     )
                     if dist < 1.0:  # within 1km
                         nearby_vehicles += 1
@@ -714,34 +677,51 @@ class DataProcessor:
             })
 
     def _is_peak_hour(self, time_of_day: float) -> bool:
-        """Check if a given time is during peak hours."""
+        """Check if a given time is during peak hours.
+
+        Args:
+            time_of_day: Time in minutes since midnight
+
+        Returns:
+            True if the time is during peak hours, False otherwise
+        """
         # Convert time to hours (assuming time is in minutes)
         hour = (time_of_day / 60.0) % 24
         # Morning peak: 7-10 AM, Evening peak: 4-7 PM
         return (7 <= hour <= 10) or (16 <= hour <= 19)
 
-    def _calculate_pooling_metrics(self, req1_feats: Dict, req2_feats: Dict) -> Dict:
-        """Calculate metrics related to request pooling compatibility."""
+    def _calculate_pooling_metrics(self, req1_feats: Dict, req2_feats: Dict, edge_feats: Dict) -> Dict:
+        """Calculate metrics related to request pooling compatibility.
+
+        Args:
+            req1_feats: Features of request 1
+            req2_feats: Features of request 2
+            edge_feats: Features of the edge between the two requests
+
+        Returns:
+            Dictionary of pooling compatibility metrics
+        """
         # Calculate spatial overlap
-        req1_origin = (req1_feats['o_lat'], req1_feats['o_lon'])
-        req1_dest = (req1_feats['d_lat'], req1_feats['d_lon'])
-        req2_origin = (req2_feats['o_lat'], req2_feats['o_lon'])
-        req2_dest = (req2_feats['d_lat'], req2_feats['d_lon'])
+        req1_origin = (req1_feats[G_TRAIN_FEATURE_O_POS_LAT], req1_feats[G_TRAIN_FEATURE_O_POS_LON])
+        req1_dest = (req1_feats[G_TRAIN_FEATURE_D_POS_LAT], req1_feats[G_TRAIN_FEATURE_D_POS_LON])
+        req2_origin = (req2_feats[G_TRAIN_FEATURE_O_POS_LAT], req2_feats[G_TRAIN_FEATURE_O_POS_LON])
+        req2_dest = (req2_feats[G_TRAIN_FEATURE_D_POS_LAT], req2_feats[G_TRAIN_FEATURE_D_POS_LON])
 
         # Distance between origins and destinations
-        origin_distance = self._haversine_distance(*req1_origin, *req2_origin)
-        dest_distance = self._haversine_distance(*req1_dest, *req2_dest)
+        origin_distance = edge_feats.get('tt_between_pickups', self._haversine_distance(*req1_origin, *req2_origin))
+        dest_distance = edge_feats.get('tt_between_dropoffs', self._haversine_distance(*req1_dest, *req2_dest))
 
         # Calculate potential detour
-        direct_dist1 = req1_feats['direct_td']
-        direct_dist2 = req2_feats['direct_td']
+        direct_dist1 = req1_feats[G_TRAIN_FEATURE_DIRECT_TD]
+        direct_dist2 = req2_feats[G_TRAIN_FEATURE_DIRECT_TD]
+        # TODO replace with route-based distances from the edge
         pooled_distance = (
             # First pickup to second pickup
-                self._haversine_distance(*req1_origin, *req2_origin) +
-                # Second pickup to its destination
-                self._haversine_distance(*req2_origin, *req2_dest) +
-                # Second destination to first destination
-                self._haversine_distance(*req2_dest, *req1_dest)
+            origin_distance +
+            # Second pickup to its destination
+            edge_feats['tt_pickup2_to_dropoff2'] +
+            # Second destination to first destination
+            edge_feats['tt_dropoff2_to_dropoff1']
         )
 
         max_detour_ratio = max(
@@ -760,18 +740,22 @@ class DataProcessor:
         }
 
     def _add_edge_compatibility_features(self, current_time: int, data: Dict) -> None:
-        """Add features that indicate compatibility between nodes."""
+        """Add features that indicate compatibility between nodes.
 
+        Args:
+            current_time: Current simulation time
+            data: Dictionary containing raw data for the timestep
+        """
         # For vehicle-request edges
-        for veh_id, targets in data[cfg.VEHICLE_REQUEST_GRAPH].items():
-            veh_feats = data[cfg.VEHICLE_FEATURES][veh_id]
+        for veh_id, targets in data[self.config.vehicle_request_graph_key].items():
+            veh_feats = data[self.config.vehicle_features_key][veh_id]
 
             for req_id, edge_feats in targets.items():
-                req_feats = data[cfg.REQUEST_FEATURES][req_id]
+                req_feats = data[self.config.request_features_key][req_id]
 
                 # Add time-of-day features
                 time_of_day = current_time % (
-                        24 * 60)  # Minutes within the day
+                    24 * 60)  # Minutes within the day
                 hour_of_day = time_of_day / 60.0
                 is_peak = self._is_peak_hour(time_of_day)
 
@@ -825,11 +809,11 @@ class DataProcessor:
                 })
 
         # For request-request edges
-        for req1_id, targets in data[cfg.REQUEST_REQUEST_GRAPH].items():
-            req1_feats = data[cfg.REQUEST_FEATURES][req1_id]
+        for req1_id, targets in data[self.config.request_request_graph_key].items():
+            req1_feats = data[self.config.request_features_key][req1_id]
 
             for req2_id, edge_feats in targets.items():
-                req2_feats = data[cfg.REQUEST_FEATURES][req2_id]
+                req2_feats = data[self.config.request_features_key][req2_id]
 
                 # Get travel times from edge features
                 travel_costs = edge_feats.get('travel_cost', [])
@@ -850,14 +834,14 @@ class DataProcessor:
 
                     # Calculate temporal metrics using actual travel times
                     time_gap = req2_feats['tw_pe'] - \
-                               (req1_feats['tw_pl'] + tt_o1_d1)
+                        (req1_feats['tw_pl'] + tt_o1_d1)
                     total_direct_time = tt_o1_d1 + tt_o2_d2
 
                     # Calculate different possible shared ride sequences
                     shared_ride_time_1 = tt_o1_o2 + tt_o2_d2 + \
-                                         tt_d1_d2  # Pick both, drop second, drop first
+                        tt_d1_d2  # Pick both, drop second, drop first
                     shared_ride_time_2 = tt_o1_d1 + tt_d1_o2 + \
-                                         tt_o2_d2  # Pick&drop first, then second
+                        tt_o2_d2  # Pick&drop first, then second
                     # shared_ride_time_3 = tt_o1_o2 + tt_o2_d1 + tt_d1_d2
                     #       # Pick both, drop first TODO add
 
@@ -867,6 +851,7 @@ class DataProcessor:
                         'tt_between_dropoffs': tt_d1_d2,  # Time between dropoff locations
                         'tt_pickup1_to_dropoff2': tt_o1_d2,  # Time from first pickup to second dropoff
                         'tt_dropoff1_to_pickup2': tt_d1_o2,  # Time from first dropoff to second pickup
+                        'tt_pickup2_to_dropoff2': tt_o2_d2,  # Time from second pickup to second dropoff
                         'min_shared_ride_time': min(shared_ride_time_1, shared_ride_time_2),
                     })
 
@@ -876,20 +861,20 @@ class DataProcessor:
                 else:
                     # Fallback to previous calculation if travel times not available
                     time_gap = req2_feats['tw_pe'] - \
-                               (req1_feats['tw_pl'] + req1_feats['direct_tt'])
+                        (req1_feats['tw_pl'] + req1_feats['direct_tt'])
                     total_direct_time = req1_feats['direct_tt'] + \
-                                        req2_feats['direct_tt']
+                        req2_feats['direct_tt']
                     shared_ride_time = (
-                            req1_feats['direct_tt'] +
-                            self._haversine_distance(
-                                req1_feats['d_lat'], req1_feats['d_lon'],
-                                req2_feats['d_lat'], req2_feats['d_lon']
-                            ) * 60 / 30  # Assuming 30 km/h average speed
+                        req1_feats['direct_tt'] +
+                        self._haversine_distance(
+                            req1_feats['d_lat'], req1_feats['d_lon'],
+                            req2_feats['d_lat'], req2_feats['d_lon']
+                        ) * 60 / 30  # Assuming 30 km/h average speed
                     )
 
                 # Calculate pooling compatibility metrics
                 pooling_metrics = self._calculate_pooling_metrics(
-                    req1_feats, req2_feats)
+                    req1_feats, req2_feats, edge_feats)
 
                 extra_time_ratio = max(
                     0, (shared_ride_time - total_direct_time) / max(1, total_direct_time))
@@ -924,18 +909,22 @@ class DataProcessor:
 
                     # Combined compatibility score
                     'overall_pooling_score': (
-                            pooling_metrics['spatial_compatibility'] *
-                            (1.0 if time_gap > 0 else 0.0) *
-                            (1.0 / (1.0 + extra_time_ratio))
+                        pooling_metrics['spatial_compatibility'] *
+                        (1.0 if time_gap > 0 else 0.0) *
+                        (1.0 / (1.0 + extra_time_ratio))
                     )
                 })
 
     def _add_assignment_features(self, data: Dict) -> None:
-        """Add assignment labels to edges."""
+        """Add assignment labels to edges.
+
+        Args:
+            data: Dictionary containing graph data
+        """
         self._add_assignment_sequence(
-            data, data['init_assignments'], cfg.INIT_LABEL, complete_graph=True)
+            data, data['init_assignments'], self.config.init_label_key, complete_graph=True)
         self._add_assignment_sequence(
-            data, data['assignments'], cfg.LABEL, complete_graph=True)
+            data, data['assignments'], self.config.label_key, complete_graph=True)
 
     def _add_assignment_sequence(self, data: Dict, assignments: Dict,
                                  feature_name: str, complete_graph: bool = True) -> None:
@@ -944,7 +933,7 @@ class DataProcessor:
         Args:
             data: Dictionary containing graph data
             assignments: Dictionary of vehicle_id -> sequence of request_ids
-            feature_name: Name of the feature to set (e.g., 'init_assign' or 'opt_assign')
+            feature_name: Name of the feature to set (e.g., 'init_assign' or 'optimal_assign')
             complete_graph: If True, add edges between all pairs of requests in sequence (complete graph),
                           not just consecutive requests
         """
@@ -956,11 +945,11 @@ class DataProcessor:
             valid_sequence = []
             # Skip the first item (typically vehicle's initial position)
             for req_id in sequence[1:]:
-                if vehicle_id not in data[cfg.VEHICLE_REQUEST_GRAPH]:
+                if vehicle_id not in data[self.config.vehicle_request_graph_key]:
                     logger.warning(
                         f"Warning: Vehicle {vehicle_id} not found in graph")
                     continue
-                if req_id not in data[cfg.VEHICLE_REQUEST_GRAPH][vehicle_id]:
+                if req_id not in data[self.config.vehicle_request_graph_key][vehicle_id]:
                     logger.warning(
                         f"Warning: Edge between vehicle {vehicle_id} and request {req_id} not found in graph")
                     continue
@@ -972,7 +961,7 @@ class DataProcessor:
             # Add vehicle-to-request edges first
             for req_id in valid_sequence:
                 try:
-                    data[cfg.VEHICLE_REQUEST_GRAPH][vehicle_id][req_id][feature_name] = 1
+                    data[self.config.vehicle_request_graph_key][vehicle_id][req_id][feature_name] = 1
                 except KeyError as e:
                     logger.warning(
                         f"Warning: Could not add V-R edge label for vehicle {vehicle_id} and request {req_id}: {str(e)}")
@@ -985,9 +974,9 @@ class DataProcessor:
                         # All requests after req1
                         for req2 in valid_sequence[i + 1:]:
                             try:
-                                if req1 in data[cfg.REQUEST_REQUEST_GRAPH] and req2 in data[cfg.REQUEST_REQUEST_GRAPH][
-                                    req1]:
-                                    data[cfg.REQUEST_REQUEST_GRAPH][req1][req2][feature_name] = 1
+                                if req1 in data[self.config.request_request_graph_key] and req2 in data[self.config.request_request_graph_key][
+                                        req1]:
+                                    data[self.config.request_request_graph_key][req1][req2][feature_name] = 1
                             except KeyError as e:
                                 logger.warning(
                                     f"Warning: Could not add R-R edge label between requests {req1} and {req2}: {str(e)}")
@@ -995,9 +984,9 @@ class DataProcessor:
                     # Original behavior: Add edges only between consecutive requests
                     for req1, req2 in zip(valid_sequence[:-1], valid_sequence[1:]):
                         try:
-                            if req1 in data[cfg.REQUEST_REQUEST_GRAPH] and req2 in data[cfg.REQUEST_REQUEST_GRAPH][
-                                req1]:
-                                data[cfg.REQUEST_REQUEST_GRAPH][req1][req2][feature_name] = 1
+                            if req1 in data[self.config.request_request_graph_key] and req2 in data[self.config.request_request_graph_key][
+                                    req1]:
+                                data[self.config.request_request_graph_key][req1][req2][feature_name] = 1
                         except KeyError as e:
                             logger.warning(
                                 f"Warning: Could not add R-R edge label between requests {req1} and {req2}: {str(e)}")
@@ -1011,8 +1000,7 @@ class DataProcessor:
         Returns:
             Path to the processed data directory
         """
-        return os.path.join(
-            self.config.base_data_dir, scenario_name, self.config.processed_dir)
+        return self.config.processed_dir / scenario_name
 
     def _save_feature_data(self, process_dir: str, all_data: List[Dict]) -> None:
         """Save processed feature data without normalization.
@@ -1021,7 +1009,7 @@ class DataProcessor:
             process_dir: Directory to save processed data
             all_data: List of data dictionaries for a single scenario
         """
-        for feature_type in [cfg.REQUEST_FEATURES, cfg.VEHICLE_FEATURES]:
+        for feature_type in [self.config.request_features_key, self.config.vehicle_features_key]:
             dfs = []
             total_samples = 0
             for timestep, data in enumerate(all_data):
@@ -1034,23 +1022,26 @@ class DataProcessor:
                     total_samples += len(df)
 
             if dfs:
-                logger.debug(
-                    f"\nProcessing {feature_type} with {total_samples} samples")
                 combined_df = pd.concat(dfs).reset_index().rename(
                     columns={"index": "id"})
-                logger.debug(f"Combined shape: {combined_df.shape}")
 
                 # Save raw features
                 save_path = os.path.join(
                     process_dir, f'{feature_type}.parquet')
                 combined_df.to_parquet(save_path)
-                logger.debug(f"\nSaved raw features to {save_path}")
 
     def _create_node_mapping(self, all_data: List[Dict]) -> Dict[int, Dict[Any, int]]:
-        """Create mapping between node IDs and indices."""
+        """Create mapping between node IDs and indices.
+
+        Args:
+            all_data: List of data dictionaries
+
+        Returns:
+            Dictionary mapping timestep -> {node_id: index}
+        """
         return {
             timestep: {rid: idx for idx, rid in enumerate(
-                data[cfg.REQUEST_FEATURES].keys())}
+                data[self.config.request_features_key].keys())}
             for timestep, data in enumerate(all_data)
         }
 
@@ -1063,7 +1054,7 @@ class DataProcessor:
             process_dir: Directory to save processed data
             node_mapping: Mapping between node IDs and indices
         """
-        for graph_type in [cfg.REQUEST_REQUEST_GRAPH, cfg.VEHICLE_REQUEST_GRAPH]:
+        for graph_type in [self.config.request_request_graph_key, self.config.vehicle_request_graph_key]:
             dfs = []
             for timestep, data in enumerate(all_data):
                 edges = []
@@ -1083,14 +1074,9 @@ class DataProcessor:
                 # Save raw edge data
                 save_path = os.path.join(process_dir, f'{graph_type}.parquet')
                 combined_df.to_parquet(save_path)
-                logger.debug(f"\nSaved raw graph data to {save_path}")
-
-                logger.debug(f"\n=== Processing {graph_type} features ===")
-                logger.debug(
-                    f"Total features found: {len(combined_df.columns)}")
-                logger.debug("\nAll columns:", combined_df.columns.tolist())
             else:
-                logger.warning(f"\nNo edges found for {graph_type}, skipping save.")
+                logger.warning(
+                    f"\nNo edges found for {graph_type}, skipping save.")
 
     def _get_edge_attributes(self, timestep: int, node_mapping: Dict[int, Dict[Any, int]],
                              graph_type: str, source: Any, target: Any,
@@ -1113,7 +1099,7 @@ class DataProcessor:
         """
         # Start with node endpoints
         attrs = {
-            'source': node_mapping[timestep][source] if graph_type == cfg.REQUEST_REQUEST_GRAPH else source,
+            'source': node_mapping[timestep][source] if graph_type == self.config.request_request_graph_key else source,
             'target': node_mapping[timestep][target]
         }
 
@@ -1167,6 +1153,14 @@ class DataProcessor:
 
     @staticmethod
     def load_processed_data(data_dir):
+        """Load processed data from parquet files in a directory.
+
+        Args:
+            data_dir: Directory containing parquet files
+
+        Returns:
+            Dictionary with data loaded from each parquet file
+        """
         data = {}
         for file in os.scandir(data_dir):
             if not file.name.endswith('.parquet'):
@@ -1176,21 +1170,22 @@ class DataProcessor:
         return data
 
     def process_single_timestep(self, data: Dict, timestep: int,
-                                edge_type: str = cfg.VEHICLE_REQUEST_GRAPH) -> pd.DataFrame:
+                                edge_type: str) -> pd.DataFrame:
         """
         Process and extract features for a single timestep's data (in-memory, no disk I/O),
         and return a merged DataFrame of edge and node features ready for classifier input.
         Args:
-            data: Raw data dict for the current timestep (must contain keys like cfg.REQUEST_FEATURES, cfg.VEHICLE_FEATURES, cfg.REQUEST_REQUEST_GRAPH, cfg.VEHICLE_REQUEST_GRAPH, etc.)
+            data: Raw data dict for the current timestep
             timestep: The current timestep
-            edge_type: Which edge graph to use (cfg.VEHICLE_REQUEST_GRAPH or cfg.REQUEST_REQUEST_GRAPH)
+            edge_type: Which edge graph to use
         Returns:
             merged: DataFrame with edge features and merged source/target node features
             y: Series of labels (if present in edge features)
         """
         # TODO update if needed later
         import pandas as pd
-        self.timestep_n_requests = len(data.get(cfg.REQUEST_FEATURES, {}))
+        self.timestep_n_requests = len(
+            data.get(self.config.request_features_key, {}))
         data = self._add_graph_features(data)
 
         # Build edge DataFrame
@@ -1206,12 +1201,12 @@ class DataProcessor:
 
         # Node features
         req_df = pd.DataFrame.from_dict(
-            data[cfg.REQUEST_FEATURES], orient='index').reset_index().rename(columns={'index': 'id'})
+            data[self.config.request_features_key], orient='index').reset_index().rename(columns={'index': 'id'})
         veh_df = pd.DataFrame.from_dict(
-            data[cfg.VEHICLE_FEATURES], orient='index').reset_index().rename(columns={'index': 'id'})
+            data[self.config.vehicle_features_key], orient='index').reset_index().rename(columns={'index': 'id'})
 
         # Merge node features
-        source_type = 'veh' if edge_type == cfg.VEHICLE_REQUEST_GRAPH else 'req'
+        source_type = 'veh' if edge_type == self.config.vehicle_request_graph_key else 'req'
         src_df = veh_df if source_type == 'veh' else req_df
         tgt_df = req_df
 
