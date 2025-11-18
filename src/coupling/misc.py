@@ -75,6 +75,11 @@ def create_fleetpy_network_from_matsim(matsim_network_path, fleetpy_data_path, n
     for link in root.find("links").findall("link"):
         if link.get("id").startswith("pt"):
             continue
+        modes = link.get("modes")
+        if modes is not None:
+            allowed_modes = modes.split(",")
+            if "car" not in allowed_modes:
+                continue
         links.append({
             "source_edge_id": link.get("id"),
             "from_node": source_node_id_to_index[link.get("from")],
@@ -95,7 +100,7 @@ def create_fleetpy_network_from_matsim(matsim_network_path, fleetpy_data_path, n
     # Convert links to a DataFrame
     links_df = pd.DataFrame(links)
     
-    if not same_hash:
+    if not same_hash or not enforce_hash_similarity:
         # Save the current hash
         current_hash = file_hash(matsim_network_path)
         os.makedirs(os.path.join(fleetpy_data_path, "networks", network_name), exist_ok=True)
@@ -110,6 +115,8 @@ def create_fleetpy_network_from_matsim(matsim_network_path, fleetpy_data_path, n
         with open(os.path.join(output_path, "crs.info"), "w") as f:
             f.write(crs_str)
         print("FleetPy network created from MATSim network: {}".format(output_path))
+        print("Nodes:", len(nodes_df), "Edges:", len(links_df))
+        print("Hash value saved: ", current_hash)
     
     return matsim_edge_to_fp_edge, fp_edge_to_matsim_edge
 

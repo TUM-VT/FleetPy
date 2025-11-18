@@ -571,7 +571,7 @@ def run(fleetpy_config_path, matsim_network_path, port):
 if __name__ == "__main__":
     # Example usage of MATSimSocket class
 
-    if len(sys.argv) <= 4:
+    if len(sys.argv) < 4:
         print("Usage: python MATSimSocket.py <fleetpy_config_path> <matsim_network_path> <port> [profile]")
         sys.exit(1)
     fleetpy_config_path = sys.argv[1]
