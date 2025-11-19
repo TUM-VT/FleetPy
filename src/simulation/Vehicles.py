@@ -14,7 +14,7 @@ from src.simulation.StationaryProcess import ChargingProcess
 
 if tp.TYPE_CHECKING:
     from src.demand.TravelerModels import RequestBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.fleetctrl.FleetControlBase import FleetControlBase
 
 LOG = logging.getLogger(__name__)

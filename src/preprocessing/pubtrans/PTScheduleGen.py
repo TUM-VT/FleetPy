@@ -9,7 +9,7 @@ from shapely.ops import nearest_points
 from scipy.stats import poisson
 from scipy.special import comb
 import plotly.graph_objects as go
-from src.routing.NetworkBasic import NetworkBasic
+from src.routing.road.NetworkBasic import NetworkBasic
 import rtree
 import math
 

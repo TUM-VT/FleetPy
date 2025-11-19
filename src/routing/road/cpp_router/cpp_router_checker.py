@@ -7,8 +7,8 @@ import pandas as pd
 Fleetpy_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.append(Fleetpy_dir)
 
-from src.routing.NetworkBasicCpp import NetworkBasicCpp
-from src.routing.NetworkBasic import NetworkBasic
+from src.routing.road.NetworkBasicCpp import NetworkBasicCpp
+from src.routing.road.NetworkBasic import NetworkBasic
 
 """
 run this script to check if the C++ router returns the same results as the python router

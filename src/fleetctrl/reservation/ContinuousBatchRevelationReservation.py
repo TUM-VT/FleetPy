@@ -19,7 +19,7 @@ from src.fleetctrl.pooling.batch.Simonetto.SimonettoAssignment import SimonettoA
 
 if TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
 
 import logging
 LOG = logging.getLogger(__name__)

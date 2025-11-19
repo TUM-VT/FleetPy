@@ -26,7 +26,7 @@ from src.demand.demand import Demand, SlaveDemand
 from src.simulation.Vehicles import SimulationVehicle
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.broker.BrokerBase import BrokerBase
     from src.python_plots.plot_classes import PyPlot
 

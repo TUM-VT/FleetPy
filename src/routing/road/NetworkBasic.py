@@ -23,8 +23,8 @@ from pyproj import Transformer
 
 # src imports
 # -----------
-from src.routing.NetworkBase import NetworkBase
-from src.routing.routing_imports.Router import Router
+from src.routing.road.NetworkBase import NetworkBase
+from src.routing.road.routing_imports.Router import Router
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables

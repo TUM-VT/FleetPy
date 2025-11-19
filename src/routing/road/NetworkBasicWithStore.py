@@ -22,8 +22,8 @@ import numpy as np
 
 # src imports
 # -----------
-from src.routing.NetworkBasic import NetworkBasic
-from src.routing.routing_imports.Router import Router
+from src.routing.road.NetworkBasic import NetworkBasic
+from src.routing.road.routing_imports.Router import Router
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables

@@ -13,7 +13,7 @@ from pyproj import Transformer
 
 # src imports
 # -----------
-from src.routing.NetworkBase import NetworkBase
+from src.routing.road.NetworkBase import NetworkBase
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables

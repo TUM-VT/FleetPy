@@ -5,7 +5,7 @@ try:
     from . import PriorityQueue_python3 as PQ
 except:
     try:
-        import src.routing.routing_imports.PriorityQueue_python3 as PQ
+        import src.routing.road.routing_imports.PriorityQueue_python3 as PQ
     except:
         raise ImportError("couldnt import PriorityQueue_python3")
 

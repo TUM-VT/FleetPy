@@ -9,7 +9,7 @@ import pandas as pd
 # ----------------
 from src.misc.globals import *
 from src.demand.TravelerModels import RequestBase
-from src.routing.NetworkBase import NetworkBase
+from src.routing.road.NetworkBase import NetworkBase
 from src.simulation.Offers import TravellerOffer
 
 LOG = logging.getLogger(__name__)

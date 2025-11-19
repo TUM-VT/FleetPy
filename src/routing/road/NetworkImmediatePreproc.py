@@ -14,7 +14,7 @@ in order to guarantee correct import in other modules.
 # -----------------------------
 import os
 import logging
-from src.routing.NetworkBasicWithStore import NetworkBasicWithStore
+from src.routing.road.NetworkBasicWithStore import NetworkBasicWithStore
 
 
 # -------------------------------------------------------------------------------------------------------------------- #

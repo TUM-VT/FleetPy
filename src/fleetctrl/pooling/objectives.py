@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from src.fleetctrl.planning.VehiclePlan import VehiclePlan
     from src.fleetctrl.planning.PlanRequest import PlanRequest
     from src.simulation.Vehicles import SimulationVehicle
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
 
 LOG = logging.getLogger(__name__)
 

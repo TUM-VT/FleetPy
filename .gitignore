@@ -46,15 +46,15 @@ studies/chicago_case_study/results/*
 studies/munich_case_study/results/*
 
 # system dependent C++ Router files
-src/routing/cpp_router/*.pyd
-src/routing/cpp_router/build/*
-src/routing/cpp_router/PyNetwork.cpp
-src/routing/extractors/cache/*
+src/routing/road/cpp_router/*.pyd
+src/routing/road/cpp_router/build/*
+src/routing/road/cpp_router/PyNetwork.cpp
+src/routing/road/extractors/cache/*
 
 # IDE-related files
 *.idea
 .vscode/*
-src/routing/cpp_router/.vs/*
+src/routing/road/cpp_router/.vs/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -186,3 +186,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# MacOS
+.DS_Store
+

@@ -5,7 +5,7 @@ import importlib
 import typing as tp
 if tp.TYPE_CHECKING:
     from src.FleetSimulationBase import FleetSimulationBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.broker.BrokerBase import BrokerBase
     from src.demand.TravelerModels import RequestBase
@@ -57,14 +57,14 @@ def get_src_simulation_environments():
 def get_src_routing_engines():
     # FleetPy routing engine options
     re_dict = {}  # str -> (module path, class name)
-    re_dict["NetworkBasic"] = ("src.routing.NetworkBasic", "NetworkBasic")
-    re_dict["NetworkImmediatePreproc"] = ("src.routing.NetworkImmediatePreproc", "NetworkImmediatePreproc")
-    re_dict["NetworkBasicWithStore"] = ("src.routing.NetworkBasicWithStore", "NetworkBasicWithStore")
-    re_dict["NetworkPartialPreprocessed"] = ("src.routing.NetworkPartialPreprocessed", "NetworkPartialPreprocessed")
-    re_dict["NetworkBasicWithStoreCpp"] = ("src.routing.NetworkBasicWithStoreCpp", "NetworkBasicWithStoreCpp")
-    re_dict["NetworkBasicCpp"] = ("src.routing.NetworkBasicCpp", "NetworkBasicCpp")
-    re_dict["NetworkPartialPreprocessedCpp"] = ("src.routing.NetworkPartialPreprocessedCpp", "NetworkPartialPreprocessedCpp")
-    re_dict["NetworkTTMatrix"] = ("src.routing.NetworkTTMatrix", "NetworkTTMatrix")
+    re_dict["NetworkBasic"] = ("src.routing.road.NetworkBasic", "NetworkBasic")
+    re_dict["NetworkImmediatePreproc"] = ("src.routing.road.NetworkImmediatePreproc", "NetworkImmediatePreproc")
+    re_dict["NetworkBasicWithStore"] = ("src.routing.road.NetworkBasicWithStore", "NetworkBasicWithStore")
+    re_dict["NetworkPartialPreprocessed"] = ("src.routing.road.NetworkPartialPreprocessed", "NetworkPartialPreprocessed")
+    re_dict["NetworkBasicWithStoreCpp"] = ("src.routing.road.NetworkBasicWithStoreCpp", "NetworkBasicWithStoreCpp")
+    re_dict["NetworkBasicCpp"] = ("src.routing.road.NetworkBasicCpp", "NetworkBasicCpp")
+    re_dict["NetworkPartialPreprocessedCpp"] = ("src.routing.road.NetworkPartialPreprocessedCpp", "NetworkPartialPreprocessedCpp")
+    re_dict["NetworkTTMatrix"] = ("src.routing.road.NetworkTTMatrix", "NetworkTTMatrix")
     # add development content
     if dev_content is not None:
         dev_re_dict = dev_content.add_dev_routing_engines()

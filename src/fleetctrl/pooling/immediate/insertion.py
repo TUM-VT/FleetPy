@@ -2,7 +2,7 @@ from src.fleetctrl.FleetControlBase import FleetControlBase
 from src.fleetctrl.planning.VehiclePlan import BoardingPlanStop, PlanStop, VehiclePlan
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.simulation.Vehicles import SimulationVehicle
-from src.routing.NetworkBase import NetworkBase
+from src.routing.road.NetworkBase import NetworkBase
 from src.fleetctrl.pooling.immediate.searchVehicles import veh_search_for_immediate_request,\
                                                             veh_search_for_reservation_request
 from src.fleetctrl.pooling.immediate.SelectRV import filter_directionality, filter_least_number_tasks

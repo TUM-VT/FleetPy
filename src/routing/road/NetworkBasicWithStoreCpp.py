@@ -22,8 +22,8 @@ import numpy as np
 
 # src imports
 # -----------
-from src.routing.NetworkBasicCpp import NetworkBasicCpp
-from src.routing.cpp_router.PyNetwork import PyNetwork
+from src.routing.road.NetworkBasicCpp import NetworkBasicCpp
+from src.routing.road.cpp_router.PyNetwork import PyNetwork
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables

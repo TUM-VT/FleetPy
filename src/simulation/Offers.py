@@ -1,7 +1,7 @@
 # src imports
 # -----------
 
-from src.routing.NetworkBase import return_position_str
+from src.routing.road.NetworkBase import return_position_str
 from src.misc.globals import *
 
 # -------------------------------------------------------------------------------------------------------------------- #

@@ -15,7 +15,7 @@ pd.options.mode.chained_assignment = None  # TODO # disables warning when overwr
 # src imports
 # -----------
 from src.misc.functions import PiecewiseContinuousLinearFunction
-from src.routing.NetworkBase import return_position_str
+from src.routing.road.NetworkBase import return_position_str
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------

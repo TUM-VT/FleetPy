@@ -69,7 +69,7 @@ conda activate fleetpy
 For improved routing efficiency, compile the C++ router:
 
 ```bash
-cd FleetPy/src/routing/cpp_router
+cd FleetPy/src/routing/road/cpp_router
 python setup.py build_ext --inplace
 ```
 
