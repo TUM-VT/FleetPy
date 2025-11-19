@@ -26,9 +26,6 @@ if TYPE_CHECKING:
     from src.fleetctrl.planning.PlanRequest import PlanRequest
     from src.simulation.Vehicles import SimulationVehicle
 
-from gnn_project.config import Config
-from gnn_project.training.train_utils import load_saved_model
-
 LOG = logging.getLogger(__name__)
 LARGE_INT = 100000
 MAX_LENGTH_OF_TREES = 1024
@@ -178,51 +175,11 @@ class AlonsoMoraAssignmentOriginal(BatchAssignmentAlgorithmBase):
     def _score_RV_RR_connections(self):
         """ this function predicts the rv-connections for all requests in self.rid_to_consider_for_global_optimisation
         """
-        if not self.enable_ml:
-            return
-        # TODO implement ML scoring for RV and RR connections
-        # TODO maybe use template pattern here
-        # 1. Preprocess data for ML model
-        # TODO finalize
-        config = Config(load_saved_model=True, model_type=self.ml_model_type, saved_model_path=self.ml_model_path)
-        model = load_saved_model(config)
-        self._preprocess_data_for_ml()
-
-        # 2. Predict RV and RR scores
-
-        # 3. Save predictions for filtering during tree building
-        self.rv_predictions = {}
-        self.rr_predictions = {}
         pass
-
-    def _preprocess_data_for_ml(self):
-        """This method preprocesses the data for ML model input."""
-        # TODO implement data preprocessing
-        data, masks = None, None
-        return data, masks
 
     def _filter_RV_with_scores(self, vid: int, r_dict: Dict[int, float]) -> Dict[int, float]:
         """This method filters the RV connections for a given vehicle based on ML predictions."""
-        if not self.enable_ml:
-            return r_dict
-
-        filtered_r_dict = {}  # Placeholder: no filtering applied yet
-        if self.ml_selection_method == "probability":
-            for rid, tt in r_dict.items():
-                score = self.rv_predictions.get((vid, rid), None)
-                if score is not None and score >= self.prediction_threshold:
-                    filtered_r_dict[rid] = tt
-        elif self.ml_selection_method == "top_k":
-            scored_rids = []
-            for rid, tt in r_dict.items():
-                score = self.rv_predictions.get((vid, rid), None)
-                if score is not None:
-                    scored_rids.append((rid, score, tt))
-            scored_rids.sort(key=lambda x: x[1], reverse=True)
-            for rid, score, tt in scored_rids[:self.top_k]:
-                filtered_r_dict[rid] = tt
-
-        return filtered_r_dict
+        return r_dict
 
     def _buildTreeForVid(self, vid: int, rids_to_build):
         """ this method builds new V2RBS for all requests_to_compute for a single vehicle
@@ -379,13 +336,7 @@ class AlonsoMoraAssignmentOriginal(BatchAssignmentAlgorithmBase):
         :param rid2: plan_request_id 2
         :return: True if compatible, False otherwise
         """
-        score = self.rr_predictions.get((rid1, rid2), None)
-        if self.ml_selection_method == "probability":
-            return score is not None and score >= self.prediction_threshold
-        elif self.ml_selection_method == "top_k":
-            # TODO: Implement top_k logic
-            return score is not None
-        return False
+        return True
 
     def _addRtvKey(self, rtv_key, veh_plan, obj):
         """this function adds entries to all necessery database dictionaries

@@ -693,16 +693,9 @@ G_FCTRL_CT_RES = "reservation_time_trigger"
 
 
 # ML Training Data
-G_TRAIN_RR_FILE = "request_request_graph"
-G_TRAIN_VR_FILE = "vehicle_request_graph"
-G_TRAIN_ASSIGNMENTS_FILE = "assignments"
-G_TRAIN_INIT_ASSIGNMENTS_FILE = "init_assignments"
-G_TRAIN_REQ_FEATURES_FILE = "request_features"
-G_TRAIN_VEH_FEATURES_FILE = "vehicle_features"
 G_TRAIN_FEATURE_TRAVEL_COST = "travel_cost"
 G_TRAIN_FEATURE_TRAVEL_TIME = "travel_time"
 G_TRAIN_FEATURE_TRAVEL_DIST = "travel_dist"
-
 G_TRAIN_FEATURE_O_POS_LAT = "o_lat"
 G_TRAIN_FEATURE_O_POS_LON = "o_lon"
 G_TRAIN_FEATURE_D_POS_LAT = "d_lat"

@@ -3,6 +3,7 @@ import os
 from collections import defaultdict
 from typing import List, Tuple, Optional, Dict, Any
 import logging
+import pickle
 
 # Third-party imports
 import pandas as pd
@@ -42,8 +43,10 @@ class GNNDataLoader:
             config: Configuration for data processing
         """
         self.config = config
-        self.enable_overwrite_data = self.config.enable_overwrite_data
+        self.enable_overwrite_data = self.config.overwrite_data
         self.scenario_paths = self.config.scenario_paths
+
+        self.log_scenario_sizes()
 
         # Edge feature dimensions
         self.rr_edge_feature_dim = None
@@ -56,18 +59,8 @@ class GNNDataLoader:
         if self.enable_overwrite_data:
             clean_normalization_directory(self.config.norm_stats_dir)
 
-    def load_data(self) -> tuple[list[Any], Dict[str, List[Tensor]]]:
-        """Load and process data from all scenarios.
-
-        Attempts to load pre-processed data first, falls back to processing raw data
-        if necessary. Also generates train/val/test masks for the loaded data.
-
-        Returns:
-            Tuple containing:
-                - List of processed HeteroData objects
-                - Dictionary with train/val/test masks
-        """
-       # First determine train/val/test split
+    def log_scenario_sizes(self):
+        """Log the number of scenarios and their split sizes."""
         num_scenarios = len(self.scenario_paths)
         logger.debug(f"Total number of scenarios: {num_scenarios}")
 
@@ -77,115 +70,120 @@ class GNNDataLoader:
         logger.debug(
             f"Train size: {train_size}, Val size: {val_size}, Test size: {test_size}")
 
-        # Set up central statistics directory
-        stats_exist = len(os.listdir(self.config.norm_stats_dir)) > 0
-        logger.debug(f"Normalization statistics exist: {stats_exist}")
-
-        scenario_data, scenario_sizes = self._prepare_scenario_data(
-            train_size, stats_exist)
-
-        # Create masks based on scenario-level splits
-        masks = self._create_scenario_based_masks(scenario_sizes, shuffle=self.config.shuffle_scenarios)
-
-        return scenario_data, masks
-
-    def _prepare_scenario_data(self, train_size: int, stats_exist: bool) -> Tuple[List[HeteroData], List[int]]:
-        """Prepare data from all scenarios, computing statistics if needed.
-
-        Args:
-            train_size: Number of training scenarios
-            stats_exist: Whether normalization statistics already exist
-
-        Returns:
-            Tuple of (scenario_data, scenario_sizes)
+    def load_data(self) -> tuple[list[Any], Dict[str, List[Tensor]]]:
         """
-        scenario_data = []
-        scenario_sizes = []  # Keep track of number of timesteps per scenario
-        # Process all scenarios, computing statistics from training set if needed
-        for idx, scenario_path in enumerate(tqdm(self.scenario_paths, desc="Processing scenarios")):
-            # Compute statistics after processing training scenarios
-            if not stats_exist and idx == train_size:
-                training_data = [
-                    (self._get_scenario_name(self.scenario_paths[i]), scenario_data[sum(
-                        scenario_sizes[:i]):sum(scenario_sizes[:i+1])])
-                    for i in range(train_size)
-                ]
-                self._compute_global_statistics(training_data)
+        Load and process data from all scenarios in three steps:
+        1. Load and process scenarios (no normalization)
+        2. Compute normalization statistics from training data
+        3. Normalize all scenarios using training stats
+        """
+        # Step 0: Try loading saved graphs
+        loaded_graphs, masks = self._try_load_saved_graphs()
+        if loaded_graphs is not None:
+            return loaded_graphs, masks
 
-            is_training = idx < train_size
-            data = self._load_or_process_scenario(
-                scenario_path, is_training=is_training)
-            if data is not None:
-                scenario_data.extend(data)
-                scenario_sizes.append(len(data))
+        # Step 1: Load or process feature dicts
+        train_size = int(self.config.train_ratio * len(self.scenario_paths))
+        raw_scenario_data, scenario_sizes = self._load_or_process_feature_dicts(
+            train_size)
 
-        return scenario_data, scenario_sizes
+        # Step 2: If norm stats missing, compute them
+        norm_stats_exist = (self.config.norm_stats_dir / 'means.parquet').exists()
+        if not norm_stats_exist:
+            training_data = raw_scenario_data[:train_size]
+            self._compute_global_statistics(training_data)
+
+        # Step 3: Normalize and create graphs
+        normalized_scenario_data, masks = self._normalize_and_create_graphs(
+            raw_scenario_data, scenario_sizes)
+        return normalized_scenario_data, masks
+
+    def _try_load_saved_graphs(self) -> tuple[Optional[List[Any]], Optional[Dict[str, torch.Tensor]]]:
+        """Try to load previously saved processed graphs and create masks by block assignment."""
+        if self.config.overwrite_data:
+            return None, None
+        processed_dir = self.config.processed_dir / self.config.experiment_name
+        train_path = processed_dir / 'train_graphs.pt'
+        val_path = processed_dir / 'val_graphs.pt'
+        test_path = processed_dir / 'test_graphs.pt'
+        if train_path.exists() and val_path.exists() and test_path.exists():
+            train_graphs = torch.load(train_path)
+            val_graphs = torch.load(val_path)
+            test_graphs = torch.load(test_path)
+            normalized_scenario_data = train_graphs + val_graphs + test_graphs
+            masks = self.create_masks(len(normalized_scenario_data), len(train_graphs), len(val_graphs))
+            return normalized_scenario_data, masks
+        return None, None
+
+    def create_masks(self, total: int, train_len: int, val_len: int) -> Dict[str, torch.Tensor]:
+        """Create train/val/test masks based on provided lengths."""
+        train_masks = torch.zeros(total, dtype=torch.bool)
+        val_masks = torch.zeros(total, dtype=torch.bool)
+        test_masks = torch.zeros(total, dtype=torch.bool)
+        train_masks[:train_len] = True
+        val_masks[train_len:train_len+val_len] = True
+        test_masks[train_len+val_len:] = True
+        masks = {"train_masks": train_masks, "val_masks": val_masks, "test_masks": test_masks}
+        return masks
+
+    def _load_or_process_feature_dicts(self, train_size: int) -> tuple[List[Tuple[str, Dict]], List[int]]:
+        """Load or process feature dicts for all scenarios."""
+        norm_stats_exist = (self.config.norm_stats_dir / 'means.parquet').exists()
+        raw_scenario_data = []
+        scenario_sizes = []
+        for idx, scenario_path in enumerate(tqdm(self.scenario_paths, desc="Loading/Processing feature dicts")):
+            scenario_name = self._get_scenario_name(scenario_path)
+            data = None
+            if norm_stats_exist:
+                data = self._try_load_feature_dict(scenario_name)
+            if data is None:
+                is_training = idx < train_size
+                data = self._process_raw_data(
+                    scenario_path, scenario_name, is_training=is_training)
+                self._save_feature_dict(data, scenario_name)
+            raw_scenario_data.append((scenario_name, data))
+            # Count timesteps from request features
+            req_key = self.config.request_features_key
+            if req_key in data and isinstance(data[req_key], pd.DataFrame) and 'timestep' in data[req_key].columns:
+                num_timesteps = max(data[req_key]['timestep']) + 1
+            else:
+                num_timesteps = 1
+            scenario_sizes.append(num_timesteps)
+        return raw_scenario_data, scenario_sizes
+
+    def _normalize_and_create_graphs(self, raw_scenario_data, scenario_sizes) -> tuple[List[Any], Dict[str, Tensor]]:
+        """Normalize data and create graphs for all scenarios."""
+        normalized_scenario_data = []
+        for _, data in tqdm(raw_scenario_data, desc="Normalizing scenarios"):
+            normalized_data = self._normalize_data(data)
+            graphs = self._create_hetero_graphs(normalized_data)
+            normalized_scenario_data.extend(graphs)
+        masks = self._create_scenario_based_masks(
+            scenario_sizes, shuffle=self.config.shuffle_scenarios)
+        # Group graphs by split and save
+        train_graphs = []
+        val_graphs = []
+        test_graphs = []
+        for i, graph in enumerate(normalized_scenario_data):
+            if masks['train_masks'][i]:
+                train_graphs.append(graph)
+            elif masks['val_masks'][i]:
+                val_graphs.append(graph)
+            elif masks['test_masks'][i]:
+                test_graphs.append(graph)
+        processed_dir = self.config.processed_dir / self.config.experiment_name
+        os.makedirs(processed_dir, exist_ok=True)
+        torch.save(train_graphs, processed_dir / 'train_graphs.pt')
+        torch.save(val_graphs, processed_dir / 'val_graphs.pt')
+        torch.save(test_graphs, processed_dir / 'test_graphs.pt')
+        return normalized_scenario_data, masks
 
     def _get_scenario_name(self, scenario_path: str) -> str:
         """Extract scenario name from path."""
         scenario_path = os.path.normpath(scenario_path)
         return os.path.basename(scenario_path)
 
-    def _get_scenario_path(self, scenario_name: str) -> str:
-        """Get the full path for a scenario by its name.
-
-        Args:
-            scenario_name: Name of the scenario
-
-        Returns:
-            Full path to the scenario directory
-        """
-        # Search through scenarios to find the matching one
-        for path in self.scenario_paths:
-            if os.path.basename(os.path.normpath(path)) == scenario_name:
-                return path
-        raise ValueError(f"Could not find scenario path for {scenario_name}")
-
-    def _load_or_process_scenario(self, scenario_path: str, is_training: bool = False) -> Optional[List[HeteroData]]:
-        """Load pre-processed data or process raw data for a scenario.
-        If self.overwrite is True, skips loading preprocessed data and forces reprocessing.
-
-        Args:
-            scenario_path: Path to the scenario directory
-            is_training: Whether this is training data (to set one-hot columns)
-
-        Returns:
-            List of processed HeteroData objects, or None if processing fails
-        """
-        scenario_name = self._get_scenario_name(scenario_path)
-        logger.debug(f"\n=== Processing scenario: {scenario_name} ===")
-        logger.debug(f"Overwrite mode: {self.enable_overwrite_data}")
-
-        # Skip loading preprocessed data if overwrite is True
-        if not self.enable_overwrite_data:
-            data = self._try_load_preprocessed_graph(scenario_name)
-            if data is not None:
-                return data
-
-        # Process raw data (either because preprocessed doesn't exist or overwrite=True)
-        return self._process_raw_data(scenario_path, scenario_name, is_training=is_training)
-
-    def _try_load_preprocessed_graph(self, scenario_name: str) -> Optional[List[HeteroData]]:
-        """Try to load pre-processed graph data for a scenario.
-
-        Args:
-            scenario_name: Name of the scenario
-
-        Returns:
-            Loaded data if available, else None
-        """
-        graph_path = self.config.processed_dir / scenario_name / 'graph_data.pt'
-
-        if not graph_path.exists():
-            return None
-
-        try:
-            return torch.load(graph_path, weights_only=False)
-        except Exception as e:
-            logger.error(f"Error loading preprocessed data: {e}")
-            return None
-
-    def _process_raw_data(self, scenario_path: str, scenario_name: str, is_training: bool = False) -> List[HeteroData]:
+    def _process_raw_data(self, scenario_path: str, scenario_name: str, is_training: bool = False) -> List[Dict]:
         """Process raw data into graph format.
 
         Args:
@@ -194,27 +192,17 @@ class GNNDataLoader:
             is_training: Whether this is training data (to set one-hot columns)
 
         Returns:
-            List of processed HeteroData objects
+            List of processed data dicts
         """
         train_data_dir = os.path.join(
             scenario_path, self.config.train_data_dir)
         prefer_processed = not self.enable_overwrite_data
         processor = DataProcessor(
             train_data_dir, self.config, prefer_processed=prefer_processed)
-        try:
-            data = processor.process_data(scenario_name)
-            data = self._encode_categorical_features(
-                data, is_training=is_training)
-            normalized_data = self._normalize_data(data)
-            graphs = self._create_and_save_graphs(
-                normalized_data, scenario_name)
-            return graphs
-        except Exception as e:
-            logger.error(f"\nError during data processing: {str(e)}")
-            import traceback
-            logger.error("Full traceback:")
-            traceback.print_exc()
-            raise
+        data = processor.process_data(scenario_name)
+        data = self._encode_categorical_features(data, is_training=is_training)
+        return data
+            
 
     def _normalize_data(self, data: Dict) -> Dict:
         """Normalize the data dictionary and return a new normalized dict.
@@ -223,7 +211,7 @@ class GNNDataLoader:
             data: Dictionary containing dataframes for different feature types
 
         Returns:
-            A new dictionary with normalized dataframes 
+            A new dictionary with normalized dataframes
         """
         normalization_stats = load_normalization_statistics(
             self.config.norm_stats_dir)
@@ -263,8 +251,8 @@ class GNNDataLoader:
             )
         return normalized
 
-    def _create_and_save_graphs(self, normalized_data: Dict, scenario_name: str) -> List[HeteroData]:
-        """Create heterogeneous graphs and save them.
+    def _create_hetero_graphs(self, normalized_data: Dict) -> List[HeteroData]:
+        """Create heterogeneous graphs.
 
         Args:
             normalized_data: Dictionary containing normalized dataframes for different feature types
@@ -275,7 +263,6 @@ class GNNDataLoader:
         """
         self._calculate_feature_dimensions(normalized_data)
         graphs = self._create_heterogeneous_graphs(normalized_data)
-        self._save_processed_graphs(graphs, scenario_name)
         return graphs
 
     def _encode_categorical_features(self, data: Dict, is_training: bool = False) -> Dict:
@@ -286,7 +273,7 @@ class GNNDataLoader:
             is_training: Whether this is training data (to set one-hot columns)
 
         Returns:
-            Updated data dictionary with one-hot encoded categorical features   
+            Updated data dictionary with one-hot encoded categorical features
         """
         for feature_type, categories in self.config.categorical_features.items():
             if feature_type not in data or data[feature_type].empty or not categories:
@@ -334,7 +321,7 @@ class GNNDataLoader:
         """Calculate edge feature dimensions.
 
         Args:
-            data: Dictionary containing normalized dataframes for different feature types    
+            data: Dictionary containing normalized dataframes for different feature types
         """
         request_graph_key = self.config.request_request_graph_key
         if request_graph_key in data and not data[request_graph_key].empty:
@@ -387,15 +374,19 @@ class GNNDataLoader:
             if name in data and isinstance(data[name], pd.DataFrame):
                 features = data[name][data[name]['timestep'] == timestep]
                 if not features.empty:
-                    numeric_features = features.select_dtypes(include=[np.number])
-                    numeric_features = numeric_features.drop(columns=self.config.excluded_node_features)
+                    numeric_features = features.select_dtypes(
+                        include=[np.number])
+                    numeric_features = numeric_features.drop(
+                        columns=self.config.excluded_node_features)
                     numeric_features = numeric_features.fillna(0.0)
                     if 'id' in features.columns:
                         node_ids = features['id'].values
                     else:
                         node_ids = numeric_features.index.values
-                    graph[node_type].x = torch.tensor(numeric_features.values, dtype=torch.float32)
-                    graph[node_type].node_ids = torch.tensor(node_ids, dtype=torch.long)
+                    graph[node_type].x = torch.tensor(
+                        numeric_features.values, dtype=torch.float32)
+                    graph[node_type].node_ids = torch.tensor(
+                        node_ids, dtype=torch.long)
                 else:
                     self._set_empty_node_features(graph, node_type)
             else:
@@ -418,18 +409,22 @@ class GNNDataLoader:
             timestep: The current timestep for which features are being added
         """
         edge_configs = [
-            (self.config.request_request_graph_key, ('request', 'connects', 'request'), self.rr_edge_feature_dim),
-            (self.config.vehicle_request_graph_key, ('vehicle', 'connects', 'request'), self.vr_edge_feature_dim)
+            (self.config.request_request_graph_key, ('request',
+             'connects', 'request'), self.rr_edge_feature_dim),
+            (self.config.vehicle_request_graph_key, ('vehicle',
+             'connects', 'request'), self.vr_edge_feature_dim)
         ]
         for name, edge_type, feat_dim in edge_configs:
             if name in data and isinstance(data[name], pd.DataFrame):
                 edges = data[name][data[name]['timestep'] == timestep]
                 if not edges.empty:
                     edge_index = torch.tensor(
-                        [edges['source'].values, edges['target'].values], dtype=torch.long)
-                    edge_features = edges.drop(columns=self.config.excluded_edge_features + ['timestep'])
+                        np.array([edges['source'].values, edges['target'].values]), dtype=torch.long)
+                    edge_features = edges.drop(
+                        columns=self.config.excluded_edge_features + ['timestep'])
                     edge_features = edge_features.fillna(0.0)
-                    edge_attr = torch.tensor(edge_features.values, dtype=torch.float32)
+                    edge_attr = torch.tensor(
+                        edge_features.values, dtype=torch.float32)
                     y = torch.tensor(
                         edges[self.config.label_key].values, dtype=torch.long) if self.config.label_key in edges.columns else None
                     graph[edge_type].edge_index = edge_index
@@ -449,23 +444,9 @@ class GNNDataLoader:
             feat_dim: Dimension of the edge features
         """
         graph[edge_type].edge_index = torch.zeros((2, 0), dtype=torch.long)
-        graph[edge_type].edge_attr = torch.zeros((0, feat_dim), dtype=torch.float32)
+        graph[edge_type].edge_attr = torch.zeros(
+            (0, feat_dim), dtype=torch.float32)
         graph[edge_type].y = torch.zeros((0,), dtype=torch.long)
-
-    def _save_processed_graphs(self, graphs: List[HeteroData], scenario_name: str) -> None:
-        """Save processed graphs. Creates directories as needed.
-
-        Args:
-            graphs: List of processed HeteroData objects
-            scenario_name: Name of the scenario
-        """
-        save_path = os.path.join(
-            self.config.processed_dir,
-            scenario_name,
-            'graph_data.pt'
-        )
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        torch.save(graphs, save_path)
 
     def _create_scenario_based_masks(self, scenario_sizes: List[int], shuffle: bool) -> Dict[str, torch.Tensor]:
         """Create train/val/test masks at the scenario level.
@@ -508,7 +489,7 @@ class GNNDataLoader:
                 train_masks[current_pos:current_pos + size] = True
             elif scenario_idx in val_indices:
                 val_masks[current_pos:current_pos + size] = True
-            else:  # Test set
+            else:
                 test_masks[current_pos:current_pos + size] = True
             current_pos += size
 
@@ -543,7 +524,8 @@ class GNNDataLoader:
                 continue
             df = pd.concat(dfs, ignore_index=True)
             numeric = df.select_dtypes(include=[np.number]).columns
-            feature_types = {ftype: [] for ftype in ["continuous", "binary", "categorical", "metadata"]}
+            feature_types = {ftype: [] for ftype in [
+                "continuous", "binary", "categorical", "metadata"]}
             for col in numeric:
                 feature_types[get_feature_type(df[col], col)].append(col)
             cont = feature_types["continuous"]
@@ -556,7 +538,8 @@ class GNNDataLoader:
                 .lower()
             cols = {col: f"{prefix}{col}" for col in cont}
             stats["means"].update(df[cont].mean().rename(cols).to_dict())
-            stats["stds"].update(df[cont].std().replace(0, 1.0).rename(cols).to_dict())
+            stats["stds"].update(df[cont].std().replace(
+                0, 1.0).rename(cols).to_dict())
             stats["mins"].update(df[cont].min().rename(cols).to_dict())
             stats["maxs"].update(df[cont].max().rename(cols).to_dict())
 
@@ -564,15 +547,29 @@ class GNNDataLoader:
             pd.DataFrame.from_dict(values, orient="index").to_parquet(
                 os.path.join(self.config.norm_stats_dir, f"{stat}.parquet"))
 
-    def load_single_timestep(self, scenario_path: str, timestep: int) -> Optional[HeteroData]:
-        """Load and process a single timestep from a scenario for inference.
+    def _save_feature_dict(self, data: Dict, scenario_name: str) -> None:
+        """Save processed feature dict as a pickle file."""
+        save_path = os.path.join(
+            self.config.processed_dir,
+            scenario_name,
+            'feature_dict.pkl'
+        )
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, 'wb') as f:
+            pickle.dump(data, f)
 
-        Args:
-            scenario_path: Path to the scenario directory
-            timestep: The timestep to process
-
-        Returns:
-            Processed HeteroData object for the specified timestep, or None if processing fails
-        """
-        # TODO implement
-        pass
+    def _try_load_feature_dict(self, scenario_name: str) -> Optional[Dict]:
+        """Try to load pre-processed feature dict for a scenario."""
+        feature_path = os.path.join(
+            self.config.processed_dir,
+            scenario_name,
+            'feature_dict.pkl'
+        )
+        if not os.path.exists(feature_path):
+            return None
+        try:
+            with open(feature_path, 'rb') as f:
+                return pickle.load(f)
+        except Exception as e:
+            logger.error(f"Error loading feature dict: {e}")
+            return None

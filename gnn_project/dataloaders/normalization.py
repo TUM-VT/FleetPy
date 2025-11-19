@@ -3,7 +3,9 @@ import shutil
 import pandas as pd
 import numpy as np
 from gnn_project.config import Config as cfg
+import logging
 
+logger = logging.getLogger(__name__)
 
 def clean_normalization_directory(stats_dir: str) -> None:
     """
@@ -130,7 +132,7 @@ def normalize_features(df: pd.DataFrame,
     # Combine explicit exclude list with binary columns
     cols_to_normalize = [
         col for col in numeric_cols if col not in exclude_columns]
-    print(f"Columns to normalize: {cols_to_normalize} for {prefix}")
+    logger.debug(f"Columns to normalize: {cols_to_normalize} for {prefix}")
 
     # Apply z-score normalization
     for col in cols_to_normalize:

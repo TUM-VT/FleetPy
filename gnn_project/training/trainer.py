@@ -31,9 +31,8 @@ class Trainer:
         self.batch_size = self.config.batch_size
         self.threshold = self.config.classification_threshold
 
-        self.model_dir = os.path.join(
-            self.config.base_data_dir, self.config.trained_models_dir)
-        os.makedirs(self.model_dir, exist_ok=True)
+        self.model_dir = self.config.trained_models_dir
+        self.best_model_path = self.model_dir / 'best_model.pt'
 
         # Create data loaders
         self.train_loader = self._create_loader(
@@ -98,7 +97,7 @@ class Trainer:
                 torch.save({
                     'model_state_dict': model.state_dict(),
                     'pos_weight': self.pos_weight
-                }, f'{self.model_dir}/best_model.pt')
+                }, self.best_model_path)
             else:
                 no_improve_epochs += 1
 
@@ -130,12 +129,12 @@ class Trainer:
         # Load best model and evaluate on test set
         try:
             checkpoint = torch.load(
-                f'{self.model_dir}/best_model.pt', weights_only=False)
+                self.best_model_path, weights_only=False)
         except Exception as e:
             logger.warning(
                 f"Warning: Could not load checkpoint with weights_only=False: {str(e)}")
             checkpoint = torch.load(
-                f'{self.model_dir}/best_model.pt', weights_only=True)
+                self.best_model_path, weights_only=True)
 
         model.load_state_dict(checkpoint['model_state_dict'])
         test_metrics = self.evaluate(model, self.test_loader)
@@ -319,7 +318,7 @@ class Trainer:
     def _create_loader(
         self,
         data: list,
-        mask: list,
+        mask: torch.Tensor,
         batch_size: int,
         shuffle: bool
     ) -> DataLoader:
@@ -337,7 +336,7 @@ class Trainer:
         filtered_data = []
         total_graphs = sum(mask)
         for i in range(len(data)):
-            if mask[i]:
+            if mask[i].item():
                 has_edges = any(
                     len(edges[0]) > 0 for edges in data[i].edge_index_dict.values())
                 if has_edges:

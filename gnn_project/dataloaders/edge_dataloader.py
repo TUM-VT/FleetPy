@@ -42,13 +42,13 @@ class EdgeClassificationDataLoader(DataLoader):
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         folder_suffix = f"_v{version}" if version else ""
         self.save_dir = os.path.join(
-            self.config.base_data_dir, self.config.train_data_dir, f"{folder_suffix}_{timestamp}")
+            self.config.ml_data_dir, self.config.train_data_dir, f"{folder_suffix}_{timestamp}")
         os.makedirs(self.save_dir, exist_ok=True)
         print('Save directory for edge classification data:', self.save_dir)
 
     def _find_latest_version_dir(self, version: str):
         """Find the latest directory for the given version, if any."""
-        base_dir = os.path.join(self.config.base_data_dir, self.config.train_data_dir)
+        base_dir = os.path.join(self.config.ml_data_dir, self.config.train_data_dir)
         folder_suffix = f"_v{version}" if version else ""
         candidates = []
         if os.path.exists(base_dir):
@@ -122,19 +122,19 @@ class EdgeClassificationDataLoader(DataLoader):
 
         for scenario_idx, (scenario_path, scenario_name) in enumerate(zip(self.scenarios, scenario_names)):
             edge_parquet_path = os.path.join(
-                self.config.base_data_dir,
+                self.config.ml_data_dir,
                 scenario_name,
                 self.config.processed_dir,
                 f'{self.edge_type}.parquet'
             )
             req_parquet_path = os.path.join(
-                self.config.base_data_dir,
+                self.config.ml_data_dir,
                 scenario_name,
                 self.config.processed_dir,
                 'req_features.parquet'
             )
             veh_parquet_path = os.path.join(
-                self.config.base_data_dir,
+                self.config.ml_data_dir,
                 scenario_name,
                 self.config.processed_dir,
                 'veh_features.parquet'

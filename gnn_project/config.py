@@ -9,6 +9,8 @@ REQUEST_FEATURES_KEY = 'request_features'
 VEHICLE_FEATURES_KEY = 'vehicle_features'
 REQUEST_REQUEST_GRAPH_KEY = 'request_request_graph'
 VEHICLE_REQUEST_GRAPH_KEY = 'vehicle_request_graph'
+ASSIGNMENT_KEY = 'assignments'
+INIT_ASSIGNMENT_KEY = 'init_assignments'
 LABEL_KEY = 'optimal_assign'
 INIT_LABEL_KEY = 'init_assign'
 
@@ -20,7 +22,8 @@ class Config:
     """Configuration class for GNN training and data processing parameters.
     """
     # ----- Directory structure -----
-    base_data_dir: Path = Path('data')
+    project_dir: Path = Path(__file__).parent.parent
+    ml_data_dir: Path = Path('data')
     experiment_name: str = 'gnn_v1'
     train_data_dir: str = 'train'
     processed_dir: Path = field(init=False)
@@ -46,7 +49,7 @@ class Config:
     sim_start: int = 0  # seconds
     sim_end: int = 86400  # seconds (24h)
     sim_step: int = 30  # seconds (30s)
-    enable_overwrite_data: bool = False
+    overwrite_data: bool = False
     log_level: str = LOG_LEVEL_DEFAULT
 
     # Data splitting
@@ -60,6 +63,8 @@ class Config:
     vehicle_features_key: str = VEHICLE_FEATURES_KEY
     request_request_graph_key: str = REQUEST_REQUEST_GRAPH_KEY
     vehicle_request_graph_key: str = VEHICLE_REQUEST_GRAPH_KEY
+    assignment_key : str = ASSIGNMENT_KEY
+    init_assignment_key : str = INIT_ASSIGNMENT_KEY
     label_key: str = LABEL_KEY
     init_label_key: str = INIT_LABEL_KEY
     # Features to exclude from edge attributes
@@ -102,18 +107,18 @@ class Config:
 
     def __post_init__(self):
         self.scenario_paths = [
-            os.path.join('..', 'studies', case_study, 'results', sc)
+            os.path.join(self.project_dir, 'studies', case_study, 'results', sc)
             for case_study, sc_names in self.scenario_names.items()
             for sc in sc_names
         ]
 
-        if type(self.base_data_dir) is str:
-            self.base_data_dir = Path(self.base_data_dir)
-        if not self.base_data_dir.exists():
-            self.base_data_dir.mkdir(parents=True, exist_ok=True)
-        self.processed_dir = self.base_data_dir / 'processed'
-        self.norm_stats_dir = self.base_data_dir / 'norm_stats' / self.experiment_name
-        self.trained_models_dir = self.base_data_dir / 'models' / self.experiment_name
+        if type(self.ml_data_dir) is str:
+            self.ml_data_dir = Path(self.ml_data_dir)
+        if not self.ml_data_dir.exists():
+            self.ml_data_dir.mkdir(parents=True, exist_ok=True)
+        self.processed_dir = self.ml_data_dir / 'processed'
+        self.norm_stats_dir = self.ml_data_dir / 'norm_stats' / self.experiment_name
+        self.trained_models_dir = self.ml_data_dir / 'models' / self.experiment_name
         self.saved_model_path = self.trained_models_dir / 'best_model.pt'
 
         self.processed_dir.mkdir(parents=True, exist_ok=True)
