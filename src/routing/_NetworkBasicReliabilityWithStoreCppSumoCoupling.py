@@ -100,7 +100,7 @@ class Edge(BasicEdge):
     def get_init_cfv(self,cost_function):
         self.cost_function_value = cost_function(tt_mean=self.travel_time,tt_var=self.travel_time_var,dis=self.distance)
 
-class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSumoCoupling):
+class _NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSumoCoupling):
     def __init__(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
         """
         The network will be initialized.
