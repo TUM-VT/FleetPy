@@ -5,6 +5,7 @@ import pathlib
 import os
 from tqdm import tqdm
 import gzip
+import time
 
 
 """
@@ -13,14 +14,11 @@ As SUMO Trips are defined Edge to Edge and FleetPy Trips are defined Node to Nod
 Requires Network already translated from SUMO to Fleetpy.
 
 Input Variables:
-- xmlfile (str):     Path to SUMO-XML File
+- xmlfile (str):     Path to SUMO-XML Demand File
 - demand_name (str): Name of the demand set 
 - demand_type (str): Type of the Demand (trips/routes) 
 - nw_name (str):     Name of the transformed Network in the FleetPy Repository
 
-Output:
-Saves .csv file into FleetPy\data\demand\{dmd_name}
-   
 """
 
 def transform_demand_SUMO_to_fp(xmlfile,demand_type,nw_name):
@@ -38,6 +36,8 @@ def transform_demand_SUMO_to_fp(xmlfile,demand_type,nw_name):
     nw_Path = FLEETPY_PATH /  "data" / "networks" / nw_name / "base"
 
     edges_df = pd.read_csv(nw_Path.joinpath("edges.csv"))
+    edges_df = edges_df.set_index("source_edge_id", drop=False)
+
     request_ids = []
     rq_times = []
     start_nodes = []
@@ -47,9 +47,9 @@ def transform_demand_SUMO_to_fp(xmlfile,demand_type,nw_name):
     if demand_type == "trips":
         for trip in tqdm(demand_root.findall("trip"), desc="Iterating over all Routes"):
             start_edge = trip.get("from")
-            start_nodes.append(get_fp_node_from_SUMO_edge(start_edge,edges_df))
+            start_nodes.append(get_fp_start_node_from_SUMO_edge(start_edge,edges_df))
             end_edge = trip.get("to")
-            end_nodes.append(get_fp_node_from_SUMO_edge(end_edge,edges_df))
+            end_nodes.append(get_fp_end_node_from_SUMO_edge(end_edge,edges_df))
             request_ids.append(int(trip.get('id')))
             rq_times.append(float(trip.get("depart")))
             orig_ids.append(trip.get('id'))
@@ -59,8 +59,8 @@ def transform_demand_SUMO_to_fp(xmlfile,demand_type,nw_name):
         for vehicle in tqdm(demand_root.findall("vehicle"),desc="Iterating over all Routes"):
                 route = vehicle.find("route")
                 edges_list = route.get("edges").split(" ")
-                start_nodes.append(get_fp_node_from_SUMO_edge(edges_list[0],edges_df))
-                end_nodes.append(get_fp_node_from_SUMO_edge(edges_list[-1],edges_df))
+                start_nodes.append(get_fp_start_node_from_SUMO_edge(edges_list[0],edges_df))
+                end_nodes.append(get_fp_end_node_from_SUMO_edge(edges_list[-1],edges_df))
                 orig_ids.append(vehicle.get('id'))
                 rq_times.append(float(vehicle.get("depart")))
                 request_ids.append(count)
@@ -81,11 +81,13 @@ def save_demand_files(fp_df,demand_type,nw_name):
     fp_df.to_csv(demand_path)
     print(f"Demand File saved to: {demand_path}")
 
-def get_fp_node_from_SUMO_edge(SUMO_EDGE,edges_df):
-    filtered_df = edges_df[edges_df['source_edge_id'] == SUMO_EDGE]
-    start_node = filtered_df["from_node"].values[0]
+def get_fp_start_node_from_SUMO_edge(sumo_edge,edges_df):
+    start_node = edges_df.loc[sumo_edge, "from_node"]
     return start_node
 
+def get_fp_end_node_from_SUMO_edge(sumo_edge,edges_df):
+    end_node = edges_df.loc[sumo_edge, "to_node"]
+    return end_node
 
 if __name__ == "__main__":
     PY_PATH = pathlib.Path(__file__)

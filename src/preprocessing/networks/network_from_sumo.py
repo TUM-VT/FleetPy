@@ -8,12 +8,24 @@ import sys
 import geopandas as gpd
 from shapely.geometry import Point, LineString
 from tqdm import tqdm
+import argparse
+
+
 """
 This script converts network.net.xml files from SUMO into nodes.csv/edges.csv and nodes_all_infos.geojson/edges_all_infos.geojson for FleetPy.
-Input:
-- (str) Path to Network file from SUMO
-- (str) Name of the network (Network is saved to FleetPy\data\networks\{Name})
-- (str),optional SUMO-Modes that the Vehicles that are controlled by FleetPy correspond to e.g. "passenger,bus,taxi" 
+
+Args:
+    xmlfile (str): Path to SUMO network XML file (network.net.xml)
+    -n, --network (str): Name of the network (Network is saved to FleetPy\data\networks\{Name})
+    -a, --allowed-modes (str, optional): SUMO modes that FleetPy vehicles correspond to (e.g., "passenger,bus,taxi"). 
+                                         FleetPy vehicles will only use lanes that allow at least one of these modes.
+                                         Defaults to "all" (all SUMO modes allowed).
+
+Usage:
+    python network_from_sumo.py <xmlfile> -n <network_name> [-a <allowed_modes>]
+    
+Example:
+    python network_from_sumo.py network.net.xml -n my_network -a "passenger,taxi"
 """
 
 ## For SUMO version 1.19 (05/2024):
@@ -206,16 +218,11 @@ def create_network(xmlfile, nw_name, allowed_modes):
     
 if __name__ == "__main__":
 
-    if len(sys.argv) == 3:
-        xmlfile = sys.argv[1]
-        nw_name = sys.argv[2]
-        create_network(xmlfile, nw_name, allowed_modes="all")
-    elif len(sys.argv) == 4:
-        xmlfile = sys.argv[1]
-        nw_name = sys.argv[2]
-        allowed_modes = sys.argv[3]
-        create_network(xmlfile, nw_name, allowed_modes)
-
-    else:
-        print("wrong call!")
-        print("arguments of this script should be the path to the SUMO network XML-file and the name of the created network (network files will be created in FLeetPy/data/networks/{network_name}")
+    parser = argparse.ArgumentParser(description='Convert SUMO network to FleetPy format')
+    parser.add_argument('xmlfile', help='Path to SUMO network XML file')
+    parser.add_argument('-n', '--network', dest='nw_name', required=True, help='Name of the network')
+    parser.add_argument('-a', '--allowed-modes', dest='allowed_modes', default='all', help='SUMO modes allowed (e.g., "passenger,bus,taxi")')
+    
+    args = parser.parse_args()
+    
+    create_network(args.xmlfile, args.nw_name, args.allowed_modes)
