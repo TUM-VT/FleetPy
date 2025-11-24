@@ -27,8 +27,6 @@ LOG = logging.getLogger(__name__)
 def read_node_line(columns):
     return Node(int(columns["node_index"]), int(columns["is_stop_only"]), float(columns["pos_x"]), float(columns["pos_y"]))
 
-
-    
 class Node(BasicNode):
     def __init__(self, node_index, is_stop_only, pos_x, pos_y, node_order=None):
         self.node_index = node_index
@@ -142,6 +140,10 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
         self.user_vot = None
         self.user_vor = None
         self.routing_mode = "edge_tt"
+
+
+        print(self.vars())
+        breakpoint()
     #def loadNetwork(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
        # LOG.info("load c++ router!")
        # print("load c++ router!")
