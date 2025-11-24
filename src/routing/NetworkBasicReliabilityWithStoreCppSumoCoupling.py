@@ -153,7 +153,8 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
         self.routing_mode = "edge_tt"
 
 
-        print(self.vars())
+        for attr, value in vars(self).items():
+            print(f"{attr}: {value}")
         breakpoint()
     #def loadNetwork(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
        # LOG.info("load c++ router!")
