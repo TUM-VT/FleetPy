@@ -44,7 +44,6 @@ class NetworkBasicWithStoreCppSumoCoupling(NetworkBasicWithStoreCpp):
         """
         if self._tt_infos_from_folder:
             tt_file = os.path.join(resultsPath, "EdgeTravelTimes", f"SUMO_travel_times_{sim_time}.csv")
-            self.cpp_router.updateEdgeTravelTimes(tt_file.encode())
-        
-        #print(f"SUMO Travel times loaded into cpp Router at step {sim_time}")
+            self.cpp_router.updateEdgeTravelTimes(tt_file.encode())        
+            print(f"SUMO Travel times loaded into cpp Router at step {sim_time}")
         

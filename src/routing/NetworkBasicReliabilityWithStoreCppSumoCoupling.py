@@ -1,3 +1,14 @@
+"""
+Authors: Roman Engelhardt, Florian Dandl, Joel Brodersen
+TUM, 2025
+In order to guarantee transferability of models, Network models should follow the following conventions.
+Classes should be called
+Node
+Edge
+Network
+in order to guarantee correct import in other modules.
+"""
+
 # -------------------------------------------------------------------------------------------------------------------- #
 # standard distribution imports
 # -----------------------------
