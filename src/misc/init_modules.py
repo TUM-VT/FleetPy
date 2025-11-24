@@ -69,6 +69,7 @@ def get_src_routing_engines():
     re_dict["NetworkBasicReliabilityWithStore"] = ("src.routing.NetworkBasicReliabilityWithStore", "NetworkBasicReliabilityWithStore")
     re_dict["NetworkBasicReliabilitySumoCoupling"] = ("src.routing.NetworkBasicReliabilitySumoCoupling", "NetworkBasicReliabilitySumoCoupling")
     re_dict["NetworkBasicReliabilityWithStoreCppSumoCoupling"] = ("src.routing.NetworkBasicReliabilityWithStoreCppSumoCoupling", "NetworkBasicReliabilityWithStoreCppSumoCoupling")
+    re_dict["_NetworkBasicReliabilityWithStoreCppSumoCoupling"] = ("src.routing._NetworkBasicReliabilityWithStoreCppSumoCoupling", "_NetworkBasicReliabilityWithStoreCppSumoCoupling")
     # add development content
     if dev_content is not None:
         dev_re_dict = dev_content.add_dev_routing_engines()
