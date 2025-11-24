@@ -147,3 +147,35 @@ def load_saved_model(config):
     logger.info(f"Loading model from {config.saved_model_path}")
     model.load_state_dict(checkpoint['model_state_dict'])
     return model
+
+
+def get_edge_predictions(graph, model, device):
+    """Get model predictions for a single graph"""
+    model.eval()
+    with torch.no_grad():
+        # Prepare data dictionaries
+        graph = graph.to(device)
+
+        # Prepare input dictionaries
+        x_dict = {}
+        edge_index_dict = {}
+        edge_attr_dict = {}
+
+        # Get node features
+        for node_type in graph.node_types:
+            x_dict[node_type] = graph[node_type].x
+
+        # Get edge features
+        for edge_type in graph.edge_types:
+            edge_index = graph[edge_type].edge_index
+            edge_attr = graph[edge_type].edge_attr
+
+            edge_index_dict[edge_type] = edge_index.long()  # Ensure int64
+            edge_attr_dict[edge_type] = edge_attr
+
+        try:
+            logits = model(x_dict, edge_index_dict, edge_attr_dict)
+            return torch.sigmoid(logits).cpu().numpy()
+        except Exception as e:
+            logger.error(f"Error during prediction: {str(e)}")
+            return None

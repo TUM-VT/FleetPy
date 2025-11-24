@@ -78,6 +78,8 @@ class Config:
         REQUEST_FEATURES_KEY: ['status'],
         VEHICLE_FEATURES_KEY: ['type', 'status']
     })
+    max_detour_ratio: float = 1.4  # Maximum allowed detour ratio for requests
+    vehicle_capacity: int = 4  # Vehicle capacity for ride-sharing
 
     # ----- Feature indices -----
     # TODO automate

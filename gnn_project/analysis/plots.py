@@ -3,47 +3,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-import torch
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-
-def get_edge_predictions(data, graph_idx, model, device):
-    """Get model predictions for a single graph"""
-    model.eval()
-    with torch.no_grad():
-        # Prepare data dictionaries
-        graph = data[graph_idx].to(device)
-
-        # Prepare input dictionaries
-        x_dict = {}
-        edge_index_dict = {}
-        edge_attr_dict = {}
-
-        # Get node features
-        for node_type in graph.node_types:
-            x_dict[node_type] = graph[node_type].x
-
-        # Get edge features
-        for edge_type in graph.edge_types:
-            edge_index = graph[edge_type].edge_index
-            edge_attr = graph[edge_type].edge_attr
-
-            edge_index_dict[edge_type] = edge_index.long()  # Ensure int64
-            edge_attr_dict[edge_type] = edge_attr
-
-        try:
-            logits = model(x_dict, edge_index_dict, edge_attr_dict)
-            return torch.sigmoid(logits).cpu().numpy()
-        except Exception as e:
-            logger.error(f"Error during prediction: {str(e)}")
-            return None
-
-
-def visualize_graph(data, graph_idx=0, model=None, device='cpu', only_new_requests=False):
+def visualize_graph(data, graph_idx=0, predictions=None, device='cpu', only_new_requests=False):
     """
     Visualize a heterogeneous graph with each request in a separate subplot,
     showing the top 5 predicted edges and true edges for each request.
@@ -51,18 +17,10 @@ def visualize_graph(data, graph_idx=0, model=None, device='cpu', only_new_reques
     Args:
         data: List of HeteroData objects
         graph_idx: Index of the graph to visualize
-        model: The trained model to get predictions from
+        predictions: (Optional) Precomputed edge predictions
         device: Device to run model predictions on
         only_new_requests: If True, only show requests that didn't appear in previous graphs
     """
-    if model is None:
-        raise ValueError("Model must be provided for visualization")
-
-    # Get edge predictions
-    predictions = get_edge_predictions(data, graph_idx, model, device)
-    if predictions is None:
-        raise ValueError("Could not get predictions from model")
-
     # Get the graph
     graph = data[graph_idx]
     # Get edge indices, predictions, and ground truth
@@ -282,7 +240,7 @@ def visualize_graph(data, graph_idx=0, model=None, device='cpu', only_new_reques
     plt.show()
 
 
-def analyze_model_performance(data, start_idx, num_graphs, model, device):
+def analyze_model_performance(data, start_idx, num_graphs, predictions, device):
     """
     Analyze model performance over a range of graphs, focusing on new requests.
 
@@ -290,9 +248,8 @@ def analyze_model_performance(data, start_idx, num_graphs, model, device):
         data: List of HeteroData objects
         start_idx: Starting graph index
         num_graphs: Number of graphs to analyze
-        model: The trained model
+        predictions: List of predictions for each graph
         device: Device to run model on
-        return_data: If True, returns a dictionary with scores and true assignments
 
     Returns:
         fig: matplotlib figure showing performance metrics
@@ -303,11 +260,9 @@ def analyze_model_performance(data, start_idx, num_graphs, model, device):
 
     for graph_idx in range(start_idx, min(start_idx + num_graphs, len(data))):
         # Get predictions
-        predictions = get_edge_predictions(data, graph_idx, model, device)
-        if predictions is None:
-            continue
-
         graph = data[graph_idx]
+        predictions_for_graph = predictions[graph_idx - start_idx]
+
         edge_index = graph[edge_type].edge_index.cpu()
         true_labels = graph[edge_type].y.cpu()
 
@@ -340,7 +295,7 @@ def analyze_model_performance(data, start_idx, num_graphs, model, device):
             if req_idx not in edges_by_request:
                 edges_by_request[req_idx] = []
             edges_by_request[req_idx].append({
-                'score': float(predictions[start_pred_idx + i]),
+                'score': float(predictions_for_graph[start_pred_idx + i]),
                 'is_true': bool(true_labels[i].item())
             })
 
@@ -495,11 +450,8 @@ def analyze_model_performance(data, start_idx, num_graphs, model, device):
     false_scores = []  # Will store scores of false assignments for histogram
 
     for graph_idx in range(start_idx, min(start_idx + num_graphs, len(data))):
-        predictions = get_edge_predictions(data, graph_idx, model, device)
-        if predictions is None:
-            continue
-
         graph = data[graph_idx]
+        predictions_for_graph = predictions[graph_idx - start_idx]
         edge_index = graph[edge_type].edge_index.cpu()
         true_labels = graph[edge_type].y.cpu()
 
@@ -529,7 +481,7 @@ def analyze_model_performance(data, start_idx, num_graphs, model, device):
         for i in range(edge_index.shape[1]):
             req_idx = edge_index[1, i].item()
             if req_idx in new_requests:  # Only include edges for new requests
-                score = float(predictions[start_pred_idx + i])
+                score = float(predictions_for_graph[start_pred_idx + i])
                 is_true = bool(true_labels[i].item())
                 all_scores.append(score)
                 # Track true/false status directly

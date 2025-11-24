@@ -15,12 +15,12 @@ from src.routing.NetworkBase import NetworkBase
 from src.simulation.Legs import VehicleRouteLeg
 from src.simulation.Vehicles import SimulationVehicle
 from gnn_project.data_processing.data_processor import DataProcessor
-from gnn_project.models.edge_classifier import XGBClassifier
 from gnn_project.config import Config
 from gnn_project.dataloaders.gnn_dataloader import GNNDataLoader
 
 from torch_geometric.data import HeteroData
 from gnn_project.models.hetero_gat import HeteroGAT
+from gnn_project.training.train_utils import get_edge_predictions
 
 
 class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
@@ -44,10 +44,9 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         }
     """
 
-    XGBOOST_MODEL_PATH = 'notebooks/data/train/_20250717_131757/xgbclassifier_rr.pkl'
     GNN_MODEL_PATH = 'gnn_project/data/models/gnn_v1/best_model.pt'
     ENABLE_ML_DEFAULT = False
-    MODEL_TYPE_DEFAULT = 'gnn'  # 'xgboost' or 'gnn'
+    MODEL_TYPE_DEFAULT = 'gnn'  # only 'gnn' for now
     ML_SELECTION_METHOD_DEFAULT = 'top_k'  # 'probability' or 'top_k'
     TOP_K_DEFAULT = 10  # Used if selection method is 'top_k'
     PREDICTION_THRESHOLD_DEFAULT = 0.5  # Used if selection method is 'probability'
@@ -71,12 +70,11 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
             self.top_k = operator_attributes.get('top_k', self.TOP_K_DEFAULT)
             self.prediction_threshold = operator_attributes.get(
                 'prediction_threshold', self.PREDICTION_THRESHOLD_DEFAULT)
-            
-            # Initialize Config
-            self.config = Config()
+
+        # Initialize Config
+        self.config = Config()
 
         # Initialize model attributes as None (will be loaded on first use)
-        self._xgb_classifier = None
         self._gnn_classifier = None
         self._data_processor = None
         self._gnn_dataloader = None
@@ -156,19 +154,21 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
     def get_travel_time_r2r(self, rid1, rid2):
         """get all travel times between the 6 combinations of rid1 and rid2 origins and destination positions"""
         req1, req2 = self.active_requests[rid1], self.active_requests[rid2]
-        return {G_TRAIN_FEATURE_TRAVEL_COST: [{key: val for key, val in
-                                               zip([G_TRAIN_FEATURE_TRAVEL_COST, G_TRAIN_FEATURE_TRAVEL_TIME,
-                                                    G_TRAIN_FEATURE_TRAVEL_DIST],
-                                                   self.routing_engine.return_travel_costs_1to1(pos1, pos2))} for
-                                              pos1, pos2 in
-                                              self.get_od_pool_pairs(req1, req2)]}
+        return {name: {key: val for key, val in
+                       zip([G_TRAIN_FEATURE_TRAVEL_COST, G_TRAIN_FEATURE_TRAVEL_TIME,
+                            G_TRAIN_FEATURE_TRAVEL_DIST],
+                           self.routing_engine.return_travel_costs_1to1(pos1, pos2))} for
+                name, pos1, pos2 in
+                self.get_od_pool_pairs(req1, req2)}
 
     @staticmethod
     def get_od_pool_pairs(req1, req2):
-        # TODO double check if this is correct
         """Returns all combinations of origin and destination positions for two requests."""
-        return [(req1.o_pos, req1.d_pos), (req1.o_pos, req2.o_pos), (req1.o_pos, req2.d_pos),
-                (req1.d_pos, req2.o_pos), (req2.o_pos, req2.d_pos), (req1.d_pos, req2.d_pos)]
+        return [('o1_o2', req1.o_pos, req2.o_pos), ('o2_o1', req2.o_pos, req1.o_pos),
+                ('o2_d1', req2.o_pos, req1.d_pos), ('o1_d2', req1.o_pos, req2.d_pos),
+                ('d1_d2', req1.d_pos, req2.d_pos), ('d2_d1', req2.d_pos, req1.d_pos),
+                ('d1_o2', req1.d_pos, req2.o_pos), ('d2_o1', req2.d_pos, req1.o_pos),
+                ('o1_d1', req1.o_pos, req1.d_pos), ('o2_d2', req2.o_pos, req2.d_pos)]
 
     def get_rr_graph_with_features(self):
         rr_graph = defaultdict(dict)
@@ -267,23 +267,33 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
 
         try:
             # Get predictions and update connections
-            pruned_edges = self._get_predictions(data)
-            # TODO hoda: save predictions for filtering later 
+            edges_df = self._get_predictions(data)
+            if edges_df is None or edges_df.empty:
+                self.rv_predictions = {}
+                self.rr_predictions = {}
+                return
+            
+            # TODO Store predictions in dict format for easy lookup
+            self.rv_predictions = {
+                (row['source'], row['target']): row['pred_prob'] for _, row in edges_df.iterrows()
+            }
+            self.rr_predictions = {}
 
         except Exception as e:
             print(f"Error during prediction with {self.model_type}: {e}")
             import traceback
             traceback.print_exc()
+            self.rv_predictions = {}
+            self.rr_predictions = {}
 
     def _get_timestep_data(self):
-        """Collects current timestep data using existing data collection methods"""
+        """Collects current timestep data for prediction."""
         return {
             self.config.request_features_key: self.get_req_features(),
             self.config.vehicle_features_key: self.get_veh_features(),
             self.config.vehicle_request_graph_key: self.get_v2r_graph_with_features(),
             self.config.request_request_graph_key: self.get_rr_graph_with_features(),
-            self.config.init_assignment_key: self.current_assignments,
-            self.config.assignment_key: self.optimisation_solutions
+            self.config.init_assignment_key: self.current_assignments
         }
 
     def _get_predictions(self, data):
@@ -292,46 +302,42 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         if not self._load_model():
             return None
 
-        if self.model_type == 'xgboost':
-            # Process features for XGBoost (merging)
-            # Note: process_single_timestep calls _add_graph_features internally
-            merged_data, _ = self._data_processor.process_single_timestep(
-                data, timestep=self.sim_time, edge_type=self.config.vehicle_request_graph_key)
-            return self._predict_with_xgboost(merged_data)
-        else:  # gnn
+        if self.model_type == 'gnn':
             # GNN pipeline
             # 1. Add graph features (in-place modification of data dicts)
             self._data_processor._add_graph_features(self.sim_time, data)
-            
+
             # 2. Convert to DataFrames and map IDs to 0-based indices
-            data_dfs, req_id_to_idx, veh_id_to_idx = self._convert_to_dataframes(data)
-            
+            data_dfs, req_id_to_idx, veh_id_to_idx = self._convert_to_dataframes(
+                data)
+
             # 3. Encode categorical features (Must be done BEFORE normalization)
-            encoded_data = self._gnn_dataloader._encode_categorical_features(data_dfs)
+            # TODO save _onehot_columns
+            encoded_data = self._gnn_dataloader._encode_categorical_features(
+                data_dfs)
 
             # 4. Normalize features
-            # Ensure normalization stats are loaded
-            if not hasattr(self._gnn_dataloader, 'normalization_stats') or self._gnn_dataloader.normalization_stats is None:
-                 from gnn_project.dataloaders.normalization import load_normalization_statistics
-                 self._gnn_dataloader.normalization_stats = load_normalization_statistics(self.config.norm_stats_dir)
+            normalized_data = self._gnn_dataloader._normalize_data(
+                encoded_data)
 
-            normalized_data = self._gnn_dataloader._normalize_data(encoded_data)
-            
             # 5. Create HeteroData Graph
             graph = self._create_hetero_graph(normalized_data)
-            
+
             # 6. Predict
             return self._predict_with_gnn(graph, req_id_to_idx, veh_id_to_idx)
+        else:
+            print(f"Unsupported model type: {self.model_type}")
+            return None
 
     def _convert_to_dataframes(self, data):
         """Convert data dicts to DataFrames and create ID mappings"""
         dfs = {}
-        
+
         # Requests
         req_data = data[self.config.request_features_key]
         if not req_data:
             return {}, {}, {}
-            
+
         req_df = pd.DataFrame.from_dict(req_data, orient='index')
         req_df['timestep'] = self.sim_time
         # Create mapping: rid -> 0..N index
@@ -345,7 +351,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         # Vehicles
         veh_data = data[self.config.vehicle_features_key]
         veh_df = pd.DataFrame.from_dict(veh_data, orient='index')
-        veh_df['timestep'] = self.sim_time
+        veh_df['timestep'] = self.sim_time  # TODO training uses indices as timesteps. can set to 0?
         sorted_vids = sorted(veh_df.index)
         veh_id_to_idx = {vid: i for i, vid in enumerate(sorted_vids)}
         veh_df = veh_df.reindex(sorted_vids).reset_index(drop=True)
@@ -361,53 +367,36 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
                     if key == self.config.vehicle_request_graph_key:
                         src_idx = veh_id_to_idx.get(source)
                         tgt_idx = req_id_to_idx.get(target)
-                    else: # rr
+                    else:  # rr
                         src_idx = req_id_to_idx.get(source)
                         tgt_idx = req_id_to_idx.get(target)
-                    
+
                     if src_idx is not None and tgt_idx is not None:
                         row = {'source': src_idx, 'target': tgt_idx}
                         row.update(features)
                         edge_rows.append(row)
-            
+
             if edge_rows:
                 df = pd.DataFrame(edge_rows)
-                df['timestep'] = self.sim_time
+                df['timestep'] = self.sim_time  # TODO training uses indices as timesteps. can set to 0?
                 dfs[key] = df
             else:
                 dfs[key] = pd.DataFrame()
-            
+
         return dfs, req_id_to_idx, veh_id_to_idx
 
     def _load_model(self):
         """Load the appropriate model if not already loaded"""
         try:
-            if self.model_type == 'xgboost' and not self._xgb_classifier:
-                self._xgb_classifier = XGBClassifier(dataloader=None)
-                import joblib
-                self._xgb_classifier.pipeline = joblib.load(
-                    self.XGBOOST_MODEL_PATH)
-            elif self.model_type == 'gnn' and not self._gnn_classifier:
+            if self.model_type == 'gnn' and not self._gnn_classifier:
                 self._gnn_classifier = HeteroGAT(self.config)
-                self._gnn_classifier.load_state_dict(
-                    torch.load(self.GNN_MODEL_PATH))
+                state_dict = torch.load(self.GNN_MODEL_PATH, map_location='cpu')
+                self._gnn_classifier.load_state_dict(state_dict)
                 self._gnn_classifier.eval()
             return True
         except Exception as e:
             print(f"Error loading {self.model_type} model: {e}")
             return False
-
-    def _predict_with_xgboost(self, merged_data):
-        """Make predictions using XGBoost model"""
-        feature_cols = [col for col in merged_data.columns if col not in [
-            'label', 'init_label']]
-        X_pred = merged_data[feature_cols]
-        y_pred_proba = self._xgb_classifier.pipeline.predict_proba(X_pred)[
-            :, 1]
-        merged_data['pred_prob'] = y_pred_proba
-
-        # TODO adjust output as needed
-        return merged_data[merged_data['pred_prob'] >= self.prediction_threshold]
 
     def _predict_with_gnn(self, graph, req_id_to_idx, veh_id_to_idx):
         """Make predictions using GNN model"""
@@ -415,44 +404,31 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         idx_to_req_id = {v: k for k, v in req_id_to_idx.items()}
         idx_to_veh_id = {v: k for k, v in veh_id_to_idx.items()}
 
+        edges_df = pd.DataFrame(columns=['source', 'target', 'pred_prob'])
         with torch.no_grad():
-            # TODO fix e.g. use get_edge_predictions
-            pred_probs = torch.sigmoid(self._gnn_classifier(graph))
-
-            # Get edge index from graph
-            # TODO other edge types
-            edge_index = graph['vehicle', 'connects', 'request'].edge_index
-            
-            # Convert to DataFrame format matching XGBoost output
-            edges_df = pd.DataFrame({
-                'source_idx': edge_index[0].numpy(),
-                'target_idx': edge_index[1].numpy(),
-                'pred_prob': pred_probs.numpy()
-            })
-            
-            # Map back to IDs
-            edges_df['source'] = edges_df['source_idx'].map(idx_to_veh_id)
-            edges_df['target'] = edges_df['target_idx'].map(idx_to_req_id)
-
-        # TODO adjust output as needed
-        return edges_df[edges_df['pred_prob'] > self.prediction_threshold]
+            pred_probs = get_edge_predictions(
+                graph, self._gnn_classifier, device='cpu')
+    
+            # TODO
+            # pred_probs has all edge types
+        return edges_df
 
     def _create_hetero_graph(self, data):
         """Creates a PyG HeteroData object from the current timestep data"""
         graph = HeteroData()
-        
+
         # Calculate feature dimensions (needed for edge features)
         self._gnn_dataloader._calculate_feature_dimensions(data)
-        
+
         # Use GNNDataLoader methods which expect data dict and timestep
         self._gnn_dataloader._add_node_features(graph, data, self.sim_time)
         self._gnn_dataloader._add_edge_features(graph, data, self.sim_time)
-        
+
         # Apply transformations to match training pipeline
         undirected_transform = T.ToUndirected(merge=True)
         graph = undirected_transform(graph)
         graph = T.NormalizeFeatures()(graph)
-        
+
         return graph
 
     def _is_RR_pred_compatible(self, rid1: int, rid2: int) -> bool:
@@ -462,6 +438,10 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         :param rid2: plan_request_id 2
         :return: True if compatible, False otherwise
         """
+        if not self.enable_ml or not self.rr_predictions:
+            # If ML is disabled or no predictions, assume all connections are compatible
+            return True
+
         score = self.rr_predictions.get((rid1, rid2), None)
         if self.ml_selection_method == "probability":
             return score is not None and score >= self.prediction_threshold
@@ -474,13 +454,15 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         """Filters the RV connections for a given vehicle based on predicted scores."""
         if not self.enable_ml:
             return r_dict
-        
+
         if self.ml_selection_method == 'probability':
-            filtered_r_dict = {rid: tt for rid, tt in r_dict.items() if self.rv_predictions.get((vid, rid), 0) >= self.prediction_threshold}
+            filtered_r_dict = {rid: tt for rid, tt in r_dict.items(
+            ) if self.rv_predictions.get((vid, rid), 0) >= self.prediction_threshold}
             return filtered_r_dict
         elif self.ml_selection_method == 'top_k':
             # Select top-k requests based on scores
-            top_k_rids = sorted(r_dict, key=lambda rid: self.rv_predictions.get((vid, rid), 0), reverse=True)[:self.top_k]
+            top_k_rids = sorted(r_dict, key=lambda rid: self.rv_predictions.get(
+                (vid, rid), 0), reverse=True)[:self.top_k]
             filtered_r_dict = {rid: r_dict[rid] for rid in top_k_rids}
             return filtered_r_dict
         return r_dict

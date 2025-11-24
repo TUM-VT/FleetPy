@@ -15,9 +15,10 @@ import pandas as pd
 from gnn_project.config import Config
 from gnn_project.data_processing.utils import calculate_bearing, haversine_distance, is_peak_hour
 from src.misc.globals import G_TRAIN_FEATURE_O_POS_LAT, G_TRAIN_FEATURE_O_POS_LON, \
-    G_TRAIN_FEATURE_D_POS_LON, G_TRAIN_FEATURE_D_POS_LAT, G_TRAIN_FEATURE_D_POS_LON, \
-    G_TRAIN_FEATURE_DIRECT_TD, G_TRAIN_FEATURE_V_POS_LAT, G_TRAIN_FEATURE_V_POS_LON, \
-    G_TRAIN_FEATURE_TW_PE, G_TRAIN_FEATURE_TW_PL, G_TRAIN_FEATURE_RQ_TIME
+    G_TRAIN_FEATURE_D_POS_LON, G_TRAIN_FEATURE_D_POS_LAT, \
+    G_TRAIN_FEATURE_DIRECT_TD, G_TRAIN_FEATURE_DIRECT_TT, G_TRAIN_FEATURE_V_POS_LAT, G_TRAIN_FEATURE_V_POS_LON, \
+    G_TRAIN_FEATURE_TW_PE, G_TRAIN_FEATURE_TW_PL, G_TRAIN_FEATURE_RQ_TIME, \
+    G_TRAIN_FEATURE_TRAVEL_TIME, G_TRAIN_FEATURE_TRAVEL_DIST, G_TRAIN_FEATURE_LOCKED
 
 logger = logging.getLogger(__name__)
 
@@ -186,17 +187,13 @@ class DataProcessor:
         G_rr = nx.DiGraph()
         for src, targets in data[self.rr_key].items():
             for tgt in targets:
-                if G_rr.number_of_edges == 0:
-                    print('Adding rr edge', src, tgt)
-                G_rr.add_edge(src, tgt)
+                G_rr.add_edge(f'r{src}', f'r{tgt}')
 
         # Vehicle-Request graph
         G_vr = nx.DiGraph()
         for veh, targets in data[self.vr_key].items():
             for req in targets:
-                if G_vr.number_of_edges == 0:
-                    print('Adding vr edge', veh, req)
-                G_vr.add_edge(veh, req)
+                G_vr.add_edge(f'v{veh}', f'r{req}')
 
         # Combined graph
         G_combined = nx.compose(G_rr, G_vr)
@@ -246,17 +243,17 @@ class DataProcessor:
                 })
 
         for req_id, feats in data[self.r_key].items():
-            update_feats(feats, 'nx_rr', centralities['rr'], req_id)
+            update_feats(feats, 'nx_rr', centralities['rr'], f'r{req_id}')
             update_feats(feats, 'nx_combined',
-                         centralities['combined'], req_id)
+                         centralities['combined'], f'r{req_id}')
 
         for veh_id, feats in data[self.v_key].items():
-            update_feats(feats, 'nx_vr', centralities['vr'], veh_id)
+            update_feats(feats, 'nx_vr', centralities['vr'], f'v{veh_id}')
             update_feats(feats, 'nx_combined',
-                         centralities['combined'], veh_id)
+                         centralities['combined'], f'v{veh_id}')
 
     def _calculate_node_degrees(self, data: Dict, G_rr: nx.DiGraph, G_vr: nx.DiGraph, G_combined: nx.DiGraph) -> tuple[Dict[int, int], Dict[int, int]]:
-        """Calculate in and out degrees for all nodes using NetworkX
+        """Calculate in and out degrees for all nodes using NetworkX. Nodes are prefixed with 'r' for requests and 'v' for vehicles.
 
         Args:
             data: Dictionary containing raw data for the timestep
@@ -291,13 +288,12 @@ class DataProcessor:
             combined_out_degrees[node] = G_combined.out_degree(node)
 
             # Add graph-specific degrees
-            if node in data[self.r_key]:
-                # For requests, combine RR and VR degrees
+            if node.startswith('r'):
                 combined_in_degrees[f"{node}_rr"] = rr_in_degrees[node]
                 combined_out_degrees[f"{node}_rr"] = rr_out_degrees[node]
                 combined_in_degrees[f"{node}_vr"] = vr_in_degrees[node]
                 combined_out_degrees[f"{node}_vr"] = vr_out_degrees[node]
-            elif node in data[self.v_key]:
+            elif node.startswith('v'):
                 # For vehicles, only VR degrees are relevant
                 combined_in_degrees[f"{node}_vr"] = vr_in_degrees[node]
                 combined_out_degrees[f"{node}_vr"] = vr_out_degrees[node]
@@ -305,7 +301,7 @@ class DataProcessor:
         return combined_in_degrees, combined_out_degrees
 
     def _add_degree_features(self, data, in_degrees, out_degrees) -> None:
-        """Add degree features to node attributes.
+        """Add degree features to node attributes. Degree dictionaries use prefixed node IDs.
 
         Args:
             data: Dictionary containing raw data for the timestep
@@ -314,17 +310,18 @@ class DataProcessor:
         """
         # Process requests (have both RR and VR degrees)
         for req_id, feats in data[self.r_key].items():
+            node_id = f'r{req_id}'
             # Combined graph degrees
-            feats['in_degree_total'] = in_degrees[req_id]
-            feats['out_degree_total'] = out_degrees[req_id]
+            feats['in_degree_total'] = in_degrees[node_id]
+            feats['out_degree_total'] = out_degrees[node_id]
 
             # Request-Request graph degrees
-            feats['in_degree_from_requests'] = in_degrees[f"{req_id}_rr"]
-            feats['out_degree_to_requests'] = out_degrees[f"{req_id}_rr"]
+            feats['in_degree_from_requests'] = in_degrees[f"{node_id}_rr"]
+            feats['out_degree_to_requests'] = out_degrees[f"{node_id}_rr"]
 
             # Vehicle-Request graph degrees
-            feats['in_degree_from_vehicles'] = in_degrees[f"{req_id}_vr"]
-            feats['out_degree_to_vehicles'] = out_degrees[f"{req_id}_vr"]
+            feats['in_degree_from_vehicles'] = in_degrees[f"{node_id}_vr"]
+            feats['out_degree_to_vehicles'] = out_degrees[f"{node_id}_vr"]
 
             # Ratio features
             # Avoid division by zero
@@ -335,13 +332,14 @@ class DataProcessor:
 
         # Process vehicles (only have VR degrees)
         for veh_id, feats in data[self.v_key].items():
+            node_id = f'v{veh_id}'
             # Combined graph degrees (same as VR for vehicles)
-            feats['in_degree'] = in_degrees[veh_id]
-            feats['out_degree'] = out_degrees[veh_id]
+            feats['in_degree'] = in_degrees[node_id]
+            feats['out_degree'] = out_degrees[node_id]
 
             # Vehicle-Request specific degrees
-            feats['in_degree_from_requests'] = in_degrees[f"{veh_id}_vr"]
-            feats['out_degree_to_requests'] = out_degrees[f"{veh_id}_vr"]
+            feats['in_degree_from_requests'] = in_degrees[f"{node_id}_vr"]
+            feats['out_degree_to_requests'] = out_degrees[f"{node_id}_vr"]
 
             # Add total connections
             feats['total_request_connections'] = feats['in_degree_from_requests'] + \
@@ -374,15 +372,15 @@ class DataProcessor:
             neighbors_src = set(G.neighbors(src))
             neighbors_tgt = set(G.neighbors(tgt))
 
-            # Split neighbors by type
+            # Split neighbors by type - check prefix since nodes are prefixed
             src_req_neighbors = {
-                n for n in neighbors_src if n in data[self.r_key]}
+                n for n in neighbors_src if n.startswith('r')}
             src_veh_neighbors = {
-                n for n in neighbors_src if n in data[self.v_key]}
+                n for n in neighbors_src if n.startswith('v')}
             tgt_req_neighbors = {
-                n for n in neighbors_tgt if n in data[self.r_key]}
+                n for n in neighbors_tgt if n.startswith('r')}
             tgt_veh_neighbors = {
-                n for n in neighbors_tgt if n in data[self.v_key]}
+                n for n in neighbors_tgt if n.startswith('v')}
 
             # Calculate common neighbors by type
             common_requests = src_req_neighbors & tgt_req_neighbors
@@ -453,7 +451,7 @@ class DataProcessor:
         for src, targets in data[self.rr_key].items():
             for tgt, features in targets.items():
                 metrics = calculate_type_specific_metrics(
-                    src, tgt, G_combined, data)
+                    f'r{src}', f'r{tgt}', G_combined, data)
                 features.update(metrics)
                 # Add edge-specific ratios
                 features['request_to_vehicle_neighbor_ratio'] = (
@@ -465,7 +463,7 @@ class DataProcessor:
         for veh, targets in data[self.vr_key].items():
             for req, features in targets.items():
                 metrics = calculate_type_specific_metrics(
-                    veh, req, G_combined, data)
+                    f'v{veh}', f'r{req}', G_combined, data)
                 features.update(metrics)
                 # Add competition metrics
                 features['vehicle_competition'] = metrics['common_vehicle_neighbors']
@@ -494,10 +492,12 @@ class DataProcessor:
 
         # Add to all node features
         for req_id, feats in data[self.r_key].items():
-            feats['clustering_coeff'] = clustering_combined.get(req_id, 0.0)
+            feats['clustering_coeff'] = clustering_combined.get(
+                f'r{req_id}', 0.0)
 
         for veh_id, feats in data[self.v_key].items():
-            feats['clustering_coeff'] = clustering_combined.get(veh_id, 0.0)
+            feats['clustering_coeff'] = clustering_combined.get(
+                f'v{veh_id}', 0.0)
 
     def _add_temporal_features(self, current_time: int, data: Dict) -> None:
         """Add temporal features that capture time-related aspects of requests.
@@ -598,8 +598,359 @@ class DataProcessor:
                 'demand_supply_ratio': nearby_requests / max(1, nearby_vehicles)
             })
 
+    def _add_vehicle_request_temporal_features(self, current_time: int, veh_feats: Dict,
+                                               req_feats: Dict, edge_feats: Dict) -> None:
+        """Add temporal compatibility features for vehicle-request edges.
+
+        Args:
+            current_time: Current simulation time
+            veh_feats: Features of the vehicle
+            req_feats: Features of the request
+            edge_feats: Features of the edge between vehicle and request
+        """
+        # Add time-of-day features
+        time_of_day = current_time % (24 * 60)  # Minutes within the day
+        hour_of_day = time_of_day / 60.0
+        is_peak = is_peak_hour(time_of_day)
+
+        edge_feats.update({
+            'is_peak_hour': float(is_peak),
+            'hour_of_day_sin': math.sin(2 * math.pi * hour_of_day / 24),
+            'hour_of_day_cos': math.cos(2 * math.pi * hour_of_day / 24),
+        })
+
+        # Use travel time information from edge features
+        travel_time = edge_feats.get(G_TRAIN_FEATURE_TRAVEL_TIME, 0)
+
+        # Calculate earliest arrival as current time + travel time to request
+        earliest_arrival = current_time + travel_time
+
+        # Time compatibility features
+        earliest_pickup = req_feats[G_TRAIN_FEATURE_TW_PE]
+        latest_pickup = req_feats[G_TRAIN_FEATURE_TW_PL]
+
+        # Calculate various temporal margins
+        arrival_slack = latest_pickup - earliest_arrival
+        earliest_slack = earliest_pickup - earliest_arrival
+
+        # Consider lock status in compatibility
+        is_locked = req_feats.get(G_TRAIN_FEATURE_LOCKED, False)
+
+        edge_feats.update({
+            'is_locked': float(is_locked),
+            'arrival_slack': max(0, arrival_slack),
+            'earliest_slack': earliest_slack,
+            'time_window_compatibility': min(1.0, max(0, arrival_slack) / max(1,
+                                                                              latest_pickup - earliest_pickup)),
+            'time_feasibility_score': 1.0 if arrival_slack > 0 else 0.0,
+            'normalized_arrival_time': (earliest_arrival - earliest_pickup) / max(1,
+                                                                                  latest_pickup - earliest_pickup),
+        })
+
+    def _add_vehicle_request_spatial_features(self, veh_feats: Dict, req_feats: Dict,
+                                              edge_feats: Dict) -> None:
+        """Add spatial compatibility features for vehicle-request edges.
+
+        Args:
+            veh_feats: Features of the vehicle
+            req_feats: Features of the request
+            edge_feats: Features of the edge between vehicle and request
+        """
+        # TODO : Add more spatial features as needed (esp. pooling)
+
+    def _add_vehicle_assignment_context_features(self, data: Dict) -> None:
+        """
+        Enrich vehicle-request edges with context from the vehicle's current assignment.
+
+        Uses:
+        - data[self.config.init_assignment_key]: current (initial) assignments
+        - data[self.rr_key]: request-request edges with pooling metrics
+        - data[self.r_key]: request node features (for lock status)
+        """
+        init_assignments = data.get(self.config.init_assignment_key, {})
+        rr_edges = data[self.rr_key]
+        req_feats_dict = data[self.r_key]
+
+        for veh_id, targets in data[self.vr_key].items():
+            # Current assignment sequence for this vehicle, if any
+            seq = init_assignments.get(veh_id, [])
+            assigned_reqs = seq[1:] if seq else []  # skip vehicle_id at position 0
+            n_assigned = len(assigned_reqs)
+
+            # Locked vs unlocked requests in current plan
+            locked_reqs = [
+                rid for rid in assigned_reqs
+                if req_feats_dict.get(rid, {}).get(G_TRAIN_FEATURE_LOCKED, False)
+            ]
+            n_locked = len(locked_reqs)
+            n_unlocked = n_assigned - n_locked
+
+            locked_set = set(locked_reqs)
+            assigned_set = set(assigned_reqs)
+
+            # Precompute some vehicle-level features once per vehicle
+            veh_level_features = {
+                "veh_n_assigned": float(n_assigned),
+                "veh_n_locked_assigned": float(n_locked),
+                "veh_n_unlocked_assigned": float(n_unlocked),
+                "veh_locked_fraction": float(n_locked) / max(1.0, float(n_assigned)),
+            }
+
+            for req_id, edge_feats in targets.items():
+                # --- Vehicle-level assignment stats on this edge -------------------
+                edge_feats.update(veh_level_features)
+
+                # --- Is this request already in the vehicle's current plan? -------
+                if req_id in assigned_set:
+                    pos = assigned_reqs.index(req_id)
+                    edge_feats["is_in_initial_plan"] = 1.0
+                    edge_feats["initial_plan_position"] = float(pos)
+                    edge_feats["initial_plan_position_norm"] = (
+                        float(pos) / max(1.0, float(n_assigned - 1))
+                        if n_assigned > 1 else 0.0
+                    )
+                else:
+                    edge_feats["is_in_initial_plan"] = 0.0
+                    edge_feats["initial_plan_position"] = -1.0
+                    edge_feats["initial_plan_position_norm"] = -1.0
+
+                # --- Aggregated pooling metrics vs currently assigned requests ----
+                pooling_scores = []
+                max_detour_ratios = []
+
+                for other_id in assigned_reqs:
+                    if other_id == req_id:
+                        continue
+
+                    # Try both directions for RR edge
+                    rr_edge = rr_edges.get(req_id, {}).get(other_id)
+                    if rr_edge is None:
+                        rr_edge = rr_edges.get(other_id, {}).get(req_id)
+
+                    if rr_edge is None:
+                        continue
+
+                    pooling_scores.append(rr_edge.get("overall_pooling_score", 0.0))
+                    if "max_detour_ratio" in rr_edge:
+                        max_detour_ratios.append(rr_edge["max_detour_ratio"])
+
+                if pooling_scores:
+                    edge_feats["assigned_overlap_count"] = float(len(pooling_scores))
+                    edge_feats["assigned_mean_pooling_score"] = (
+                        float(sum(pooling_scores)) / len(pooling_scores)
+                    )
+                    edge_feats["assigned_max_pooling_score"] = float(max(pooling_scores))
+                else:
+                    edge_feats["assigned_overlap_count"] = 0.0
+                    edge_feats["assigned_mean_pooling_score"] = 0.0
+                    edge_feats["assigned_max_pooling_score"] = 0.0
+
+                if max_detour_ratios:
+                    edge_feats["assigned_min_max_detour_ratio"] = float(min(max_detour_ratios))
+                else:
+                    edge_feats["assigned_min_max_detour_ratio"] = 0.0
+    
+    def _extract_travel_costs_from_edge(self, edge_feats: Dict) -> None:
+        """Extract travel costs from edge features. Removes nested structure and overwrites original dict.
+
+        Args:
+            edge_feats: Features of the edge
+        """
+        edge_feats_copy = edge_feats.copy()
+        edge_feats.clear()
+        for prefix, feature_type in [('tt', G_TRAIN_FEATURE_TRAVEL_TIME), ('td', G_TRAIN_FEATURE_TRAVEL_DIST)]:
+            data = {
+                f'{prefix}_{name}': feats.get(feature_type, 0.0)
+                for name, feats in edge_feats_copy.items()
+            }
+            edge_feats.update(data)
+
+    def _calculate_spatial_proximity(self, edge_feats: Dict) -> Dict:
+        """Calculate spatial proximity metrics between two requests.
+
+        Args:
+            edge_feats: Features of the edge between the two requests
+
+        Returns:
+            Dictionary of spatial proximity metrics
+        """
+        return {
+            'origin_proximity': 1.0 / max(0.1, edge_feats['td_o1_o2']),
+            'destination_proximity': 1.0 / max(0.1, edge_feats['td_d1_d2']),
+            'spatial_compatibility': 1.0 / (1.0 + edge_feats['td_o1_o2'] + edge_feats['td_d1_d2']),
+        }
+
+    def _calculate_detour_metrics(self, req1_feats: Dict, req2_feats: Dict, edge_feats: Dict) -> Dict:
+        """Calculate detour and ride-sharing distance metrics for two requests.
+
+        For each of the four possible pooling sequences
+        (O1->O2->D1->D2, O2->O1->D1->D2, O1->O2->D2->D1, O2->O1->D2->D1),
+        we compute:
+        - total vehicle distance for the sequence,
+        - per-request in-vehicle distance along that sequence,
+        - per-request detour ratios and extra distances.
+
+        We then:
+        - determine whether there exists a sequence where both requests stay
+          within certain detour thresholds (including max detour ratio),),
+        - pick a "best" sequence to summarize with:
+          * primary: both detours <= max_allowed_detour,
+            choose the one with minimal total distance;
+          * fallback: sequence with minimal max per-request detour ratio.
+
+        Returned features are based on this best sequence and global feasibility.
+        """
+        max_allowed_detour = self.config.max_detour_ratio
+
+        # Direct OD distances for each request
+        direct_dist1 = req1_feats.get(G_TRAIN_FEATURE_DIRECT_TD, 0.0)
+        direct_dist2 = req2_feats.get(G_TRAIN_FEATURE_DIRECT_TD, 0.0)
+
+        # Small epsilon to avoid division by zero
+        def safe_div(num, denom):
+            return num / max(0.1, denom)
+
+        # Helper to read pairwise distances from edge_feats
+        def d(a: str, b: str) -> float:
+            # a, b in {"o1", "o2", "d1", "d2"}
+            return edge_feats.get(f"td_{a}_{b}", 0.0)
+
+        # Precompute commonly used pairwise distances
+        o1_o2 = d("o1", "o2")
+        o2_o1 = d("o2", "o1")
+        o1_d1 = d("o1", "d1")
+        o2_d2 = d("o2", "d2")
+        o1_d2 = d("o1", "d2")
+        o2_d1 = d("o2", "d1")
+        d1_d2 = d("d1", "d2")
+        d2_d1 = d("d2", "d1")
+
+        sequences = []
+
+        # Sequence 1: O1 -> O2 -> D1 -> D2
+        total_1 = o1_o2 + o2_d1 + d1_d2
+        r1_1 = o1_o2 + o2_d1                  # O1 -> O2 -> D1
+        r2_1 = o2_d1 + d1_d2                  # O2 -> D1 -> D2
+        sequences.append(("O1_O2_D1_D2", total_1, r1_1, r2_1))
+
+        # Sequence 2: O2 -> O1 -> D1 -> D2
+        total_2 = o2_o1 + o1_d1 + d1_d2
+        r1_2 = o1_d1                          # O1 -> D1
+        r2_2 = o2_o1 + o1_d1 + d1_d2          # O2 -> O1 -> D1 -> D2
+        sequences.append(("O2_O1_D1_D2", total_2, r1_2, r2_2))
+
+        # Sequence 3: O1 -> O2 -> D2 -> D1
+        total_3 = o1_o2 + o2_d2 + d2_d1
+        r1_3 = o1_o2 + o2_d2 + d2_d1          # O1 -> O2 -> D2 -> D1
+        r2_3 = o2_d2                          # O2 -> D2
+        sequences.append(("O1_O2_D2_D1", total_3, r1_3, r2_3))
+
+        # Sequence 4: O2 -> O1 -> D2 -> D1
+        total_4 = o2_o1 + o1_d2 + d2_d1
+        r1_4 = o1_d2 + d2_d1                  # O1 -> D2 -> D1
+        r2_4 = o2_o1 + o1_d2                  # O2 -> O1 -> D2
+        sequences.append(("O2_O1_D2_D1", total_4, r1_4, r2_4))
+
+        # Compute per-sequence metrics
+        seq_infos = []
+        for name, total_dist, r1_dist, r2_dist in sequences:
+            r1_detour_ratio = safe_div(r1_dist, direct_dist1)
+            r2_detour_ratio = safe_div(r2_dist, direct_dist2)
+
+            r1_extra = r1_dist - direct_dist1
+            r2_extra = r2_dist - direct_dist2
+
+            max_detour_ratio = max(r1_detour_ratio, r2_detour_ratio)
+            avg_detour_ratio = 0.5 * (r1_detour_ratio + r2_detour_ratio)
+            max_extra = max(r1_extra, r2_extra)
+            avg_extra = 0.5 * (r1_extra + r2_extra)
+
+            seq_infos.append({
+                "name": name,
+                "total_dist": total_dist,
+                "r1_dist": r1_dist,
+                "r2_dist": r2_dist,
+                "r1_detour_ratio": r1_detour_ratio,
+                "r2_detour_ratio": r2_detour_ratio,
+                "r1_extra": r1_extra,
+                "r2_extra": r2_extra,
+                "max_detour_ratio": max_detour_ratio,
+                "avg_detour_ratio": avg_detour_ratio,
+                "max_extra": max_extra,
+                "avg_extra": avg_extra,
+            })
+
+        # Global metric: min pooled distance over all sequences
+        min_pooled_distance = min(info["total_dist"] for info in seq_infos)
+
+        # Detour-within-threshold flags:
+        # does there exist a SEQUENCE where BOTH requests have detour <= t?
+        thresholds = [1.1, 1.2, 1.4, 1.6, 2.0]
+        detour_within_threshold = {}
+        for t in thresholds:
+            feasible_for_t = any(
+                (info["r1_detour_ratio"] <= t and info["r2_detour_ratio"] <= t)
+                for info in seq_infos
+            )
+            detour_within_threshold[f"detour_within_{t}x"] = int(feasible_for_t)
+        
+
+        # Dedicated flag for *exact* sim cap feasibility
+        feasible_under_cap = any(
+            (info["r1_detour_ratio"] <= self.config.max_detour_ratio and
+             info["r2_detour_ratio"] <= self.config.max_detour_ratio)
+            for info in seq_infos
+        )
+
+        # Choose a "best" sequence for summary metrics
+        # First, prefer sequences where both requests are within a reasonable detour cap
+        feasible_seqs = [
+            info for info in seq_infos
+            if info["r1_detour_ratio"] <= max_allowed_detour
+            and info["r2_detour_ratio"] <= max_allowed_detour
+        ]
+
+        if feasible_seqs:
+            # Among feasible ones, pick the one with minimal total vehicle distance
+            best = min(feasible_seqs, key=lambda x: x["total_dist"])
+        else:
+            # Fallback: pick the sequence with the minimal worst-case detour ratio
+            best = min(seq_infos, key=lambda x: x["max_detour_ratio"])
+
+        # Symmetry: difference between per-request detour ratios in the chosen sequence
+        detour_symmetry = abs(best["r1_detour_ratio"] - best["r2_detour_ratio"])
+
+        # Margin relative to the detour cap (positive = comfortably within)
+        detour_margin_to_cap = self.config.max_detour_ratio - best["max_detour_ratio"]
+
+        return {
+            # Vehicle-level pooling distance
+            "min_pooled_distance": min_pooled_distance,
+
+            # Per-sequence summaries based on the chosen "best" sequence
+            "max_detour_ratio": best["max_detour_ratio"],
+            "avg_detour_ratio": best["avg_detour_ratio"],
+            "max_detour_distance": best["max_extra"],
+            "avg_detour_distance": best["avg_extra"],
+            "detour_symmetry": detour_symmetry,
+
+            # Per-request detour metrics for the best sequence
+            "r1_detour_ratio": best["r1_detour_ratio"],
+            "r2_detour_ratio": best["r2_detour_ratio"],
+            "r1_detour_distance": best["r1_extra"],
+            "r2_detour_distance": best["r2_extra"],
+
+            # Relation to the simulation detour cap
+            "detour_ratio_cap": self.config.max_detour_ratio,
+            "feasible_under_detour_cap": int(feasible_under_cap),
+            "detour_margin_to_cap": detour_margin_to_cap,
+
+            # Threshold feasibility across all sequences
+            **detour_within_threshold,
+        }
+
     def _calculate_pooling_metrics(self, req1_feats: Dict, req2_feats: Dict, edge_feats: Dict) -> Dict:
-        """Calculate metrics related to request pooling compatibility.
+        """Calculate comprehensive metrics related to request pooling compatibility.
 
         Args:
             req1_feats: Features of request 1
@@ -609,48 +960,253 @@ class DataProcessor:
         Returns:
             Dictionary of pooling compatibility metrics
         """
-        # Calculate spatial overlap
-        req1_origin = (req1_feats[G_TRAIN_FEATURE_O_POS_LAT],
-                       req1_feats[G_TRAIN_FEATURE_O_POS_LON])
-        req1_dest = (req1_feats[G_TRAIN_FEATURE_D_POS_LAT],
-                     req1_feats[G_TRAIN_FEATURE_D_POS_LON])
-        req2_origin = (req2_feats[G_TRAIN_FEATURE_O_POS_LAT],
-                       req2_feats[G_TRAIN_FEATURE_O_POS_LON])
-        req2_dest = (req2_feats[G_TRAIN_FEATURE_D_POS_LAT],
-                     req2_feats[G_TRAIN_FEATURE_D_POS_LON])
+        spatial_metrics = self._calculate_spatial_proximity(edge_feats)
+        detour_metrics = self._calculate_detour_metrics(req1_feats, req2_feats, edge_feats)
 
-        # Distance between origins and destinations
-        origin_distance = edge_feats.get(
-            'tt_between_pickups', haversine_distance(*req1_origin, *req2_origin))
-        dest_distance = edge_feats.get(
-            'tt_between_dropoffs', haversine_distance(*req1_dest, *req2_dest))
+        return {**spatial_metrics, **detour_metrics}
 
-        # Calculate potential detour
-        direct_dist1 = req1_feats[G_TRAIN_FEATURE_DIRECT_TD]
-        direct_dist2 = req2_feats[G_TRAIN_FEATURE_DIRECT_TD]
-        pooled_distance = (
-            # First pickup to second pickup
-            haversine_distance(*req1_origin, *req2_origin) +
-            # Second pickup to its destination
-            haversine_distance(*req2_origin, *req2_dest) +
-            # Second destination to first destination
-            haversine_distance(*req2_dest, *req1_dest)
+    def _calculate_ride_sharing_efficiency(self, req1_feats: Dict, req2_feats: Dict, edge_feats: Dict) -> Dict:
+        """Calculate ride-sharing efficiency and time-based detour metrics.
+
+        We consider four pooling sequences:
+        - O1 -> O2 -> D1 -> D2
+        - O2 -> O1 -> D1 -> D2
+        - O1 -> O2 -> D2 -> D1
+        - O2 -> O1 -> D2 -> D1
+
+        For each sequence we compute:
+        - total vehicle travel time,
+        - per-request in-vehicle travel time along that sequence,
+        - per-request time detour ratios and extra times (vs direct TT).
+
+        We then:
+        - evaluate pooling efficiency vs a single-vehicle sequential baseline,
+        - pick a "best" sequence, aligned with the simulation's detour cap,
+        - derive per-request and aggregate time-detour features.
+        """
+
+        # --- Detour cap (same rate as for distance) -------------------------------
+        max_detour_ratio = self.config.max_detour_ratio
+
+        # --- Direct travel times for each request --------------------------------
+        direct_tt1 = req1_feats.get(G_TRAIN_FEATURE_DIRECT_TT, 0.0)
+        direct_tt2 = req2_feats.get(G_TRAIN_FEATURE_DIRECT_TT, 0.0)
+
+        def safe_div(num, denom):
+            return num / max(0.1, denom)
+
+        # Helper to read pairwise travel times from edge_feats
+        def tt(a: str, b: str) -> float:
+            # a, b in {"o1", "o2", "d1", "d2"}
+            return edge_feats.get(f"tt_{a}_{b}", 0.0)
+
+        # Precompute leg times
+        tt_o1_d1 = tt("o1", "d1")
+        tt_o1_o2 = tt("o1", "o2")
+        tt_o2_o1 = tt("o2", "o1")
+        tt_o1_d2 = tt("o1", "d2")
+        tt_o2_d2 = tt("o2", "d2")
+        tt_d1_d2 = tt("d1", "d2")
+        tt_o2_d1 = tt("o2", "d1")
+        tt_d2_d1 = tt("d2", "d1")
+        tt_d1_o2 = tt("d1", "o2")  # used for sequential baseline
+
+        sequences = []
+
+        # Sequence 1: O1 -> O2 -> D1 -> D2
+        total_1 = tt_o1_o2 + tt_o2_d1 + tt_d1_d2
+        r1_1 = tt_o1_o2 + tt_o2_d1              # O1 -> O2 -> D1
+        r2_1 = tt_o2_d1 + tt_d1_d2              # O2 -> D1 -> D2
+        sequences.append(("O1_O2_D1_D2", total_1, r1_1, r2_1))
+
+        # Sequence 2: O2 -> O1 -> D1 -> D2
+        total_2 = tt_o2_o1 + tt_o1_d1 + tt_d1_d2
+        r1_2 = tt_o1_d1                          # O1 -> D1
+        r2_2 = tt_o2_o1 + tt_o1_d1 + tt_d1_d2    # O2 -> O1 -> D1 -> D2
+        sequences.append(("O2_O1_D1_D2", total_2, r1_2, r2_2))
+
+        # Sequence 3: O1 -> O2 -> D2 -> D1
+        total_3 = tt_o1_o2 + tt_o2_d2 + tt_d2_d1
+        r1_3 = tt_o1_o2 + tt_o2_d2 + tt_d2_d1    # O1 -> O2 -> D2 -> D1
+        r2_3 = tt_o2_d2                          # O2 -> D2
+        sequences.append(("O1_O2_D2_D1", total_3, r1_3, r2_3))
+
+        # Sequence 4: O2 -> O1 -> D2 -> D1
+        total_4 = tt_o2_o1 + tt_o1_d2 + tt_d2_d1
+        r1_4 = tt_o1_d2 + tt_d2_d1              # O1 -> D2 -> D1
+        r2_4 = tt_o2_o1 + tt_o1_d2              # O2 -> O1 -> D2
+        sequences.append(("O2_O1_D2_D1", total_4, r1_4, r2_4))
+
+        # --- Per-sequence metrics -------------------------------------------------
+        seq_infos = []
+        for name, total_t, r1_t, r2_t in sequences:
+            r1_detour_ratio_t = safe_div(r1_t, direct_tt1)
+            r2_detour_ratio_t = safe_div(r2_t, direct_tt2)
+
+            r1_extra_t = r1_t - direct_tt1
+            r2_extra_t = r2_t - direct_tt2
+
+            max_detour_ratio_t = max(r1_detour_ratio_t, r2_detour_ratio_t)
+            avg_detour_ratio_t = 0.5 * (r1_detour_ratio_t + r2_detour_ratio_t)
+            max_extra_t = max(r1_extra_t, r2_extra_t)
+            avg_extra_t = 0.5 * (r1_extra_t + r2_extra_t)
+
+            seq_infos.append({
+                "name": name,
+                "total_time": total_t,
+                "r1_time": r1_t,
+                "r2_time": r2_t,
+                "r1_detour_ratio_t": r1_detour_ratio_t,
+                "r2_detour_ratio_t": r2_detour_ratio_t,
+                "r1_extra_time": r1_extra_t,
+                "r2_extra_time": r2_extra_t,
+                "max_detour_ratio_t": max_detour_ratio_t,
+                "avg_detour_ratio_t": avg_detour_ratio_t,
+                "max_extra_time": max_extra_t,
+                "avg_extra_time": avg_extra_t,
+            })
+
+        # Shared-ride time stats (vehicle-level)
+        min_shared_ride_time = min(info["total_time"] for info in seq_infos)
+        max_shared_ride_time = max(info["total_time"] for info in seq_infos)
+        avg_shared_ride_time = sum(info["total_time"] for info in seq_infos) / max(1, len(seq_infos))
+
+        # --- Baselines for efficiency --------------------------------------------
+        # Single-vehicle sequential: serve R1 then reposition then R2
+        total_direct_time = tt_o1_d1 + tt_d1_o2 + tt_o2_d2
+
+        # Independent vehicles baseline (optional but useful signal)
+        sum_direct_times = tt_o1_d1 + tt_o2_d2
+
+        # System-level extra time ratio vs single-vehicle sequential baseline
+        extra_time_ratio = max(
+            0.0,
+            (min_shared_ride_time - total_direct_time) / max(1.0, total_direct_time)
         )
+        ride_sharing_efficiency = 1.0 / (1.0 + extra_time_ratio)
 
-        max_detour_ratio = max(
-            pooled_distance / max(0.1, direct_dist1),
-            pooled_distance / max(0.1, direct_dist2)
+        # --- Time-window based rough compatibility ---------
+        earliest_2 = req2_feats.get(G_TRAIN_FEATURE_TW_PE, 0.0)
+        latest_1 = req1_feats.get(G_TRAIN_FEATURE_TW_PL, 0.0)
+
+        # "If we serve R1 at its latest and drive direct, can we still start R2 on time?"
+        time_gap = earliest_2 - (latest_1 + direct_tt1)
+        temporal_compatibility = 1.0 if time_gap > 0 else 0.0
+        extra_waiting_time = max(0.0, time_gap)
+
+        # --- Cap-aware "best" sequence selection ---------------------------------
+        feasible_seqs = [
+            info for info in seq_infos
+            if info["r1_detour_ratio_t"] <= max_detour_ratio
+            and info["r2_detour_ratio_t"] <= max_detour_ratio
+        ]
+
+        if feasible_seqs:
+            # Among cap-feasible sequences, pick the one with minimal total time
+            best = min(feasible_seqs, key=lambda x: x["total_time"])
+        else:
+            # Fallback: pick sequence with the smallest worst-case time detour ratio
+            best = min(seq_infos, key=lambda x: x["max_detour_ratio_t"])
+
+        time_detour_symmetry = abs(best["r1_detour_ratio_t"] - best["r2_detour_ratio_t"])
+        time_detour_margin_to_cap = max_detour_ratio - best["max_detour_ratio_t"]
+
+        # Optional thresholds around the cap (for the model to learn gradations)
+        thresholds_t = [1.1, 1.2, max_detour_ratio, max_detour_ratio + 0.2]
+        time_detour_within_threshold = {}
+        for t in thresholds_t:
+            feasible_for_t = any(
+                info["r1_detour_ratio_t"] <= t and info["r2_detour_ratio_t"] <= t
+                for info in seq_infos
+            )
+            time_detour_within_threshold[f"time_detour_within_{t:.1f}x"] = int(feasible_for_t)
+
+        feasible_under_time_cap = any(
+            info["r1_detour_ratio_t"] <= max_detour_ratio
+            and info["r2_detour_ratio_t"] <= max_detour_ratio
+            for info in seq_infos
         )
 
         return {
-            # Higher when origins are closer
-            'origin_proximity': 1.0 / max(0.1, origin_distance),
-            # Higher when destinations are closer
-            'destination_proximity': 1.0 / max(0.1, dest_distance),
-            'pooling_detour_ratio': max_detour_ratio,
-            # Normalized spatial compatibility
-            'spatial_compatibility': 1.0 / (1.0 + origin_distance + dest_distance),
+            # System-level shared ride stats
+            "min_shared_ride_time": min_shared_ride_time,
+            "max_shared_ride_time": max_shared_ride_time,
+            "avg_shared_ride_time": avg_shared_ride_time,
+            "total_direct_time": total_direct_time,
+            "sum_direct_times": sum_direct_times,
+
+            # Efficiency vs sequential baseline
+            "extra_time_ratio": extra_time_ratio,
+            "ride_sharing_efficiency": ride_sharing_efficiency,
+
+            # Rough time-window compatibility
+            "time_gap": time_gap,
+            "temporal_compatibility": temporal_compatibility,
+            "extra_waiting_time": extra_waiting_time,
+
+            # Time-detour metrics for the chosen "best" sequence
+            "max_time_detour_ratio": best["max_detour_ratio_t"],
+            "avg_time_detour_ratio": best["avg_detour_ratio_t"],
+            "max_time_detour": best["max_extra_time"],
+            "avg_time_detour": best["avg_extra_time"],
+            "r1_time_detour_ratio": best["r1_detour_ratio_t"],
+            "r2_time_detour_ratio": best["r2_detour_ratio_t"],
+            "r1_time_detour": best["r1_extra_time"],
+            "r2_time_detour": best["r2_extra_time"],
+            "time_detour_symmetry": time_detour_symmetry,
+
+            # Relation to detour cap (time-based view)
+            "feasible_under_time_detour_cap": int(feasible_under_time_cap),
+            "time_detour_margin_to_cap": time_detour_margin_to_cap,
+
+            # Threshold feasibility across sequences
+            **time_detour_within_threshold,
         }
+
+    def _add_request_request_features(self, req1_feats: Dict, req2_feats: Dict,
+                                      edge_feats: Dict) -> None:
+        """Add all features for request-request edges.
+
+        Args:
+            req1_feats: Features of request 1
+            req2_feats: Features of request 2
+            edge_feats: Features of the edge between the two requests
+        """
+        # Extract travel costs. Overwrites edge_feats to flatten the nested structure. Needs to be done first.
+        self._extract_travel_costs_from_edge(edge_feats)
+
+        # Get pooling metrics
+        pooling_metrics = self._calculate_pooling_metrics(
+            req1_feats, req2_feats, edge_feats)
+
+        # Get ride-sharing efficiency metrics
+        efficiency_metrics = self._calculate_ride_sharing_efficiency(req1_feats, req2_feats, edge_feats)
+
+        # Check lock status
+        is_req1_locked = req1_feats.get(G_TRAIN_FEATURE_LOCKED, False)
+        is_req2_locked = req2_feats.get(G_TRAIN_FEATURE_LOCKED, False)
+        both_locked = is_req1_locked and is_req2_locked
+
+        # Update edge features with all metrics
+        edge_feats.update({
+            # Lock status
+            'src_locked': is_req1_locked,
+            'tgt_locked': is_req2_locked,
+            'both_locked': int(both_locked),
+            
+            # Pooling compatibility (spatial)
+            **pooling_metrics,
+
+            # Ride-sharing efficiency metrics
+            **efficiency_metrics,
+
+            # Combined score
+            'overall_pooling_score': (
+                pooling_metrics['spatial_compatibility'] *
+                efficiency_metrics['temporal_compatibility'] *
+                efficiency_metrics['ride_sharing_efficiency']
+            )
+        })
 
     def _add_edge_compatibility_features(self, current_time: int, data: Dict) -> None:
         """Add features that indicate compatibility between nodes.
@@ -659,174 +1215,33 @@ class DataProcessor:
             current_time: Current simulation time
             data: Dictionary containing raw data for the timestep
         """
-        # For vehicle-request edges
+        # Process vehicle-request edges
         for veh_id, targets in data[self.vr_key].items():
             veh_feats = data[self.v_key][veh_id]
 
             for req_id, edge_feats in targets.items():
                 req_feats = data[self.r_key][req_id]
 
-                # Add time-of-day features
-                time_of_day = current_time % (
-                    24 * 60)  # Minutes within the day
-                hour_of_day = time_of_day / 60.0
-                is_peak = is_peak_hour(time_of_day)
+                # Add temporal features
+                self._add_vehicle_request_temporal_features(
+                    current_time, veh_feats, req_feats, edge_feats)
 
-                edge_feats.update({
-                    'is_peak_hour': float(is_peak),
-                    # Cyclical encoding
-                    'hour_of_day_sin': math.sin(2 * math.pi * hour_of_day / 24),
-                    'hour_of_day_cos': math.cos(2 * math.pi * hour_of_day / 24),
-                })
+                # Add spatial features
+                self._add_vehicle_request_spatial_features(
+                    veh_feats, req_feats, edge_feats)
 
-                # Use travel time information from edge features
-                travel_time = edge_feats.get('travel_cost', {})
-
-                # Calculate earliest arrival as current time + travel time to request
-                earliest_arrival = current_time + travel_time
-                # Add to vehicle features
-                veh_feats['earliest_arrival'] = earliest_arrival
-
-                # Time compatibility and earliest arrival features
-                earliest_arrival = veh_feats['earliest_arrival']
-                earliest_pickup = req_feats['tw_pe']
-                latest_pickup = req_feats['tw_pl']
-
-                # Calculate various temporal margins
-                arrival_slack = latest_pickup - earliest_arrival
-                earliest_slack = earliest_pickup - earliest_arrival
-
-                # Consider lock status in compatibility
-                is_locked = req_feats.get('locked', False)
-
-                edge_feats.update({
-                    # Lock status feature
-                    # Convert to int (0 or 1)
-                    'is_locked': float(is_locked),
-
-                    # Temporal compatibility metrics (adjusted for locks)
-                    'arrival_slack': max(0, arrival_slack) if not is_locked else 0,
-                    # Can be negative if vehicle arrives before earliest pickup
-                    'earliest_slack': earliest_slack if not is_locked else 0,
-                    'time_window_compatibility': min(1.0, max(0, arrival_slack) / max(1,
-                                                                                      latest_pickup - earliest_pickup)) if not is_locked else 0,
-                    'time_feasibility_score': 1.0 if arrival_slack > 0 and not is_locked else 0.0,
-                    'normalized_arrival_time': (earliest_arrival - earliest_pickup) / max(1,
-                                                                                          latest_pickup - earliest_pickup),
-
-                    # Vehicle suitability
-                    'distance_to_vehicle': haversine_distance(
-                        veh_feats['lat'], veh_feats['lon'],
-                        req_feats['o_lat'], req_feats['o_lon']
-                    )
-                })
-
-        # For request-request edges
+        # Process request-request edges
         for req1_id, targets in data[self.rr_key].items():
             req1_feats = data[self.r_key][req1_id]
 
             for req2_id, edge_feats in targets.items():
                 req2_feats = data[self.r_key][req2_id]
-
-                # Get travel times from edge features
-                travel_costs = edge_feats.get('travel_cost', [])
-                if isinstance(travel_costs, list) and len(travel_costs) >= 6:
-                    # Extract travel times for all combinations
-                    tt_o1_d1 = travel_costs[0].get(
-                        'travel_time', 0)  # origin1 -> dest1
-                    tt_o1_o2 = travel_costs[1].get(
-                        'travel_time', 0)  # origin1 -> origin2
-                    tt_o1_d2 = travel_costs[2].get(
-                        'travel_time', 0)  # origin1 -> dest2
-                    tt_d1_o2 = travel_costs[3].get(
-                        'travel_time', 0)  # dest1 -> origin2
-                    tt_o2_d2 = travel_costs[4].get(
-                        'travel_time', 0)  # origin2 -> dest2
-                    tt_d1_d2 = travel_costs[5].get(
-                        'travel_time', 0)  # dest1 -> dest2
-
-                    # Calculate temporal metrics using actual travel times
-                    time_gap = req2_feats['tw_pe'] - \
-                        (req1_feats['tw_pl'] + tt_o1_d1)
-                    total_direct_time = tt_o1_d1 + tt_o2_d2
-
-                    # Calculate different possible shared ride sequences
-                    shared_ride_time_1 = tt_o1_o2 + tt_o2_d2 + \
-                        tt_d1_d2  # Pick both, drop second, drop first
-                    shared_ride_time_2 = tt_o1_d1 + tt_d1_o2 + \
-                        tt_o2_d2  # Pick&drop first, then second
-                    # shared_ride_time_3 = tt_o1_o2 + tt_o2_d1 + tt_d1_d2
-                    #       # Pick both, drop first TODO add
-
-                    # Add detailed travel time features
-                    edge_feats.update({
-                        'tt_between_pickups': tt_o1_o2,  # Time between pickup locations
-                        'tt_between_dropoffs': tt_d1_d2,  # Time between dropoff locations
-                        'tt_pickup1_to_dropoff2': tt_o1_d2,  # Time from first pickup to second dropoff
-                        'tt_dropoff1_to_pickup2': tt_d1_o2,  # Time from first dropoff to second pickup
-                        'tt_pickup2_to_dropoff2': tt_o2_d2,  # Time from second pickup to second dropoff
-                        'min_shared_ride_time': min(shared_ride_time_1, shared_ride_time_2),
-                    })
-
-                    # Use the better sequence
-                    shared_ride_time = min(
-                        shared_ride_time_1, shared_ride_time_2)
-                else:
-                    # Fallback to previous calculation if travel times not available
-                    time_gap = req2_feats['tw_pe'] - \
-                        (req1_feats['tw_pl'] + req1_feats['direct_tt'])
-                    total_direct_time = req1_feats['direct_tt'] + \
-                        req2_feats['direct_tt']
-                    shared_ride_time = (
-                        req1_feats['direct_tt'] +
-                        haversine_distance(
-                            req1_feats['d_lat'], req1_feats['d_lon'],
-                            req2_feats['d_lat'], req2_feats['d_lon']
-                        ) * 60 / 30  # Assuming 30 km/h average speed
-                    )
-
-                # Calculate pooling compatibility metrics
-                pooling_metrics = self._calculate_pooling_metrics(
+                self._add_request_request_features(
                     req1_feats, req2_feats, edge_feats)
-
-                extra_time_ratio = max(
-                    0, (shared_ride_time - total_direct_time) / max(1, total_direct_time))
-
-                # Check if either request is locked
-                is_req1_locked = req1_feats.get('locked', False)
-                is_req2_locked = req2_feats.get('locked', False)
-                both_locked = is_req1_locked and is_req2_locked
-
-                edge_feats.update({
-                    # Lock status features
-                    'src_locked': is_req1_locked,  # Already 0 or 1
-                    'tgt_locked': is_req2_locked,  # Already 0 or 1
-                    'both_locked': int(both_locked),  # Convert boolean to 0/1
-
-                    # Basic temporal compatibility (adjusted for locks)
-                    'time_gap': time_gap,
-                    'temporal_compatibility': 1.0 if time_gap > 0 else 0.0,
-
-                    # Pooling compatibility metrics
-                    'origin_proximity': pooling_metrics['origin_proximity'],
-                    'destination_proximity': pooling_metrics['destination_proximity'],
-                    'pooling_detour_ratio': pooling_metrics['pooling_detour_ratio'],
-                    'spatial_compatibility': pooling_metrics['spatial_compatibility'],
-
-                    # Ride-sharing metrics
-                    # Additional waiting time for second request
-                    'extra_waiting_time': max(0, time_gap),
-                    'extra_time_ratio': extra_time_ratio,  # Ratio of extra time due to sharing
-                    # Higher when detour is smaller
-                    'ride_sharing_efficiency': 1.0 / (1.0 + extra_time_ratio),
-
-                    # Combined compatibility score
-                    'overall_pooling_score': (
-                        pooling_metrics['spatial_compatibility'] *
-                        (1.0 if time_gap > 0 else 0.0) *
-                        (1.0 / (1.0 + extra_time_ratio))
-                    )
-                })
+                
+        # Add assignment-context features on VR edges,
+        # now that RR edges already have pooling/detour metrics
+        self._add_vehicle_assignment_context_features(data)
 
     def _add_assignment_features(self, data: Dict) -> None:
         """Add assignment labels to edges.
@@ -940,8 +1355,11 @@ class DataProcessor:
                 edges = []
                 for source, targets in data[graph_type].items():
                     for target, info in targets.items():
-                        edge_attrs = self._get_edge_attributes(
-                            timestep, node_mapping, graph_type, source, target, info)
+                        info.update({
+                            'source': node_mapping[timestep][source] if graph_type == self.rr_key else source,
+                            'target': node_mapping[timestep][target]
+                        })
+                        edge_attrs = info
                         edge_attrs['timestep'] = timestep
                         edges.append(edge_attrs)
                 if edges:
@@ -957,67 +1375,6 @@ class DataProcessor:
             else:
                 logger.warning(
                     f"\nNo edges found for {graph_type}, skipping save.")
-
-    def _get_edge_attributes(self, timestep: int, node_mapping: Dict[int, Dict[Any, int]],
-                             graph_type: str, source: Any, target: Any,
-                             info: Dict) -> Dict:
-        """Get attributes for a graph edge.
-
-        Preserves all computed edge features for GNN training while handling
-        special cases for nested structures.
-
-        Args:
-            timestep: Current timestep
-            node_mapping: Mapping from node IDs to indices
-            graph_type: Type of graph (REQUEST_REQUEST_GRAPH or VEHICLE_REQUEST_GRAPH)
-            source: Source node ID
-            target: Target node ID
-            info: Dictionary of edge information/features
-
-        Returns:
-            Dict with all edge attributes in a flat structure
-        """
-        # Start with node endpoints
-        attrs = {
-            'source': node_mapping[timestep][source] if graph_type == self.rr_key else source,
-            'target': node_mapping[timestep][target]
-        }
-
-        # Handle travel_cost separately since it's a nested structure
-        if 'travel_cost' in info:
-            if isinstance(info['travel_cost'], list):
-                # For request-request edges
-                if len(info['travel_cost']) >= 6:
-                    tt_names = [
-                        'tt_origin1_dest1',  # origin1 -> dest1
-                        'tt_between_pickups',  # origin1 -> origin2
-                        'tt_pickup1_dropoff2',  # origin1 -> dest2
-                        'tt_dropoff1_pickup2',  # dest1 -> origin2
-                        'tt_origin2_dest2',  # origin2 -> dest2
-                        'tt_between_dropoffs'  # dest1 -> dest2
-                    ]
-                    for name, cost in zip(tt_names, info['travel_cost']):
-                        if isinstance(cost, dict):
-                            attrs[name] = cost.get('travel_time', 0)
-            else:
-                # For vehicle-request edges
-                if isinstance(info['travel_cost'], dict):
-                    attrs['veh_to_req_travel_time'] = info['travel_cost'].get(
-                        'travel_time', 0)
-
-        # Copy all other features (except nested structures)
-        for key, value in info.items():
-            # Skip already processed nested structures
-            if key == 'travel_cost':
-                continue
-
-            # Include only serializable primitive types
-            if isinstance(value, (int, float, str, bool)) or value is None:
-                attrs[key] = value
-            elif isinstance(value, (list, tuple)) and all(isinstance(x, (int, float, str, bool)) for x in value):
-                # Handle simple lists of primitives
-                attrs[key] = value
-        return attrs
 
     @staticmethod
     def load_processed_data(data_dir: str) -> Dict[str, pd.DataFrame]:
@@ -1054,7 +1411,7 @@ class DataProcessor:
         import pandas as pd
         self.timestep_n_requests = len(
             data.get(self.r_key, {}))
-        data = self._add_graph_features(data)
+        data = self._add_graph_features(timestep, data)
 
         # Build edge DataFrame
         edge_graph = data[edge_type]
@@ -1093,5 +1450,5 @@ class DataProcessor:
         merged = merged.fillna(0)
 
         # Label column if present
-        y = merged['label'] if 'label' in merged.columns else None
+        y = merged[self.config.label_key] if self.config.label_key in merged.columns else None
         return merged, y
