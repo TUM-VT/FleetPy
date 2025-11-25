@@ -353,8 +353,8 @@ class NetworkBasicReliabilityWithStoreCppSumoCoupling(NetworkBasicWithStoreCppSu
   
 
     def customized_section_cost_function(self,tt_mean=None,tt_var=None,dis=None):
-            vor=self.user_vor
-            vot=self.user_vot
+            vor=self.user_vor if self.user_vor is not None else 0.0
+            vot=self.user_vot if self.user_vot is not None else 0.0
             cfv = vot * tt_mean + vor * math.sqrt(tt_var)
             return cfv
     

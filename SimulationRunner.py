@@ -60,8 +60,8 @@ class SimulationRunner:
             sc_df['evaluation_int_start'] = [int(row['evaluation_int_start'])]
             sc_df['evaluation_int_end'] = [int(row['evaluation_int_end'])]
             sc_df['MOD_demand_subset'] = [row['MOD_demand_subset']]
-            sc_df['t_update'] = [int(row['t_update']) if not pd.isna(row['t_update']) else 24 * 3600]
-            sc_df['f_pv,pd'] = [row['f_pv,pd'] if row['f_pv,pd'] is not None else 0]
+            sc_df['sumo_t_update'] = [int(row['sumo_t_update']) if not pd.isna(row['sumo_t_update']) else 24 * 3600]
+            sc_df['sumo_fcd_vehicles'] = [row['sumo_fcd_vehicles']]
             sc_df['random_seed'] = [row['random_seed']]
             sc_df["rerouting_sc"] = [row["rerouting_sc"]]
             sc_df["hybrid_router"] = [int(row["hybrid_router"])]
@@ -123,7 +123,6 @@ class SimulationRunner:
         zip_files = []
         for scenario in self.selected_scenarios:
             sc_res_dir = self.res_dir /self.sc_config_file_dict[scenario].get("scenario_name")
-            zip_files.append(sc_res_dir / "SumoDumps" / "vehRoutes.xml")
             zip_files.append(sc_res_dir / "00_simulation.log")
         
         for file_path in zip_files:
