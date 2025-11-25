@@ -19,7 +19,7 @@ import sys
 # -----------
 from src.FleetSimulationBase import FleetSimulationBase
 from src.fleetctrl.FleetControlBase import FleetControlBase
-from src.simulation.Vehicles import ExternallyMovingSimulationVehicle
+from src.simulation.Vehicles import SUMOMovingSimulationVehicle
 from src.misc.init_modules import load_fleet_control_module
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -71,8 +71,8 @@ class SUMOcontrolledSim(FleetSimulationBase):
         :param scenario_parameters: row of pandas data-frame; entries are saved as x["key"]
         """
         super().add_init(scenario_parameters)
-        print(f"Operator Routing Mode: {scenario_parameters[G_OP_ROUTING_MODE]}")
-        self.routing_engine.set_routing_mode(scenario_parameters[G_OP_ROUTING_MODE])
+        #print(f"Operator Routing Mode: {scenario_parameters[G_OP_ROUTING_MODE]}")
+        #self.routing_engine.set_routing_mode(scenario_parameters[G_OP_ROUTING_MODE])
 
     def step(self, sim_time):
         """This method determines the simulation flow in a time step.
@@ -151,7 +151,7 @@ class SUMOcontrolledSim(FleetSimulationBase):
                 for veh_type, nr_veh in fleet_composition_dict.items():
                     for _ in range(nr_veh):
                         veh_type_list.append([op_id, vid, veh_type])
-                        tmp_veh_obj = ExternallyMovingSimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+                        tmp_veh_obj = SUMOMovingSimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
                                                         self.routing_engine, self.demand.rq_db,
                                                         self.op_output[op_id], route_output_flag,
                                                         replay_flag)
@@ -168,7 +168,7 @@ class SUMOcontrolledSim(FleetSimulationBase):
                 list_vehicles = []
                 for vid, veh_type in init_vids.items():
                     veh_type_list.append([op_id, vid, veh_type])
-                    tmp_veh_obj = ExternallyMovingSimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+                    tmp_veh_obj = SUMOMovingSimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
                                                         self.routing_engine, self.demand.rq_db,
                                                         self.op_output[op_id], route_output_flag,
                                                         replay_flag)

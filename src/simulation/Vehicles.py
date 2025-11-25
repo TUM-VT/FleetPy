@@ -46,7 +46,7 @@ class SimulationVehicle:
         self.replay_flag = replay_flag
         #
         veh_data_f = os.path.join(vehicle_data_dir, f"{vehicle_type}.csv")
-        veh_data = pd.read_csv(veh_data_f, header=None, index_col=0, squeeze=True)
+        veh_data = pd.read_csv(veh_data_f, header=None, index_col=0).squeeze("columns")
         self.veh_type = veh_data[G_VTYPE_NAME]
         self.max_pax = int(veh_data[G_VTYPE_MAX_PAX])
         self.max_parcels = int(veh_data.get(G_VTYPE_MAX_PARCELS, 0))
@@ -73,6 +73,8 @@ class SimulationVehicle:
         self.cl_remaining_route = []  # list of remaining nodes to next stop
         self.cl_remaining_time = None
         self.cl_locked = False
+        # cumulative distance
+        self.cumulative_distance = 0.0
         # TODO # check and think about consistent way for large time steps -> will vehicles wait until next update?
         self.start_next_leg_first = False   # flag, if True, a new assignment has been made, which has to be activated first in the next call of update_veh_state
 
@@ -82,6 +84,9 @@ class SimulationVehicle:
     def reset_current_leg(self):
         # current info
         self.status = VRL_STATES.IDLE
+        # add distance to cumulative distance
+        self.cumulative_distance += self.cl_driven_distance
+
         # current leg (cl) info
         self.cl_start_time = None
         self.cl_start_pos = None
@@ -136,7 +141,7 @@ class SimulationVehicle:
             for leg in self.assigned_route:
                 leg_end_pos = leg.destination_pos
                 if leg_end_pos != last_pos:
-                    tt, dis, var,cfv = self.routing_engine.return_travel_costs_1to1(last_pos, leg_end_pos)
+                    _, tt, _ = self.routing_engine.return_travel_costs_1to1(last_pos, leg_end_pos)
                     last_pos = leg_end_pos
                     last_time += tt
                 elif leg.duration:
@@ -178,9 +183,6 @@ class SimulationVehicle:
         :param simulation_time
         :return: list of currently boarding requests, list of starting to alight requests
         """
-        if self.vid == 9:
-            LOG.info(f"start_next_leg {self.vid} : {self.assigned_route[0]}")
-
         if self.assigned_route:
             LOG.debug(f"start_next_leg {self.vid} : {self.assigned_route[0]}")
         else:
@@ -261,7 +263,7 @@ class SimulationVehicle:
         """
         if self.assigned_route and not self.start_next_leg_first:
             ca = self.assigned_route[0]
-            LOG.info(f"Vehicle {self.vid} ends the VRL {ca} at time {simulation_time}")
+            LOG.debug(f"Vehicle {self.vid} ends the VRL {ca} at time {simulation_time}")
             if ca.stationary_process is not None:
                 ca.stationary_process.end_task(simulation_time)
             # record
@@ -340,8 +342,9 @@ class SimulationVehicle:
             boarding_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(1,[])]
             alighting_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(-1,[])]
             vrl.rq_dict = {1:boarding_list, -1:alighting_list}
-        #LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
-        #LOG.debug(f"  -> current assignment: {self.assigned_route}")
+        LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
+        LOG.debug(f"  -> current assignment: {[str(x) for x in self.assigned_route]}")
+        LOG.debug(f" -> force: {force_ignore_lock}")
         start_flag = True
         if self.assigned_route:
             if not list_route_legs or list_route_legs[0] != self.assigned_route[0]:
@@ -573,11 +576,11 @@ class SimulationVehicle:
         this is usefull in case it has to be overwritten to trigger additional processes
         :param target_pos: destination position tuple
         :return: list of node ids (route from pos to target_pos)"""
-        return self.routing_engine.return_best_route_1to1(self.pos, target_pos,mode = self.routing_engine.routing_mode)
+        return self.routing_engine.return_best_route_1to1(self.pos, target_pos)
 
 # ===================================================================================================== #
 
-class ExternallyMovingSimulationVehicle(SimulationVehicle):
+class SUMOMovingSimulationVehicle(SimulationVehicle):
     """ this class can be used for simulations where vehicle movements are controlled externally i.e. when coupling with
     an microscopic traffic simulation.
     boarding processes are still handled in this class, but vehicles only move if their positions are actively updated
@@ -595,7 +598,6 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
         if self.status in G_DRIVING_STATUS:
             if veh_pos is None:
                 LOG.debug("non moving vehicle registered? {}".format(self))
-                print("non moving vehicle registered? {}".format(self))
                 self._route_update_needed = True
             else:
                 self.pos = veh_pos
@@ -683,14 +685,14 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                     self._route_update_needed = False
                     return route
                 
-                # New Route not saved in current Leg --> will hapen in next FP step --> Vehicle gets no update this time in next Step
+                # New Route not saved in current Leg --> will hapen in next FP step --> Vehicle gets no update this time step
                 else: 
                     self._route_update_needed = True
                     if self.pos[1] != None:
                         route = [self.pos[0],self.pos[1]]
                         LOG.info(f"BEFORE: veh {self.vid} clears edge {self.pos} before it gets new Route  -> {route}")
                         route = None
-                        LOG.info(f"NOW: veh {self.vid} on edge {self.pos} gets no Route but in next timestep. Proceeds with current Route: {route}")
+                        LOG.info(f"NOW: veh {self.vid} on edge {self.pos} gets no Route but will get it in next timestep. Proceeds with current Route: {route}")
                         return route
 
                     else:
@@ -713,14 +715,13 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
         :type force_ignore_lock: bool
         """
         # transform rq from PlanRequest to SimulationRequest (based on RequestBase)
-        LOG.debug(f"Vehicle {self.vid ,self.status} before new assignment: {[str(x) for x in self.assigned_route]} at time {sim_time}")
+        # LOG.info(f"Vehicle {self.vid} before new assignment: {[str(x) for x in self.assigned_route]} at time {sim_time}")
         for vrl in list_route_legs:
             boarding_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(1,[])]
             alighting_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(-1,[])]
             vrl.rq_dict = {1:boarding_list, -1:alighting_list}
-        LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
-        LOG.debug(f"  -> current assignment: {self.assigned_route}")
-        LOG.debug(f"start next leg first {self.start_next_leg_first}")
+        #LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
+        #LOG.debug(f"  -> current assignment: {self.assigned_route}")
         start_flag = True
         if self.assigned_route:
             if not list_route_legs or list_route_legs[0] != self.assigned_route[0]:
@@ -738,10 +739,8 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                         raise AssertionError("assign_vehicle_plan(): Trying to assign new VRLs instead of a locked VRL.")
             else:
                 start_flag = False
-        
-        LOG.debug(f"After End Leg {self.assigned_route} start_flag: {start_flag}, status: {self.status}")
+
         self.assigned_route = list_route_legs
-        LOG.debug(f"New Assignement {self.assigned_route} start_flag: {start_flag}, status: {self.status}")
         if list_route_legs:
             if start_flag:
                 self.start_next_leg_first = True
@@ -772,14 +771,14 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
         ## Get Driven Distance for stats
         if len(self.cl_driven_route) > 1:
             try:
-                travel_time, driven_distance,travel_time_var,route_cfv = self.routing_engine.return_route_infos(self.cl_driven_route, 0.0, 0.0)
+                _, driven_distance = self.routing_engine.return_route_infos(self.cl_driven_route, 0.0, 0.0)
             except KeyError:
                 LOG.debug(f'reached_destination had a Keyerror')
                 driven_distance = 0
                 if len(self.cl_driven_route) > 2:
                     for i in range(2, len(self.cl_driven_route)):
                         try:
-                            tt, dis,var,cfv = self.routing_engine.get_section_infos(self.cl_driven_route[i-1], self.cl_driven_route[i])
+                            tt, dis = self.routing_engine.get_section_infos(self.cl_driven_route[i-1], self.cl_driven_route[i])
                         except:
                             dis = 0
                         driven_distance += dis
