@@ -3,8 +3,7 @@
 from abc import abstractmethod
 import os, sys
 
-# Fix libsumo DLL loading issue by adding SUMO bin directory to DLL search path
-import traci ##TODO: Change to Libsumo for Linux server
+import traci 
 import pandas as pd
 import csv
 import logging 
@@ -28,24 +27,64 @@ import time
 
 
 """ 
-This script can be used to create a FleetPy-Simulation coupled to SUMO.
-Customers, requests and the control of fleet vehicles are controled in FleetPy while vehicle movements are conducted in SUMO.
-When a new vehicle route is available, the vehicle is created in SUMO and drives on the computed route to its destination. The vehicle is deleted once it reaches the destination in SUMO (also for boarding processes and created again after the boarding process)
-The script requires as input the usual FleetPy config files (constant config and scenario config) and additionally the .sumocfg file.
-The network used by FleetPy has to be synchronized to the SUMO-network. Therefore, the script preprocessing\networks\network_from_sumo.py can be used to create the corresponding FleetPy network representation.
-The corresponding FleetPy-demand files have to be created manually.
-Additionally, the vehicle_types (str-names) used in the FleetPy have to be defined in SUMO, too. Those will be used as fleet vehicle types
-Parameters starting with fp_ refer to FleetPy parameters, parameters starting with s_ refer to SUMO parameters and parameters starting with g_ refer to global parameters.
+SUMOFleetPyServer - Coupled FleetPy-SUMO Simulation Server
+===========================================================
+
+This script creates a co-simulation coupling FleetPy (mobility-on-demand simulation) with SUMO (traffic simulation).
+FleetPy handles customer requests, routing decisions, and fleet control logic, while SUMO simulates the actual 
+vehicle movements in a microscopic traffic simulation environment.
+
+DESCRIPTION:
+-----------
+The coupling works by synchronizing two simulation environments:
+- FleetPy computes routes and manages fleet operations
+- SUMO executes vehicle movements and provides realistic travel times
+- Vehicles are dynamically created/removed in SUMO based on FleetPy route assignments
+- Travel time feedback from SUMO updates FleetPy's routing engine in real-time
+
+INPUT ARGUMENTS (Command Line):
+-------------------------------
+1. constant_config_path (str, required):
+   Path to the FleetPy constant configuration file containing study-wide parameters
+   (e.g., network paths, vehicle types, evaluation settings)
+
+2. scenario_config_path (str, required):
+   Path to the FleetPy scenario configuration file containing scenario-specific parameters
+   (e.g., demand levels, fleet sizes, operator strategies)
+
+3. sumo_config (str, required):
+   Path to the SUMO configuration file (.sumocfg) defining the SUMO simulation setup
+   (network, routes, simulation time, etc.)
+
+4. sumoBinary (str, optional, default="sumo-gui"):
+   SUMO executable to use: "sumo" for command-line or "sumo-gui" for graphical interface
+
+5. log_level (str, optional, default="info"):
+   Logging verbosity level: "verbose", "debug", "info", or "warning"
+
+PREREQUISITES:
+-------------
+- FleetPy network must be synchronized with SUMO network (use preprocessing/networks/network_from_sumo.py)
+- FleetPy demand files must created and matched to the network (use preprocessing/networks/demand_from_sumo.py)
+- Vehicle types defined in FleetPy must exist in SUMO as vehicle type definitions
+- SUMO_HOME environment variable should be set 
+
+NAMING CONVENTIONS:
+------------------
+- fp_*  : FleetPy-related parameters and variables
+- g_*   : Global parameters shared between FleetPy and SUMO
+- sumo_*: SUMO-specific parameters and variables
+
+OUTPUT FILES:
+------------
+- SumoDumps/: SUMO output files (TripInfo, vehRoutes, EdgeData, collisions, statistics)
+- EdgeTravelTimes/: Time-series of travel time updates sent from SUMO to FleetPy
+- Standard FleetPy evaluation outputs (KPIs, statistics, plots)
+- Computationaltime.csv: Total simulation execution time
+
 """
 
 LOG = logging.getLogger(__name__)
-#if 'SUMO_HOME' in os.environ:
-   # tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
-    #sys.path.append(tools)
-#else:
-    #sys.exit("please declare environment variable 'SUMO_HOME'")
-
-
 t_start = time.time()
 
 
@@ -139,40 +178,6 @@ class SUMOFleetPyServer():
             self.g_update_fleetsim_traveltimes = True
             self.g_sumo_t_update = int(self.fp_sim_env.scenario_parameters.get(G_SUMO_STAT_INT))
 
-        
-    def setup_hybrid_router(self):
-        if self.fp_sim_env.scenario_parameters.get("hybrid_router") == 1:
-            
-            print("Setting up hybrid router")
-            fp_path = pathlib.Path(self.fp_sim_env.dir_names.get(G_DIR_MAIN))
-            sc_0_data_path = fp_path.parent / "fleetpy_coupling" / "hybrid_router" / "hourly_edge_counts_sc0.csv"
-            if not os.path.isfile(sc_0_data_path):
-                raise(f"Error: {sc_0_data_path} does not exist! Please run the hybrid router script to create this file.")
-            self.fp_hybrid_router_sc0_df = pd.read_csv(sc_0_data_path)
-            fp_path = pathlib.Path(self.fp_sim_env.dir_names.get(G_DIR_MAIN))
-            self.fp_hybrid_router_sc0_df["edge_id"] = self.fp_hybrid_router_sc0_df["edge"].map(self.g_sumo_edge_id_to_fs_edge)
-            self.fp_hybrid_router_sc0_df = self.fp_hybrid_router_sc0_df.rename(columns={"count":"count_sc0"})
-            self.fp_hybrid_router_sc0_df["edge_id_str"] = self.fp_hybrid_router_sc0_df["edge_id"].astype(str)
-            self.fp_hybrid_router_sc0_df.reset_index(inplace=True,drop=True)
-            
-            network_dir_path = pathlib.Path(self.fp_sim_env.dir_names[G_DIR_NETWORK])
-            historic_tt_dir = network_dir_path.parent / f"sumo_in_s_{str(self.fp_sim_env.scenario_parameters.get('random_seed')).zfill(2)}"
-            eval_start = self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME, self.fp_sim_env.scenario_parameters.get(G_EVAL_INT_START)) 
-            eval_end = self.fp_sim_env.scenario_parameters.get(G_SIM_END_TIME, self.fp_sim_env.scenario_parameters.get(G_EVAL_INT_END))
-            hourly_dirs = [
-                d for d in os.listdir(historic_tt_dir)
-                if d.isdigit() and eval_start <= int(d) <= eval_end and os.path.isdir(os.path.join(historic_tt_dir, d))
-            ]
-            hourly_tt_df_dict = {}
-            for hour in hourly_dirs:
-                hour_path = historic_tt_dir / hour / "edges_td_att.csv"
-                edges_df = pd.read_csv(hour_path)
-                edges_df["edge_id"] =  tuple(zip(edges_df['from_node'], edges_df['to_node']))
-                hourly_tt_df_dict.update({hour: edges_df})
-            self.fp_hybrid_router_hourly_tt_dict = hourly_tt_df_dict
-
-        else:
-            return
     def setup_sumo_simulation(self):
         """ 
         This function setups the SUMO simulation environment including the traci interface. SUMO parameters are read from the scenario config file. Default Values of SUMO are used if parameters are not given.
@@ -210,7 +215,6 @@ class SUMOFleetPyServer():
                 "--time-to-teleport", str(self.fp_sim_env.scenario_parameters.get(G_SUMO_TIME_TO_TELEPORT, 300)),
                 "--time-to-teleport.highways", str(self.fp_sim_env.scenario_parameters.get(G_SUMO_TIME_TO_TELEPORT_HIGHWAYS, 0)),
                 "--eager-insert", str(self.fp_sim_env.scenario_parameters.get(G_SUMO_EAGER_INSERT, False)),
-
                 ]    
      
         traci.start(sumoCmd)
@@ -317,7 +321,6 @@ class SUMOFleetPyServer():
             arrivedVehicles_internal = self._update_routes_and_add_vehicles(sim_time)
 
             # 3) sumo time step
-
             try:
                 traci.simulationStep()
             except Exception as e:
@@ -583,38 +586,6 @@ class SUMOFleetPyServer():
                 del sim_pos_dict[sim_time-2]
 
         return sim_pos_dict,res_list
-
-    def _get_hybrid_router_tt(self,tt_df,sim_time):
-        if self.fp_sim_env.scenario_parameters.get("hybrid_router") == 0:
-            return tt_df
-        
-        sim_hour = int(sim_time/3600)
-        #tt_df["count"] = tt_df["count"] * 3600/int(self.fp_sim_env.scenario_parameters.get("sumo_statistics_interval"))
-        tt_df = tt_df.reset_index(drop=True)
-        tt_df["edge_id_str"] = tt_df["edge_id"].astype(str) 
-        tt_df = pd.merge(left=tt_df, right= self.fp_hybrid_router_sc0_df, on="edge_id_str", how="left")
-        p_opt = self.fp_scenario_config.get("p_opt", 1) if self.fp_scenario_config.get("p_opt", 1) is not None else 1
-        tt_df["p_fco"] = np.where(
-                                tt_df["count_sc0"] == None,
-                                p_opt,
-                                tt_df["count"] / tt_df["count_sc0"])   
-        tt_df["hybrid_router_alpha"] = tt_df["p_fco"] / p_opt
-        tt_df["hybrid_router_alpha"] = tt_df["hybrid_router_alpha"].clip(upper=1)
-        tt_df = tt_df[tt_df["hour"] == sim_hour]
-    
-        historic_tt_df = self.fp_hybrid_router_hourly_tt_dict.get(str(sim_hour*3600))
-        historic_tt_df.rename(columns={"edge_id":"edge","edge_tt":"edge_tt_historic"}, inplace=True)      
-        historic_tt_df["edge_id_str"] = historic_tt_df["edge"].astype(str)
-        tt_df = tt_df.merge(historic_tt_df, on="edge_id_str", how="left")
-        tt_df["edge_tt_hybrid"] = tt_df["hybrid_router_alpha"] *tt_df["edge_tt"] +  (1-tt_df["hybrid_router_alpha"])*tt_df["edge_tt_historic"]
-        tt_df.drop(columns=["Unnamed: 0", "index", "from_node_y", "to_node_y"], inplace=True,errors='ignore')
-        tt_df.rename(columns={"from_node_x":"from_node","to_node_x":"to_node","edge_var_x":"edge_var"}, inplace=True)
-        tt_df["edge_tt"] = tt_df["edge_tt_hybrid"].round(3)
-        print("Hybrid Router: ",f"alpha: {np.average(tt_df['hybrid_router_alpha'])}",f'avg p:{np.average(tt_df["p_fco"])}')
-        tt_df = tt_df[["edge_tt", "edge_var", "from_node", "to_node"]]
-        tt_df = tt_df.dropna(subset=['edge_tt'])
-        tt_df["edge_var"] = tt_df["edge_var"].fillna(0)
-        return tt_df
     
     def _process_tt_data(self,res_list,sim_time):        
         tt_df = pd.DataFrame(res_list, columns=['veh_id','edge_id', 'starting_time', 'end_time'])
@@ -633,7 +604,6 @@ class SUMOFleetPyServer():
         tt_df["edge_tt"]=tt_df['edge_tt'].round(3)
         tt_df["edge_var"] = tt_df["edge_var"].fillna(0)
         tt_df["edge_var"]=tt_df['edge_var'].round(3)
-        tt_df = self._get_hybrid_router_tt(tt_df,sim_time) 
         tt_df = tt_df[["from_node", "to_node", "edge_tt", "edge_var"]]
         return tt_df 
 
@@ -813,5 +783,4 @@ if __name__ == "__main__":
     SUMOFleetPyCoupling.setup_fleetsimulation()
     SUMOFleetPyCoupling.setup_sumo_simulation()
     SUMOFleetPyCoupling.setup_network_translation()
-    SUMOFleetPyCoupling.setup_hybrid_router()
     SUMOFleetPyCoupling.run_coupled_simulation()
