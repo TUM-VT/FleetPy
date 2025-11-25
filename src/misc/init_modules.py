@@ -66,6 +66,7 @@ def get_src_routing_engines():
     re_dict["NetworkBasicCpp"] = ("src.routing.NetworkBasicCpp", "NetworkBasicCpp")
     re_dict["NetworkPartialPreprocessedCpp"] = ("src.routing.NetworkPartialPreprocessedCpp", "NetworkPartialPreprocessedCpp")
     re_dict["NetworkTTMatrix"] = ("src.routing.NetworkTTMatrix", "NetworkTTMatrix")
+    re_dict["NetworkBasicWithStoreOnlineMatrixCpp"] = ("src.routing.NetworkBasicWithStoreOnlineMatrixCpp", "NetworkBasicWithStoreOnlineMatrixCpp")
     # add development content
     if dev_content is not None:
         dev_re_dict = dev_content.add_dev_routing_engines()

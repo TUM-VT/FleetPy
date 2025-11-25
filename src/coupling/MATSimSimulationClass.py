@@ -168,10 +168,11 @@ class MATSimSimulationClass(FleetSimulationBase):
         done_VRLS = veh_obj.update_state(sim_time, veh_pos, rids_picked_up, rids_dropped_off, status,
                              earliest_diverge_pos, earliest_diverge_time, finished_leg_ids, current_pick_up, current_drop_off)
         # send update to operator
-        if len(rids_picked_up) > 0 or len(rids_dropped_off) > 0:
-            self.broker.receive_status_update(op_id, vid, sim_time, done_VRLS, True)
-        else:
-            self.broker.receive_status_update(op_id, vid, sim_time, done_VRLS, False) # TODO force update plan
+        # if len(rids_picked_up) > 0 or len(rids_dropped_off) > 0:
+        #     self.broker.receive_status_update(op_id, vid, sim_time, done_VRLS, True)
+        # else:
+        #     self.broker.receive_status_update(op_id, vid, sim_time, done_VRLS, False) # TODO force update plan
+        self.broker.receive_status_update(op_id, vid, sim_time, done_VRLS, False) 
     
     def step(self, sim_time):
         """
