@@ -1,5 +1,5 @@
 #pragma once
-#include <tuple>
+
 #include <vector>
 #include <utility>
 #include <string>
@@ -17,12 +17,12 @@ private:
 
 	int settled_fw_index_ = 0;
 	int visit_fw_index_ = 0;
-	std::vector<double> cost_fw_ = {0.0, 0.0, 0.0, 0.0};
+	std::pair<double, double> cost_fw_ = { 0.0, 0.0 };
 	int prev_ = -1;
 
 	int settled_bw_index_ = 0;
 	int visit_bw_index_ = 0;
-	std::vector<double> cost_bw_ = {0.0, 0.0, 0.0, 0.0};
+	std::pair<double, double> cost_bw_ = { 0.0, 0.0 };
 	int next_ = -1;
 
 public:
@@ -41,17 +41,17 @@ public:
 
 	void setSettledFw(int dijkstra_number);
 	bool isSettledFw(int dijkstra_number);
-	std::vector<double> getCostFw();
+	void setCostFw(std::pair<double, double> cost);
+	std::pair<double, double> getCostFw();
 	void setPrev(int new_prev);
 	int getPrev();
 	void setVisitFw(int dijkstra_number);
 	bool isVisitedFw(int dijkstra_number);
-    void setCostFw(std::vector<double> cost);
 
-    void setSettledBw(int dijkstra_number);
+	void setSettledBw(int dijkstra_number);
 	bool isSettledBw(int dijkstra_number);
-	void setCostBw(std::vector<double> cost);
-	std::vector<double> getCostBw();
+	void setCostBw(std::pair<double, double> cost);
+	std::pair<double, double> getCostBw();
 	void setNext(int new_next);
 	int getNext();
 	void setVisitBw(int dijkstra_number);

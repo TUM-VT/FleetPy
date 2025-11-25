@@ -87,11 +87,11 @@ void Node::setVisitFw(int dijkstra_number) {
 bool Node::isVisitedFw(int dijkstra_number) {
 	return visit_fw_index_ == dijkstra_number;
 }
-void Node::setCostFw(std::vector<double> cost) {
+void Node::setCostFw(pair<double, double> cost) {
 	//cout << "set cost" << cost.first << " " << cost.second << endl;
 	cost_fw_ = cost;
 }
-std::vector<double> Node::getCostFw() {
+pair<double, double> Node::getCostFw() {
 	return cost_fw_;
 }
 void Node::setPrev(int new_prev) {
@@ -117,11 +117,11 @@ void Node::setVisitBw(int dijkstra_number) {
 bool Node::isVisitedBw(int dijkstra_number) {
 	return visit_bw_index_ == dijkstra_number;
 }
-void Node::setCostBw(std::vector<double> cost) {
+void Node::setCostBw(pair<double, double> cost) {
 	//cout << "set cost" << cost.first << " " << cost.second << endl;
 	cost_bw_ = cost;
 }
-std::vector<double> Node::getCostBw() {
+pair<double, double> Node::getCostBw() {
 	return cost_bw_;
 }
 void Node::setNext(int new_next) {

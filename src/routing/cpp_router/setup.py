@@ -3,7 +3,7 @@ import numpy
 from distutils.core import Extension, setup
 from Cython.Build import cythonize
 
-""" to install and use the cpp-routers the c++ file have to be compiled and
+""" to install an use the cpp-routers the c++ file have to be compiled and
 the interface to python via cython has to be created
 therefore a c++ compiler has to be installed and linked correctly to python
     (dont ask me how. on windows it works after installing visual studio code 2019 with the python extension)

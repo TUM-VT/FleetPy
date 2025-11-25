@@ -7,23 +7,11 @@
 #include <iterator>
 #include <queue>
 #include <utility>
-#include <tuple>
 #include "Network.h"
 #include "Node.h"
 #include "Edge.h"
 
 using namespace std;
-
-template <typename Tuple1, typename Tuple2, std::size_t... I>
-auto addTuplesImpl(const Tuple1& t1, const Tuple2& t2, std::index_sequence<I...>) {
-    return std::make_tuple(std::get<I>(t1) + std::get<I>(t2)...);
-}
-
-template <typename Tuple1, typename Tuple2>
-auto addTuples(const Tuple1& t1, const Tuple2& t2) {
-    static_assert(std::tuple_size<Tuple1>::value == std::tuple_size<Tuple2>::value, "Tuples must be of the same size.");
-    return addTuplesImpl(t1, t2, std::make_index_sequence<std::tuple_size<Tuple1>::value>{});
-}
 
 template <class Container>
 void split(const std::string& str, Container& cont, char delim = ' '){
@@ -32,27 +20,6 @@ void split(const std::string& str, Container& cont, char delim = ' '){
     while (std::getline(ss, token, delim)) {
         cont.push_back(token);
     }
-}
-
-std::string& trim_right(
-  std::string&       s,
-  const std::string& delimiters = " \f\n\r\t\v" )
-{
-  return s.erase( s.find_last_not_of( delimiters ) + 1 );
-}
-
-std::string& trim_left(
-  std::string&       s,
-  const std::string& delimiters = " \f\n\r\t\v" )
-{
-  return s.erase( 0, s.find_first_not_of( delimiters ) );
-}
-
-std::string& trim(
-  std::string&       s,
-  const std::string& delimiters = " \f\n\r\t\v" )
-{
-  return trim_left( trim_right( s, delimiters ), delimiters );
 }
 
 
@@ -75,7 +42,6 @@ Network::Network(string node_path, string edge_path) {
         while (!file.eof()) {
             string a;
             getline(file, a);
-            trim( a );
             vector<string> linesplits = {};
             split(a, linesplits, ',');
             int column_counter = 0;
@@ -152,7 +118,6 @@ Network::Network(string node_path, string edge_path) {
         while (!file2.eof()) {
             string a;
             getline(file2, a);
-            trim( a );
             vector<string> linesplits = {};
             split(a, linesplits, ',');
             //from_node,to_node,distance,travel_time,source_edge_id
@@ -216,7 +181,7 @@ Network::Network(string node_path, string edge_path) {
 }
 
 void Network::updateEdgeTravelTimes(std::string file_path) {
-    cout << "c++ update tts" << file_path << endl;
+    cout << "c++ update tts " << file_path << endl;
     ifstream file(file_path);
     if (file.is_open()) {
         cout << "is open!" << endl;
@@ -225,13 +190,10 @@ void Network::updateEdgeTravelTimes(std::string file_path) {
         int from_node_col = -1;
         int to_node_col = -1;
         int tt_col = -1;
-        int var_col = -1;
-        int cfv_col = -1;
 
         while (!file.eof()) {
             string a;
             getline(file, a);
-            trim( a );
             vector<string> linesplits = {};
             split(a, linesplits, ',');
             int column_counter = 0;
@@ -246,12 +208,6 @@ void Network::updateEdgeTravelTimes(std::string file_path) {
                     else if (entry == "edge_tt") {
                         tt_col = column_counter;
                     }
-                    else if (entry == "edge_var") {
-                        var_col = column_counter;
-                    }
-                    else if (entry == "edge_cfv") {
-                        cfv_col = column_counter;
-                    }
                     column_counter++;
                 }
                 row_counter++;
@@ -261,9 +217,6 @@ void Network::updateEdgeTravelTimes(std::string file_path) {
             int from_node_index;
             int to_node_index;
             double edge_tt;
-            double edge_var;
-            double edge_cfv;
-
             for (const auto& entry : linesplits) {
                 //cout << " ,   " << entry;
                 if (column_counter == from_node_col) {
@@ -275,17 +228,11 @@ void Network::updateEdgeTravelTimes(std::string file_path) {
                 else if (column_counter == tt_col) {
                     edge_tt = stod(entry);
                 }
-                else if (column_counter == var_col) {
-                    edge_var = stod(entry);
-                }
-                else if (column_counter == cfv_col) {
-                    edge_cfv = stod(entry);
-                }
                 column_counter++;
             }
             //cout << endl;
             if (column_counter >= 3) {
-                updateEdgeTravelTime(from_node_index, to_node_index, edge_tt,edge_var,edge_cfv);
+                updateEdgeTravelTime(from_node_index, to_node_index, edge_tt);
             }
             //cout << row_counter << " " << column_counter << endl;
             //cout << " -> " << nodes.size() << endl;
@@ -300,14 +247,12 @@ void Network::updateEdgeTravelTimes(std::string file_path) {
     }
 }
 
-void Network::updateEdgeTravelTime(int start_node_index, int end_node_index, double edge_travel_time,double edge_var, double edge_cfv) {
+void Network::updateEdgeTravelTime(int start_node_index, int end_node_index, double edge_travel_time) {
     //cout << "update edge" << start_node_index << " " << end_node_index << " " << edge_travel_time << endl;
     bool fw_found = false;
     for (Edge &edge : nodes[start_node_index].getOutgoingEdges()) {
         if (edge.getEndNode() == end_node_index) {
             edge.setNewTravelTime(edge_travel_time);
-            edge.setNewTravelTimeVar(edge_var);
-            edge.setNewEdgeCfv(edge_cfv);
             fw_found = true;
             break;
         }
@@ -317,8 +262,6 @@ void Network::updateEdgeTravelTime(int start_node_index, int end_node_index, dou
         if (edge.getStartNode() == start_node_index) {
             //cout << "other edge: " << edge.getTravelTime() << endl;
             edge.setNewTravelTime(edge_travel_time);
-            edge.setNewTravelTimeVar(edge_var);
-            edge.setNewEdgeCfv(edge_cfv);
             bw_found = true;
             break;
         }
@@ -343,24 +286,21 @@ void Network::setTargets(const vector<int>& targets) {
     current_targets = targets;
 }
 
-std::vector<Resultstruct> Network::computeTravelCosts1toX(int start_node_index, const std::vector<int>& targets, double time_range, int max_targets, string mode) {
+std::vector<Resultstruct> Network::computeTravelCosts1toX(int start_node_index, const std::vector<int>& targets, double time_range, int max_targets) {
     setTargets(targets);
 
-    int targets_reached = dijkstraForward(start_node_index, time_range = time_range, max_targets = max_targets, mode);
+    int targets_reached = dijkstraForward(start_node_index, time_range = time_range, max_targets = max_targets);
 
     vector<Resultstruct> return_vector(targets_reached);
     int i = 0;
     for (int target : targets) {
         if (nodes[target].isSettledFw(dijkstra_number)) {
             //cout << "reached " << target << " max: " << targets_reached << endl;
-            std::vector<double> costs = nodes[target].getCostFw();
+            pair<double, double> costs = nodes[target].getCostFw();
             Resultstruct target_results;
             target_results.target = target;
-            target_results.traveltime = nodes[target].getCostFw()[0];
-            target_results.traveldistance = nodes[target].getCostFw()[1];
-            target_results.travel_time_var = nodes[target].getCostFw()[2];
-            target_results.cost_function_value = nodes[target].getCostFw()[3];
-
+            target_results.traveltime = nodes[target].getCostFw().first;
+            target_results.traveldistance = nodes[target].getCostFw().second;
             return_vector[i] = target_results;
             i++;
         }
@@ -369,7 +309,7 @@ std::vector<Resultstruct> Network::computeTravelCosts1toX(int start_node_index, 
     return return_vector;
 }
 
-int Network::computeTravelCosts1ToXpy(int start_node_index, int number_targets, int* targets, int* reached_targets, double* reached_target_tts, double* reached_target_dis, double time_range, int max_targets,string mode) {
+int Network::computeTravelCosts1ToXpy(int start_node_index, int number_targets, int* targets, int* reached_targets, double* reached_target_tts, double* reached_target_dis, double time_range, int max_targets) {
     vector<int> vec_targets(number_targets);
     for (int i = 0; i < number_targets;++i) {
         //cout << targets + i << " " << * (targets + i) << endl;
@@ -386,7 +326,7 @@ int Network::computeTravelCosts1ToXpy(int start_node_index, int number_targets, 
     return return_vector.size();
 }
 
-int Network::dijkstraForward(int start_node_index, double time_range, int max_targets,string mode) {
+int Network::dijkstraForward(int start_node_index, double time_range, int max_targets) {
     dijkstra_number++;
     priority_queue<pair<double, int>> pq = {};
 
@@ -394,7 +334,7 @@ int Network::dijkstraForward(int start_node_index, double time_range, int max_ta
 
     Node& start_node = nodes[start_node_index];
     start_node.setPrev(start_node_index);
-    start_node.setCostFw(std::vector<double>(4, 0.0));
+    start_node.setCostFw(pair<double, double>(0.0, 0.0));
     double current_cost = 0.0;
 
     pq.push(pair<double, int>(current_cost, start_node_index));
@@ -424,65 +364,30 @@ int Network::dijkstraForward(int start_node_index, double time_range, int max_ta
         if (current_node.mustStop() & (current_node.getIndex() != start_node_index)) {
             continue;
         }
-        dijkstraStepForward_(pq, current_node, -current_pair.first,mode);
+        dijkstraStepForward_(pq, current_node, -current_pair.first);
     
     }
     return targets_reached;
 }
 
-double Network::getEdgeCostValue(Edge& edge, string mode){
-    if (mode == "edge_tt"){
-        return edge.getTravelTime();
-    }
-    else if (mode == "distance") {
-        return edge.getTravelDistance();
-    }
-    else if (mode == "edge_var"){
-        return  edge.getTravelTimeVar();
-    }
-    else if (mode == "edge_cfv"){
-        return edge.getCostFunctionValue();
-    }
-}
-
-double Network::getCostValue(std::vector<double> cost_vector, string mode){
-    if (mode == "edge_tt"){
-        return cost_vector[0];
-    }
-    else if (mode == "distance") {
-        return cost_vector[1];
-    }
-    else if (mode == "edge_var"){
-        return cost_vector[2];
-    }
-    else if (mode == "edge_cfv"){
-        return cost_vector[3];
-    }
-}
-
-void Network::dijkstraStepForward_(std::priority_queue<std::pair<double, int>>& current_pq, Node& current_node, double current_cost,string mode) {
+void Network::dijkstraStepForward_(std::priority_queue<std::pair<double, int>>& current_pq, Node& current_node, double current_cost) {
     double next_cost;
     //cout << "djijstra step " << current_node.getStr() << endl;
     for (Edge& edge : current_node.getOutgoingEdges()) {
         Node& next_node = nodes[edge.getEndNode()];
         //cout << current_node.getStr() << " " << next_node.getStr() << endl;
         if (!next_node.isSettledFw(dijkstra_number)) {
-            next_cost = this->getEdgeCostValue(edge,mode) + current_cost;
-           //cout << "Current Node: " <<current_node.getIndex();
-           //cout << " Next Node: " << next_node.getIndex() << " Cost: " << next_cost << endl;
+            next_cost = current_cost + edge.getTravelTime();
             if (!next_node.isVisitedFw(dijkstra_number)) {
                 next_node.setPrev(current_node.getIndex());
-                //next_node.setCostFw(pair<double, double>(next_cost, current_node.getCostFw().second + edge.getTravelDistance()));std::vector<double>(4, 0.0)
-                std::vector<double> next_cost_vector = {current_node.getCostFw()[0]+edge.getTravelTime(),current_node.getCostFw()[1]+edge.getTravelDistance(),current_node.getCostFw()[2]+edge.getTravelTimeVar(),current_node.getCostFw()[3]+edge.getCostFunctionValue()};
-                next_node.setCostFw(next_cost_vector);
+                next_node.setCostFw(pair<double, double>(next_cost, current_node.getCostFw().second + edge.getTravelDistance()));
                 next_node.setVisitFw(dijkstra_number);
                 current_pq.push(pair<double, int>(-next_cost, next_node.getIndex()));
             }
             else {
-                if (this->getCostValue(next_node.getCostFw(),mode) > next_cost) {
+                if (next_node.getCostFw().first > next_cost) {
                     next_node.setPrev(current_node.getIndex());
-                    std::vector<double> next_cost_vector = {current_node.getCostFw()[0]+edge.getTravelTime(),current_node.getCostFw()[1]+edge.getTravelDistance(),current_node.getCostFw()[2]+edge.getTravelTimeVar(),current_node.getCostFw()[3]+edge.getCostFunctionValue()};
-                    next_node.setCostFw(next_cost_vector);
+                    next_node.setCostFw(pair<double, double>(next_cost, current_node.getCostFw().second + edge.getTravelDistance()));
                     current_pq.push(pair<double, int>(-next_cost, next_node.getIndex()));
                 }
             }
@@ -492,22 +397,20 @@ void Network::dijkstraStepForward_(std::priority_queue<std::pair<double, int>>& 
     }
 }
 
-std::vector<Resultstruct> Network::computeTravelCostsXto1(int start_node_index, const std::vector<int>& targets, double time_range, int max_targets,string mode) {
+std::vector<Resultstruct> Network::computeTravelCostsXto1(int start_node_index, const std::vector<int>& targets, double time_range, int max_targets) {
     setTargets(targets);
 
-    int targets_reached = dijkstraBackward(start_node_index, time_range = time_range, max_targets = max_targets, mode);
-    //cout <<"cpp targets reached: "<< targets_reached << endl;
+    int targets_reached = dijkstraBackward(start_node_index, time_range = time_range, max_targets = max_targets);
+
     vector<Resultstruct> return_vector(targets_reached);
     int i = 0;
     for (int target : targets) {
         if (nodes[target].isSettledBw(dijkstra_number)) {
-            std::vector<double> costs = nodes[target].getCostBw();
+            pair<double, double> costs = nodes[target].getCostBw();
             Resultstruct target_results;
             target_results.target = target;
-            target_results.traveltime = nodes[target].getCostBw()[0];
-            target_results.traveldistance = nodes[target].getCostBw()[1];
-            target_results.travel_time_var = nodes[target].getCostBw()[2];
-            target_results.cost_function_value = nodes[target].getCostBw()[3];
+            target_results.traveltime = nodes[target].getCostBw().first;
+            target_results.traveldistance = nodes[target].getCostBw().second;
             return_vector[i] = target_results;
             i++;
         }
@@ -516,26 +419,24 @@ std::vector<Resultstruct> Network::computeTravelCostsXto1(int start_node_index, 
     return return_vector;
 }
 
-int Network::computeTravelCostsXTo1py(int start_node_index, int number_targets, int* targets, int* reached_targets, double* reached_target_tts, double* reached_target_dis,double* reached_target_var,double* reached_target_cfv, double time_range, int max_targets,string mode) {
+int Network::computeTravelCostsXTo1py(int start_node_index, int number_targets, int* targets, int* reached_targets, double* reached_target_tts, double* reached_target_dis, double time_range, int max_targets) {
     vector<int> vec_targets(number_targets);
     for (int i = 0; i < number_targets;++i) {
         //cout << targets + i << " " << * (targets + i) << endl;
         vec_targets[i] = *(targets + i);
     }
 
-    vector<Resultstruct> return_vector = computeTravelCostsXto1(start_node_index, vec_targets, time_range = time_range, max_targets = max_targets, mode);
+    vector<Resultstruct> return_vector = computeTravelCostsXto1(start_node_index, vec_targets, time_range = time_range, max_targets = max_targets);
 
     for (unsigned int i = 0; i < return_vector.size(); ++i) {
         *(reached_targets + i) = return_vector[i].target;
         *(reached_target_tts + i) = return_vector[i].traveltime;
         *(reached_target_dis + i) = return_vector[i].traveldistance;
-        *(reached_target_var + i) = return_vector[i].travel_time_var;
-        *(reached_target_cfv + i) = return_vector[i].cost_function_value;
     }
     return return_vector.size();
 }
 
-int Network::dijkstraBackward(int start_node_index, double time_range, int max_targets,string mode) {
+int Network::dijkstraBackward(int start_node_index, double time_range, int max_targets) {
     dijkstra_number++;
     priority_queue<pair<double, int>> pq = {};
 
@@ -543,7 +444,7 @@ int Network::dijkstraBackward(int start_node_index, double time_range, int max_t
 
     Node& start_node = nodes[start_node_index];
     start_node.setNext(start_node_index);
-    start_node.setCostBw(std::vector<double>{0.0,0.0,0.0,0.0});
+    start_node.setCostBw(pair<double, double>(0.0, 0.0));
     double current_cost = 0.0;
 
     pq.push(pair<double, int>(current_cost, start_node_index));
@@ -576,33 +477,30 @@ int Network::dijkstraBackward(int start_node_index, double time_range, int max_t
             continue;
         }
         //cout << "dijkstra  " << current_node.getStr() << endl;
-        dijkstraStepBackward_(pq, current_node, -current_pair.first,mode);
+        dijkstraStepBackward_(pq, current_node, -current_pair.first);
 
     }
     return targets_reached;
 }
 
-void Network::dijkstraStepBackward_(std::priority_queue<std::pair<double, int>>& current_pq, Node& current_node, double current_cost,string mode) {
+void Network::dijkstraStepBackward_(std::priority_queue<std::pair<double, int>>& current_pq, Node& current_node, double current_cost) {
     double next_cost;
     //cout << "djijstra step " << current_node.getStr() << endl;
     for (Edge& edge : current_node.getIncomingEdges()) {
         Node& next_node = nodes[edge.getStartNode()];
         //cout << current_node.getStr() << " " << next_node.getStr() << endl;
         if (!next_node.isSettledBw(dijkstra_number)) {
-            //next_cost = current_cost + edge.getCostFunctionValue();
-            next_cost = this->getEdgeCostValue(edge,mode) + current_cost;
+            next_cost = current_cost + edge.getTravelTime();
             if (!next_node.isVisitedBw(dijkstra_number)) {
                 next_node.setNext(current_node.getIndex());
-                std::vector<double> next_cost_vector = {current_node.getCostBw()[0]+edge.getTravelTime(),current_node.getCostBw()[1]+edge.getTravelDistance(),current_node.getCostBw()[2]+edge.getTravelTimeVar(),current_node.getCostBw()[3]+edge.getCostFunctionValue()};
-                next_node.setCostBw(next_cost_vector);
+                next_node.setCostBw(pair<double, double>(next_cost, current_node.getCostBw().second + edge.getTravelDistance()));
                 next_node.setVisitBw(dijkstra_number);
                 current_pq.push(pair<double, int>(-next_cost, next_node.getIndex()));
             }
             else {
-                if (this->getCostValue(next_node.getCostBw(),mode) > next_cost)  {
+                if (next_node.getCostBw().first > next_cost) {
                     next_node.setNext(current_node.getIndex());
-                    std::vector<double> next_cost_vector = {current_node.getCostBw()[0]+edge.getTravelTime(),current_node.getCostBw()[1]+edge.getTravelDistance(),current_node.getCostBw()[2]+edge.getTravelTimeVar(),current_node.getCostBw()[3]+edge.getCostFunctionValue()};
-                    next_node.setCostBw(next_cost_vector);
+                    next_node.setCostBw(pair<double, double>(next_cost, current_node.getCostBw().second + edge.getTravelDistance()));
                     current_pq.push(pair<double, int>(-next_cost, next_node.getIndex()));
                 }
             }
@@ -612,26 +510,21 @@ void Network::dijkstraStepBackward_(std::priority_queue<std::pair<double, int>>&
     }
 }
 
-void Network::computeTravelCosts1To1py(int start_node_index, int end_node_index, string mode, double* tt, double* dis, double* var, double* cfv) {
+void Network::computeTravelCosts1To1py(int start_node_index, int end_node_index, double* tt, double* dis) {
     int meeting_node = 1;
-    //cout << "-CPP- " <<endl;
-    //cout << start_node_index << " --> " <<end_node_index << " mode: " <<mode <<endl;
-    std::tuple<double, double, double, double> result = dijkstraBidirectional(start_node_index, end_node_index,mode, &meeting_node);
-    *tt = std::get<0>(result);
-    *dis = std::get<1>(result);
-    *var = std::get<2>(result);
-    *cfv = std::get<3>(result);
+    pair<double, double> result = dijkstraBidirectional(start_node_index, end_node_index, &meeting_node);
+    *tt = result.first;
+    *dis = result.second;
 }
 
-std::tuple<double, double, double, double> Network::dijkstraBidirectional(int start_node_index, int end_node_index,string mode, int* meeting_node_index) {
+pair<double, double> Network::dijkstraBidirectional(int start_node_index, int end_node_index, int* meeting_node_index) {
     dijkstra_number++;
     *meeting_node_index = -1;
 
     priority_queue<pair<double, int>> fw_pq = {};
     Node& start_node = nodes[start_node_index];
     start_node.setPrev(start_node_index);
-    //start_node.setCostFw(pair<double, double>(0.0, 0.0));
-    start_node.setCostFw(std::vector<double>(4, 0.0));
+    start_node.setCostFw(pair<double, double>(0.0, 0.0));
     start_node.setVisitFw(dijkstra_number);
     double current_fw_cost = 0.00000001;
     fw_pq.push(pair<double, int>(current_fw_cost, start_node_index));
@@ -639,7 +532,7 @@ std::tuple<double, double, double, double> Network::dijkstraBidirectional(int st
     priority_queue<pair<double, int>> bw_pq = {};
     Node& end_node = nodes[end_node_index];
     end_node.setNext(end_node_index);
-    end_node.setCostBw(std::vector<double>(4, 0.0));
+    end_node.setCostBw(pair<double, double>(0.0, 0.0));
     end_node.setVisitBw(dijkstra_number);
     double current_bw_cost = 0.0000001;
     bw_pq.push(pair<double, int>(current_bw_cost, end_node_index));
@@ -671,7 +564,7 @@ std::tuple<double, double, double, double> Network::dijkstraBidirectional(int st
                 break;
             }
             //cout << "forward " << current_pair.first << " " << current_pair.second << endl;
-            dijkstraStepForward_(fw_pq, current_node, -current_pair.first,mode);
+            dijkstraStepForward_(fw_pq, current_node, -current_pair.first);
         }
         else if (current_bw_cost >= -0.9) {
             if (bw_pq.empty()) {
@@ -696,22 +589,17 @@ std::tuple<double, double, double, double> Network::dijkstraBidirectional(int st
                 break;
             }
             //cout << "backward " << current_pair.first << " " << current_pair.second << endl;
-            dijkstraStepBackward_(bw_pq, current_node, -current_pair.first, mode);
+            dijkstraStepBackward_(bw_pq, current_node, -current_pair.first);
         }
         else {
             //cout << "TODO NO ROUTE FOUND!" << endl;
-            //return pair<double, double>(-1.0, -1.0);
-            return std::tuple<double, double, double, double>(-1.0,-1.0,-1.0,-1.0);
+            return pair<double, double>(-1.0, -1.0);
         }
     }
     //cout << "common node found: " << common_node << endl;
-    //pair<double, double> best_value;
-    std::vector<double> best_value(4);
-    for (int i = 0; i < 4; ++i) {
-        best_value[i] = nodes[common_node].getCostFw()[i] + nodes[common_node].getCostBw()[i];
-    }
-    //best_value.first = nodes[common_node].getCostFw().first + nodes[common_node].getCostBw().first;
-    //best_value.second = nodes[common_node].getCostFw().second + nodes[common_node].getCostBw().second;
+    pair<double, double> best_value;
+    best_value.first = nodes[common_node].getCostFw().first + nodes[common_node].getCostBw().first;
+    best_value.second = nodes[common_node].getCostFw().second + nodes[common_node].getCostBw().second;
     *meeting_node_index = common_node;
     while (!fw_pq.empty()) {
         pair<double, int> current_pair = fw_pq.top();
@@ -723,15 +611,11 @@ std::tuple<double, double, double, double> Network::dijkstraBidirectional(int st
             }
         }
         if (current_node.isVisitedBw(dijkstra_number)) {
-            //double tt = current_node.getCostFw().first + current_node.getCostBw().first;
-            //double tt = current_node.getCostFw()[0] + current_node.getCostBw()[0];
-            double costValue = this->getCostValue(current_node.getCostFw(),mode) + this->getCostValue(current_node.getCostBw(),mode);         
-            
-            if (costValue < this->getCostValue(best_value,mode)) {
+            double tt = current_node.getCostFw().first + current_node.getCostBw().first;
+            if (tt < best_value.first) {
                 //cout << "rest a " << current_node.getIndex() << " " << tt << endl;
-                for (int i = 0; i < 4; ++i) {
-                    best_value[i] = current_node.getCostFw()[i] + current_node.getCostBw()[i];
-                    }
+                best_value.first = tt;
+                best_value.second = current_node.getCostFw().second + current_node.getCostBw().second;
                 *meeting_node_index = current_node.getIndex();
             }
         }
@@ -746,25 +630,21 @@ std::tuple<double, double, double, double> Network::dijkstraBidirectional(int st
             }
         }
         if (current_node.isVisitedFw(dijkstra_number)) {
-            //double tt = current_node.getCostFw().first + current_node.getCostBw().first;
-            double costValue = this->getCostValue(current_node.getCostFw(),mode) + this->getCostValue(current_node.getCostBw(),mode);
-            if (costValue < this->getCostValue(best_value,mode)) {
-                //cout << "rest a " << current_node.getIndex() << " " << tt << endl;
-                for (int i = 0; i < 4; ++i) {
-                    best_value[i] = current_node.getCostFw()[i] + current_node.getCostBw()[i];
-                    }
+            double tt = current_node.getCostFw().first + current_node.getCostBw().first;
+            if (tt < best_value.first) {
+                //cout << "rest b " << current_node.getIndex() << " " << tt << endl;
+                best_value.first = tt;
+                best_value.second = current_node.getCostFw().second + current_node.getCostBw().second;
                 *meeting_node_index = current_node.getIndex();
             }
         }
-        }
-    std::tuple<double, double, double, double> return_value;
-    return_value = std::make_tuple(best_value[0], best_value[1], best_value[2], best_value[3]);
-    return return_value;
     }
+    return best_value;
+}
 
-int Network::computeRouteSize1to1(int start_node_index, int end_node_index,string mode) {
+int Network::computeRouteSize1to1(int start_node_index, int end_node_index) {
     int meeting_node_index = -1;
-    std::tuple<double, double, double, double> result = dijkstraBidirectional(start_node_index, end_node_index,mode, &meeting_node_index);
+    pair<double, double> result = dijkstraBidirectional(start_node_index, end_node_index, &meeting_node_index);
     if (meeting_node_index >= 0) {
         _last_found_route_fw = {};
         _last_found_route_fw.push_back(meeting_node_index);
