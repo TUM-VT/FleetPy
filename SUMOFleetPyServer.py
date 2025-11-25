@@ -4,11 +4,7 @@ from abc import abstractmethod
 import os, sys
 
 # Fix libsumo DLL loading issue by adding SUMO bin directory to DLL search path
-#sumo_bin = r"C:\Program Files (x86)\Eclipse\Sumo\bin"
-#if hasattr(os, 'add_dll_directory'):
-    #os.add_dll_directory(sumo_bin)
-
-import libsumo as traci
+import traci ##TODO: Change to Libsumo for Linux server
 import pandas as pd
 import csv
 import logging 
@@ -127,7 +123,8 @@ class SUMOFleetPyServer():
             scenario_cfgs[i] = constant_cfg + scenario_cfg
             
         scenario_cfgs[0][G_SIM_START_TIME] += scenario_cfgs[0].get(G_SUMO_SIM_TIME_OFFSET, 0)
-
+        
+        print(scenario_cfgs[0])
         SF = load_simulation_environment(scenario_cfgs[0])
         
 
@@ -270,7 +267,6 @@ class SUMOFleetPyServer():
         self._finalize_setup()
     
     def run_fp_simulation(self):
-        #run_scenarios(constant_config_file=self.fp_constant_config_path, scenario_file=self.fp_scenario_config_path, n_parallel_sim=1, n_cpu_per_sim=1, evaluate=1, log_level="info", continue_next_after_error=True)
         constant_cfg = config.ConstantConfig(self.fp_constant_config_path)
         scenario_cfgs = config.ScenarioConfig(self.fp_scenario_config_path)
 
@@ -294,9 +290,7 @@ class SUMOFleetPyServer():
 
     # combine constant and scenario parameters into verbose scenario parameters
         for i, scenario_cfg in enumerate(scenario_cfgs):
-            scenario_cfgs[i] = constant_cfg + scenario_cfg
-        
-        print(scenario_cfgs)
+            scenario_cfgs[i] = constant_cfg + scenario_cfg       
         SF = load_simulation_environment(scenario_cfgs[0])
         self.fp_sim_env = SF
         resultsPath = self.fp_sim_env.dir_names[G_DIR_OUTPUT]
@@ -318,12 +312,7 @@ class SUMOFleetPyServer():
         sim_time_offset = self.fp_sim_env.scenario_parameters.get(G_SUMO_SIM_TIME_OFFSET, 0)
         end_time = self.fp_sim_env.scenario_parameters[G_SIM_END_TIME]
         fp_time_step = self.fp_sim_env.scenario_parameters.get(G_SIM_TIME_STEP, 1)
-
-        ##tt-retrieval (old)
-        veh_edge_start_time_count = {}  #{(veh_id,edge,start_time):time_counter}
-        veh_start_time_dict ={} #{(veh_id,start_time_on_current_edge)}
-        veh_edge_dict ={} # {(veh_id,sim_time):edge_id,..}
-        
+       
         ##tt-retrieval (new)
         sim_pos_dict = {} # {sim_time:{veh_id:(edge,start_time_on_this_edge)}}
         res_list = [] # [(edge_id, start_time, end_time, veh_id)]
@@ -391,10 +380,7 @@ class SUMOFleetPyServer():
                 time_df = self._process_tt_data(res_list=res_list,sim_time=sim_time)
                 time_update_dict = dict(zip(zip(list(time_df["from_node"]),list(time_df["to_node"])),zip(list(time_df["edge_tt"]),list(time_df["edge_var"]))))
                 self._save_tt_to_csv(time_df, sim_time)
-                # Clear data structures to prevent memory accumulation
-                veh_edge_start_time_count ={}
-                veh_start_time_dict ={}
-                veh_edge_dict ={}
+
                 res_list = []  # Clear res_list to prevent unlimited growth
                 if self.g_update_fleetsim_traveltimes==True:
                     self.fp_sim_env.update_network_travel_times(time_update_dict, sim_time)
@@ -472,8 +458,8 @@ class SUMOFleetPyServer():
                                 LOG.warning(f'Route of {sumo_vid} is not valid') # No occurence
                                 is_valid_route = False
                             else:
-                                traci.vehicle.setParameter(objID=sumo_vid,param="cleg_dest",value=sumoRoute[-1])
-                                traci.vehicle.setParameter(objID=sumo_vid,param="cleg",value=sumoRoute)
+                                traci.vehicle.setParameter(objectID=sumo_vid, key="cleg_dest", value=sumoRoute[-1])
+                                traci.vehicle.setParameter(objectID=sumo_vid, key="cleg", value=sumoRoute)
                         except:
                             LOG.warning(f'Route of {sumo_vid} could not be set to: {sumoRoute}')
                             #print(f'Route of {sumo_vid} could not be set to: {sumoRoute}')
@@ -859,20 +845,8 @@ if __name__ == "__main__":
 
 
     SUMOFleetPyCoupling = SUMOFleetPyServer(constant_config_path=constant_config_path, scenario_config_path=scenario_config_path, sumo_config=sumo_config, sumoBinary=sumoBinary, log_level=log_level)
-    if SUMOFleetPyCoupling.sumo_sim == False:
-        SUMOFleetPyCoupling.run_fp_simulation()
-    else:
-        if SUMOFleetPyCoupling.sumo_sim == True:
-            import traci._simulation
-            import traci.constants as tc
-            #if sumoBinary == "sumo-gui":
-                #import traci
-           # else: 
-               # breakpoint()  
-                #import libsumo as traci
-                #print("No GUI Needed. Using libsumo instead of traci for better performance.")
-        SUMOFleetPyCoupling.setup_fleetsimulation()
-        SUMOFleetPyCoupling.setup_traci()
-        SUMOFleetPyCoupling.setup_network_translation()
-        SUMOFleetPyCoupling.setup_hybrid_router()
-        SUMOFleetPyCoupling.run_coupled_simulation()
+    SUMOFleetPyCoupling.setup_fleetsimulation()
+    SUMOFleetPyCoupling.setup_traci()
+    SUMOFleetPyCoupling.setup_network_translation()
+    SUMOFleetPyCoupling.setup_hybrid_router()
+    SUMOFleetPyCoupling.run_coupled_simulation()
