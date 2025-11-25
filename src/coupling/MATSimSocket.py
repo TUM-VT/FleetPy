@@ -47,6 +47,9 @@ class MATSimSocket:
         self.socket = self.context.socket(zmq.REQ)
         self.socket.connect(f"tcp://{self.server_ip}:{self.server_port}")
         
+        # Set a timeout for recv (5000 milliseconds = 5 seconds)
+        self.socket.setsockopt(zmq.RCVTIMEO, STAT_INT * 1000)
+        
         # build list of operator dictionaries  # TODO: this could be eliminated with a new YAML-based config system
         self.list_op_dicts = build_operator_attribute_dicts(scenario_parameters, scenario_parameters[G_NR_OPERATORS],
                                                                               prefix="op_")
@@ -133,14 +136,16 @@ class MATSimSocket:
             await_response = True
             while await_response:
                 # listen to server connection
-                byte_stream_msg = self.socket.recv()
-                time_now = datetime.datetime.now()
-                if time_now - self.last_stat_report_time > datetime.timedelta(seconds=STAT_INT):
-                    self.last_stat_report_time = time_now
+                try:
+                    byte_stream_msg = self.socket.recv()
+                except zmq.Again as e:
+                    time_now = datetime.datetime.now()
+                    prt_str = f"{time_now}: no message received since {self.last_stat_report_time} \n" + "-" * 20 + "\n"
                     if self.log_communication:
-                        prt_str = f"time:{time_now}\ncurrent_msg:{current_msg}\nbyte_stream_msg:{byte_stream_msg}\n" \
-                                  + "-" * 20 + "\n"
                         self.log_com(prt_str)
+                    LOG.warning(prt_str)
+                    continue
+                self.last_stat_report_time = datetime.datetime.now()
                 if not byte_stream_msg:
                     continue
                 full_msg = byte_stream_msg.decode(ENCODING)
