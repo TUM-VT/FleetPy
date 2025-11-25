@@ -58,7 +58,7 @@ class NetworkBasicCpp(NetworkBasic):
         """
         loads new travel time files for scenario_time
         """
-        super().load_tt_file(scenario_time)
+        super().load_tt_file(scenario_time, ext_path=ext_path)
         if ext_path is not None:
             tt_file = ext_path
             self.cpp_router.updateEdgeTravelTimes(tt_file.encode())
