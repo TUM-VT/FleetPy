@@ -15,14 +15,6 @@ import xml.etree.ElementTree as ET
 
 py_path = pathlib.Path(__file__)
 
-#SELECTED_SCENARIOS = [360,361,366,367,372,373,378,379,384,385]
-SELECTED_SCENARIOS = [390,391,392,393,396,397,398,399,402,403,404,405,408,409,410,411]
-SELECTED_SCENARIOS = [438,439,440,444,445,446,450,451,452,456,457,458,462,463,464]
-
-STUDY_NAME = "fleetpy_sumo_coupling_in"
-PROCESS_COUNT = 3
-SIM_NETWORK_NAME = "sumo_in"
-
 def get_current_max_key(FP_path):
     filenames = os.listdir(FP_path/"studies"/STUDY_NAME/"scenarios")
     keys = [filename.split("_")[0] for filename in filenames]
@@ -32,8 +24,9 @@ def get_current_max_key(FP_path):
 
 class SimulationRunner:
 
-    def __init__(self,selected_scenarios,study_name,process_count,sim_network_name):
+    def __init__(self,selected_scenarios,study_name,sim_network_name,process_count):
         self.selected_scenarios = selected_scenarios
+        self.sim_network_name = sim_network_name
         self.study_name = study_name
         self.process_count = process_count
         self.py_path = pathlib.Path(__file__).resolve()
@@ -41,46 +34,41 @@ class SimulationRunner:
         sc_config = sc_config.set_index('simulation_index')
         self.sc_config = sc_config
         self.sc_config_file_dict = {}
-        self.sim_network_name = sim_network_name
         self.res_dir = py_path.parent / "studies" / self.study_name / "results"
+        print(sc_config.describe())
+        print(sc_config.keys())
+
 
     def create_sc_config_files(self):
         for sc_index, row in self.sc_config.iterrows():
             sc_df = pd.DataFrame()
-            scenario_name = f'{str(sc_index).zfill(3)}_{row["network_name"]}_{row["SAV_demand_ratio"]}_{row["sim_env"]}'
-            p_cstr_dt = row['p_cstr_dt'] if row['p_cstr_dt'] is not None else 0
-            p_cstr_wt = row['p_cstr_wt'] if row['p_cstr_wt'] is not None else 0
-            sumo_statistics_interval = (
-                int(row['sumo_statistics_interval']) 
-                if not pd.isna(row['sumo_statistics_interval']) 
-                else 24 * 3600
-)           
+            scenario_name = f'{str(sc_index).zfill(3)}_{row["network_name"]}_{row["MOD_demand_subset"]}_{row["sim_env"]}'
+            p_cstr_dt = row.get('p_cstr_dt') if row.get('p_cstr_dt') is not None else 0
+            p_cstr_wt = row.get('p_cstr_wt') if row.get('p_cstr_wt') is not None else 0
+           
             sc_df["scenario_name"] = [scenario_name]
             sc_df["op_module"] = ["PoolingIRSOnly"]
-            sc_df['rq_file'] = [f"{row['simulation_network']}_s_{str(row['random_seed']).zfill(2)}_{row['SAV_demand_ratio']}.csv"]
-            sc_df['demand_name'] = [f"{row['simulation_network']}_s_{str(row['random_seed']).zfill(2)}_{row['SAV_demand_ratio']}"]
+            sc_df['rq_file'] = [f"{row['network_name']}_s_{str(row['random_seed']).zfill(2)}_{row['MOD_demand_subset']}.csv"]
+            sc_df['demand_name'] = [f"{row['network_name']}_s_{str(row['random_seed']).zfill(2)}_{row['MOD_demand_subset']}"]
             sc_df['op_fleet_composition'] = [f"{row['vehtype']}:{row['fleet_size']}"]
-            sc_df['op_init_veh_distribution'] = [row['op_init_veh_distribution']]
             sc_df['network_type'] = [row['network_type']]
-            sc_df['op_vr_control_func_dict'] = [f"func_key:{row['objective_function']};vot:{row['vot']};vor:{row['vor']};p_cstr_dt:{p_cstr_dt};p_cstr_wt:{p_cstr_wt}"]
+            sc_df['op_vr_control_func_dict'] = [f"func_key:{row['objective_function']};vot:{row.get('vot')};vor:{row.get('vor')};p_cstr_dt:{p_cstr_dt};p_cstr_wt:{p_cstr_wt}"]
             sc_df['sim_env'] = [row['sim_env']]
             sc_df['network_name'] = [row['network_name']]
-            sc_df['start_time'] = [int(row['start_time'])]
+            sc_df['start_time'] = [int(row['start_time'])]  
             sc_df['end_time'] = [row['end_time']]
             sc_df['evaluation_int_start'] = [int(row['evaluation_int_start'])]
             sc_df['evaluation_int_end'] = [int(row['evaluation_int_end'])]
-            sc_df['SAV_demand_ratio'] = [row['SAV_demand_ratio']]
-            sc_df['sumo_statistics_interval'] = [sumo_statistics_interval]
-            sc_df['sumo_fco_vehicles'] = [row['sumo_fco_vehicles']]
-            sc_df['op_routing_mode'] = [row['op_routing_mode']]
+            sc_df['MOD_demand_subset'] = [row['MOD_demand_subset']]
+            sc_df['t_update'] = [int(row['t_update']) if not pd.isna(row['t_update']) else 24 * 3600]
+            sc_df['f_pv,pd'] = [row['f_pv,pd'] if row['f_pv,pd'] is not None else 0]
             sc_df['random_seed'] = [row['random_seed']]
             sc_df["rerouting_sc"] = [row["rerouting_sc"]]
-            sc_df["sumo_sim"] = [int(row["sumo_sim"])]
             sc_df["hybrid_router"] = [int(row["hybrid_router"])]
             sc_df["p_opt"] = [float(row["p_opt"])]
 
             self.sc_config_file_dict.update({sc_index:sc_df.squeeze()})
-            sc_df.to_csv(py_path.parent/"studies"/STUDY_NAME/"scenarios"/f"{scenario_name}.csv", index=False)
+            sc_df.to_csv(py_path.parent/"studies"/self.study_name/"scenarios"/f"{scenario_name}.csv", index=False)
 
     def create_rerouting_xml_files(self):
         rerouting_cfg_path = self.py_path.parent.parent / "fleetpy_coupling" / "Simulation" / self.sim_network_name / "Rerouting" / "rerouting_scenarios.csv"
@@ -101,15 +89,15 @@ class SimulationRunner:
 
 
     def run_fleetpy_sc(self,sc_index):
-        SAV_demand_ratio = float(self.sc_config_file_dict[sc_index].get("SAV_demand_ratio"))
+        MOD_demand_subset = float(self.sc_config_file_dict[sc_index].get("MOD_demand_subset"))
         if self.sc_config_file_dict[sc_index].get("rerouting_sc") == None or math.isnan(self.sc_config_file_dict[sc_index].get("rerouting_sc")):
-            sumocfg_path = self.py_path.parent.parent/"fleetpy_coupling"/"Simulation"/self.sim_network_name/f"{self.sim_network_name}_s_{str(self.sc_config_file_dict[sc_index]['random_seed']).zfill(2)}_{round(SAV_demand_ratio,2)}.sumocfg"
+            sumocfg_path = self.py_path.parent.parent/"fleetpy_coupling"/"Simulation"/self.sim_network_name/f"{self.sim_network_name}_s_{str(self.sc_config_file_dict[sc_index]['random_seed']).zfill(2)}_{round(MOD_demand_subset,2)}.sumocfg"
         else:
             rerouting_sc = self.sc_config_file_dict[sc_index].get("rerouting_sc")
 
             rerouting_sc = str(int(rerouting_sc))
             #rerouting_sc = str(int(self.sc_config_file_dict[sc_index].get("rerouting_sc").round()))
-            sumocfg_path = self.py_path.parent.parent/"fleetpy_coupling"/"Simulation"/self.sim_network_name/f"{self.sim_network_name}_s_{str(self.sc_config_file_dict[sc_index]['random_seed']).zfill(2)}_{round(SAV_demand_ratio,2)}_r_{rerouting_sc.zfill(3)}.sumocfg"
+            sumocfg_path = self.py_path.parent.parent/"fleetpy_coupling"/"Simulation"/self.sim_network_name/f"{self.sim_network_name}_s_{str(self.sc_config_file_dict[sc_index]['random_seed']).zfill(2)}_{round(MOD_demand_subset,2)}_r_{rerouting_sc.zfill(3)}.sumocfg"
 
         
         command = [
@@ -123,15 +111,9 @@ class SimulationRunner:
         ]
        # try:
         result = subprocess.run(command)
-        #result = subprocess.run(command, capture_output=True, text=True)
-            #print(f"Process ID {multiprocessing.current_process().pid} - Output:", result.stdout)
-            #print(f"Process ID {multiprocessing.current_process().pid} - Errors:", result.stderr)
-       # except subprocess.CalledProcessError as e:
-           # print(f"Process ID {multiprocessing.current_process().pid} - Command failed with error:", e)
 
     def run_in_parallel(self):
         print(f"Running {sim_runner.selected_scenarios} on {sim_runner.process_count} processes in paralell.")
-
         # Create a pool of workers and execute the function in parallel
         with multiprocessing.Pool(self.process_count) as pool:
             pool.map(self.run_fleetpy_sc,self.selected_scenarios)  # Mapping the function to run across multiple processes
@@ -181,17 +163,15 @@ if __name__ == "__main__":
     parser.add_argument("--scenarios", "--sc", type=lambda s: [int(item) for item in s.split(',')], help="List of scenario IDs", default=None)
     parser.add_argument('--study_name', type=str, default=None, help='Study name')
     parser.add_argument('--processes',"--p", type=int, default=None, help='Number of Processes')
-    parser.add_argument('--sim_network_name', type=int, default=None, help='Simulation Network Name')
+    parser.add_argument('--sim_network_name', type=str, default=None, help='Simulation Network Name')
     parser.add_argument('--sc_from', type=int, default=None, help='From Scenario...')
     parser.add_argument('--sc_to', type=int, default=None, help='To Scenario... (including)')
+    parser.add_argument('--fp_path ', type=str, default=str(py_path.parent), help='Path to FleetPy repository')
+    parser.add_argument('--fp_coupling_path ', type=str, default=str(py_path.parent.parent / "fleetpy_coupling"), help='Path to FleetPy Coupling repository')
     args = parser.parse_args()
-    study_name = STUDY_NAME if args.study_name is None else args.study_name
-    selected_scenarios = SELECTED_SCENARIOS if args.scenarios is None else args.scenarios
-    selected_scenarios =list(range(args.sc_from,args.sc_to+1)) if args.sc_from is not None and args.sc_to is not None else selected_scenarios
-    process_count = PROCESS_COUNT if args.processes is None else args.processes
-    sim_network_name = SIM_NETWORK_NAME if args.sim_network_name is None else args.sim_network_name
-
-    sim_runner = SimulationRunner(selected_scenarios=selected_scenarios,study_name=study_name,process_count=process_count,sim_network_name=sim_network_name)
+    
+    selected_scenarios =list(range(args.sc_from,args.sc_to+1)) if args.sc_from is not None and args.sc_to is not None else args.scenarios
+    sim_runner = SimulationRunner(selected_scenarios=selected_scenarios,study_name=args.study_name,process_count=args.processes,sim_network_name=args.sim_network_name)
     sim_runner.create_sc_config_files()
     sim_runner.create_rerouting_xml_files()
     sim_runner.run_in_parallel()
