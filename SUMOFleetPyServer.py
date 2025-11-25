@@ -125,9 +125,7 @@ class SUMOFleetPyServer():
             
         scenario_cfgs[0][G_SIM_START_TIME] += scenario_cfgs[0].get(G_SUMO_SIM_TIME_OFFSET, 0)
         
-        print(scenario_cfgs[0])
-        SF = load_simulation_environment(scenario_cfgs[0])
-        
+        SF = load_simulation_environment(scenario_cfgs[0])      
 
         self.fp_scenario_config = scenario_cfgs[0]
 
@@ -382,8 +380,7 @@ class SUMOFleetPyServer():
    
         evaluation_start_time = int(self.fp_sim_env.scenario_parameters.get(G_EVAL_INT_START,self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME)))
         evaluation_end_time = int(self.fp_sim_env.scenario_parameters.get(G_EVAL_INT_END,self.fp_sim_env.scenario_parameters.get(G_SIM_END_TIME)))
-        
-        breakpoint()
+       
         eval.standard_evaluation(self.fp_sim_env.dir_names[G_DIR_OUTPUT], evaluation_start_time =evaluation_start_time, evaluation_end_time =evaluation_end_time, print_comments=True, dir_names_in = {})
         eval.evaluate_folder(self.fp_sim_env.dir_names[G_DIR_OUTPUT],evaluation_start_time = evaluation_start_time, evaluation_end_time = evaluation_end_time, print_comments = False)
         sys.stdout.flush()
@@ -619,8 +616,6 @@ class SUMOFleetPyServer():
         tt_df["edge_var"] = tt_df["edge_var"].fillna(0)
         return tt_df
     
-
-
     def _process_tt_data(self,res_list,sim_time):        
         tt_df = pd.DataFrame(res_list, columns=['veh_id','edge_id', 'starting_time', 'end_time'])
         if len(tt_df) == 0:
