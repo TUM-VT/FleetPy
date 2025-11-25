@@ -18,6 +18,7 @@ from torch_geometric.data import HeteroData
 # Local imports
 from gnn_project.config import Config
 from gnn_project.data_processing.data_processor import DataProcessor
+from gnn_project.defaults import *
 from gnn_project.dataloaders.normalization import (
     load_normalization_statistics,
     normalize_features,
@@ -35,7 +36,6 @@ class GNNDataLoader:
     This class handles loading of raw and pre-processed data, transforming it into
     a format suitable for graph neural networks, and managing data splits.
     """
-
     def __init__(self, config: Config) -> None:
         """Initialize the DataLoader.
 
@@ -54,6 +54,7 @@ class GNNDataLoader:
 
         # Store one-hot columns for each feature type after first transform (training)
         self._onehot_columns = {}
+        self._load_onehot_columns()
 
         # Set up normalization directory
         if self.enable_overwrite_data:
@@ -70,7 +71,7 @@ class GNNDataLoader:
         logger.debug(
             f"Train size: {train_size}, Val size: {val_size}, Test size: {test_size}")
 
-    def load_data(self) -> tuple[list[Any], Dict[str, List[Tensor]]]:
+    def load_data(self) -> tuple[list[Any], dict[str, Tensor] | None] | tuple[list[Any], dict[str, Tensor]]:
         """
         Load and process data from all scenarios in three steps:
         1. Load and process scenarios (no normalization)
@@ -88,7 +89,7 @@ class GNNDataLoader:
             train_size)
 
         # Step 2: If norm stats missing, compute them
-        norm_stats_exist = (self.config.norm_stats_dir / 'means.parquet').exists()
+        norm_stats_exist = (self.config.norm_stats_dir / MEANS_FILE).exists()
         if not norm_stats_exist:
             training_data = raw_scenario_data[:train_size]
             self._compute_global_statistics(training_data)
@@ -103,9 +104,9 @@ class GNNDataLoader:
         if self.config.overwrite_data:
             return None, None
         processed_dir = self.config.processed_dir / self.config.experiment_name
-        train_path = processed_dir / 'train_graphs.pt'
-        val_path = processed_dir / 'val_graphs.pt'
-        test_path = processed_dir / 'test_graphs.pt'
+        train_path = processed_dir / TRAIN_MASKS
+        val_path = processed_dir / VAL_MASKS
+        test_path = processed_dir / TEST_MASKS
         if train_path.exists() and val_path.exists() and test_path.exists():
             train_graphs = torch.load(train_path)
             val_graphs = torch.load(val_path)
@@ -123,12 +124,12 @@ class GNNDataLoader:
         train_masks[:train_len] = True
         val_masks[train_len:train_len+val_len] = True
         test_masks[train_len+val_len:] = True
-        masks = {"train_masks": train_masks, "val_masks": val_masks, "test_masks": test_masks}
+        masks = {TRAIN_MASKS: train_masks, VAL_MASKS: val_masks, TEST_MASKS: test_masks}
         return masks
 
     def _load_or_process_feature_dicts(self, train_size: int) -> tuple[List[Tuple[str, Dict]], List[int]]:
         """Load or process feature dicts for all scenarios."""
-        norm_stats_exist = (self.config.norm_stats_dir / 'means.parquet').exists()
+        norm_stats_exist = (self.config.norm_stats_dir / MEANS_FILE).exists()
         raw_scenario_data = []
         scenario_sizes = []
         for idx, scenario_path in enumerate(tqdm(self.scenario_paths, desc="Loading/Processing feature dicts")):
@@ -144,8 +145,8 @@ class GNNDataLoader:
             raw_scenario_data.append((scenario_name, data))
             # Count timesteps from request features
             req_key = self.config.request_features_key
-            if req_key in data and isinstance(data[req_key], pd.DataFrame) and 'timestep' in data[req_key].columns:
-                num_timesteps = max(data[req_key]['timestep']) + 1
+            if req_key in data and isinstance(data[req_key], pd.DataFrame) and TIMESTEP in data[req_key].columns:
+                num_timesteps = max(data[req_key][TIMESTEP]) + 1
             else:
                 num_timesteps = 1
             scenario_sizes.append(num_timesteps)
@@ -158,6 +159,7 @@ class GNNDataLoader:
             normalized_data = self._normalize_data(data)
             graphs = self._create_hetero_graphs(normalized_data)
             normalized_scenario_data.extend(graphs)
+
         masks = self._create_scenario_based_masks(
             scenario_sizes, shuffle=self.config.shuffle_scenarios)
         # Group graphs by split and save
@@ -165,25 +167,49 @@ class GNNDataLoader:
         val_graphs = []
         test_graphs = []
         for i, graph in enumerate(normalized_scenario_data):
-            if masks['train_masks'][i]:
+            if masks[TRAIN_MASKS][i]:
                 train_graphs.append(graph)
-            elif masks['val_masks'][i]:
+            elif masks[VAL_MASKS][i]:
                 val_graphs.append(graph)
-            elif masks['test_masks'][i]:
+            elif masks[TEST_MASKS][i]:
                 test_graphs.append(graph)
         processed_dir = self.config.processed_dir / self.config.experiment_name
         os.makedirs(processed_dir, exist_ok=True)
-        torch.save(train_graphs, processed_dir / 'train_graphs.pt')
-        torch.save(val_graphs, processed_dir / 'val_graphs.pt')
-        torch.save(test_graphs, processed_dir / 'test_graphs.pt')
+        torch.save(train_graphs, processed_dir / TRAIN_GRAPHS)
+        torch.save(val_graphs, processed_dir / VAL_GRAPHS)
+        torch.save(test_graphs, processed_dir / TEST_GRAPHS)
         return normalized_scenario_data, masks
+
+    def _save_onehot_columns(self) -> None:
+        """Save the one-hot columns mapping to a pickle file."""
+        save_path = os.path.join(
+            self.config.norm_stats_dir,
+            ONEHOT_COLS
+        )
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, 'wb') as f:
+            pickle.dump(self._onehot_columns, f)
+
+    def _load_onehot_columns(self) -> None:
+        """Load the one-hot columns mapping from a pickle file."""
+        load_path = os.path.join(
+            self.config.norm_stats_dir,
+            ONEHOT_COLS
+        )
+        if not os.path.exists(load_path):
+            return
+        try:
+            with open(load_path, 'rb') as f:
+                self._onehot_columns = pickle.load(f)
+        except Exception as e:
+            logger.error(f"Error loading one-hot columns: {e}")
 
     def _get_scenario_name(self, scenario_path: str) -> str:
         """Extract scenario name from path."""
         scenario_path = os.path.normpath(scenario_path)
         return os.path.basename(scenario_path)
 
-    def _process_raw_data(self, scenario_path: str, scenario_name: str, is_training: bool = False) -> List[Dict]:
+    def _process_raw_data(self, scenario_path: str, scenario_name: str, is_training: bool = False) -> dict:
         """Process raw data into graph format.
 
         Args:
@@ -201,6 +227,8 @@ class GNNDataLoader:
             train_data_dir, self.config, prefer_processed=prefer_processed)
         data = processor.process_data(scenario_name)
         data = self._encode_categorical_features(data, is_training=is_training)
+        if is_training:
+            self._save_onehot_columns()
         return data
             
 
@@ -217,8 +245,8 @@ class GNNDataLoader:
             self.config.norm_stats_dir)
         if normalization_stats is None:
             return data
-        means = normalization_stats['means']
-        stds = normalization_stats['stds']
+        means = normalization_stats[MEANS]
+        stds = normalization_stats[STDS]
         data_mappings = [
             (self.config.request_features_key, 'req_'),
             (self.config.vehicle_features_key, 'veh_'),
@@ -232,9 +260,9 @@ class GNNDataLoader:
 
             df = normalized[feature_key]
             feature_types = self._categorize_features(df)
-            for ftype, cols in feature_types.items():
-                if cols:
-                    logger.debug(f"{ftype.capitalize()} features: {cols}")
+            # for ftype, cols in feature_types.items():
+            #     if cols:
+            #         logger.debug(f"{ftype.capitalize()} features: {cols}")
             clean_prefix = prefix.replace('_', '')
             feature_means = {
                 k.replace(prefix, ''): v for k, v in means.items() if k.startswith(prefix)}
@@ -256,7 +284,6 @@ class GNNDataLoader:
 
         Args:
             normalized_data: Dictionary containing normalized dataframes for different feature types
-            scenario_name: Name of the scenario
 
         Returns:
             List of processed HeteroData objects
@@ -436,7 +463,7 @@ class GNNDataLoader:
             else:
                 self._set_empty_edge_features(graph, edge_type, feat_dim)
 
-    def _set_empty_edge_features(self, graph: HeteroData, edge_type: tuple, feat_dim: int) -> None:
+    def _set_empty_edge_features(self, graph: HeteroData, edge_type: tuple[str, str, str], feat_dim: int) -> None:
         """Set empty edge features for a given edge type.
         Args:
             graph: The HeteroData graph object
@@ -518,7 +545,7 @@ class GNNDataLoader:
                 if key in data_dict and isinstance(data_dict[key], pd.DataFrame):
                     collections[key].append(data_dict[key])
 
-        stats = {"means": {}, "stds": {}, "mins": {}, "maxs": {}}
+        stats = {MEANS: {}, STDS: {}, MINS: {}, MAXS: {}}
         for name, dfs in collections.items():
             if not dfs:
                 continue
@@ -537,11 +564,11 @@ class GNNDataLoader:
                 .replace(self.config.vehicle_request_graph_key, "vr_") \
                 .lower()
             cols = {col: f"{prefix}{col}" for col in cont}
-            stats["means"].update(df[cont].mean().rename(cols).to_dict())
-            stats["stds"].update(df[cont].std().replace(
+            stats[MEANS].update(df[cont].mean().rename(cols).to_dict())
+            stats[STDS].update(df[cont].std().replace(
                 0, 1.0).rename(cols).to_dict())
-            stats["mins"].update(df[cont].min().rename(cols).to_dict())
-            stats["maxs"].update(df[cont].max().rename(cols).to_dict())
+            stats[MINS].update(df[cont].min().rename(cols).to_dict())
+            stats[MAXS].update(df[cont].max().rename(cols).to_dict())
 
         for stat, values in stats.items():
             pd.DataFrame.from_dict(values, orient="index").to_parquet(
@@ -552,7 +579,7 @@ class GNNDataLoader:
         save_path = os.path.join(
             self.config.processed_dir,
             scenario_name,
-            'feature_dict.pkl'
+            FEATURE_DICT
         )
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         with open(save_path, 'wb') as f:
@@ -563,7 +590,7 @@ class GNNDataLoader:
         feature_path = os.path.join(
             self.config.processed_dir,
             scenario_name,
-            'feature_dict.pkl'
+            FEATURE_DICT
         )
         if not os.path.exists(feature_path):
             return None

@@ -1,13 +1,17 @@
+import logging
 import os
 import shutil
 import pandas as pd
 import numpy as np
+from pathlib import Path
+
+from gnn_project.defaults import *
 from gnn_project.config import Config as cfg
-import logging
 
 logger = logging.getLogger(__name__)
 
-def clean_normalization_directory(stats_dir: str) -> None:
+
+def clean_normalization_directory(stats_dir: Path) -> None:
     """
     Cleans the normalization statistics directory by removing existing files
     and recreating the directory if it doesn't exist.
@@ -20,7 +24,7 @@ def clean_normalization_directory(stats_dir: str) -> None:
     os.makedirs(stats_dir, exist_ok=True)
 
 
-def load_normalization_statistics(stats_dir: str) -> dict[str, dict]:
+def load_normalization_statistics(stats_dir: Path) -> dict[str, dict]:
     """
     Loads saved normalization statistics from parquet files.
 
@@ -32,10 +36,10 @@ def load_normalization_statistics(stats_dir: str) -> dict[str, dict]:
               The keys in these dictionaries include the feature type prefix (e.g., 'req_feature', 'veh_feature')
     """
     # Read parquet files and convert to dictionaries
-    means_df = pd.read_parquet(os.path.join(stats_dir, "means.parquet"))
-    stds_df = pd.read_parquet(os.path.join(stats_dir, "stds.parquet"))
-    mins_df = pd.read_parquet(os.path.join(stats_dir, "mins.parquet"))
-    maxs_df = pd.read_parquet(os.path.join(stats_dir, "maxs.parquet"))
+    means_df = pd.read_parquet(os.path.join(stats_dir, MEANS_FILE))
+    stds_df = pd.read_parquet(os.path.join(stats_dir, STDS_FILE))
+    mins_df = pd.read_parquet(os.path.join(stats_dir, MINS_FILE))
+    maxs_df = pd.read_parquet(os.path.join(stats_dir, MAXS_FILE))
 
     # Convert to dictionaries preserving the prefixed column names
     means = means_df.iloc[:, 0].to_dict()
@@ -43,7 +47,7 @@ def load_normalization_statistics(stats_dir: str) -> dict[str, dict]:
     mins = mins_df.iloc[:, 0].to_dict()
     maxs = maxs_df.iloc[:, 0].to_dict()
 
-    return {'means': means, 'stds': stds, 'mins': mins, 'maxs': maxs}
+    return {MEANS: means, STDS: stds, MINS: mins, MAXS: maxs}
 
 
 def get_feature_type(series: pd.Series, column_name: str = None) -> str:
@@ -61,21 +65,21 @@ def get_feature_type(series: pd.Series, column_name: str = None) -> str:
 
     # 1. Metadata columns (always exclude from normalization)
     metadata_patterns = [
-        'id$', 'timestep', 'source', 'target', cfg.label_key
+        f'{ID}$', TIMESTEP, SOURCE, TARGET, LABEL_KEY
     ]
     if column_name and any(re.search(pattern, column_name.lower()) for pattern in metadata_patterns):
         return 'metadata'
 
-    # 2. Binary indicators and flags
+    # 2. findicators and flags
     binary_patterns = [
-        'locked$', '^is_', 'feasibility', cfg.init_label_key
+        'locked$', '^is_', 'feasibility', INIT_LABEL_KEY
     ]
     if column_name and any(re.search(pattern, column_name.lower()) for pattern in binary_patterns):
         return 'binary'
 
     # 3. Categorical features (one-hot encoded or discrete classes)
     categorical_patterns = [
-        'status_[0-9]+$', 'type_[a-z]+$',  # one-hot encoded columns
+        f'{STATUS}_[0-9]+$', f'{TYPE}_[a-z]+$',  # one-hot encoded columns
     ]
     if column_name and any(re.search(pattern, column_name.lower()) for pattern in categorical_patterns):
         return 'categorical'
@@ -132,7 +136,7 @@ def normalize_features(df: pd.DataFrame,
     # Combine explicit exclude list with binary columns
     cols_to_normalize = [
         col for col in numeric_cols if col not in exclude_columns]
-    logger.debug(f"Columns to normalize: {cols_to_normalize} for {prefix}")
+    # logger.debug(f"Columns to normalize: {cols_to_normalize} for {prefix}")
 
     # Apply z-score normalization
     for col in cols_to_normalize:

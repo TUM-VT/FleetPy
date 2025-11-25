@@ -6,6 +6,7 @@ import pickle
 import shutil
 from collections import defaultdict
 from typing import Dict, List, Any, Optional
+from pathlib import Path
 
 # Third-party imports
 import networkx as nx
@@ -14,11 +15,12 @@ import pandas as pd
 # Local imports
 from gnn_project.config import Config
 from gnn_project.data_processing.utils import calculate_bearing, haversine_distance, is_peak_hour
+from gnn_project.defaults import *
 from src.misc.globals import G_TRAIN_FEATURE_O_POS_LAT, G_TRAIN_FEATURE_O_POS_LON, \
     G_TRAIN_FEATURE_D_POS_LON, G_TRAIN_FEATURE_D_POS_LAT, \
     G_TRAIN_FEATURE_DIRECT_TD, G_TRAIN_FEATURE_DIRECT_TT, G_TRAIN_FEATURE_V_POS_LAT, G_TRAIN_FEATURE_V_POS_LON, \
     G_TRAIN_FEATURE_TW_PE, G_TRAIN_FEATURE_TW_PL, G_TRAIN_FEATURE_RQ_TIME, \
-    G_TRAIN_FEATURE_TRAVEL_TIME, G_TRAIN_FEATURE_TRAVEL_DIST, G_TRAIN_FEATURE_LOCKED
+    G_TRAIN_FEATURE_TRAVEL_TIME, G_TRAIN_FEATURE_TRAVEL_DIST, G_TRAIN_FEATURE_LOCKED, G_TRAIN_FEATURE_TRAVEL_COST
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,6 @@ class DataProcessor:
         self.train_data_dir = train_data_dir
         self.config = config
         self.prefer_processed = prefer_processed
-        self.timestep_n_requests = 0  # Will be set during processing
 
         self.r_key = config.request_features_key
         self.v_key = config.vehicle_features_key
@@ -98,13 +99,9 @@ class DataProcessor:
         all_data = []
         for timestep in range(self.config.sim_start, self.config.sim_end,
                               self.config.sim_step):
-            try:
-                data = self._load_timestep_data(timestep)
-                data = self._add_graph_features(timestep, data)
-                all_data.append(data)
-            except Exception as e:
-                logger.error(
-                    f"Unexpected error in timestep {timestep}: {str(e)}")
+            data = self._load_timestep_data(timestep)
+            data = self._add_graph_features(timestep, data)
+            all_data.append(data)
         return all_data
 
     def _load_timestep_data(self, timestep: int) -> Dict:
@@ -148,8 +145,6 @@ class DataProcessor:
         Returns:
             Updated data dictionary with added graph features
         """
-        self.timestep_n_requests = len(data[self.r_key])
-
         # Add domain-specific features first
         self._add_temporal_features(timestep, data)
         self._add_spatial_features(data)
@@ -647,17 +642,6 @@ class DataProcessor:
                                                                                   latest_pickup - earliest_pickup),
         })
 
-    def _add_vehicle_request_spatial_features(self, veh_feats: Dict, req_feats: Dict,
-                                              edge_feats: Dict) -> None:
-        """Add spatial compatibility features for vehicle-request edges.
-
-        Args:
-            veh_feats: Features of the vehicle
-            req_feats: Features of the request
-            edge_feats: Features of the edge between vehicle and request
-        """
-        # TODO : Add more spatial features as needed (esp. pooling)
-
     def _add_vehicle_assignment_context_features(self, data: Dict) -> None:
         """
         Enrich vehicle-request edges with context from the vehicle's current assignment.
@@ -761,7 +745,7 @@ class DataProcessor:
         for prefix, feature_type in [('tt', G_TRAIN_FEATURE_TRAVEL_TIME), ('td', G_TRAIN_FEATURE_TRAVEL_DIST)]:
             data = {
                 f'{prefix}_{name}': feats.get(feature_type, 0.0)
-                for name, feats in edge_feats_copy.items()
+                for name, feats in edge_feats_copy[G_TRAIN_FEATURE_TRAVEL_COST].items()
             }
             edge_feats.update(data)
 
@@ -1226,10 +1210,6 @@ class DataProcessor:
                 self._add_vehicle_request_temporal_features(
                     current_time, veh_feats, req_feats, edge_feats)
 
-                # Add spatial features
-                self._add_vehicle_request_spatial_features(
-                    veh_feats, req_feats, edge_feats)
-
         # Process request-request edges
         for req1_id, targets in data[self.rr_key].items():
             req1_feats = data[self.r_key][req1_id]
@@ -1238,7 +1218,7 @@ class DataProcessor:
                 req2_feats = data[self.r_key][req2_id]
                 self._add_request_request_features(
                     req1_feats, req2_feats, edge_feats)
-                
+
         # Add assignment-context features on VR edges,
         # now that RR edges already have pooling/detour metrics
         self._add_vehicle_assignment_context_features(data)
@@ -1312,13 +1292,13 @@ class DataProcessor:
                     df = pd.DataFrame.from_dict(
                         data[feature_type], orient='index')
                     df = df.fillna(0.0)
-                    df['timestep'] = timestep
+                    df[TIMESTEP] = timestep
                     dfs.append(df)
                     total_samples += len(df)
 
             if dfs:
                 combined_df = pd.concat(dfs).reset_index().rename(
-                    columns={"index": "id"})
+                    columns={"index": ID})
 
                 # Save raw features
                 save_path = os.path.join(
@@ -1356,11 +1336,11 @@ class DataProcessor:
                 for source, targets in data[graph_type].items():
                     for target, info in targets.items():
                         info.update({
-                            'source': node_mapping[timestep][source] if graph_type == self.rr_key else source,
-                            'target': node_mapping[timestep][target]
+                            SOURCE: node_mapping[timestep][source] if graph_type == self.rr_key else source,
+                            TARGET: node_mapping[timestep][target]
                         })
                         edge_attrs = info
-                        edge_attrs['timestep'] = timestep
+                        edge_attrs[TIMESTEP] = timestep
                         edges.append(edge_attrs)
                 if edges:
                     dfs.append(pd.DataFrame(edges))
@@ -1377,7 +1357,7 @@ class DataProcessor:
                     f"\nNo edges found for {graph_type}, skipping save.")
 
     @staticmethod
-    def load_processed_data(data_dir: str) -> Dict[str, pd.DataFrame]:
+    def load_processed_data(data_dir: Path) -> Dict[str, pd.DataFrame]:
         """Load processed data from parquet files in a directory.
 
         Args:
@@ -1408,9 +1388,6 @@ class DataProcessor:
             y: Series of labels (if present in edge features)
         """
         # TODO update if needed later
-        import pandas as pd
-        self.timestep_n_requests = len(
-            data.get(self.r_key, {}))
         data = self._add_graph_features(timestep, data)
 
         # Build edge DataFrame
@@ -1418,34 +1395,34 @@ class DataProcessor:
         edge_rows = []
         for source, targets in edge_graph.items():
             for target, features in targets.items():
-                row = {'source': source, 'target': target}
+                row = {SOURCE: source, TARGET: target}
                 row.update(features)
                 edge_rows.append(row)
         edge_df = pd.DataFrame(edge_rows)
-        edge_df['timestep'] = timestep
+        edge_df[TIMESTEP] = timestep
 
         # Node features
         req_df = pd.DataFrame.from_dict(
-            data[self.r_key], orient='index').reset_index().rename(columns={'index': 'id'})
+            data[self.r_key], orient='index').reset_index().rename(columns={'index': ID})
         veh_df = pd.DataFrame.from_dict(
-            data[self.v_key], orient='index').reset_index().rename(columns={'index': 'id'})
+            data[self.v_key], orient='index').reset_index().rename(columns={'index': ID})
 
         # Merge node features
         source_type = 'veh' if edge_type == self.vr_key else 'req'
         src_df = veh_df if source_type == 'veh' else req_df
         tgt_df = req_df
 
-        src_feat_cols = [col for col in src_df.columns if col not in ['id']]
-        tgt_feat_cols = [col for col in tgt_df.columns if col not in ['id']]
-        src_df_renamed = src_df[src_feat_cols + ['id']
+        src_feat_cols = [col for col in src_df.columns if col not in [ID]]
+        tgt_feat_cols = [col for col in tgt_df.columns if col not in [ID]]
+        src_df_renamed = src_df[src_feat_cols + [ID]
                                 ].rename(columns={col: f'src_{col}' for col in src_feat_cols})
-        tgt_df_renamed = tgt_df[tgt_feat_cols + ['id']
+        tgt_df_renamed = tgt_df[tgt_feat_cols + [ID]
                                 ].rename(columns={col: f'tgt_{col}' for col in tgt_feat_cols})
 
-        merged = edge_df.merge(src_df_renamed, left_on='source',
-                               right_on='id', how='left').drop(columns=['id'])
-        merged = merged.merge(tgt_df_renamed, left_on='target',
-                              right_on='id', how='left').drop(columns=['id'])
+        merged = edge_df.merge(src_df_renamed, left_on=SOURCE,
+                               right_on=ID, how='left').drop(columns=[ID])
+        merged = merged.merge(tgt_df_renamed, left_on=TARGET,
+                              right_on=ID, how='left').drop(columns=[ID])
         merged = merged.loc[:, ~merged.columns.duplicated()]
         merged = merged.fillna(0)
 

@@ -1,3 +1,4 @@
+import logging
 import pickle
 import os
 from typing import Dict, List, Callable
@@ -22,6 +23,8 @@ from torch_geometric.data import HeteroData
 from gnn_project.models.hetero_gat import HeteroGAT
 from gnn_project.training.train_utils import get_edge_predictions
 
+
+LOG = logging.getLogger(__name__)
 
 class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
     """Extension of Alonso-Mora Assignment Class that can optionally use ML for assignment predictions.
@@ -54,12 +57,14 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
     def __init__(self, fleetcontrol: FleetControlBase, routing_engine: NetworkBase, sim_time: int,
                  obj_function: Callable, operator_attributes: dict, optimisation_cores: int = 1, seed: int = 6061992,
                  veh_objs_to_build: Dict[int, SimulationVehicle] = {}):
+        """Initializes the GNNAlonsoMoraAssignment with optional ML settings."""
         super().__init__(fleetcontrol, routing_engine, sim_time, obj_function, operator_attributes, optimisation_cores,
                          seed, veh_objs_to_build)
         self.train_data_path = os.path.join(
             self.fleetcontrol.dir_names[G_DIR_OUTPUT], G_DIR_TRAIN)
 
         # Configure ML settings from operator attributes
+        # TODO add to operator attributes
         self.enable_ml = operator_attributes.get(
             'enable_ml', self.ENABLE_ML_DEFAULT)  # ML is disabled by default
         if self.enable_ml:
@@ -79,21 +84,24 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         self._data_processor = None
         self._gnn_dataloader = None
 
+        # Initialize prediction storage
         self.rv_predictions = {}
         self.rr_predictions = {}
 
         if self.enable_ml:
-            print(f"ML predictions enabled using {self.model_type} model")
+            LOG.info(f"ML predictions enabled using {self.model_type} model")
 
     def compute_new_vehicle_assignments(self, sim_time: int, vid_to_list_passed_VRLs: Dict[int, List[VehicleRouteLeg]],
                                         veh_objs_to_build: Dict[int, SimulationVehicle] = {
     },
             new_travel_times: bool = False, build_from_scratch: bool = False):
+        """Compute new vehicle assignments, optionally using ML predictions. Writes training data after computation."""
         super().compute_new_vehicle_assignments(sim_time, vid_to_list_passed_VRLs, veh_objs_to_build, new_travel_times,
                                                 build_from_scratch)
         self.write_train_data(sim_time)
 
     def write_train_data(self, sim_time: int):
+        """Writes training data for the current timestep to disk."""
         dir_path = os.path.join(self.train_data_path, str(sim_time))
         os.makedirs(dir_path, exist_ok=True)
         train_data = self.get_train_data()
@@ -102,29 +110,31 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
             self.write_pickle(path, data)
 
     def get_train_data(self) -> dict[str, dict]:
+        """Collects training data for the current timestep."""
         train_data = {
-            self.config.request_request_graph_key: self.get_rr_graph_with_features(),
-            self.config.vehicle_request_graph_key: self.get_v2r_graph_with_features(),
-            self.config.assignment_key: self.optimisation_solutions,
-            self.config.init_assignment_key: self.current_assignments,
             self.config.request_features_key: self.get_req_features(),
-            self.config.vehicle_features_key: self.get_veh_features()
+            self.config.vehicle_features_key: self.get_veh_features(),
+            self.config.vehicle_request_graph_key: self.get_v2r_graph_with_features(),
+            self.config.request_request_graph_key: self.get_rr_graph_with_features(),
+            self.config.init_assignment_key: self.current_assignments,
+            self.config.assignment_key: self.optimisation_solutions,
         }
         return train_data
 
     def get_veh_features(self):
+        """Collects vehicle features for training data."""
         veh_features = {vid: {
             G_TRAIN_FEATURE_TYPE: vehicle.veh_type,
             G_TRAIN_FEATURE_STATUS: vehicle.status.value,
             G_TRAIN_FEATURE_SOC: vehicle.soc,
             G_TRAIN_FEATURE_V_POS_LAT: self.routing_engine.return_positions_lon_lat([vehicle.pos])[0][0],
             G_TRAIN_FEATURE_V_POS_LON: self.routing_engine.return_positions_lon_lat([vehicle.pos])[0][1],
-            # TODO add other vehicle features as needed
         }
             for vid, vehicle in self.veh_objs.items()}
         return veh_features
 
     def get_req_features(self):
+        """Collects request features for training data."""
         req_features = {
             rid: {G_TRAIN_FEATURE_O_POS_LAT: self.routing_engine.return_positions_lon_lat([req.o_pos])[0][0],
                   G_TRAIN_FEATURE_O_POS_LON: self.routing_engine.return_positions_lon_lat([req.o_pos])[0][1],
@@ -139,27 +149,27 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
                   G_TRAIN_FEATURE_STATUS: req.status,
                   G_TRAIN_FEATURE_LOCKED: 1 if self.r2v_locked.get(
                       rid, None) else 0
-                  # TODO add other request features as needed
                   }
             for rid, req in self.active_requests.items()}
         return req_features
 
-    def get_travel_time_v2r(self, vid, rid):
+    def get_travel_time_v2r(self, vid: int, rid: int) -> dict:
+        """get travel times between vehicle vid and request rid origin position"""
         v_pos = self.veh_objs[vid].pos
         r_pos = self.active_requests[rid].get_o_stop_info()[0]
         return {key: val for key, val in
                 zip([G_TRAIN_FEATURE_TRAVEL_COST, G_TRAIN_FEATURE_TRAVEL_TIME, G_TRAIN_FEATURE_TRAVEL_DIST],
                     self.routing_engine.return_travel_costs_1to1(v_pos, r_pos))}
 
-    def get_travel_time_r2r(self, rid1, rid2):
+    def get_travel_time_r2r(self, rid1: int, rid2: int) -> dict:
         """get all travel times between the 6 combinations of rid1 and rid2 origins and destination positions"""
         req1, req2 = self.active_requests[rid1], self.active_requests[rid2]
-        return {name: {key: val for key, val in
+        return {G_TRAIN_FEATURE_TRAVEL_COST: {name: {key: val for key, val in
                        zip([G_TRAIN_FEATURE_TRAVEL_COST, G_TRAIN_FEATURE_TRAVEL_TIME,
                             G_TRAIN_FEATURE_TRAVEL_DIST],
                            self.routing_engine.return_travel_costs_1to1(pos1, pos2))} for
                 name, pos1, pos2 in
-                self.get_od_pool_pairs(req1, req2)}
+                self.get_od_pool_pairs(req1, req2)}}
 
     @staticmethod
     def get_od_pool_pairs(req1, req2):
@@ -171,6 +181,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
                 ('o1_d1', req1.o_pos, req1.d_pos), ('o2_d2', req2.o_pos, req2.d_pos)]
 
     def get_rr_graph_with_features(self):
+        """Return rr graph with travel-time features."""
         rr_graph = defaultdict(dict)
         for rid1, rid2 in self.rr:
             rr_graph[rid1][rid2] = self.get_travel_time_r2r(rid1, rid2)
@@ -185,9 +196,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         could be computed.
         """
         v2r_graph = {}
-
-        # Safe-get locked map (may not exist on older objects)
-        v2r_locked = getattr(self, 'v2r_locked', {}) or {}
+        v2r_locked = getattr(self, 'v2r_locked', {})
 
         # Union of vehicle ids present in either map
         all_vids = set(self.v2r.keys()) | set(v2r_locked.keys())
@@ -235,19 +244,15 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
 
     @staticmethod
     def write_pickle(path, data: Dict):
+        """Writes data to a pickle file at the specified path."""
         with open(path, 'wb') as f:
             pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     def _score_RV_RR_connections(self):
-        """
-        Predicts the rv-connections using either the original method or ML models (XGBoost/GNN).
-        This is intended for online use at each simulation timestep.
-        """
+        """Predicts the rv-connections using either the original method or ML models (XGBoost/GNN)."""
         # If ML is not enabled, skip prediction and use original implementation
         if not self.enable_ml:
             return
-
-        print(f"predict rv connections (online) using {self.model_type} model")
 
         # Skip if no requests to consider
         if not self.rid_to_consider_for_global_optimisation:
@@ -280,7 +285,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
             self.rr_predictions = {}
 
         except Exception as e:
-            print(f"Error during prediction with {self.model_type}: {e}")
+            LOG.error(f"Error during prediction with {self.model_type}: {e}")
             import traceback
             traceback.print_exc()
             self.rv_predictions = {}
@@ -326,7 +331,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
             # 6. Predict
             return self._predict_with_gnn(graph, req_id_to_idx, veh_id_to_idx)
         else:
-            print(f"Unsupported model type: {self.model_type}")
+            LOG.error(f"Unsupported model type: {self.model_type}")
             return None
 
     def _convert_to_dataframes(self, data):
@@ -395,7 +400,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
                 self._gnn_classifier.eval()
             return True
         except Exception as e:
-            print(f"Error loading {self.model_type} model: {e}")
+            LOG.error(f"Error loading {self.model_type} model: {e}")
             return False
 
     def _predict_with_gnn(self, graph, req_id_to_idx, veh_id_to_idx):

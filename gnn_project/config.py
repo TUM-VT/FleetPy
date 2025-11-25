@@ -4,17 +4,7 @@ from typing import Dict, List
 import torch
 from pathlib import Path
 
-
-REQUEST_FEATURES_KEY = 'request_features'
-VEHICLE_FEATURES_KEY = 'vehicle_features'
-REQUEST_REQUEST_GRAPH_KEY = 'request_request_graph'
-VEHICLE_REQUEST_GRAPH_KEY = 'vehicle_request_graph'
-ASSIGNMENT_KEY = 'assignments'
-INIT_ASSIGNMENT_KEY = 'init_assignments'
-LABEL_KEY = 'optimal_assign'
-INIT_LABEL_KEY = 'init_assign'
-
-LOG_LEVEL_DEFAULT = 'INFO'  # Options: 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'
+from gnn_project.defaults import *
 
 
 @dataclass
@@ -23,9 +13,9 @@ class Config:
     """
     # ----- Directory structure -----
     project_dir: Path = Path(__file__).parent.parent
-    ml_data_dir: Path = Path('data')
+    ml_data_dir: Path = Path(DATA)
     experiment_name: str = 'gnn_v1'
-    train_data_dir: str = 'train'
+    train_data_dir: str = TRAIN
     processed_dir: Path = field(init=False)
     trained_models_dir: Path = field(init=False)
     norm_stats_dir: Path = field(init=False)
@@ -53,7 +43,7 @@ class Config:
     log_level: str = LOG_LEVEL_DEFAULT
 
     # Data splitting
-    dataloader_type: str = 'GNNDataLoader'  # Options: 'GNNDataLoader', others TBD
+    dataloader_type: str = GNN_DATALOADER  # Options: 'GNNDataLoader', others TBD
     train_ratio: float = 1 / 3  # 3/7
     val_ratio: float = 1 / 3  # 2/7
     test_ratio: float = 1 / 3  # 2/7
@@ -68,15 +58,15 @@ class Config:
     label_key: str = LABEL_KEY
     init_label_key: str = INIT_LABEL_KEY
     # Features to exclude from edge attributes
-    excluded_edge_features: List[str] = field(default_factory=lambda: ['source', 'target',
-                                                                       LABEL_KEY, 'timestep'])
+    excluded_edge_features: List[str] = field(default_factory=lambda: [SOURCE, TARGET,
+                                                                       LABEL_KEY, TIMESTEP])
     # Features to exclude from node attributes
     excluded_node_features: List[str] = field(
-        default_factory=lambda: ['id', 'timestep'])
+        default_factory=lambda: [ID, TIMESTEP])
 
     categorical_features: Dict[str, List[str]] = field(default_factory=lambda: {
-        REQUEST_FEATURES_KEY: ['status'],
-        VEHICLE_FEATURES_KEY: ['type', 'status']
+        REQUEST_FEATURES_KEY: [STATUS],
+        VEHICLE_FEATURES_KEY: [TYPE, STATUS]
     })
     max_detour_ratio: float = 1.4  # Maximum allowed detour ratio for requests
     vehicle_capacity: int = 4  # Vehicle capacity for ride-sharing
@@ -87,7 +77,7 @@ class Config:
     locked_idx: int = 10
 
     # ----- Model parameters -----
-    model_type: str = 'HeteroGAT'  # Options: 'HeteroGAT', others TBD
+    model_type: str = HETERO_GAT  # Options: 'HeteroGAT', others TBD
     device: torch.device = torch.device(
         'cuda' if torch.cuda.is_available() else 'cpu')
     random_seed: int = 42
@@ -109,7 +99,7 @@ class Config:
 
     def __post_init__(self):
         self.scenario_paths = [
-            os.path.join(self.project_dir, 'studies', case_study, 'results', sc)
+            os.path.join(self.project_dir, STUDIES, case_study, RESULTS, sc)
             for case_study, sc_names in self.scenario_names.items()
             for sc in sc_names
         ]
@@ -118,10 +108,10 @@ class Config:
             self.ml_data_dir = Path(self.ml_data_dir)
         if not self.ml_data_dir.exists():
             self.ml_data_dir.mkdir(parents=True, exist_ok=True)
-        self.processed_dir = self.ml_data_dir / 'processed'
-        self.norm_stats_dir = self.ml_data_dir / 'norm_stats' / self.experiment_name
-        self.trained_models_dir = self.ml_data_dir / 'models' / self.experiment_name
-        self.saved_model_path = self.trained_models_dir / 'best_model.pt'
+        self.processed_dir = self.ml_data_dir / PROCESSED
+        self.norm_stats_dir = self.ml_data_dir / NORM_STATS / self.experiment_name
+        self.trained_models_dir = self.ml_data_dir / MODELS / self.experiment_name
+        self.saved_model_path = self.trained_models_dir / BEST_MODEL
 
         self.processed_dir.mkdir(parents=True, exist_ok=True)
         self.norm_stats_dir.mkdir(parents=True, exist_ok=True)

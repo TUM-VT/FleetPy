@@ -1,4 +1,5 @@
 import torch
+from torch import Tensor
 from torch_geometric.loader import DataLoader
 import os
 from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
@@ -6,7 +7,7 @@ from gnn_project.config import Config
 from typing import Optional
 import logging
 from gnn_project.training.focal_loss import FocalLoss
-
+from gnn_project.defaults import *
 
 logger = logging.getLogger(__name__)
 
@@ -30,25 +31,23 @@ class Trainer:
         self.epochs = self.config.epochs
         self.batch_size = self.config.batch_size
         self.threshold = self.config.classification_threshold
-
         self.model_dir = self.config.trained_models_dir
-        self.best_model_path = self.model_dir / 'best_model.pt'
 
         # Create data loaders
         self.train_loader = self._create_loader(
-            data, masks['train_masks'], self.batch_size, shuffle=True)
+            data, masks[TRAIN_MASKS], self.batch_size, shuffle=True)
         self.val_loader = self._create_loader(
-            data, masks['val_masks'], self.batch_size, shuffle=False)
+            data, masks[VAL_MASKS], self.batch_size, shuffle=False)
         self.test_loader = self._create_loader(
-            data, masks['test_masks'], self.batch_size, shuffle=False)
+            data, masks[TEST_MASKS], self.batch_size, shuffle=False)
 
         # Calculate class weights from training data
         if pos_weight is None:
-            self.pos_weight = self._calculate_pos_weight(data, masks['train_masks'])
+            self.pos_weight = self._calculate_pos_weight(data, masks[TRAIN_MASKS])
         else:
             self.pos_weight = torch.tensor(pos_weight, device=self.device)
 
-    def _calculate_pos_weight(self, data: list, mask: list) -> torch.Tensor:
+    def _calculate_pos_weight(self, data: list, mask: torch.Tensor) -> torch.Tensor:
         """Calculate weight for positive class to handle class imbalance
 
         Args:
@@ -95,9 +94,9 @@ class Trainer:
                 no_improve_epochs = 0
                 # Save best model
                 torch.save({
-                    'model_state_dict': model.state_dict(),
-                    'pos_weight': self.pos_weight
-                }, self.best_model_path)
+                    MODEL_STATE_DICT: model.state_dict(),
+                    POS_WEIGHT: self.pos_weight
+                }, self.config.saved_model_path)
             else:
                 no_improve_epochs += 1
 
@@ -105,21 +104,7 @@ class Trainer:
             logger.info(f"\n{'=' * 80}")
             logger.info(f"Epoch {epoch + 1}/{self.epochs}")
             logger.info(f"{'-' * 80}")
-            logger.info(f"{'Metric':<15} {'Training':<15} {'Validation':<15}")
-            logger.info(f"{'-' * 80}")
-            logger.info(
-                f"{'Loss':<15} {train_metrics['loss']:<15.4f} {'-':<15}")
-            logger.info(
-                f"{'Accuracy':<15} {train_metrics['accuracy']:<15.4f} {val_metrics['accuracy']:<15.4f}")
-            logger.info(
-                f"{'F1':<15} {train_metrics['f1']:<15.4f} {val_metrics['f1']:<15.4f}")
-            logger.info(
-                f"{'Precision':<15} {train_metrics['precision']:<15.4f} {val_metrics['precision']:<15.4f}")
-            logger.info(
-                f"{'Recall':<15} {train_metrics['recall']:<15.4f} {val_metrics['recall']:<15.4f}")
-            logger.info(
-                f"{'AUC-ROC':<15} {train_metrics['auc_roc']:<15.4f} {val_metrics['auc_roc']:<15.4f}")
-            logger.info(f"{'-' * 80}")
+            self.report_epoch_statistics(train_metrics, val_metrics)
 
             if no_improve_epochs >= patience:
                 logger.info(
@@ -129,15 +114,18 @@ class Trainer:
         # Load best model and evaluate on test set
         try:
             checkpoint = torch.load(
-                self.best_model_path, weights_only=False)
+                self.config.saved_model_path, weights_only=False)
         except Exception as e:
             logger.warning(
                 f"Warning: Could not load checkpoint with weights_only=False: {str(e)}")
             checkpoint = torch.load(
-                self.best_model_path, weights_only=True)
+                self.config.saved_model_path, weights_only=True)
 
-        model.load_state_dict(checkpoint['model_state_dict'])
+        model.load_state_dict(checkpoint[MODEL_STATE_DICT])
         test_metrics = self.evaluate(model, self.test_loader)
+        self.report_test_metrics(test_metrics)
+
+    def report_test_metrics(self, test_metrics):
         logger.info(f"\n{'=' * 80}")
         logger.info(f"Final Test Results")
         logger.info(f"{'-' * 80}")
@@ -149,6 +137,23 @@ class Trainer:
         logger.info(f"{'Recall':<15} {test_metrics['recall']:<15.4f}")
         logger.info(f"{'AUC-ROC':<15} {test_metrics['auc_roc']:<15.4f}")
         logger.info(f"{'=' * 80}")
+
+    def report_epoch_statistics(self, train_metrics, val_metrics):
+        logger.info(f"{'Metric':<15} {'Training':<15} {'Validation':<15}")
+        logger.info(f"{'-' * 80}")
+        logger.info(
+                f"{'Loss':<15} {train_metrics['loss']:<15.4f} {'-':<15}")
+        logger.info(
+                f"{'Accuracy':<15} {train_metrics['accuracy']:<15.4f} {val_metrics['accuracy']:<15.4f}")
+        logger.info(
+                f"{'F1':<15} {train_metrics['f1']:<15.4f} {val_metrics['f1']:<15.4f}")
+        logger.info(
+                f"{'Precision':<15} {train_metrics['precision']:<15.4f} {val_metrics['precision']:<15.4f}")
+        logger.info(
+                f"{'Recall':<15} {train_metrics['recall']:<15.4f} {val_metrics['recall']:<15.4f}")
+        logger.info(
+                f"{'AUC-ROC':<15} {train_metrics['auc_roc']:<15.4f} {val_metrics['auc_roc']:<15.4f}")
+        logger.info(f"{'-' * 80}")
 
     def train_epoch(self, model: torch.nn.Module, criterion: torch.nn.Module) -> dict:
         """Train for one epoch
@@ -167,15 +172,7 @@ class Trainer:
         all_targets = []
         num_batches = 0
 
-        num_batches = len(self.train_loader)
-        data_iterator = iter(self.train_loader)
-        for batch_idx in range(num_batches):
-            try:
-                batch = next(data_iterator)
-            except StopIteration:
-                logger.warning("Data iterator exhausted, reinitializing.")
-                data_iterator = iter(self.train_loader)
-                batch = next(data_iterator)
+        for batch_idx, batch in enumerate(self.train_loader):
             batch = batch.to(self.device)
 
             self.optimizer.zero_grad()

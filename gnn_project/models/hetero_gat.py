@@ -3,17 +3,17 @@ from torch.nn import Linear, Dropout
 from torch_geometric.nn import HeteroConv, GATv2Conv, GATConv
 import logging
 
+from gnn_project.defaults import RR_EDGE_NAME, VR_EDGE_NAME, RV_EDGE_NAME, REQUEST, VEHICLE
+
 logger = logging.getLogger(__name__)
 
 class HeteroGAT(torch.nn.Module):
-    EDGE_STACK_DIM = 96
     EDGE_DIM = {
-        ('request', 'connects', 'request'): 43,
-        ('vehicle', 'connects', 'request'): 35,
-        ('request', 'rev_connects', 'vehicle'): 35,
+        RR_EDGE_NAME: 71,
+        VR_EDGE_NAME: 46,
+        RV_EDGE_NAME: 46,
     }
 
-    # change signature
     def __init__(self, config):
         super().__init__()
         torch.manual_seed(42)
@@ -23,19 +23,20 @@ class HeteroGAT(torch.nn.Module):
         self.layernorms = torch.nn.ModuleList()
         # Initialize projection layers for each edge type
         self.edge_projs = torch.nn.ModuleDict()
+        self.edge_stack_dim = config.hidden_channels * 3  # src + edge_attr + tgt
         for et, dim in HeteroGAT.EDGE_DIM.items():
             key = f"edge_proj_{et}"
             self.edge_projs[key] = Linear(dim, config.hidden_channels)
 
         for _ in range(config.num_layers):
             self.layernorms.append(torch.nn.ModuleDict({
-                ntype: torch.nn.LayerNorm(config.hidden_channels) for ntype in ['request', 'vehicle']
+                ntype: torch.nn.LayerNorm(config.hidden_channels) for ntype in [REQUEST, VEHICLE]
             }))
             # Create GAT convolutions for original and reversed edge types
             conv_dict = {
-                ('request', 'connects', 'request'): GATConv((-1, -1), config.hidden_channels, heads=config.heads, add_self_loops=False, concat=False, dropout=config.dropout, residual=True),
-                ('vehicle', 'connects', 'request'): GATConv((-1, -1), config.hidden_channels, heads=config.heads, add_self_loops=False, concat=False, dropout=config.dropout, residual=True),
-                ('request', 'rev_connects', 'vehicle'): GATConv((-1, -1), config.hidden_channels, heads=config.heads, add_self_loops=False, concat=False, dropout=config.dropout, residual=True),
+                RR_EDGE_NAME: GATConv((-1, -1), config.hidden_channels, heads=config.heads, add_self_loops=False, concat=False, dropout=config.dropout, residual=True),
+                VR_EDGE_NAME: GATConv((-1, -1), config.hidden_channels, heads=config.heads, add_self_loops=False, concat=False, dropout=config.dropout, residual=True),
+                RV_EDGE_NAME: GATConv((-1, -1), config.hidden_channels, heads=config.heads, add_self_loops=False, concat=False, dropout=config.dropout, residual=True),
             }
             
             conv = HeteroConv(conv_dict, aggr='mean')
@@ -44,7 +45,7 @@ class HeteroGAT(torch.nn.Module):
         # Output layers with intermediate layer
         self.out_channels = config.num_classes
         self.hidden_channels = config.hidden_channels
-        self.lin1 = Linear(HeteroGAT.EDGE_STACK_DIM, config.hidden_channels)
+        self.lin1 = Linear(self.edge_stack_dim, config.hidden_channels)
         self.lin2 = Linear(config.hidden_channels, config.num_classes)
 
         # Initialize weights properly
@@ -70,11 +71,10 @@ class HeteroGAT(torch.nn.Module):
         
         if not has_edges:
             # Return empty tensor with requires_grad=True
-            empty_tensor = torch.zeros((0, self.out_channels), device=x_dict['request'].device, dtype=torch.float32)
+            empty_tensor = torch.zeros((0, self.out_channels), device=x_dict[REQUEST].device, dtype=torch.float32)
             empty_tensor.requires_grad_(True)
             return empty_tensor
         
-        # DEBUG: check if there are NaNs in the input
         for key, x in x_dict.items():
             if torch.isnan(x).any():
                 logger.warning(f"NaNs detected in input {key}: {x}")
@@ -82,8 +82,6 @@ class HeteroGAT(torch.nn.Module):
         for i, conv in enumerate(self.convs):
             # Apply GAT convolution
             x_dict_out = conv(x_dict, edge_index_dict, edge_attr_dict)
-            # for key, x in x_dict_out.items():
-            #     logger.debug(f"After GAT '{key}' embedding: mean={x.mean().item():.4f}, std={x.std().item():.4f}, min={x.min().item():.4f}, max={x.max().item():.4f}")
             # Apply LayerNorm, activation, and dropout for each node type
             for key in x_dict_out:
                 if key in x_dict:  # Apply residual connection if shapes match
@@ -103,7 +101,7 @@ class HeteroGAT(torch.nn.Module):
         for edge_type, edges in edge_index_dict.items():
             if len(edges[0]) == 0:  # Skip empty edge types
                 empty_tensor = torch.zeros((0, self.out_channels), 
-                                         device=x_dict['request'].device, 
+                                         device=x_dict[REQUEST].device, 
                                          dtype=torch.float32)
                 empty_tensor.requires_grad_(True)
                 edge_features_dict[edge_type] = empty_tensor
@@ -124,13 +122,9 @@ class HeteroGAT(torch.nn.Module):
                 edge_features.append(torch.cat([src_features, edge_attrs, tgt_features]))
             # Stack features for this edge type
             edge_features = torch.stack(edge_features)
-            # logger.debug(f"{edge_type} - edge_features shape: {edge_features.shape}")
-            # logger.debug(f"Edge type {edge_type} features before MLP: mean={edge_features.mean().item():.4f}, std={edge_features.std().item():.4f}, min={edge_features.min().item():.4f}, max={edge_features.max().item():.4f}")
             edge_features = self.dropout(torch.nn.functional.leaky_relu(self.lin1(edge_features)))
             edge_features_dict[edge_type] = self.lin2(edge_features)  # No activation here - using BCEWithLogitsLoss
-            # logger.debug(f"Edge type {edge_type} logits: mean={edge_features_dict[edge_type].mean().item():.4f}, std={edge_features_dict[edge_type].std().item():.4f}, min={edge_features_dict[edge_type].min().item():.4f}, max={edge_features_dict[edge_type].max().item():.4f}")
-        
+
         # Concatenate logits
         final_output = torch.cat([edge_features_dict[edge_type] for edge_type in edge_index_dict.keys()])
-        # logger.debug(f"Final output logits: mean={final_output.mean().item():.4f}, std={final_output.std().item():.4f}, min={final_output.min().item():.4f}, max={final_output.max().item():.4f}")
         return final_output

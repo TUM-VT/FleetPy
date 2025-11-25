@@ -2,14 +2,13 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import torch
 from torch_geometric.data import HeteroData
-from gnn_project.utils.visualization import visualize_graph
 import logging
 import os
 from glob import glob
 from pathlib import Path
-from gnn_project.models.hetero_gat import HeteroGAT
-from gnn_project.dataloaders.gnn_dataloader import GNNDataLoader
-from gnn_project.config import Config as cfg
+from models.hetero_gat import HeteroGAT
+from dataloaders.gnn_dataloader import GNNDataLoader
+from config import Config as cfg
 
 # Add BaseStorage class to safe globals for loading
 import torch.serialization
