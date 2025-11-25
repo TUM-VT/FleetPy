@@ -247,11 +247,11 @@ class RequestBase(metaclass=ABCMeta):
         should be called in time, when the request enters the system
         :param routing_engine: network object
         """
-        (tt, dis, var, cfv) = routing_engine.return_travel_costs_1to1(self.o_pos, self.d_pos)
+        _, tt, dis = routing_engine.return_travel_costs_1to1(self.o_pos, self.d_pos)
         self.direct_route_travel_distance = dis
         self.direct_route_travel_time = tt
-        self.direct_route_var = var
-        self.direct_route_cfv = cfv
+
+        
 
     def _add_record(self, record_dict):
         """This method enables the output of Traveler Model specific output

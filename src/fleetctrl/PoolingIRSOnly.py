@@ -57,11 +57,6 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         self.rid_to_assigned_vid = {} # rid -> vid
         self.pos_veh_dict = {}  # pos -> list_veh
         self.vr_ctrl_f = return_pooling_objective_function(operator_attributes[G_OP_VR_CTRL_F])
-        if "vot" in operator_attributes[G_OP_VR_CTRL_F].keys():
-            self.routing_engine.user_vot = operator_attributes[G_OP_VR_CTRL_F]["vot"]
-        if "vor" in operator_attributes[G_OP_VR_CTRL_F].keys():
-            self.routing_engine.user_vor = operator_attributes[G_OP_VR_CTRL_F]["vor"]
-  
         self.sim_time = scenario_parameters[G_SIM_START_TIME]
         # others # TODO # standardize IRS assignment memory?
         self.tmp_assignment = {}  # rid -> VehiclePlan
@@ -110,19 +105,19 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
                           boarding_time=self.const_bt)
 
         rid_struct = rq.get_rid_struct()
-
         self.rq_dict[rid_struct] = prq
-        if prq.o_pos == prq.d_pos: ##Trivial Case
+
+        if prq.o_pos == prq.d_pos:
             LOG.debug(f"automatic decline for rid {rid_struct}!")
             self._create_rejection(prq, sim_time)
             return
 
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
-        if t_pu_earliest - sim_time > self.opt_horizon: #Reservation Case
+        if t_pu_earliest - sim_time > self.opt_horizon:
             self.reservation_module.add_reservation_request(prq, sim_time)
             offer = self.reservation_module.return_immediate_reservation_offer(prq.get_rid_struct(), sim_time)
             LOG.debug(f"reservation offer for rid {rid_struct} : {offer}")
-        else: #Insertion
+        else:
             list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
             if len(list_tuples) > 0:
                 (vid, vehplan, delta_cfv) = min(list_tuples, key=lambda x:x[2])
@@ -163,7 +158,6 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
             new_vehicle_plan = self.tmp_assignment[rid]
             vid = new_vehicle_plan.vid
             veh_obj = self.sim_vehicles[vid]
-            LOG.info(f"Assign Vehicle Plan {veh_obj}, {simulation_time}")
             self.assign_vehicle_plan(veh_obj, new_vehicle_plan, simulation_time)
             del self.tmp_assignment[rid]
 
@@ -245,64 +239,8 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         :return: utility of vehicle plan
         :rtype: float
         """
-        return self.vr_ctrl_f(simulation_time, veh_obj, vehicle_plan, self.rq_dict, self.routing_engine,prq=None)
+        return self.vr_ctrl_f(simulation_time, veh_obj, vehicle_plan, self.rq_dict, self.routing_engine)
 
-    def _get_Vehplan_cost_values(self,prq,simulation_time,vehiclePlan):
-        stops_list_waiting_time = [self.sim_vehicles[vehiclePlan.vid].pos]
-        waiting_time_boarding_stops = 0
-        for index,stop in enumerate(vehiclePlan.list_plan_stops):
-            if stop.boarding_dict.get(1) != None and prq.rid in stop.boarding_dict.get(1):
-                stops_list_waiting_time.append(stop.pos)
-                pu_index = index
-                break
-            elif (stop.boarding_dict.get(1) != None and prq.rid not in stop.boarding_dict.get(1)) or stop.boarding_dict.get(-1) != None:
-                stops_list_waiting_time.append(stop.pos) 
-                waiting_time_boarding_stops +=1
-            else:
-                stops_list_waiting_time.append(stop.pos)
-
-        stop_list_driving_time =[]
-        driving_time_boarding_stops = 0 
-        for index,stop in enumerate(vehiclePlan.list_plan_stops[pu_index:]):          
-            if stop.boarding_dict.get(-1) != None and prq.rid in stop.boarding_dict.get(-1):
-                stop_list_driving_time.append(stop.pos)  
-                break
-            elif stop.boarding_dict.get(1) != None or (stop.boarding_dict.get(-1) != None and prq.rid not in stop.boarding_dict.get(-1)):
-                stop_list_driving_time.append(stop.pos) 
-                driving_time_boarding_stops +=1
-            else:
-                stop_list_driving_time.append(stop.pos)
-        
-
-        legs_waiting = list(zip(stops_list_waiting_time, stops_list_waiting_time[1:]))
-        legs_drving = list(zip(stop_list_driving_time, stop_list_driving_time[1:]))
-
-        waiting_time = 0 + waiting_time_boarding_stops * prq.boarding_time
-        waiting_distance = 0
-        waiting_time_var = 0
-        waiting_cost_function_value = 0
-
-        for leg in legs_waiting:
-            tt , dis, var, cfv = self.routing_engine.return_travel_costs_1to1(leg[0],leg[1],mode=self.routing_engine.routing_mode)
-            waiting_time += tt
-            waiting_distance += dis
-            waiting_time_var += var
-            waiting_cost_function_value += cfv
-        
-        driving_time = 0 + driving_time_boarding_stops * prq.boarding_time
-        driving_distance = 0
-        driving_time_var = 0
-        driving_cost_function_value = 0
-
-        for leg in legs_drving:
-            tt , dis, var, cfv = self.routing_engine.return_travel_costs_1to1(leg[0],leg[1],mode=self.routing_engine.routing_mode)
-            driving_time += tt
-            driving_distance += dis
-            driving_time_var += var
-            driving_cost_function_value += cfv
-        
-        return{"wait_t":waiting_time,"wait_dis":waiting_distance,"wait_var":waiting_time_var,"wait_cfv":waiting_cost_function_value,"wait_stops":waiting_time_boarding_stops,
-               "drive_t":driving_time,"drive_dis":driving_distance,"drive_var":driving_time_var,"drive_cfv":driving_cost_function_value,"drive_stops":driving_time_boarding_stops}
     def _create_user_offer(self, prq, simulation_time, assigned_vehicle_plan=None, offer_dict_without_plan={}):
         """ creating the offer for a requests
 
@@ -319,12 +257,11 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         :rtype: TravellerOffer
         """
         if assigned_vehicle_plan is not None:
-            vehPlan_cost_value_dict  = self._get_Vehplan_cost_values(prq=prq,simulation_time=simulation_time,vehiclePlan=assigned_vehicle_plan)
             pu_time, do_time = assigned_vehicle_plan.pax_info.get(prq.get_rid_struct())
-            # offer = {G_OFFER_WAIT: pu_time - simulation_time, G_OFFER_DRIVE: do_time - pu_time,rt
+            # offer = {G_OFFER_WAIT: pu_time - simulation_time, G_OFFER_DRIVE: do_time - pu_time,
             #          G_OFFER_FARE: int(prq.init_direct_td * self.dist_fare + self.base_fare)}
             offer = TravellerOffer(prq.get_rid_struct(), self.op_id, pu_time - prq.rq_time, do_time - pu_time,
-                                   self._compute_fare(simulation_time, prq, assigned_vehicle_plan),additional_parameters=vehPlan_cost_value_dict)
+                                   self._compute_fare(simulation_time, prq, assigned_vehicle_plan))
             prq.set_service_offered(offer)  # has to be called
         else:
             offer = self._create_rejection(prq, simulation_time)

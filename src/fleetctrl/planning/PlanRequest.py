@@ -41,7 +41,6 @@ class PlanRequest:
         :param sub_rid_id: id of this plan request that differs from the traveller id; usefull if one customer can be represented by multiple plan requests
         """
         # copy from rq
-        self.boarding_time = boarding_time
         self.rid = rq.get_rid_struct()
         self.nr_pax = rq.nr_pax
         if sub_rid_id is not None:
@@ -62,7 +61,7 @@ class PlanRequest:
         self.walking_time_start = walking_time_start
         self.walking_time_end = walking_time_end
         #
-        self.init_direct_tt, self.init_direct_td, init_direct_std, init_direct_cfv = routing_engine.return_travel_costs_1to1(self.o_pos, self.d_pos)
+        _, self.init_direct_tt, self.init_direct_td = routing_engine.return_travel_costs_1to1(self.o_pos, self.d_pos)
         # decision/output
         self.service_vehicle = None
         self.pu_time = None
