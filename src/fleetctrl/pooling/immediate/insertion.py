@@ -30,7 +30,8 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
     :param skip_first_position_insertion: if true, an insertion at the first position of the list_plan_stops is not tried
     :return: generator with feasible new routes
     """
-    #LOG.info("simple_insert: sim_time {} veh {}".format(sim_time, veh_obj))
+    # LOG.debug("simple_insert: sim_time {} veh {}".format(sim_time, veh_obj))
+    # LOG.debug(f"simple insert: {orig_veh_plan}")
 
     # do not consider inactive vehicles
     if veh_obj.status == VRL_STATES.OUT_OF_SERVICE:
@@ -39,7 +40,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
     number_stops = len(orig_veh_plan.list_plan_stops)
     # add o_stop
     o_prq_feasible = True   # once max wait time of new_prq_obj is reached, no insertion at later index will be feasible
-    poss_o_insertions : Dict[Tuple(int, bool), PlanStop] = {}  # insertion-index of o_stop, True of stop overwritten -> plan_stop
+    poss_o_insertions : Dict[Tuple[int, bool], PlanStop] = {}  # insertion-index of o_stop, True of stop overwritten -> plan_stop
     
     prq_o_stop_pos, prq_t_pu_earliest, prq_t_pu_latest = new_prq_obj.get_o_stop_info()
     new_rid_struct = new_prq_obj.get_rid_struct()
@@ -75,9 +76,13 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
             
             org_plan_copy.list_plan_stops[i] = BoardingPlanStop(prq_o_stop_pos, boarding_dict=new_boarding_dict, max_trip_time_dict=mtt_dict.copy(),
                                                               latest_arrival_time_dict=lat_dict.copy(), earliest_pickup_time_dict=new_earliest_pickup_time_dict,
-                                                              latest_pickup_time_dict=new_latest_pickup_time_dict, change_nr_pax=change_nr_pax,duration=stop_duration, change_nr_parcels=old_pstop.get_change_nr_parcels())
+                                                              latest_pickup_time_dict=new_latest_pickup_time_dict, change_nr_pax=change_nr_pax,duration=stop_duration,
+                                                              change_nr_parcels=old_pstop.get_change_nr_parcels(),
+                                                              earliest_start_time=old_pstop.direct_earliest_start_time, earliest_end_time=old_pstop.direct_earliest_end_time,
+                                                              latest_start_time=old_pstop.direct_latest_start_time, fixed_stop=old_pstop.is_fixed_stop())
             #LOG.debug(f"test first if boarding: {next_o_plan}")
             is_feasible = org_plan_copy.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
+            #LOG.debug(f"first check {org_plan_copy}")
             if is_feasible:
                 poss_o_insertions[ (i, True) ] = org_plan_copy.list_plan_stops[i]
                 skip_next = i+1
@@ -91,7 +96,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                                              latest_pickup_time_dict={new_rid_struct : prq_t_pu_latest}, change_nr_pax=new_prq_obj.nr_pax,
                                              duration=std_bt)
             org_plan_copy.list_plan_stops[i:i] = [new_plan_stop]
-            #LOG.debug(f"test else boarding: {next_o_plan}")
+            #LOG.debug(f"first check 2 {org_plan_copy}")
             is_feasible = org_plan_copy.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
             if is_feasible:
                 poss_o_insertions[ (i, False) ] = new_plan_stop
@@ -115,6 +120,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
         org_plan_copy.list_plan_stops[i:i] = [new_plan_stop]
         #LOG.debug(f"test at end: {next_o_plan}")
         is_feasible = org_plan_copy.update_tt_and_check_plan(veh_obj, sim_time, routing_engine)
+        #LOG.debug(f"first check 3 {org_plan_copy}")
         if is_feasible:
             poss_o_insertions[ (i, False) ] = new_plan_stop
         org_plan_copy.list_plan_stops[i:i+1] = []
@@ -154,9 +160,12 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                 org_plan_copy.list_plan_stops[j] = BoardingPlanStop(d_stop_pos, boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
                                                                   latest_arrival_time_dict=lat_dict.copy(), earliest_pickup_time_dict=ept_dict.copy(),
                                                                   latest_pickup_time_dict=lpt_dict.copy(), change_nr_pax=change_nr_pax, change_nr_parcels=old_pstop.get_change_nr_parcels(),
-                                                                  duration=stop_duration)
+                                                                  duration=stop_duration,
+                                                                  earliest_start_time=old_pstop.direct_earliest_start_time, earliest_end_time=old_pstop.direct_earliest_end_time,
+                                                                  latest_start_time=old_pstop.direct_latest_start_time, fixed_stop=old_pstop.is_fixed_stop())
 
                 is_feasible = org_plan_copy.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, init_plan_state)
+                #LOG.debug(f"second check 1 {org_plan_copy}")
                 if is_feasible:
                     skip_next = j + 1
                     new_plan = org_plan_copy.copy()
@@ -178,6 +187,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                 # check constraints > yield plan if feasible
                 #LOG.debug(f"test with deboarding: {next_d_plan}")
                 is_feasible = org_plan_copy.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, init_plan_state)
+                #LOG.debug(f"second check 2 {org_plan_copy}")
                 if is_feasible:
                     new_plan = org_plan_copy.copy()
                     org_plan_copy.list_plan_stops[j:j+1] = []
@@ -197,6 +207,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
             # check constraints > yield plan if feasible
             #LOG.debug(f"test with deboarding: {next_d_plan}")
             is_feasible = org_plan_copy.update_tt_and_check_plan(veh_obj, sim_time, routing_engine, init_plan_state)
+            #LOG.debug(f"second check 3 {org_plan_copy}")
             if is_feasible:
                 new_plan = org_plan_copy.copy()
                 org_plan_copy.list_plan_stops[j:j+1] = []
@@ -260,14 +271,15 @@ def simple_remove(veh_obj : SimulationVehicle, veh_plan : VehiclePlan, remove_ri
             else:
                 rid_found_in_plan_flag = True
                 change_nr_pax += rq_dict[rid].nr_pax
-        if len(new_boarding_dict.keys()) > 0 or ps.is_locked() or ps.is_locked_end():
+        if len(new_boarding_dict.keys()) > 0 or ps.is_locked() or ps.is_locked_end() or ps.is_fixed_stop():
             dur, _ = ps.get_duration_and_earliest_departure()
             # new_ps = BoardingPlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
             #                           earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
             #                           change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked())
             new_ps = PlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
                                       earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
-                                      change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked(), locked_end=ps.is_locked_end())
+                                      change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked(), locked_end=ps.is_locked_end(), fixed_stop=ps.is_fixed_stop(),
+                                      earliest_start_time=ps.direct_earliest_start_time, earliest_end_time=ps.direct_earliest_end_time, latest_start_time=ps.direct_latest_start_time)
             new_plan_list.append(new_ps)
     #LOG.info("simple remove: {}".format([str(x) for x in new_plan_list]))
     external_pax_info = veh_plan.pax_info.copy()
@@ -392,7 +404,9 @@ def insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : Fle
         return immediate_insertion_with_heuristics(sim_time, prq, fleetctrl, force_feasible_assignment)
 
 
-def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase, force_feasible_assignment : bool=True) -> List[Tuple[Any, VehiclePlan, float]]:
+def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase,
+                                        force_feasible_assignment : bool=True, excluded_vid = []
+                                        ) -> List[Tuple[Any, VehiclePlan, float]]:
     """This function has access to all FleetControl attributes and therefore can trigger different heuristics and
     is easily extendable if new ideas for heuristics are developed.
 
@@ -426,7 +440,7 @@ def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleet
     # -> separation into multiple parts or if-clause for Parallelization_Manager in between?
 
     # 1) pre vehicle-search processes
-    excluded_vid = []
+    # excluded_vid = []
 
     # 2) vehicle-search process
     rv_vehicles, rv_results_dict = veh_search_for_immediate_request(sim_time, prq, fleetctrl, excluded_vid)
@@ -595,7 +609,7 @@ def insert_prq_in_selected_veh_list(selected_veh_obj_list : List[SimulationVehic
         veh_plan = vid_to_vehplan_assignments[veh_obj.vid]
         current_vehplan_utility = veh_plan.get_utility()
         if current_vehplan_utility is None:
-            current_vehplan_utility = obj_function(sim_time, veh_obj, veh_plan, rq_dict, routing_engine,prq)
+            current_vehplan_utility = obj_function(sim_time, veh_obj, veh_plan, rq_dict, routing_engine)
             veh_plan.set_utility(current_vehplan_utility)
         # use (vid, vehplan, delta_cfv) tuple format from here on
         keep_plans = []
@@ -606,7 +620,7 @@ def insert_prq_in_selected_veh_list(selected_veh_obj_list : List[SimulationVehic
         # TODO choice of insert function/heuristics per trigger
         for next_insertion_veh_plan in simple_insert(routing_engine, sim_time, veh_obj, veh_plan, prq,
                                                      const_bt, add_bt, skip_first_position_insertion=skip_first_pos):
-            next_insertion_utility = obj_function(sim_time, veh_obj, next_insertion_veh_plan, rq_dict, routing_engine,prq)
+            next_insertion_utility = obj_function(sim_time, veh_obj, next_insertion_veh_plan, rq_dict, routing_engine)
             delta_cfv = next_insertion_utility - current_vehplan_utility
             if threshold is None or delta_cfv < threshold:
                 keep_plans.append((veh_obj.vid, next_insertion_veh_plan, delta_cfv))
