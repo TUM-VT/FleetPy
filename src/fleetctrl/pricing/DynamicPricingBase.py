@@ -6,7 +6,7 @@ from src.misc.globals import *
 
 LOG = logging.getLogger(__name__)
 
-INPUT_PARAMETERS_DynamicPrizingBase = {
+INPUT_PARAMETERS_DynamicPricingBase = {
     "doc" :  """This sub-module implements strategies that dynamically set fares for trips. """,
     "inherit" : None,
     "input_parameters_mandatory": [],
@@ -15,7 +15,7 @@ INPUT_PARAMETERS_DynamicPrizingBase = {
     "optional_modules": []
 }
 
-class DynamicPrizingBase(ABC):
+class DynamicPricingBase(ABC):
     def __init__(self, fleetctrl, operator_attributes, solver="Gurobi"):
         """This sub-module implements strategies that dynamically set fares for trips.
 

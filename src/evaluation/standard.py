@@ -92,7 +92,7 @@ def create_vehicle_type_db(vehicle_data_dir):
     veh_type_db = {}    # veh_type -> veh_type_data
     for f in list_veh_data_f:
         veh_type_name = os.path.basename(f)[:-4]
-        veh_type_data = pd.read_csv(f, index_col=0, squeeze=True)
+        veh_type_data = pd.read_csv(f, index_col=0).squeeze("columns")
         veh_type_db[veh_type_name] = {}
         for k, v in veh_type_data.items():
             try:
@@ -209,11 +209,12 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         offer_entry = entries[G_RQ_OFFERS]
         offer = decode_offer_str(offer_entry)
         row_id_to_offer_dict[key] = offer
+        rid = entries[G_RQ_ID]
         for op_id, op_offer in offer.items():
             try:
-                op_id_to_offer_dict[op_id][key] = op_offer
+                op_id_to_offer_dict[op_id][rid] = op_offer
             except KeyError:
-                op_id_to_offer_dict[op_id] = {key : op_offer}
+                op_id_to_offer_dict[op_id] = {rid : op_offer}
             for offer_param in op_offer.keys():
                 active_offer_parameters[offer_param] = 1
     
@@ -378,7 +379,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
                 op_vehicle_revenue_hours = (rev_df["VRL_end_sim_end_time"].sum() - rev_df["VRL_start_sim_end_time"].sum())/3600.0
                 op_ride_per_veh_rev_hours = op_number_pax/op_vehicle_revenue_hours
                 op_ride_per_veh_rev_hours_rq = op_number_users/op_vehicle_revenue_hours
-                op_fleet_utilization = 100 * (utilization_time/(n_vehicles * simulation_time - unutilized_time))
+                op_fleet_utilization = 100 * (utilization_time/(n_vehicles * simulation_time - unutilized_time)) #TODO: to change for SoD
             except ZeroDivisionError:
                 pass
             op_total_km = op_vehicle_df[G_VR_LEG_DISTANCE].sum()/1000.0

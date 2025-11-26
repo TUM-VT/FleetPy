@@ -20,21 +20,20 @@ from src.infra.Zoning import ZoneSystem
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
-class ForecastZoneSystem(ZoneSystem):
+INPUT_PARAMETERS_ForecastZoneSystemBase = {
+    "doc" : "this class is the base class for providing demand forecasts for the fleet control system",
+    "inherit" : "ZoneSystem",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
+class ForecastZoneSystemBase(ZoneSystem):
     def __init__(self, zone_network_dir, scenario_parameters, dir_names, operator_attributes):
         super().__init__(zone_network_dir, scenario_parameters, dir_names)
         self.fc_temp_resolution = None
         self.demand = None
-        self._zone_to_sampling_nodes = None
-        if operator_attributes.get("op_fc_sampling_node_file"):
-            sampling_nodes = pd.read_csv(os.path.join(zone_network_dir, operator_attributes.get("op_fc_sampling_node_file")), index_col=0)
-            self._zone_to_sampling_nodes = {}
-            for n in sampling_nodes.index:
-                z = self.get_zone_from_node(n)
-                try:
-                    self._zone_to_sampling_nodes[z].append(n)
-                except KeyError:
-                    self._zone_to_sampling_nodes[z] = [n]
 
     def register_demand_ref(self, demand_ref):
         self.demand = demand_ref

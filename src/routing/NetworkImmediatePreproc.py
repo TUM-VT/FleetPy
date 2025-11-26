@@ -23,6 +23,16 @@ from src.routing.NetworkBasicWithStore import NetworkBasicWithStore
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
+INPUT_PARAMETERS_NetworkImmediatePreproc = {
+    "doc" : """This network immdiatly computes the travel times between all nodes
+        -> only useful for small networks""",
+    "inherit" : "NetworkBasicWithStore",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
 class NetworkImmediatePreproc(NetworkBasicWithStore):
     def __init__(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
         """

@@ -12,14 +12,25 @@ from scipy.sparse import load_npz
 
 # src imports
 # -----------
-from src.fleetctrl.forecast.ForecastZoning import ForecastZoneSystem
+from src.fleetctrl.forecast.ForecastZoneSystemBase import ForecastZoneSystemBase
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
-class AggForecastZoneSystem(ForecastZoneSystem):
+INPUT_PARAMETERS_AggForecastZoneSystem = {
+    "doc" : "this class predicts demand based on a forecast file; this file contains the expected number of origins and destinations per zone " ,
+    "inherit" : "ForecastZoneSystemBase",
+    "input_parameters_mandatory": [G_RA_FC_FNAME],
+    "input_parameters_optional": [
+        G_RA_OP_CORR_M_F
+        ],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
+class AggForecastZoneSystem(ForecastZoneSystemBase):
     def __init__(self, zone_network_dir, scenario_parameters, dir_names, operator_attributes):
         super().__init__(zone_network_dir, scenario_parameters, dir_names, operator_attributes)
         # reading zone-correlation matrix if available
@@ -253,13 +264,11 @@ class AggForecastZoneSystem(ForecastZoneSystem):
                 break
             o_zone = np.random.choice(dep_zones, p=dep_prob)
             d_zone = np.random.choice(arr_zones, p=arr_prob)
-            if self._zone_to_sampling_nodes is None:
-                o_n = self.get_random_node(o_zone)
-                d_n = self.get_random_node(d_zone)
+            o_n = self.get_random_node(o_zone, only_boarding_nodes=True)
+            d_n = self.get_random_node(d_zone, only_boarding_nodes=True)
+            if o_n != -1 and d_n != -1:
+                future_list.append( (int(tc), o_n, d_n) )
             else:
-                o_n = np.random.choice(self._zone_to_sampling_nodes[o_zone])
-                d_n = np.random.choice(self._zone_to_sampling_nodes[d_zone])
-            future_list.append( (int(tc), o_n, d_n) )
-        #LOG.warning(f"future set: {len(future_list)} | {future_list}")
+                LOG.warning(f"draw future: couldnt find nodes for {o_zone} and {d_zone}")
 
         return future_list

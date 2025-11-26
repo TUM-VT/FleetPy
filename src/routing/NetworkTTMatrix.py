@@ -116,13 +116,13 @@ class NetworkTTMatrix(NetworkBase):
             self.crs = f.read()
         # load network structure: nodes
         nodes_f = os.path.join(network_name_dir, "base", "nodes.csv")
-        print(f"\t ... loading nodes from {nodes_f} ...")
+        LOG.info(f"\t ... loading nodes from {nodes_f} ...")
         nodes_df = pd.read_csv(nodes_f)
         self.nodes = nodes_df.apply(read_node_line, axis=1).to_list()
         self.number_nodes = len(self.nodes)
         # load network structure: edges
         edges_f = os.path.join(network_name_dir, "base", "edges.csv")
-        print(f"\t ... loading edges from {edges_f} ...")
+        LOG.info(f"\t ... loading edges from {edges_f} ...")
         edges_df = pd.read_csv(edges_f)
         for _, edge_info_row in edges_df.iterrows():
             o_node_index = int(edge_info_row[G_EDGE_FROM])

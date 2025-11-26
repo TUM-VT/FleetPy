@@ -19,7 +19,8 @@ when implementing a new ride-pooling assginment algorithm these functions have t
 
 class SimulationVehicleStruct():
     """ this class can be used to get basic vehicle information for optimisation """
-    def __init__(self, simulation_vehicle : SimulationVehicle, assigned_veh_plan : VehiclePlan, sim_time : int, routing_engine : NetworkBase, empty_init = False):
+    def __init__(self, simulation_vehicle : SimulationVehicle, assigned_veh_plan : VehiclePlan, sim_time : int, 
+                 routing_engine : NetworkBase, empty_init = False, add_assigned_route = True):
         self.op_id = simulation_vehicle.op_id
         self.vid = simulation_vehicle.vid
 
@@ -41,11 +42,14 @@ class SimulationVehicleStruct():
 
             self.cl_start_time = simulation_vehicle.cl_start_time
             
-            # assigned route = list of assigned vehicle legs (copy and remove stationary process (TODO?))
-            self.assigned_route = [VehicleRouteLeg(x.status, x.destination_pos, x.rq_dict, power=x.power, duration=x.duration, route=x.route, locked=x.locked, earliest_start_time=x.earliest_start_time)
-                                for x in simulation_vehicle.assigned_route]
+            if add_assigned_route:
+                # assigned route = list of assigned vehicle legs (copy and remove stationary process (TODO?))
+                self.assigned_route = [VehicleRouteLeg(x.status, x.destination_pos, x.rq_dict, power=x.power, duration=x.duration, route=x.route, locked=x.locked, earliest_start_time=x.earliest_start_time)
+                                    for x in simulation_vehicle.assigned_route]
+            else:
+                self.assigned_route = []
 
-            self.locked_planstops = VehiclePlan(self, sim_time, routing_engine, [])
+            self.locked_planstops = VehiclePlan(self, sim_time, routing_engine, []) # this is not updated dynamically if vehicle states are updated (dangerous!) TODO
             self.set_locked_vehplan(assigned_veh_plan, sim_time, routing_engine)
             
         else:
@@ -158,6 +162,9 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         if fleetcontrol is not None:
             self.fo_id = fleetcontrol.op_id
             self.solver = fleetcontrol.solver
+        else:
+            self.fo_id = None
+            self.solver = "Gurobi"
         self.routing_engine = routing_engine
         self.sim_time = sim_time
         self.std_bt = operator_attributes.get(G_OP_CONST_BT, 0)
@@ -183,7 +190,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         # constraints for optimisation
         # 1) requests locked to single vehicle (i.e. on-board) | rid is always a base_rid!
         self.v2r_locked : Dict[int, Dict[Any, int]] = {}    #vid -> rid -> 1 | rids currently locked to vid
-        self.r2v_locked  : Dict[Any, Dict[int, int]]= {}    #rid -> vid -> 1 | rids currently locked to vid
+        self.r2v_locked  : Dict[Any, int]= {}    #rid -> vid | rids currently locked to vid
         for vid in self.veh_objs.keys():
             self.v2r_locked[vid] = {}
         # 2) assignment constraint (defines if requests have to be assigned) | rid is always a base_rid!
@@ -275,7 +282,7 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def set_assignment(self, vid : int, assigned_plan : VehiclePlan, is_external_vehicle_plan : bool = False):
+    def set_assignment(self, vid : int, assigned_plan : VehiclePlan, is_external_vehicle_plan : bool = False, _is_init_sol=True):
         """ sets the vehicleplan as assigned in the algorithm database; if the plan is not computed within the this algorithm, the is_external_vehicle_plan flag should be set to true
         :param vid: vehicle id
         :param assigned_plan: vehicle plan object that has been assigned

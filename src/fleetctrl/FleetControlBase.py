@@ -21,7 +21,7 @@ from src.fleetctrl.charging.ChargingBase import ChargingBase  # ,VehicleChargeLe
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan, RoutingTargetPlanStop
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
-from src.fleetctrl.pricing.DynamicPricingBase import DynamicPrizingBase
+from src.fleetctrl.pricing.DynamicPricingBase import DynamicPricingBase
 from src.fleetctrl.fleetsizing.DynamicFleetSizingBase import DynamicFleetSizingBase
 from src.fleetctrl.reservation.ReservationBase import ReservationBase
 from src.demand.TravelerModels import RequestBase
@@ -54,7 +54,7 @@ INPUT_PARAMETERS_FleetControlBase = {
         G_OP_CONST_BT, G_OP_ADD_BT, G_OP_INIT_VEH_DIST
         ],
     "mandatory_modules": [],
-    "optional_modules": [G_RA_RES_MOD, G_OP_CH_M, G_OP_REPO_M, G_OP_DYN_P_M, G_OP_DYN_FS_M]
+    "optional_modules": [G_RA_RES_MOD, G_OP_CH_M, G_OP_REPO_M, G_OP_DYN_P_M, G_OP_DYN_FS_M, G_RA_FC_TYPE]
 }
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -92,13 +92,16 @@ class FleetControlBase(metaclass=ABCMeta):
         self.log_gurobi : bool = scenario_parameters.get(G_LOG_GUROBI, False)
         self.op_id = op_id
         self.routing_engine: NetworkBase = routing_engine
+        self._use_own_routing_engine = False
         if operator_attributes.get(G_RA_OP_NW_TYPE):
-            LOG.info(f"operator {self.fleetctrl.op_id} loads its own network!")
+            LOG.info(f"operator {self.op_id} loads its own network!")
             if not operator_attributes.get(G_RA_OP_NW_NAME):
                 raise IOError(f"parameter {G_RA_OP_NW_NAME} has to be given to load a network for operator {self.op_id}")
             from src.misc.init_modules import load_routing_engine
             self.routing_engine : NetworkBase = load_routing_engine(operator_attributes[G_RA_OP_NW_TYPE], os.path.join(dir_names[G_DIR_DATA], "networks", operator_attributes[G_RA_OP_NW_NAME]),
                                                       network_dynamics_file_name=operator_attributes.get(G_RA_OP_NW_DYN_F))
+            self.routing_engine.update_network(scenario_parameters[G_SIM_START_TIME])
+            self._use_own_routing_engine = True
         # TODO: is a zonesystem needed for the fleetcontrol module? -> moved to repo module
         #self.zones: ZoneSystem = zone_system
         self.dir_names = dir_names
@@ -261,7 +264,7 @@ class FleetControlBase(metaclass=ABCMeta):
         dyn_pricing_method = operator_attributes.get(G_OP_DYN_P_M)
         if dyn_pricing_method:
             DPS_class = load_dynamic_pricing_strategy(dyn_pricing_method)
-            self.dyn_pricing : DynamicPrizingBase = DPS_class(self, operator_attributes)
+            self.dyn_pricing : DynamicPricingBase = DPS_class(self, operator_attributes)
             prt_strategy_str += f"\t Dynamic Pricing: {self.dyn_pricing.__class__.__name__}\n"
             self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_DP)
         else:
@@ -281,8 +284,10 @@ class FleetControlBase(metaclass=ABCMeta):
             prt_strategy_str += f"\t Dynamic Fleet Sizing: None\n"
 
         # log and print summary of additional strategies
+        self.skip_output = True if scenario_parameters.get(G_SKIP_OUTPUT, 0) > 0 else False
         LOG.info(prt_strategy_str)
-        print(prt_strategy_str)
+        if not self.skip_output:
+            print(prt_strategy_str)
 
     def add_init(self, operator_attributes, scenario_parameters):
         """ additional init for stuff that has to be loaded (i.e. in modules) that requires full init of fleetcontrol
@@ -421,6 +426,9 @@ class FleetControlBase(metaclass=ABCMeta):
         :return: TravellerOffer or None for the request
         :rtype: TravellerOffer or None
         """
+        if self.rq_dict.get(rid) is None:
+            LOG.warning(f"rid {rid} not in database when querrying an offer! -> this might result from an auto reject due to similar o-d pairs in a Batch Offer Framework -> send rejection!")
+            return Rejection(rid, self.op_id)
         return self.rq_dict[rid].get_current_offer()
 
     @abstractmethod
@@ -526,6 +534,11 @@ class FleetControlBase(metaclass=ABCMeta):
         :param simulation_time: current simulation time
         :type simulation_time: float
         """
+        # update network if own network is used
+        if self._use_own_routing_engine:
+            new_tt = self.routing_engine.update_network(simulation_time)
+            if new_tt:
+                self.inform_network_travel_time_update(simulation_time)
         # check whether reservation requests should be considered as immediate requests
         rids_to_reveal = self.reservation_module.reveal_requests_for_online_optimization(simulation_time)
         for rid in rids_to_reveal:

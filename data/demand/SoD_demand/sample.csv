@@ -1,0 +1,21 @@
+﻿route_ID,route_departure,origin_stop,destination_stop
+193,21:15:00,Trudering Bf.,Wasserburger Landstra√üe
+193,21:15:00,Trudering Bf.,Phantasiestra√üe
+193,21:15:00,Trudering Bf.,Drosselweg
+193,21:15:00,Jagdhornstra√üe,"Haar, Am Jagdfeldzentrum"
+193,21:17:00,Kulturzentrum Trudering,Trudering Bf.
+193,21:17:00,Drosselweg,Trudering Bf.
+193,21:17:00,"Haar, Ludwig-Moser-Stra√üe",Trudering Bf.
+193,21:17:00,"Haar, Ludwig-Moser-Stra√üe",Friedenspromenade
+193,21:35:00,Bahnstra√üe,"Haar, Am Jagdfeldzentrum"
+193,21:35:00,Trudering Bf.,Phantasiestra√üe
+193,21:35:00,Trudering Bf.,Phantasiestra√üe
+193,21:35:00,Trudering Bf.,Friedenspromenade
+193,21:37:00,"Haar, Am Jagdfeldzentrum",Phantasiestra√üe
+193,21:37:00,"Haar, Ludwig-Moser-Stra√üe",Wasserburger Landstra√üe
+193,21:37:00,"Haar, Hans-Stie√überger-Stra√üe",Trudering Bf.
+193,21:37:00,"Haar, Hans-Stie√überger-Stra√üe",Trudering Bf.
+193,22:37:00,Trudering Bf.,Jagdhornstra√üe
+193,23:37:00,Bahnstra√üe,"Haar, Am Jagdfeldzentrum"
+193,00:37:00,Trudering Bf.,Phantasiestra√üe
+193,01:37:00,Bahnstra√üe,"Haar, Hans-Stie√überger-Stra√üe"

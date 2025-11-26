@@ -1,0 +1,4 @@
+scenario_name,sim_env,op_module,op_multiop_preferred_operator_probabilities,rq_type,user_max_decision_time,nr_mod_operators
+mt_broker_independent,PreferredOperatorSimulation,BrokerBaseCtrl;BrokerBaseCtrl,0.5;0.5,PreferredOperatorRequest,0,2
+mt_broker_broker,BrokerDecision,BrokerDecisionCtrl;BrokerDecisionCtrl,0.5;0.5,BrokerDecisionRequest,0,2
+mt_broker_user,UserDecisionSimulation,BrokerBaseCtrl;BrokerBaseCtrl,0.5;0.5,UserDecisionRequest,0,2

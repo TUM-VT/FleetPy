@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use Fleetpy, please cite it as below. Furthermore, we invite you to cite the arXiv pre-print: https://arxiv.org/abs/2207.14246"
+authors:
+- family-names: Engelhardt
+    given-names: Roman
+  - family-names: Dandl
+    given-names: Florian
+  - family-names: Syed
+    given-names: Arslan-Ali
+  - family-names: Zhang
+    given-names: Yunfei
+  - family-names: Fehn
+    given-names: Fabian
+  - family-names: Wolf
+    given-names: Fynn
+  - family-names: Bogenberger
+    given-names: Klaus
+title: "FleetPy"
+license: "MIT"
+url: "https://github.com/TUM-VT/FleetPy"

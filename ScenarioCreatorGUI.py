@@ -9,7 +9,7 @@ import numpy as np
 
 from src.scenario_gui.ModuleSelectionPage import ModuleSelectionPage
 from src.scenario_gui.ParameterSelectionPage import ParametersSelectionPage
-from scenario_creator import ScenarioCreator
+from src.scenario_gui.scenario_creator import ScenarioCreator
 
 
 class MainWindow(QMainWindow):

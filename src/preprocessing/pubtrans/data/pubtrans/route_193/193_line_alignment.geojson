@@ -1,0 +1,7 @@
+{
+"type": "FeatureCollection",
+"name": "193_line_alignment",
+"features": [
+{ "type": "Feature", "properties": { }, "geometry": { "type": "LineString", "coordinates": [ ] } }
+]
+}

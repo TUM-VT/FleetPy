@@ -70,7 +70,7 @@ class RequestBase(metaclass=ABCMeta):
         self.d_node = int(rq_row[G_RQ_DESTINATION])
         self.d_pos = routing_engine.return_node_position(self.d_node)
         # store miscellaneous custom values from demand file
-        for param, value in rq_row.drop([G_RQ_TIME, G_RQ_ID, G_RQ_ORIGIN, G_RQ_DESTINATION]).iteritems():
+        for param, value in rq_row.drop([G_RQ_TIME, G_RQ_ID, G_RQ_ORIGIN, G_RQ_DESTINATION]).items():
             setattr(self, str(param), value)
         # offer: operator_id > offer class entity
         self.offer = {}
@@ -628,6 +628,48 @@ class UserDecisionRequest(RequestBase):
                         selected_op = op_id
         if selected_offer is not None:
             self.fare = selected_offer.get(G_OFFER_FARE, 0)
+        return selected_op
+
+
+INPUT_PARAMETERS_UserUtilityRequest = {
+    "doc" :     """This request class chooses the offer with the highest overall utility, which combines the value of waiting time(vot),
+    the value of driving time(vot), and fare (base_fare and pre_distance_fare)
+    """,
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [G_MC_VOT],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
+class UserUtilityRequest(RequestBase):
+    """This request class chooses the offer with the highest overall utility
+    -- utility = - vot*t_wait - vot*t_drive - fare
+    """
+    type = "UserUtilityRequest"
+
+    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
+        self.vot = scenario_parameters[G_MC_VOT]
+
+    def choose_offer(self, scenario_parameters, simulation_time):  
+        selected_op = None
+        highest_utility = float("-inf")
+        for op_id, offer in self.offer.items():
+            if not offer.service_declined():
+                t_wait = offer[G_OFFER_WAIT]
+                t_drive = offer[G_OFFER_DRIVE]
+                fare = offer.get(G_OFFER_FARE, 0)
+                utility = - self.vot * t_wait - self.vot * t_drive - fare
+                if utility > highest_utility:
+                    highest_utility = utility
+                    selected_op = op_id
+                elif utility == highest_utility:
+                    if np.random.randint(2) == 0:
+                        selected_op = op_id
+        if selected_op is not None:
+            chosen_offer = self.offer[selected_op]
+            self.fare = chosen_offer.get(G_OFFER_FARE, 0)
         return selected_op
 
 #----------------------------------------------------------------------------#

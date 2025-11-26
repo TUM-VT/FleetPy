@@ -120,8 +120,9 @@ class DynamicFleetSizingBase(ABC):
                 #         charging_process.station.cancel_booking(sim_time, charging_process)
                 new_veh_plan = VehiclePlan(veh_obj, sim_time, self.fleetctrl.routing_engine, self.fleetctrl.veh_plans[veh_obj.vid].list_plan_stops[:1])
                 self.fleetctrl.assign_vehicle_plan(veh_obj, new_veh_plan, sim_time, force_assign=True)
-            _, inactive_vrl = veh_obj.end_current_leg(sim_time)
-            self.fleetctrl.receive_status_update(veh_obj.vid, sim_time, [inactive_vrl])
+            else:   # TODO the following line is not good!
+                _, inactive_vrl = veh_obj.end_current_leg(sim_time)
+                self.fleetctrl.receive_status_update(veh_obj.vid, sim_time, [inactive_vrl])
             depot.schedule_active(veh_obj)
         else:
             LOG.info("Activation failed!")

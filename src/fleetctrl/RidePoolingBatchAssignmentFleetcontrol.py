@@ -2,6 +2,7 @@ import logging
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
 from src.fleetctrl.RidePoolingBatchOptimizationFleetControlBase import RidePoolingBatchOptimizationFleetControlBase
 from src.simulation.Offers import TravellerOffer
+from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.misc.globals import *
 
 LOG = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ INPUT_PARAMETERS_RidePoolingBatchAssignmentFleetcontrol = {
     "inherit" : "RidePoolingBatchOptimizationFleetControlBase",
     "input_parameters_mandatory": [],
     "input_parameters_optional": [
-        G_OP_MAX_WT_2, G_OP_OFF_TW, G_OP_LOCK_VID
+        G_OP_MAX_WT_2, G_OP_OFF_TW
         ],
     "mandatory_modules": [],
     "optional_modules": []
@@ -58,7 +59,6 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
         self._offer_pickup_time_interval = operator_attributes.get(G_OP_OFF_TW, None)
         if self._offer_pickup_time_interval != self._offer_pickup_time_interval:
             self._offer_pickup_time_interval = None
-        self._lock_to_vid = operator_attributes.get(G_OP_LOCK_VID, False)
 
         self.unassigned_requests_1 = {}
         self.unassigned_requests_2 = {}
@@ -104,9 +104,8 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
         pu_offer_tuple = self._get_offered_time_interval(rid)
         if pu_offer_tuple is not None:
             new_earliest_pu, new_latest_pu = pu_offer_tuple
+            LOG.debug("updated time constraints for rid {} to {} - {}".format(rid, new_earliest_pu, new_latest_pu))
             self.change_prq_time_constraints(simulation_time, rid, new_latest_pu, new_ept=new_earliest_pu)
-        if self._lock_to_vid:
-            self._lock_vid_rid_pickup(simulation_time, self.rid_to_assigned_vid[rid], rid)
 
         super().user_confirms_booking(rid, simulation_time)
 
@@ -171,20 +170,37 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
         else:
             return False
 
-    def _create_user_offer(self, rq, simulation_time, assigned_vehicle_plan = None, offer_dict_without_plan={}):
+    def _create_user_offer(self, prq : PlanRequest, simulation_time : int, assigned_vehicle_plan : VehiclePlan=None,
+                           offer_dict_without_plan : dict={}) -> TravellerOffer:
+        """ creating the offer for a requests
+
+        :param prq: plan request
+        :type prq: PlanRequest obj
+        :param simulation_time: current simulation time
+        :type simulation_time: int
+        :param assigned_vehicle_plan: vehicle plan of initial solution to serve this request
+        :type assigned_vehicle_plan: VehiclePlan None
+        :param offer_dict_without_plan: can be used to create an offer that is not derived from a vehicle plan
+                    entries will be used to create/extend offer
+        :type offer_dict_without_plan: dict or None
+        :return: offer for request
+        :rtype: TravellerOffer
+        """
         if assigned_vehicle_plan is not None:
-            pu_time, do_time = assigned_vehicle_plan.pax_info.get(rq.get_rid_struct())
+            pu_time, do_time = assigned_vehicle_plan.pax_info.get(prq.get_rid_struct())
             add_offer = {}
-            pu_offer_tuple = self._get_offered_time_interval(rq.get_rid_struct())
+            pu_offer_tuple = self._get_offered_time_interval(prq.get_rid_struct())
             if pu_offer_tuple is not None:
                 new_earliest_pu, new_latest_pu = pu_offer_tuple
                 add_offer[G_OFFER_PU_INT_START] = new_earliest_pu
                 add_offer[G_OFFER_PU_INT_END] = new_latest_pu
-            offer = TravellerOffer(rq.get_rid(), self.op_id, pu_time - rq.get_rq_time(), do_time - pu_time, int(rq.init_direct_td * self.dist_fare + self.base_fare),
+            add_offer["vid"] = assigned_vehicle_plan.vid
+            fare = self._compute_fare(simulation_time, prq, assigned_vehicle_plan)
+            offer = TravellerOffer(prq.get_rid(), self.op_id, pu_time - prq.get_rq_time(), do_time - pu_time, fare,
                     additional_parameters=add_offer)
-            rq.set_service_offered(offer)
+            prq.set_service_offered(offer)
         else:
-            offer = self._create_rejection(rq, simulation_time)
+            offer = self._create_rejection(prq, simulation_time)
         return offer
 
     def _get_offered_time_interval(self, rid):
@@ -198,19 +214,19 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
             vid = self.rid_to_assigned_vid[rid]
             assigned_plan = self.veh_plans[vid]
             pu_time, _ = assigned_plan.pax_info.get(rid)
-            new_earliest_pu = pu_time 
-            new_latest_pu = pu_time + self._offer_pickup_time_interval
-            if new_latest_pu > latest_pu:
-                new_latest_pu = latest_pu
-            # if pu_time - self._offer_pickup_time_interval/2.0 < earliest_pu:
-            #     new_earliest_pu = earliest_pu
-            #     new_latest_pu = earliest_pu + self._offer_pickup_time_interval
-            # elif pu_time + self._offer_pickup_time_interval/2.0 > latest_pu:
+            # new_earliest_pu = pu_time 
+            # new_latest_pu = pu_time + self._offer_pickup_time_interval
+            # if new_latest_pu > latest_pu:
             #     new_latest_pu = latest_pu
-            #     new_earliest_pu = latest_pu - self._offer_pickup_time_interval
-            # else:
-            #     new_earliest_pu = pu_time - self._offer_pickup_time_interval/2.0
-            #     new_latest_pu = pu_time + self._offer_pickup_time_interval/2.0
+            if pu_time - self._offer_pickup_time_interval/2.0 < earliest_pu:
+                new_earliest_pu = earliest_pu
+                new_latest_pu = earliest_pu + self._offer_pickup_time_interval
+            elif pu_time + self._offer_pickup_time_interval/2.0 > latest_pu:
+                new_latest_pu = latest_pu
+                new_earliest_pu = latest_pu - self._offer_pickup_time_interval
+            else:
+                new_earliest_pu = pu_time - self._offer_pickup_time_interval/2.0
+                new_latest_pu = pu_time + self._offer_pickup_time_interval/2.0
             return new_earliest_pu, new_latest_pu
         else:
             return None

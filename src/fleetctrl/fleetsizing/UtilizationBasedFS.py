@@ -106,7 +106,11 @@ class UtilizationBasedFS(DynamicFleetSizingBase):
         }
         self.fleetctrl._add_to_dynamic_fleetcontrol_output(simulation_time, dyn_output_dict)
         
-        activate_list = self.time_triggered_activate(simulation_time)
+        try:
+            activate_list = self.time_triggered_activate(simulation_time)
+        except:
+            LOG.warning("error in activate list")
+            activate_list = []
         deactivate_list = self.time_triggered_deactivate(simulation_time)
         LOG.debug("refill charging units at depot")
         self.fill_charging_units_at_depot(simulation_time)

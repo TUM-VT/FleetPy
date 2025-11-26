@@ -114,6 +114,9 @@ class V2RB():
                         struct_feasible_veh_plans.append(veh_plan)
                     else:
                         LOG.warning("(assigned) vehicle plan became structural infeasible! {}".format(veh_plan))
+                        LOG.warning(f" -> with with veh_obj : {veh_obj}")
+                        LOG.warning(f" -> and assigned route: {[str(x) for x in veh_obj.assigned_route]}")
+                        raise Exception("vehicle plan became structural infeasible!")
                 else:
                     veh_plan.update_plan(veh_obj, sim_time, routing_engine, list_passed_VRLs=list_passed_VRLs,
                                          keep_time_infeasible=False)

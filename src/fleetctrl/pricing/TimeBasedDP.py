@@ -1,15 +1,15 @@
-from src.fleetctrl.pricing.DynamicPricingBase import DynamicPrizingBase
+from src.fleetctrl.pricing.DynamicPricingBase import DynamicPricingBase
 
 INPUT_PARAMETERS_TimeBasedDP = {
     "doc" :  """This strategy sets fares at specific times during the simulation based on an input file. """,
-    "inherit" : "DynamicPrizingBase",
+    "inherit" : "DynamicPricingBase",
     "input_parameters_mandatory": [],
     "input_parameters_optional": [],
     "mandatory_modules": [],
     "optional_modules": []
 }
 
-class TimeBasedDP(DynamicPrizingBase):
+class TimeBasedDP(DynamicPricingBase):
     def __init__(self, fleetctrl, operator_attributes, solver="Gurobi"):
         """This strategy sets fares at specific times during the simulation based on an input file.
 

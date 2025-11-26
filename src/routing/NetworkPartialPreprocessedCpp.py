@@ -121,6 +121,29 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         super().load_tt_file(scenario_time)
         if self._tt_infos_from_folder:
             self._load_travel_info_tables(self.network_name_dir, scenario_time=scenario_time)
+            
+    def _return_node_to_node_travel_costs_1to1(self, origin_node, destination_node):
+        s = None
+        if origin_node < self.max_preprocessed_index and destination_node < self.max_preprocessed_index:
+            tt, dis = self.tt_table[origin_node][destination_node], self.dis_table[origin_node][destination_node]
+            if self._current_tt_factor is not None:
+                tt = tt * self._current_tt_factor
+                s = (tt, tt, dis)
+            else:
+                s = (tt, tt, dis)
+        else:
+            s = self.travel_time_infos.get( (origin_node, destination_node) , None)
+        if s is None:
+            s = self.cpp_router.computeTravelCosts1To1(origin_node, destination_node)
+            if self._current_tt_factor is not None:
+                s = (s[0] * self._current_tt_factor, s[1])
+            if s[0] < -0.001:
+                print("no route found? {} -> {} {}".format(origin_node, destination_node, s))
+                s = (float("inf"), float("inf"))
+            s = (s[0], s[0], s[1])
+            self._add_to_database(origin_node, destination_node, s[0], s[1], s[2])
+        return s
+        
 
     def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None):
         """
@@ -133,6 +156,10 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         """
         if customized_section_cost_function is not None:
             return super().return_travel_costs_1to1(origin_position, destination_position, customized_section_cost_function = customized_section_cost_function)
+        
+        if origin_position[1] is None and destination_position[1] is None:
+            return self._return_node_to_node_travel_costs_1to1(origin_position[0], destination_position[0])
+        
         trivial_test = self.test_and_get_trivial_route_tt_and_dis(origin_position, destination_position)
         if trivial_test is not None:
             return trivial_test[1]
@@ -149,9 +176,12 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         #LOG.warning("get1to1: {} -> {} table: {} dict {}".format(origin_node, destination_node, self.max_preprocessed_index, self.travel_time_infos.get( (origin_node, destination_node) , None)))
         if customized_section_cost_function is None:
             if origin_node < self.max_preprocessed_index and destination_node < self.max_preprocessed_index:
-                s = (self.tt_table[origin_node][destination_node], self.tt_table[origin_node][destination_node], self.dis_table[origin_node][destination_node])
+                tt, dis = self.tt_table[origin_node][destination_node], self.dis_table[origin_node][destination_node]
                 if self._current_tt_factor is not None:
-                    s = (s[0] * self._current_tt_factor, s[1] * self._current_tt_factor, s[2])
+                    tt = tt * self._current_tt_factor
+                    s = (tt, tt, dis)
+                else:
+                    s = (tt, tt, dis)
             else:
                 s = self.travel_time_infos.get( (origin_node, destination_node) , None)
         if s is None:

@@ -1,0 +1,4 @@
+scenario_name,op_rp_batch_optimizer
+mt_batch_opt_AM,AlonsoMora
+mt_batch_opt_IH,InsertionHeuristic
+mt_batch_opt_LA,SimonettoAssignment
