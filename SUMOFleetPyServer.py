@@ -470,10 +470,10 @@ class SUMOFleetPyServer():
                     
                         try:
                             traci.vehicle.addFull(vehID=sumo_vid, routeID=route_name, typeID=self.fp_opvid_to_veh_type[opid_vid_tuple])
-                            traci.vehicle.setParameter(objID=sumo_vid,param="Num_PAX",value=len([rq.get_rid_struct() for rq in veh_obj.pax]))
-                            traci.vehicle.setParameter(objID=sumo_vid,param="PAX",value=[rq.get_rid_struct() for rq in veh_obj.pax])
-                            traci.vehicle.setParameter(objID=sumo_vid,param="cleg_dest",value=sumoRoute[-1])
-                            traci.vehicle.setParameter(objID=sumo_vid,param="cleg",value=sumoRoute)
+                            traci.vehicle.setParameter(objectID=sumo_vid, key="Num_PAX", value=len([rq.get_rid_struct() for rq in veh_obj.pax]))
+                            traci.vehicle.setParameter(objectID=sumo_vid, key="PAX", value=[rq.get_rid_struct() for rq in veh_obj.pax])
+                            traci.vehicle.setParameter(objectID=sumo_vid, key="cleg_dest", value=sumoRoute[-1])
+                            traci.vehicle.setParameter(objectID=sumo_vid, key="cleg", value=sumoRoute)
 
                             LOG.debug(f"Inserted Vehicle to SUMO: {sumo_vid},{route_name},{self.fp_opvid_to_veh_type[opid_vid_tuple]}")
                             if traci.vehicle.isRouteValid(sumo_vid) is False:
