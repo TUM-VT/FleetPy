@@ -1,3 +1,0 @@
-op_module,scenario_name,rq_file,op_fleet_composition,op_init_veh_distribution,network_type,op_vr_control_func_dict
-PoolingIRSOnly,test_no_coupling_pool_irsonly_sc_1,test_demand.csv,default_vehtype:3,init_veh_dist.csv,NetworkBasic,func_key:distance_and_user_times_with_walk;vot:1
-

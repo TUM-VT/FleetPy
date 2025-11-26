@@ -1,2 +1,0 @@
-op_module,scenario_name,rq_file,op_fleet_composition,op_init_veh_distribution
-PoolingIRSOnly,test_no_coupling_pool_irs_only_sc_1,test_demand.csv,default_vehtype:3,init_veh_dist.csv

@@ -1,2 +1,0 @@
-network_type,network_name,sim_env,op_module,demand_name,scenario_name,rq_file,op_fleet_composition,sumo_statistics_interval,op_init_veh_distribution
-NetworkBasicWithStoreCppSumoCoupling,sumo_in,SUMOcontrolledSim,PoolingIRSOnly,demand_in_0.02,B1_SUMO_in_miv_0.02_75_veh,demand_in_0.02.csv,default_vehtype:75,100000,init_veh_dist_betriebshof.csv

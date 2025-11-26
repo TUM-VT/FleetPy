@@ -1,2 +1,0 @@
-op_module,scenario_name,rq_file,op_fleet_composition,op_init_veh_distribution,network_type,op_vr_control_func_dict,evaluation_int_start,evaluation_int_end
-PoolingIRSOnly,test_no_coupling_pool_irsonly_reliability_sc_2,test_demand.csv,default_vehtype:3,init_veh_dist.csv,NetworkBasicReliabilityWithStore,func_key:user_vot_vor;vot:1;vor:2,50,800

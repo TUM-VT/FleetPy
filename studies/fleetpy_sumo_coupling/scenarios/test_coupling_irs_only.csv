@@ -1,2 +1,0 @@
-op_module,scenario_name,rq_file,op_fleet_composition,op_init_veh_distribution,sim_env,network_type,op_vr_control_func_dict,op_routing_mode
-PoolingIRSOnly,test_coupling_irs_only_sc_1,test_demand.csv,default_vehtype:3,init_veh_dist.csv,SUMOcontrolledSim,NetworkBasicReliabilityWithStoreCppSumoCoupling,func_key:user_vot_vor;vot:1;vor:0,edge_tt
