@@ -50,7 +50,7 @@ class SimulationRunner:
             sc_df['demand_name'] = [f"{row['network_name']}_s_{str(row['random_seed']).zfill(2)}_{row['MOD_demand_subset']}"]
             sc_df['op_fleet_composition'] = [f"{row['vehtype']}:{row['fleet_size']}"]
             sc_df['network_type'] = [row['network_type']]
-            sc_df['op_vr_control_func_dict'] = [f"func_key:{row['objective_function']};vot:{row.get('vot')};vor:{row.get('vor')};p_cstr_dt:{p_cstr_dt};p_cstr_wt:{p_cstr_wt}"]
+            sc_df['op_vr_control_func_dict'] = [f"func_key:{row['objective_function']}"]
             sc_df['sim_env'] = [row['sim_env']]
             sc_df['network_name'] = [row['network_name']]
             sc_df['start_time'] = [int(row['start_time'])]  
