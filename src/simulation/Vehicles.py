@@ -276,8 +276,13 @@ class SimulationVehicle:
             record_dict[G_VR_LEG_START_TIME] = self.cl_start_time
             record_dict[G_VR_LEG_END_TIME] = simulation_time
             if self.cl_start_pos is None:
-                LOG.error(f"current cl starting point not set before! {self.vid} {self.status.display_name} {self.cl_start_time}")
-                raise EnvironmentError
+                LOG.warning(f"ending a leg that has not been started before! {self.vid} {self.status.display_name} {self.cl_start_time}")
+                if len(ca.rq_dict.get(1, [])) != 0 or len(ca.rq_dict.get(-1, [])) != 0:
+                    LOG.error(f"THERE SHOULD HAVE BEEN A BOARDING! {ca.rq_dict.get(1, [])} {ca.rq_dict.get(-1, [])}")
+                    raise EnvironmentError(f"THERE SHOULD HAVE BEEN A BOARDING! {ca.rq_dict.get(1, [])} {ca.rq_dict.get(-1, [])}")
+                self.reset_current_leg()
+                self.assigned_route = self.assigned_route[1:]
+                return ([], {})
             record_dict[G_VR_LEG_START_POS] = self.routing_engine.return_position_str(self.cl_start_pos)
             record_dict[G_VR_LEG_END_POS] = self.routing_engine.return_position_str(self.pos)
             record_dict[G_VR_LEG_DISTANCE] = self.cl_driven_distance

@@ -31,6 +31,8 @@ ENCODING = "utf-8"
 LOG_COMMUNICATION = True
 LARGE_INT = 100000
 
+# TODO : incorporate matsim inactive vehicle status -> new assignment (even if same as before) will trigger error
+
 class MATSimSocket:
     """
     A class to handle communication with a MATSim server using sockets.
