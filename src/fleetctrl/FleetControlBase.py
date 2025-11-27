@@ -397,14 +397,14 @@ class FleetControlBase(metaclass=ABCMeta):
         raise EnvironmentError("_create_user_offer() can't be called with super()")
         return offer
 
-    def _create_rejection(self, prq : PlanRequest, simulation_time : int) -> Rejection:
+    def _create_rejection(self, prq : PlanRequest, simulation_time : int, reason: REJECTION_REASON = None) -> Rejection:
         """This method creates a TravellerOffer representing a rejection.
 
         :param prq: PlanRequest
         :param simulation_time: current simulation time
         :return: Rejection (child class of TravellerOffer)
         """
-        offer = Rejection(prq.get_rid(), self.op_id)
+        offer = Rejection(prq.get_rid(), self.op_id, reason=reason)
         LOG.debug(f"reject customer {prq} at time {simulation_time}")
         prq.set_service_offered(offer)
         if self.repo and not prq.get_reservation_flag():
@@ -413,6 +413,7 @@ class FleetControlBase(metaclass=ABCMeta):
     
     def _is_valid_request(self, sim_time, plan_request: PlanRequest) -> bool:
         """Check if a request is valid (e.g. feasible o-d-relation).
+        and create rejection if not.
 
         :param sim_time: current simulation time
         :param plan_request: plan request that contains all relevant information
@@ -420,14 +421,14 @@ class FleetControlBase(metaclass=ABCMeta):
         """
         if plan_request.o_pos == plan_request.d_pos:
             LOG.debug(f"automatic decline for rid {plan_request.get_rid_struct()}!")
-            self._create_rejection(plan_request, sim_time)
+            self._create_rejection(plan_request, sim_time, reason=REJECTION_REASON.INVALID_RQ)
             return False
         if self.repo and self.repo.zone_system:
             o_zone = self.repo.zone_system.get_zone_from_pos(plan_request.get_o_stop_info()[0])
             d_zone = self.repo.zone_system.get_zone_from_pos(plan_request.get_d_stop_info()[0])
             if o_zone < 0 or d_zone < 0:
                 LOG.debug(f"automatic decline for rid {plan_request.get_rid_struct()} due to out-of-operating-area request!")
-                self._create_rejection(plan_request, sim_time)
+                self._create_rejection(plan_request, sim_time, reason=REJECTION_REASON.OUT_OF_OPERATING_AREA)
                 return False
         return True
 

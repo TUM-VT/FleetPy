@@ -107,8 +107,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         rid_struct = rq.get_rid_struct()
         self.rq_dict[rid_struct] = prq
 
-        if not self._is_valid_request(sim_time, prq):
-            self._create_rejection(prq, sim_time)
+        if not self._is_valid_request(sim_time, prq): # automatic rejection inside
             return
 
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
@@ -125,7 +124,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
                 LOG.debug(f"new offer for rid {rid_struct} : {offer}")
             else:
                 LOG.debug(f"rejection for rid {rid_struct}")
-                self._create_rejection(prq, sim_time)
+                self._create_rejection(prq, sim_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
                 
         if self.repo and not prq.get_reservation_flag():
             self.repo.register_user_request(prq, sim_time)
@@ -263,7 +262,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
                                    self._compute_fare(simulation_time, prq, assigned_vehicle_plan))
             prq.set_service_offered(offer)  # has to be called
         else:
-            offer = self._create_rejection(prq, simulation_time)
+            offer = self._create_rejection(prq, simulation_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
         return offer
 
     def change_prq_time_constraints(self, sim_time, rid, new_lpt, new_ept=None):

@@ -194,8 +194,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
                           boarding_time=self.const_bt)
         rid_struct = rq.get_rid_struct()
 
-        if not self._is_valid_request(sim_time, prq):
-            self._create_rejection(prq, sim_time)
+        if not self._is_valid_request(sim_time, prq): # automatic rejection inside
             return
 
         self.new_requests[rid_struct] = 1
@@ -525,5 +524,5 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
                                    additional_parameters={"vid": assigned_vehicle_plan.vid})
             prq.set_service_offered(offer)  # has to be called
         else:
-            offer = self._create_rejection(prq, simulation_time)
+            offer = self._create_rejection(prq, simulation_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
         return offer
