@@ -104,12 +104,12 @@ class NetworkBasicWithStoreOnlineMatrixCpp(NetworkBasicWithStoreCpp):
         LOG.info("start computing new travel time tables for top {} most queried nodes...".format(matrix_size))
         t = time.time()
         node_positions = [self.return_node_position(n) for n in selected_nodes]
+        self._node_index_to_matrix_index = {n :i for i, n in enumerate(selected_nodes)}
         for i, s in enumerate(node_positions):
-            self._node_index_to_matrix_index[s] = i
             r = self.return_travel_costs_1toX(s, node_positions)
             for e_pos, _, tt, dis in r:
-                o_index = s[0]
-                d_index = e_pos[0]
+                o_index = i
+                d_index = self._node_index_to_matrix_index[e_pos[0]]
                 self.tt_table[o_index][d_index] = tt
                 self.dis_table[o_index][d_index] = dis
             if i % 500 == 0:

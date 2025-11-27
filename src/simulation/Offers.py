@@ -123,6 +123,8 @@ class TravellerOffer:
                 offer_info.append(f"{k}:{v}")
             return ";".join(offer_info)
         else:
+            if self.get(G_OFFER_REJECTION_REASON, None) is not None:
+                return f"{G_OFFER_REJECTION_REASON}:{self.get(G_OFFER_REJECTION_REASON)}"
             return ""
 
     def __str__(self):
@@ -134,5 +136,7 @@ class TravellerOffer:
 
 class Rejection(TravellerOffer):
     """This class takes minimal input and creates an offer that represents a rejection."""
-    def __init__(self, traveler_id, operator_id):
+    def __init__(self, traveler_id, operator_id, reason: REJECTION_REASON=None):
         super().__init__(traveler_id, operator_id, offered_waiting_time=None, offered_driving_time=None, fare=None)
+        if reason is not None:
+            self.extend_offer({G_OFFER_REJECTION_REASON: reason.display_name})

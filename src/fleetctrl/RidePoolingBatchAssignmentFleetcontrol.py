@@ -204,7 +204,7 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
                     additional_parameters=add_offer)
             prq.set_service_offered(offer)
         else:
-            offer = self._create_rejection(prq, simulation_time)
+            offer = self._create_rejection(prq, simulation_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
         return offer
 
     def _get_offered_time_interval(self, rid):
