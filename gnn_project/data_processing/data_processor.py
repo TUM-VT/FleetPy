@@ -1231,8 +1231,9 @@ class DataProcessor:
         """
         self._add_assignment_sequence(
             data, data[self.config.init_assignment_key], self.config.init_label_key, all_pairs=True)
-        self._add_assignment_sequence(
-            data, data[self.config.assignment_key], self.config.label_key, all_pairs=True)
+        if self.config.assignment_key in data:
+            self._add_assignment_sequence(
+                data, data[self.config.assignment_key], self.config.label_key, all_pairs=True)
 
     def _add_assignment_sequence(self, data: Dict, assignments: Dict,
                                  feature_name: str, all_pairs: bool = True) -> None:

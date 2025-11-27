@@ -104,9 +104,9 @@ class GNNDataLoader:
         if self.config.overwrite_data:
             return None, None
         processed_dir = self.config.processed_dir / self.config.experiment_name
-        train_path = processed_dir / TRAIN_MASKS
-        val_path = processed_dir / VAL_MASKS
-        test_path = processed_dir / TEST_MASKS
+        train_path = processed_dir / TRAIN_GRAPHS
+        val_path = processed_dir / VAL_GRAPHS
+        test_path = processed_dir / TEST_GRAPHS
         if train_path.exists() and val_path.exists() and test_path.exists():
             train_graphs = torch.load(train_path)
             val_graphs = torch.load(val_path)
@@ -260,9 +260,6 @@ class GNNDataLoader:
 
             df = normalized[feature_key]
             feature_types = self._categorize_features(df)
-            # for ftype, cols in feature_types.items():
-            #     if cols:
-            #         logger.debug(f"{ftype.capitalize()} features: {cols}")
             clean_prefix = prefix.replace('_', '')
             feature_means = {
                 k.replace(prefix, ''): v for k, v in means.items() if k.startswith(prefix)}
@@ -351,13 +348,20 @@ class GNNDataLoader:
             data: Dictionary containing normalized dataframes for different feature types
         """
         request_graph_key = self.config.request_request_graph_key
-        if request_graph_key in data and not data[request_graph_key].empty:
+        if request_graph_key in data and isinstance(data[request_graph_key], pd.DataFrame) and not data[request_graph_key].empty:
             self.rr_edge_feature_dim = len(
                 data[request_graph_key].columns) - len(self.config.excluded_edge_features)
+        elif self.rr_edge_feature_dim is None:
+            # If we couldn't determine dimension, default to 0
+            self.rr_edge_feature_dim = 0
+            
         vr_graph_key = self.config.vehicle_request_graph_key
-        if vr_graph_key in data and not data[vr_graph_key].empty:
+        if vr_graph_key in data and isinstance(data[vr_graph_key], pd.DataFrame) and not data[vr_graph_key].empty:
             self.vr_edge_feature_dim = len(
                 data[vr_graph_key].columns) - len(self.config.excluded_edge_features)
+        elif self.vr_edge_feature_dim is None:
+            # If we couldn't determine dimension, default to 0
+            self.vr_edge_feature_dim = 0
 
     def _create_heterogeneous_graphs(self, data: Dict) -> List[HeteroData]:
         """Create heterogeneous graphs directly as PyG HeteroData objects.
@@ -397,17 +401,17 @@ class GNNDataLoader:
             data: Dictionary containing normalized dataframes for different feature types
             timestep: The current timestep for which features are being added
         """
-        for name, node_type in [(self.config.request_features_key, 'request'), (self.config.vehicle_features_key, 'vehicle')]:
+        for name, node_type in [(self.config.request_features_key, REQUEST), (self.config.vehicle_features_key, VEHICLE)]:
             if name in data and isinstance(data[name], pd.DataFrame):
-                features = data[name][data[name]['timestep'] == timestep]
+                features = data[name][data[name][TIMESTEP] == timestep]
                 if not features.empty:
                     numeric_features = features.select_dtypes(
                         include=[np.number])
                     numeric_features = numeric_features.drop(
                         columns=self.config.excluded_node_features)
                     numeric_features = numeric_features.fillna(0.0)
-                    if 'id' in features.columns:
-                        node_ids = features['id'].values
+                    if ID in features.columns:
+                        node_ids = features[ID].values
                     else:
                         node_ids = numeric_features.index.values
                     graph[node_type].x = torch.tensor(
@@ -436,19 +440,20 @@ class GNNDataLoader:
             timestep: The current timestep for which features are being added
         """
         edge_configs = [
-            (self.config.request_request_graph_key, ('request',
-             'connects', 'request'), self.rr_edge_feature_dim),
-            (self.config.vehicle_request_graph_key, ('vehicle',
-             'connects', 'request'), self.vr_edge_feature_dim)
+            (self.config.request_request_graph_key, RR_EDGE_NAME, self.rr_edge_feature_dim),
+            (self.config.vehicle_request_graph_key, VR_EDGE_NAME, self.vr_edge_feature_dim)
         ]
         for name, edge_type, feat_dim in edge_configs:
             if name in data and isinstance(data[name], pd.DataFrame):
-                edges = data[name][data[name]['timestep'] == timestep]
+                if TIMESTEP in data[name].columns:
+                    edges = data[name][data[name][TIMESTEP] == timestep]
+                else:
+                    edges = data[name]
                 if not edges.empty:
                     edge_index = torch.tensor(
-                        np.array([edges['source'].values, edges['target'].values]), dtype=torch.long)
+                        np.array([edges[SOURCE].values, edges[TARGET].values]), dtype=torch.long)
                     edge_features = edges.drop(
-                        columns=self.config.excluded_edge_features + ['timestep'])
+                        columns=self.config.excluded_edge_features, errors='ignore')
                     edge_features = edge_features.fillna(0.0)
                     edge_attr = torch.tensor(
                         edge_features.values, dtype=torch.float32)
@@ -463,13 +468,17 @@ class GNNDataLoader:
             else:
                 self._set_empty_edge_features(graph, edge_type, feat_dim)
 
-    def _set_empty_edge_features(self, graph: HeteroData, edge_type: tuple[str, str, str], feat_dim: int) -> None:
+    def _set_empty_edge_features(self, graph: HeteroData, edge_type: tuple[str, str, str], feat_dim: Optional[int]) -> None:
         """Set empty edge features for a given edge type.
         Args:
             graph: The HeteroData graph object
             edge_type: The edge type tuple
-            feat_dim: Dimension of the edge features
+            feat_dim: Dimension of the edge features (None defaults to 0)
         """
+        # Handle None by defaulting to 0 features
+        if feat_dim is None:
+            feat_dim = 0
+            
         graph[edge_type].edge_index = torch.zeros((2, 0), dtype=torch.long)
         graph[edge_type].edge_attr = torch.zeros(
             (0, feat_dim), dtype=torch.float32)

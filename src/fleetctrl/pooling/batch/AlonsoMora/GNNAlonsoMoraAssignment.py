@@ -15,13 +15,12 @@ from src.misc.globals import *
 from src.routing.NetworkBase import NetworkBase
 from src.simulation.Legs import VehicleRouteLeg
 from src.simulation.Vehicles import SimulationVehicle
-from gnn_project.data_processing.data_processor import DataProcessor
-from gnn_project.config import Config
-from gnn_project.dataloaders.gnn_dataloader import GNNDataLoader
 
 from torch_geometric.data import HeteroData
-from gnn_project.models.hetero_gat import HeteroGAT
-from gnn_project.training.train_utils import get_edge_predictions
+from gnn_project.config import Config
+from gnn_project.data_processing.data_processor import DataProcessor
+from gnn_project.dataloaders.gnn_dataloader import GNNDataLoader
+from gnn_project.training.train_utils import get_edge_predictions, load_saved_model
 
 
 LOG = logging.getLogger(__name__)
@@ -34,20 +33,14 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
     it uses the original implementation unless ML is explicitly enabled.
 
     Configuration via operator_attributes:
-        enable_ml (bool): Whether to use ML predictions. Default: False
+        enable_ml_training (bool): Whether to enable ML training. Default: False
+        enable_ml_inference (bool): Whether to enable ML inference. Default: False
         model_type (str): Which model to use ('xgboost' or 'gnn'). Default: 'gnn'
+        ml_selection_method (str): 'probability' or 'top_k'. Default: 'top_k'
         prediction_threshold (float): Probability threshold for predictions. Default: 0.5
-
-    Example configuration:
-        operator_attributes = {
-            'enable_ml': True,  # Enable ML predictions
-            'model_type': 'gnn',  # Use GNN model
-            'ml_selection_method': 'probability',  # Use probability selection method
-            'prediction_threshold': 0.7,  # Higher threshold for more selective pruning
-        }
+        top_k (int): Number of top predictions to consider if using 'top_k' method
     """
-
-    GNN_MODEL_PATH = 'gnn_project/data/models/gnn_v1/best_model.pt'
+    EXPERIMENT_NAME = 'gnn_v1'
     ENABLE_ML_DEFAULT = False
     MODEL_TYPE_DEFAULT = 'gnn'  # only 'gnn' for now
     ML_SELECTION_METHOD_DEFAULT = 'top_k'  # 'probability' or 'top_k'
@@ -60,24 +53,32 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         """Initializes the GNNAlonsoMoraAssignment with optional ML settings."""
         super().__init__(fleetcontrol, routing_engine, sim_time, obj_function, operator_attributes, optimisation_cores,
                          seed, veh_objs_to_build)
-        self.train_data_path = os.path.join(
-            self.fleetcontrol.dir_names[G_DIR_OUTPUT], G_DIR_TRAIN)
-
+        
         # Configure ML settings from operator attributes
-        # TODO add to operator attributes
-        self.enable_ml = operator_attributes.get(
-            'enable_ml', self.ENABLE_ML_DEFAULT)  # ML is disabled by default
-        if self.enable_ml:
+        self.enable_ml_training = operator_attributes.get(
+            G_OP_ENABLE_ML_TRAINING, self.ENABLE_ML_DEFAULT)  # ML is disabled by default
+        self.enable_ml_inference = operator_attributes.get(
+            G_OP_ENABLE_ML_INFERENCE, self.ENABLE_ML_DEFAULT)
+        if self.enable_ml_inference:
             self.model_type = operator_attributes.get(
-                'model_type', self.MODEL_TYPE_DEFAULT)  # 'xgboost' or 'gnn'
+                G_OP_MODEL_TYPE, self.MODEL_TYPE_DEFAULT)  # 'xgboost' or 'gnn'
             self.ml_selection_method = operator_attributes.get(
-                'ml_selection_method', self.ML_SELECTION_METHOD_DEFAULT)  # 'probability' or 'top_k'
-            self.top_k = operator_attributes.get('top_k', self.TOP_K_DEFAULT)
+                G_OP_ML_SELECTION_METHOD, self.ML_SELECTION_METHOD_DEFAULT)  # 'probability' or 'top_k'
+            self.top_k = operator_attributes.get(G_OP_TOP_K, self.TOP_K_DEFAULT)
             self.prediction_threshold = operator_attributes.get(
-                'prediction_threshold', self.PREDICTION_THRESHOLD_DEFAULT)
-
+                G_OP_PREDICTION_THRESHOLD, self.PREDICTION_THRESHOLD_DEFAULT)
+        self.train_data_path = os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT], G_DIR_TRAIN)
+        
         # Initialize Config
-        self.config = Config()
+        self.config = Config(
+            ml_data_dir=os.path.join(self.fleetcontrol.dir_names[G_DIR_MAIN], 'gnn_project/data'),
+            experiment_name=self.EXPERIMENT_NAME,
+            sim_start=0,
+            sim_end=2*60*60,
+            load_saved_model=True,
+            overwrite_data=False,
+            # log_level='DEBUG',
+        )
 
         # Initialize model attributes as None (will be loaded on first use)
         self._gnn_classifier = None
@@ -85,11 +86,9 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         self._gnn_dataloader = None
 
         # Initialize prediction storage
+        # TODO clear after each time step
         self.rv_predictions = {}
         self.rr_predictions = {}
-
-        if self.enable_ml:
-            LOG.info(f"ML predictions enabled using {self.model_type} model")
 
     def compute_new_vehicle_assignments(self, sim_time: int, vid_to_list_passed_VRLs: Dict[int, List[VehicleRouteLeg]],
                                         veh_objs_to_build: Dict[int, SimulationVehicle] = {
@@ -102,6 +101,8 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
 
     def write_train_data(self, sim_time: int):
         """Writes training data for the current timestep to disk."""
+        if not self.enable_ml_training:
+            return
         dir_path = os.path.join(self.train_data_path, str(sim_time))
         os.makedirs(dir_path, exist_ok=True)
         train_data = self.get_train_data()
@@ -251,7 +252,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
     def _score_RV_RR_connections(self):
         """Predicts the rv-connections using either the original method or ML models (XGBoost/GNN)."""
         # If ML is not enabled, skip prediction and use original implementation
-        if not self.enable_ml:
+        if not self.enable_ml_inference:
             return
 
         # Skip if no requests to consider
@@ -263,12 +264,8 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
             self._data_processor = DataProcessor(
                 self.train_data_path, self.config, prefer_processed=False)
 
-        # Initialize dataloader if needed
-        if not self._gnn_dataloader:
-            self._gnn_dataloader = GNNDataLoader(self.config)
-
         # Get current timestep data using existing data collection methods
-        data = self._get_timestep_data()
+        data = self._get_current_timestep_data()
 
         try:
             # Get predictions and update connections
@@ -291,7 +288,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
             self.rv_predictions = {}
             self.rr_predictions = {}
 
-    def _get_timestep_data(self):
+    def _get_current_timestep_data(self):
         """Collects current timestep data for prediction."""
         return {
             self.config.request_features_key: self.get_req_features(),
@@ -308,31 +305,41 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
             return None
 
         if self.model_type == 'gnn':
-            # GNN pipeline
-            # 1. Add graph features (in-place modification of data dicts)
-            self._data_processor._add_graph_features(self.sim_time, data)
-
-            # 2. Convert to DataFrames and map IDs to 0-based indices
-            data_dfs, req_id_to_idx, veh_id_to_idx = self._convert_to_dataframes(
-                data)
-
-            # 3. Encode categorical features (Must be done BEFORE normalization)
-            # TODO save _onehot_columns
-            encoded_data = self._gnn_dataloader._encode_categorical_features(
-                data_dfs)
-
-            # 4. Normalize features
-            normalized_data = self._gnn_dataloader._normalize_data(
-                encoded_data)
-
-            # 5. Create HeteroData Graph
-            graph = self._create_hetero_graph(normalized_data)
-
-            # 6. Predict
-            return self._predict_with_gnn(graph, req_id_to_idx, veh_id_to_idx)
+             # Initialize dataloader if needed
+            if not self._gnn_dataloader:
+                self._gnn_dataloader = GNNDataLoader(self.config)
+            return self._get_gnn_predictions(data)
         else:
             LOG.error(f"Unsupported model type: {self.model_type}")
             return None
+        
+    def _get_gnn_predictions(self, data):
+        """Get predictions using GNN model"""
+        # 1. Add graph features (in-place modification of data dicts)
+        self._data_processor._add_graph_features(self.sim_time, data)
+
+        # 2. Convert to DataFrames and map IDs to 0-based indices
+        data_dfs, req_id_to_idx, veh_id_to_idx = self._convert_to_dataframes(
+            data)
+        
+        if not data_dfs:
+            LOG.warning("No data available for GNN prediction.")
+            return None
+
+        # 3. Encode categorical features (Must be done BEFORE normalization)
+        # TODO why id is missing here?
+        encoded_data = self._gnn_dataloader._encode_categorical_features(
+            data_dfs)
+        
+        # 4. Normalize features
+        normalized_data = self._gnn_dataloader._normalize_data(
+            encoded_data)
+
+        # 5. Create HeteroData Graph
+        graph = self._create_hetero_graph(normalized_data)
+
+        # 6. Predict
+        return self._predict_with_gnn(graph, req_id_to_idx, veh_id_to_idx)
 
     def _convert_to_dataframes(self, data):
         """Convert data dicts to DataFrames and create ID mappings"""
@@ -394,9 +401,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         """Load the appropriate model if not already loaded"""
         try:
             if self.model_type == 'gnn' and not self._gnn_classifier:
-                self._gnn_classifier = HeteroGAT(self.config)
-                state_dict = torch.load(self.GNN_MODEL_PATH, map_location='cpu')
-                self._gnn_classifier.load_state_dict(state_dict)
+                load_saved_model(self.config)
                 self._gnn_classifier.eval()
             return True
         except Exception as e:
@@ -443,7 +448,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         :param rid2: plan_request_id 2
         :return: True if compatible, False otherwise
         """
-        if not self.enable_ml or not self.rr_predictions:
+        if not self.enable_ml_inference or not self.rr_predictions:
             # If ML is disabled or no predictions, assume all connections are compatible
             return True
 
@@ -457,7 +462,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
 
     def _filter_RV_with_scores(self, vid: int, r_dict: Dict[int, float]) -> Dict[int, float]:
         """Filters the RV connections for a given vehicle based on predicted scores."""
-        if not self.enable_ml:
+        if not self.enable_ml_inference or not self.rv_predictions:
             return r_dict
 
         if self.ml_selection_method == 'probability':

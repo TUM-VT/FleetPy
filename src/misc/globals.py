@@ -321,6 +321,14 @@ G_OP_PA_ASSTH = "op_parcel_assignment_threshold"
 G_OP_PA_OBASS = "op_parcel_passenger_ob_assignment"
 G_OP_PA_REDEL = "op_parcel_remaining_delivery_time"
 
+# ML-based Alonso-Mora
+G_OP_ENABLE_ML_TRAINING = "op_enable_ml_training"
+G_OP_ENABLE_ML_INFERENCE = "op_enable_ml_inference"
+G_OP_MODEL_TYPE = "op_model_type"
+G_OP_ML_SELECTION_METHOD = "op_ml_selection_method"
+G_OP_TOP_K = "op_top_k"
+G_OP_PREDICTION_THRESHOLD = "op_prediction_threshold"
+
 # -------------------------------------------------------------------------------------------------------------------- #
 # Charging Stations/Depots
 # ------------------------
