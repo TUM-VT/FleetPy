@@ -57,7 +57,7 @@ class Config:
     init_assignment_key : str = INIT_ASSIGNMENT_KEY
     label_key: str = LABEL_KEY
     init_label_key: str = INIT_LABEL_KEY
-    # Features to exclude from edge attributes
+    # Features to exclude from edge attributes (only the target label and metadata, not init_assign which is a feature)
     excluded_edge_features: List[str] = field(default_factory=lambda: [SOURCE, TARGET,
                                                                        LABEL_KEY, TIMESTEP])
     # Features to exclude from node attributes

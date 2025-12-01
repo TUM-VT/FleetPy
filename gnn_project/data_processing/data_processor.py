@@ -85,7 +85,7 @@ class DataProcessor:
         node_mapping = self._create_node_mapping(all_data)
 
         # Save raw features and graph data
-        self._save_feature_data(processed_dir, all_data)
+        self._save_node_data(processed_dir, all_data)
         self._save_graph_data(all_data, processed_dir, node_mapping)
         all_data = self.load_processed_data(processed_dir)
         return all_data
@@ -96,12 +96,12 @@ class DataProcessor:
         Returns:
             List of processed data dictionaries for each timestep
         """
-        all_data = []
+        all_data = {}
         for timestep in range(self.config.sim_start, self.config.sim_end,
                               self.config.sim_step):
             data = self._load_timestep_data(timestep)
             data = self._add_graph_features(timestep, data)
-            all_data.append(data)
+            all_data[timestep] = data
         return all_data
 
     def _load_timestep_data(self, timestep: int) -> Dict:
@@ -1225,10 +1225,27 @@ class DataProcessor:
 
     def _add_assignment_features(self, data: Dict) -> None:
         """Add assignment labels to edges.
+        
+        Initializes all edges with label=0, then sets label=1 for edges in assignments.
+        This ensures the columns exist even when all values are 0 (e.g., during inference).
 
         Args:
             data: Dictionary containing graph data
         """
+        # Initialize all edges with 0 labels first (ensures columns exist)
+        for _, targets in data[self.vr_key].items():
+            for _, edge_feats in targets.items():
+                edge_feats[self.config.init_label_key] = 0
+                if self.config.assignment_key in data:
+                    edge_feats[self.config.label_key] = 0
+        
+        for _, targets in data[self.rr_key].items():
+            for _, edge_feats in targets.items():
+                edge_feats[self.config.init_label_key] = 0
+                if self.config.assignment_key in data:
+                    edge_feats[self.config.label_key] = 0
+        
+        # Now set 1 for edges that are in the assignments
         self._add_assignment_sequence(
             data, data[self.config.init_assignment_key], self.config.init_label_key, all_pairs=True)
         if self.config.assignment_key in data:
@@ -1278,7 +1295,7 @@ class DataProcessor:
                             f"Warning: Could not add R-R edge label between requests {req1} and {req2}: {str(e)}")
                         continue
 
-    def _save_feature_data(self, process_dir: str, all_data: List[Dict]) -> None:
+    def _save_node_data(self, process_dir: str, all_data: Dict[int, Dict]) -> None:
         """Save processed feature data without normalization.
 
         Args:
@@ -1288,7 +1305,7 @@ class DataProcessor:
         for feature_type in [self.r_key, self.v_key]:
             dfs = []
             total_samples = 0
-            for timestep, data in enumerate(all_data):
+            for timestep, data in all_data.items():
                 if data[feature_type]:
                     df = pd.DataFrame.from_dict(
                         data[feature_type], orient='index')
@@ -1300,6 +1317,8 @@ class DataProcessor:
             if dfs:
                 combined_df = pd.concat(dfs).reset_index().rename(
                     columns={"index": ID})
+                # Sort columns alphabetically for consistent ordering with inference
+                combined_df = combined_df[sorted(combined_df.columns)]
 
                 # Save raw features
                 save_path = os.path.join(
@@ -1308,6 +1327,8 @@ class DataProcessor:
 
     def _create_node_mapping(self, all_data: List[Dict]) -> Dict[int, Dict[Any, int]]:
         """Create mapping between node IDs and indices.
+        
+        Sorts request IDs to ensure deterministic index assignment that matches inference.
 
         Args:
             all_data: List of data dictionaries
@@ -1317,11 +1338,11 @@ class DataProcessor:
         """
         return {
             timestep: {rid: idx for idx, rid in enumerate(
-                data[self.r_key].keys())}
-            for timestep, data in enumerate(all_data)
+                sorted(data[self.r_key].keys()))}
+            for timestep, data in all_data.items()
         }
 
-    def _save_graph_data(self, all_data: List[Dict], process_dir: str,
+    def _save_graph_data(self, all_data: Dict[int, Dict], process_dir: str,
                          node_mapping: Dict[int, Dict[Any, int]]) -> None:
         """Save graph structure data without normalization.
 
@@ -1332,15 +1353,15 @@ class DataProcessor:
         """
         for graph_type in [self.rr_key, self.vr_key]:
             dfs = []
-            for timestep, data in enumerate(all_data):
+            for timestep, data in all_data.items():
                 edges = []
                 for source, targets in data[graph_type].items():
-                    for target, info in targets.items():
-                        info.update({
+                    for target, features in targets.items():
+                        edge_attrs = {
                             SOURCE: node_mapping[timestep][source] if graph_type == self.rr_key else source,
                             TARGET: node_mapping[timestep][target]
-                        })
-                        edge_attrs = info
+                        }
+                        edge_attrs.update(features)
                         edge_attrs[TIMESTEP] = timestep
                         edges.append(edge_attrs)
                 if edges:
@@ -1350,6 +1371,8 @@ class DataProcessor:
                 # Combine all timesteps and save raw data
                 combined_df = pd.concat(dfs)
                 combined_df = combined_df.fillna(0.0)
+                # Sort columns alphabetically for consistent ordering with inference
+                combined_df = combined_df[sorted(combined_df.columns)]
                 # Save raw edge data
                 save_path = os.path.join(process_dir, f'{graph_type}.parquet')
                 combined_df.to_parquet(save_path)
@@ -1374,59 +1397,3 @@ class DataProcessor:
             file_name = file.name[:file.name.find('.')]
             data[file_name] = pd.read_parquet(file.path)
         return data
-
-    def process_single_timestep(self, data: Dict, timestep: int,
-                                edge_type: str) -> pd.DataFrame:
-        """
-        Process and extract features for a single timestep's data (in-memory, no disk I/O),
-        and return a merged DataFrame of edge and node features ready for classifier input.
-        Args:
-            data: Raw data dict for the current timestep
-            timestep: The current timestep
-            edge_type: Which edge graph to use
-        Returns:
-            merged: DataFrame with edge features and merged source/target node features
-            y: Series of labels (if present in edge features)
-        """
-        # TODO update if needed later
-        data = self._add_graph_features(timestep, data)
-
-        # Build edge DataFrame
-        edge_graph = data[edge_type]
-        edge_rows = []
-        for source, targets in edge_graph.items():
-            for target, features in targets.items():
-                row = {SOURCE: source, TARGET: target}
-                row.update(features)
-                edge_rows.append(row)
-        edge_df = pd.DataFrame(edge_rows)
-        edge_df[TIMESTEP] = timestep
-
-        # Node features
-        req_df = pd.DataFrame.from_dict(
-            data[self.r_key], orient='index').reset_index().rename(columns={'index': ID})
-        veh_df = pd.DataFrame.from_dict(
-            data[self.v_key], orient='index').reset_index().rename(columns={'index': ID})
-
-        # Merge node features
-        source_type = 'veh' if edge_type == self.vr_key else 'req'
-        src_df = veh_df if source_type == 'veh' else req_df
-        tgt_df = req_df
-
-        src_feat_cols = [col for col in src_df.columns if col not in [ID]]
-        tgt_feat_cols = [col for col in tgt_df.columns if col not in [ID]]
-        src_df_renamed = src_df[src_feat_cols + [ID]
-                                ].rename(columns={col: f'src_{col}' for col in src_feat_cols})
-        tgt_df_renamed = tgt_df[tgt_feat_cols + [ID]
-                                ].rename(columns={col: f'tgt_{col}' for col in tgt_feat_cols})
-
-        merged = edge_df.merge(src_df_renamed, left_on=SOURCE,
-                               right_on=ID, how='left').drop(columns=[ID])
-        merged = merged.merge(tgt_df_renamed, left_on=TARGET,
-                              right_on=ID, how='left').drop(columns=[ID])
-        merged = merged.loc[:, ~merged.columns.duplicated()]
-        merged = merged.fillna(0)
-
-        # Label column if present
-        y = merged[self.config.label_key] if self.config.label_key in merged.columns else None
-        return merged, y

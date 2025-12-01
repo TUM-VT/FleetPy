@@ -46,8 +46,6 @@ class GNNDataLoader:
         self.enable_overwrite_data = self.config.overwrite_data
         self.scenario_paths = self.config.scenario_paths
 
-        self.log_scenario_sizes()
-
         # Edge feature dimensions
         self.rr_edge_feature_dim = None
         self.vr_edge_feature_dim = None
@@ -82,6 +80,8 @@ class GNNDataLoader:
         loaded_graphs, masks = self._try_load_saved_graphs()
         if loaded_graphs is not None:
             return loaded_graphs, masks
+
+        self.log_scenario_sizes()
 
         # Step 1: Load or process feature dicts
         train_size = int(self.config.train_ratio * len(self.scenario_paths))
@@ -410,6 +410,10 @@ class GNNDataLoader:
                     numeric_features = numeric_features.drop(
                         columns=self.config.excluded_node_features)
                     numeric_features = numeric_features.fillna(0.0)
+                    
+                    # Save feature names as metadata for validation
+                    graph[node_type].feature_names = list(numeric_features.columns)
+                    
                     if ID in features.columns:
                         node_ids = features[ID].values
                     else:
@@ -455,6 +459,10 @@ class GNNDataLoader:
                     edge_features = edges.drop(
                         columns=self.config.excluded_edge_features, errors='ignore')
                     edge_features = edge_features.fillna(0.0)
+                    
+                    # Save feature names as metadata for validation
+                    graph[edge_type].feature_names = list(edge_features.columns)
+                    
                     edge_attr = torch.tensor(
                         edge_features.values, dtype=torch.float32)
                     y = torch.tensor(

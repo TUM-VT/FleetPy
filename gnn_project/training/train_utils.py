@@ -1,5 +1,6 @@
 
 import os
+import traceback
 
 from gnn_project.models.hetero_gat import HeteroGAT
 # from gnn_project.models.edge_classifier import RFClassifier
@@ -178,4 +179,5 @@ def get_edge_predictions(graph, model, device):
             return torch.sigmoid(logits).cpu().numpy()
         except Exception as e:
             logger.error(f"Error during prediction: {str(e)}")
+            traceback.print_exc()
             return None
