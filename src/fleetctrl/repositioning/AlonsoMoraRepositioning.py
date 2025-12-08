@@ -48,7 +48,7 @@ class AlonsoMoraRepositioning(RepositioningBase):
         this class does not need a zone system (always feasible to do that? maybe other modules need it)"""
         """ this method loads the forecast zone system needed for the corresponding repositioning strategy"""
         if dir_names.get(G_DIR_ZONES, None) is not None:
-            FC_Class = load_forecast_model(operator_attributes["myopic"])
+            FC_Class = load_forecast_model("myopic")
             return FC_Class(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
         return None
         
