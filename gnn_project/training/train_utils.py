@@ -32,7 +32,7 @@ DATALOADER_REGISTRY = {
 }
 
 
-def train_or_load_model(config, data=None, masks=None):
+def train_or_load_model(config, data=None, masks=None) -> tuple:
     """Train a new model or load a saved model based on the configuration.
 
     Args:
@@ -55,8 +55,8 @@ def train_or_load_model(config, data=None, masks=None):
     return model, trainer
 
 
-def load_data(config):
-    """Load data using the specified dataloader in the configuration.
+def load_data(config) -> tuple:
+    """Load data using the configured dataloader.
 
     Args:
         config: Configuration object with data loading parameters.
@@ -74,7 +74,25 @@ def load_data(config):
     return data, masks
 
 
-def init_model_and_trainer(config, data, masks):
+def load_feature_names(config, experiment_name=None) -> dict:
+    """Load feature names for a given experiment.
+    
+    Args:
+        config: Configuration object with data loading parameters.
+        experiment_name: (Optional) Name of the experiment. If None, uses config.experiment_name.
+        
+    Returns:
+        Dictionary mapping node/edge types to their feature names.
+    """
+    try:
+        loader_class = DATALOADER_REGISTRY[config.dataloader_type]
+    except KeyError:
+        raise ValueError(f"Unsupported dataloader type: {config.dataloader_type}")
+    loader = loader_class(config)
+    return loader.load_feature_names(experiment_name)
+
+
+def init_model_and_trainer(config, data, masks) -> tuple:
     """Initialize the model and trainer based on the configuration.
 
     Args:
@@ -93,7 +111,7 @@ def init_model_and_trainer(config, data, masks):
     return model, trainer
 
 
-def build_model(config):
+def build_model(config) -> torch.nn.Module:
     """Build the model based on the configuration.
 
     Args:
@@ -110,7 +128,7 @@ def build_model(config):
     return model
 
 
-def should_load_model(config):
+def should_load_model(config) -> bool:
     """Determine whether to load a saved model based on the configuration.
 
     Args:
@@ -126,7 +144,7 @@ def should_load_model(config):
     return True
 
 
-def load_saved_model(config):
+def load_saved_model(config) -> torch.nn.Module:
     """Load a saved model from the specified path in the configuration.
 
     Args:
@@ -150,33 +168,32 @@ def load_saved_model(config):
     return model
 
 
-def get_edge_predictions(graph, model, device):
+def get_edge_predictions(graph, model, device) -> dict:
     """Get model predictions for a single graph"""
     model.eval()
     with torch.no_grad():
-        # Prepare data dictionaries
         graph = graph.to(device)
 
         # Prepare input dictionaries
-        x_dict = {}
-        edge_index_dict = {}
-        edge_attr_dict = {}
-
-        # Get node features
-        for node_type in graph.node_types:
-            x_dict[node_type] = graph[node_type].x
-
-        # Get edge features
-        for edge_type in graph.edge_types:
-            edge_index = graph[edge_type].edge_index
-            edge_attr = graph[edge_type].edge_attr
-
-            edge_index_dict[edge_type] = edge_index.long()  # Ensure int64
-            edge_attr_dict[edge_type] = edge_attr
-
+        x_dict = {ntype: graph[ntype].x for ntype in graph.node_types}
+        edge_index_dict = {
+            et: graph[et].edge_index.long() for et in graph.edge_types
+        }
+        edge_attr_dict = {
+            et: graph[et].edge_attr for et in graph.edge_types
+        }
+        
         try:
             logits = model(x_dict, edge_index_dict, edge_attr_dict)
-            return torch.sigmoid(logits).cpu().numpy()
+            preds = torch.sigmoid(logits).cpu()
+            preds_by_edge_type = {}
+            start_idx = 0
+            for edge_type in graph.edge_types:
+                num_edges = graph[edge_type].edge_index.shape[1]
+                end_idx = start_idx + num_edges
+                preds_by_edge_type[edge_type] = preds[start_idx:end_idx]
+                start_idx = end_idx 
+            return preds_by_edge_type
         except Exception as e:
             logger.error(f"Error during prediction: {str(e)}")
             traceback.print_exc()

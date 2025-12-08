@@ -502,10 +502,10 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         idx_to_veh_id = {v: k for k, v in veh_id_to_idx.items()}
 
         edges_dict = {SOURCE: [], TARGET: [], PRED_SCORE: [], EDGE_TYPE: []}
-        pred_scores = get_edge_predictions(
+        # get_edge_predictions now returns a dict by edge type
+        pred_scores_by_type = get_edge_predictions(
             graph, self._gnn_classifier, device='cpu')
 
-        cum_cnt = 0
         for edge_type, edges in graph.edge_index_dict.items():
             if len(edges[0]) == 0:
                 continue  # Skip empty edge types
@@ -513,18 +513,20 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
             if edge_type == RV_EDGE_NAME:
                 continue
             
-            for _, edge in enumerate(zip(edges[0], edges[1])):
+            # Get predictions for this specific edge type
+            edge_type_predictions = pred_scores_by_type[edge_type]
+            
+            for i, edge in enumerate(zip(edges[0], edges[1])):
                 src_idx, tgt_idx = edge
                 src_id = idx_to_veh_id[src_idx.item(
                 )] if edge_type[0] == VEHICLE else idx_to_req_id[src_idx.item()]
                 tgt_id = idx_to_req_id[tgt_idx.item(
                 )] if edge_type[2] == REQUEST else idx_to_veh_id[tgt_idx.item()]
-                score = float(pred_scores[cum_cnt])
+                score = float(edge_type_predictions[i])
                 edges_dict[SOURCE].append(src_id)
                 edges_dict[TARGET].append(tgt_id)
                 edges_dict[PRED_SCORE].append(score)
                 edges_dict[EDGE_TYPE].append(edge_type)
-                cum_cnt += 1
         return pd.DataFrame(edges_dict)
 
     def _create_hetero_graph(self, data: dict):

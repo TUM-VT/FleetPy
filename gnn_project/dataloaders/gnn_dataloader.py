@@ -1,5 +1,6 @@
 # Standard library imports
 import os
+import json
 from collections import defaultdict
 from typing import List, Tuple, Optional, Dict, Any
 import logging
@@ -53,6 +54,9 @@ class GNNDataLoader:
         # Store one-hot columns for each feature type after first transform (training)
         self._onehot_columns = {}
         self._load_onehot_columns()
+
+        # Store feature names for each node/edge type
+        self.feature_names = {}
 
         # Set up normalization directory
         if self.enable_overwrite_data:
@@ -113,6 +117,8 @@ class GNNDataLoader:
             test_graphs = torch.load(test_path)
             normalized_scenario_data = train_graphs + val_graphs + test_graphs
             masks = self.create_masks(len(normalized_scenario_data), len(train_graphs), len(val_graphs))
+            # Load feature names if available
+            self.feature_names = self.load_feature_names()
             return normalized_scenario_data, masks
         return None, None
 
@@ -146,7 +152,7 @@ class GNNDataLoader:
             # Count timesteps from request features
             req_key = self.config.request_features_key
             if req_key in data and isinstance(data[req_key], pd.DataFrame) and TIMESTEP in data[req_key].columns:
-                num_timesteps = max(data[req_key][TIMESTEP]) + 1
+                num_timesteps = data[req_key][TIMESTEP].nunique()
             else:
                 num_timesteps = 1
             scenario_sizes.append(num_timesteps)
@@ -178,6 +184,7 @@ class GNNDataLoader:
         torch.save(train_graphs, processed_dir / TRAIN_GRAPHS)
         torch.save(val_graphs, processed_dir / VAL_GRAPHS)
         torch.save(test_graphs, processed_dir / TEST_GRAPHS)
+        self._save_feature_names(processed_dir)
         return normalized_scenario_data, masks
 
     def _save_onehot_columns(self) -> None:
@@ -203,6 +210,43 @@ class GNNDataLoader:
                 self._onehot_columns = pickle.load(f)
         except Exception as e:
             logger.error(f"Error loading one-hot columns: {e}")
+
+    def _save_feature_names(self, processed_dir) -> None:
+        """Save feature names mapping to a JSON file.
+        
+        Args:
+            processed_dir: Directory where processed data is saved
+        """
+        save_path = os.path.join(processed_dir, 'feature_names.json')
+        with open(save_path, 'w') as f:
+            json.dump(self.feature_names, f, indent=2)
+        logger.debug(f"Saved feature names to {save_path}")
+
+    def load_feature_names(self, experiment_name: Optional[str] = None) -> Dict[str, List[str]]:
+        """Load feature names mapping from a JSON file.
+        
+        Args:
+            experiment_name: Name of the experiment. If None, uses config.experiment_name
+            
+        Returns:
+            Dictionary mapping node/edge types to their feature names
+        """
+        exp_name = experiment_name or self.config.experiment_name
+        processed_dir = self.config.processed_dir / exp_name
+        load_path = os.path.join(processed_dir, 'feature_names.json')
+        
+        if not os.path.exists(load_path):
+            logger.warning(f"Feature names file not found at {load_path}")
+            return {}
+        
+        try:
+            with open(load_path, 'r') as f:
+                feature_names = json.load(f)
+            logger.debug(f"Loaded feature names from {load_path}")
+            return feature_names
+        except Exception as e:
+            logger.error(f"Error loading feature names: {e}")
+            return {}
 
     def _get_scenario_name(self, scenario_path: str) -> str:
         """Extract scenario name from path."""
@@ -376,21 +420,20 @@ class GNNDataLoader:
         r_key = self.config.request_features_key
         if isinstance(data.get(r_key), pd.DataFrame):
             if 'timestep' in data[r_key].columns:
-                max_timestep = data[r_key]['timestep'].max()
+                timesteps = sorted(data[r_key][TIMESTEP].unique())
             else:
-                max_timestep = 0
+                timesteps = []
         else:
-            max_timestep = 0
-        logger.debug(f"Max timestep determined: {max_timestep}")
+            timesteps = []
         graphs = []
-        for timestep in range(max_timestep + 1):
+        for timestep in timesteps:
             graph = HeteroData()
             self._add_node_features(graph, data, timestep)
             self._add_edge_features(graph, data, timestep)
             undirected_transform = T.ToUndirected(merge=True)
             graph = undirected_transform(graph)
             graph = T.NormalizeFeatures()(graph)
-            graphs.append(graph)
+            graphs.append(graph)   
         return graphs
 
     def _add_node_features(self, graph: HeteroData, data: Dict, timestep: int) -> None:
@@ -411,8 +454,9 @@ class GNNDataLoader:
                         columns=self.config.excluded_node_features)
                     numeric_features = numeric_features.fillna(0.0)
                     
-                    # Save feature names as metadata for validation
-                    graph[node_type].feature_names = list(numeric_features.columns)
+                    # Store feature names for this node type
+                    if node_type not in self.feature_names:
+                        self.feature_names[node_type] = list(numeric_features.columns)
                     
                     if ID in features.columns:
                         node_ids = features[ID].values
@@ -460,8 +504,10 @@ class GNNDataLoader:
                         columns=self.config.excluded_edge_features, errors='ignore')
                     edge_features = edge_features.fillna(0.0)
                     
-                    # Save feature names as metadata for validation
-                    graph[edge_type].feature_names = list(edge_features.columns)
+                    # Store feature names for this edge type
+                    edge_type_key = f"{edge_type[0]}__{edge_type[1]}__{edge_type[2]}"
+                    if edge_type_key not in self.feature_names:
+                        self.feature_names[edge_type_key] = list(edge_features.columns)
                     
                     edge_attr = torch.tensor(
                         edge_features.values, dtype=torch.float32)
@@ -486,7 +532,7 @@ class GNNDataLoader:
         # Handle None by defaulting to 0 features
         if feat_dim is None:
             feat_dim = 0
-            
+            print("Warning: Edge feature dimension is None, defaulting to 0.")
         graph[edge_type].edge_index = torch.zeros((2, 0), dtype=torch.long)
         graph[edge_type].edge_attr = torch.zeros(
             (0, feat_dim), dtype=torch.float32)
@@ -512,9 +558,11 @@ class GNNDataLoader:
             scenario_indices = torch.randperm(num_scenarios).tolist()
         else:
             scenario_indices = list(range(num_scenarios))
-        train_indices = scenario_indices[:train_scenarios]
-        val_indices = scenario_indices[train_scenarios:train_scenarios + val_scenarios]
-        test_indices = scenario_indices[train_scenarios + val_scenarios:]
+        
+        # Create sets for faster lookup
+        train_indices_set = set(scenario_indices[:train_scenarios])
+        val_indices_set = set(scenario_indices[train_scenarios:train_scenarios + val_scenarios])
+        test_indices_set = set(scenario_indices[train_scenarios + val_scenarios:])
 
         # Initialize masks for all timesteps
         device = torch.device('cpu')  # We'll keep masks on CPU initially
@@ -526,14 +574,15 @@ class GNNDataLoader:
             total_timesteps, dtype=torch.bool, device=device)
 
         # Fill masks based on scenario assignments
+        # IMPORTANT: Iterate in the ORIGINAL order since graphs are in original order
         current_pos = 0
         for scenario_idx in range(num_scenarios):
             size = scenario_sizes[scenario_idx]
-            if scenario_idx in train_indices:
+            if scenario_idx in train_indices_set:
                 train_masks[current_pos:current_pos + size] = True
-            elif scenario_idx in val_indices:
+            elif scenario_idx in val_indices_set:
                 val_masks[current_pos:current_pos + size] = True
-            else:
+            else:  # scenario_idx in test_indices_set
                 test_masks[current_pos:current_pos + size] = True
             current_pos += size
 
@@ -543,11 +592,11 @@ class GNNDataLoader:
         test_timesteps = test_masks.sum().item()
 
         logger.debug(
-            f"Scenario split: Train={len(train_indices)}, Val={len(val_indices)}, Test={len(test_indices)} scenarios")
+            f"Scenario split: Train={len(train_indices_set)}, Val={len(val_indices_set)}, Test={len(test_indices_set)} scenarios")
         logger.debug(
             f"Timestep split: Train={train_timesteps}, Val={val_timesteps}, Test={test_timesteps} timesteps")
 
-        return {"train_masks": train_masks, "val_masks": val_masks, "test_masks": test_masks}
+        return {TRAIN_MASKS: train_masks, VAL_MASKS: val_masks, TEST_MASKS: test_masks}
 
     def _compute_global_statistics(self, training_data: List[Tuple[str, Dict]]) -> None:
         """Compute and save global statistics across all training scenarios.

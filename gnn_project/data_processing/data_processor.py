@@ -1297,6 +1297,10 @@ class DataProcessor:
 
     def _save_node_data(self, process_dir: str, all_data: Dict[int, Dict]) -> None:
         """Save processed feature data without normalization.
+        
+        Important: The data is sorted by node ID to match the index mapping
+        created in _create_node_mapping, ensuring consistency between node
+        features and graph edge indices.
 
         Args:
             process_dir: Directory to save processed data
@@ -1311,6 +1315,8 @@ class DataProcessor:
                         data[feature_type], orient='index')
                     df = df.fillna(0.0)
                     df[TIMESTEP] = timestep
+                    # Sort by index (node IDs) to match the sorted order in _create_node_mapping
+                    df = df.sort_index()
                     dfs.append(df)
                     total_samples += len(df)
 
