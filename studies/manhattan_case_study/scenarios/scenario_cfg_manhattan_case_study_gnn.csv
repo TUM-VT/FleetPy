@@ -2,4 +2,4 @@ scenario_name,rq_file,op_fleet_composition,op_rp_batch_optimizer,end_time,op_ena
 # test_manhattan_scenario_1,2018-11-12_sample_5_1.csv,default_vehtype:120,GNNAlonsoMora,7200
 # test_manhattan_scenario_2,2018-11-13_sample_5_1.csv,default_vehtype:120,GNNAlonsoMora,7200
 # test_manhattan_scenario_3,2018-11-14_sample_5_1.csv,default_vehtype:120,GNNAlonsoMora,7200
-gnn_manhattan_scenario_intg_1,2018-11-12_sample_5_1.csv,default_vehtype:120,GNNAlonsoMora,7200,False,True,gnn,top_k,5,5,0.5
+gnn_manhattan_scenario_intg_1,2018-11-12_sample_5_1.csv,default_vehtype:120,GNNAlonsoMora,7200,False,True,gnn,top_k,5,5

@@ -42,6 +42,11 @@ class GNNDataLoader:
 
         Args:
             config: Configuration for data processing
+            
+        Note:
+            - overwrite_data: Forces reprocessing of raw data and regeneration of graphs
+            - recompute_norm_stats: Forces recomputation of normalization statistics from training data
+              (normally, existing norm stats are preserved unless they don't exist)
         """
         self.config = config
         self.enable_overwrite_data = self.config.overwrite_data
@@ -57,10 +62,6 @@ class GNNDataLoader:
 
         # Store feature names for each node/edge type
         self.feature_names = {}
-
-        # Set up normalization directory
-        if self.enable_overwrite_data:
-            clean_normalization_directory(self.config.norm_stats_dir)
 
     def log_scenario_sizes(self):
         """Log the number of scenarios and their split sizes."""
@@ -92,9 +93,12 @@ class GNNDataLoader:
         raw_scenario_data, scenario_sizes = self._load_or_process_feature_dicts(
             train_size)
 
-        # Step 2: If norm stats missing, compute them
+        # Step 2: If norm stats missing or forced recomputation, compute them
         norm_stats_exist = (self.config.norm_stats_dir / MEANS_FILE).exists()
-        if not norm_stats_exist:
+        if not norm_stats_exist or self.config.recompute_norm_stats:
+            if self.config.recompute_norm_stats:
+                clean_normalization_directory(self.config.norm_stats_dir)
+                logger.info("Recomputing normalization statistics from training data...")
             training_data = raw_scenario_data[:train_size]
             self._compute_global_statistics(training_data)
 

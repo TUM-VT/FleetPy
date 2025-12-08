@@ -40,6 +40,7 @@ class Config:
     sim_end: int = 86400  # seconds (24h)
     sim_step: int = 30  # seconds (30s)
     overwrite_data: bool = False
+    recompute_norm_stats: bool = False  # Whether to force recomputation of normalization statistics
     log_level: str = LOG_LEVEL_DEFAULT
 
     # Data splitting

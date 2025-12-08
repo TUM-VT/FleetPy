@@ -630,9 +630,11 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         if not self.enable_ml_inference:
             return r_dict
 
+        logging.debug('Number of Connections before filtering: ' + str(len(r_dict)))
         # Simple filtering - only keep requests that passed prediction filtering
         filtered_r_dict = {rid: tt for rid, tt in r_dict.items()
                           if (vid, rid) in self.rv_predictions}
+        logging.debug('Number of Connections after filtering: ' + str(len(filtered_r_dict)))
         return filtered_r_dict
 
     def _save_predictions(self, edges_df):
@@ -684,9 +686,6 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
                                   for row in vr_edges.itertuples()}
             self.rr_predictions = {(getattr(row, SOURCE), getattr(row, TARGET)): getattr(row, PRED_SCORE) 
                                   for row in rr_edges.itertuples()}
-            
-        print(self.rv_predictions)
-        print(self.rr_predictions)
 
     def clear_databases(self):
         """Clears the stored prediction databases."""
