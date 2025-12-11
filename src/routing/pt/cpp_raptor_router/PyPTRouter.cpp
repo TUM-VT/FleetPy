@@ -2521,7 +2521,6 @@ static const char __pyx_k_pyx_vtable[] = "__pyx_vtable__";
 static const char __pyx_k_to_stop_id[] = "to_stop_id";
 static const char __pyx_k_MemoryError[] = "MemoryError";
 static const char __pyx_k_agency_name[] = "agency_name";
-static const char __pyx_k_arrival_day[] = "arrival_day";
 static const char __pyx_k_current_day[] = "current_day";
 static const char __pyx_k_journey_opt[] = "journey_opt";
 static const char __pyx_k_RuntimeError[] = "RuntimeError";
@@ -2531,8 +2530,6 @@ static const char __pyx_k_initializing[] = "_initializing";
 static const char __pyx_k_is_coroutine[] = "_is_coroutine";
 static const char __pyx_k_journey_dict[] = "journey_dict";
 static const char __pyx_k_stringsource[] = "<stringsource>";
-static const char __pyx_k_waiting_time[] = "waiting_time";
-static const char __pyx_k_departure_day[] = "departure_day";
 static const char __pyx_k_journeys_list[] = "journeys_list";
 static const char __pyx_k_max_transfers[] = "max_transfers";
 static const char __pyx_k_num_transfers[] = "num_transfers";
@@ -2542,23 +2539,29 @@ static const char __pyx_k_departure_time[] = "departure_time";
 static const char __pyx_k_construct_query[] = "construct_query";
 static const char __pyx_k_input_directory[] = "input_directory";
 static const char __pyx_k_setstate_cython[] = "__setstate_cython__";
-static const char __pyx_k_arrival_datetime[] = "arrival_datetime";
 static const char __pyx_k_included_sources[] = "included_sources";
 static const char __pyx_k_included_targets[] = "included_targets";
 static const char __pyx_k_asyncio_coroutines[] = "asyncio.coroutines";
 static const char __pyx_k_cline_in_traceback[] = "cline_in_traceback";
+static const char __pyx_k_source_waiting_time[] = "source_waiting_time";
 static const char __pyx_k_source_transfer_time[] = "source_transfer_time";
+static const char __pyx_k_target_transfer_time[] = "target_transfer_time";
 static const char __pyx_k_return_pt_journeys_1to1[] = "return_pt_journeys_1to1";
 static const char __pyx_k_PyPTRouter___reduce_cython[] = "PyPTRouter.__reduce_cython__";
 static const char __pyx_k_PyPTRouter_construct_query[] = "PyPTRouter.construct_query";
+static const char __pyx_k_target_station_arrival_day[] = "target_station_arrival_day";
+static const char __pyx_k_target_station_arrival_time[] = "target_station_arrival_time";
 static const char __pyx_k_PyPTRouter___setstate_cython[] = "PyPTRouter.__setstate_cython__";
+static const char __pyx_k_source_station_departure_day[] = "source_station_departure_day";
 static const char __pyx_k_Expected_string_int_tuple_got[] = "Expected (string, int) tuple, got ";
+static const char __pyx_k_source_station_departure_time[] = "source_station_departure_time";
 static const char __pyx_k_return_fastest_pt_journey_1to1[] = "return_fastest_pt_journey_1to1";
 static const char __pyx_k_No_value_specified_for_struct_at[] = "No value specified for struct attribute 'year'";
 static const char __pyx_k_PyPTRouter_return_fastest_pt_jou[] = "PyPTRouter.return_fastest_pt_journey_1to1";
 static const char __pyx_k_PyPTRouter_return_pt_journeys_1t[] = "PyPTRouter.return_pt_journeys_1to1";
 static const char __pyx_k_RAPTOR_router_not_initialized_Pl[] = "RAPTOR router not initialized. Please initialize first.";
 static const char __pyx_k_no_default___reduce___due_to_non[] = "no default __reduce__ due to non-trivial __cinit__";
+static const char __pyx_k_source_station_departure_datetim[] = "source_station_departure_datetime";
 static const char __pyx_k_No_value_specified_for_struct_at_2[] = "No value specified for struct attribute 'month'";
 static const char __pyx_k_No_value_specified_for_struct_at_3[] = "No value specified for struct attribute 'day'";
 static const char __pyx_k_No_value_specified_for_struct_at_4[] = "No value specified for struct attribute 'weekday'";
@@ -2573,9 +2576,9 @@ static const char __pyx_k_No_value_specified_for_struct_at_12[] = "No value spec
 /* #### Code section: decls ### */
 static int __pyx_pf_10PyPTRouter_10PyPTRouter___cinit__(struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_input_directory); /* proto */
 static void __pyx_pf_10PyPTRouter_10PyPTRouter_2__dealloc__(struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_4construct_query(CYTHON_UNUSED struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_arrival_datetime, PyObject *__pyx_v_included_sources, PyObject *__pyx_v_included_targets, int __pyx_v_max_transfers); /* proto */
-static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1(struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_arrival_datetime, PyObject *__pyx_v_included_sources, PyObject *__pyx_v_included_targets, int __pyx_v_max_transfers, bool __pyx_v_detailed); /* proto */
-static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1to1(struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_arrival_datetime, PyObject *__pyx_v_included_sources, PyObject *__pyx_v_included_targets, int __pyx_v_max_transfers, bool __pyx_v_detailed); /* proto */
+static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_4construct_query(CYTHON_UNUSED struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_source_station_departure_datetime, PyObject *__pyx_v_included_sources, PyObject *__pyx_v_included_targets, int __pyx_v_max_transfers); /* proto */
+static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1(struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_source_station_departure_datetime, PyObject *__pyx_v_included_sources, PyObject *__pyx_v_included_targets, int __pyx_v_max_transfers, bool __pyx_v_detailed); /* proto */
+static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1to1(struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_source_station_departure_datetime, PyObject *__pyx_v_included_sources, PyObject *__pyx_v_included_targets, int __pyx_v_max_transfers, bool __pyx_v_detailed); /* proto */
 static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_10__reduce_cython__(CYTHON_UNUSED struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self); /* proto */
 static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_12__setstate_cython__(CYTHON_UNUSED struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, CYTHON_UNUSED PyObject *__pyx_v___pyx_state); /* proto */
 static PyObject *__pyx_tp_new_10PyPTRouter_PyPTRouter(PyTypeObject *t, PyObject *a, PyObject *k); /*proto*/
@@ -2656,8 +2659,6 @@ typedef struct {
   PyObject *__pyx_n_s__28;
   PyObject *__pyx_n_u_agency_name;
   PyObject *__pyx_n_s_append;
-  PyObject *__pyx_n_s_arrival_datetime;
-  PyObject *__pyx_n_u_arrival_day;
   PyObject *__pyx_n_u_arrival_time;
   PyObject *__pyx_n_s_asyncio_coroutines;
   PyObject *__pyx_n_s_cline_in_traceback;
@@ -2667,7 +2668,6 @@ typedef struct {
   PyObject *__pyx_n_s_datetime;
   PyObject *__pyx_n_s_day;
   PyObject *__pyx_n_u_day;
-  PyObject *__pyx_n_u_departure_day;
   PyObject *__pyx_n_s_departure_time;
   PyObject *__pyx_n_u_departure_time;
   PyObject *__pyx_n_s_detailed;
@@ -2719,18 +2719,24 @@ typedef struct {
   PyObject *__pyx_n_s_self;
   PyObject *__pyx_n_s_setstate;
   PyObject *__pyx_n_s_setstate_cython;
+  PyObject *__pyx_n_s_source_station_departure_datetim;
+  PyObject *__pyx_n_u_source_station_departure_day;
+  PyObject *__pyx_n_u_source_station_departure_time;
   PyObject *__pyx_n_u_source_transfer_time;
+  PyObject *__pyx_n_u_source_waiting_time;
   PyObject *__pyx_n_s_spec;
   PyObject *__pyx_n_s_src_vec;
   PyObject *__pyx_n_u_steps;
   PyObject *__pyx_kp_s_stringsource;
+  PyObject *__pyx_n_u_target_station_arrival_day;
+  PyObject *__pyx_n_u_target_station_arrival_time;
+  PyObject *__pyx_n_u_target_transfer_time;
   PyObject *__pyx_n_s_test;
   PyObject *__pyx_n_s_tgt_vec;
   PyObject *__pyx_n_u_to_stop_id;
   PyObject *__pyx_n_u_trip_id;
   PyObject *__pyx_n_u_trip_time;
   PyObject *__pyx_kp_u_utf_8;
-  PyObject *__pyx_n_u_waiting_time;
   PyObject *__pyx_n_u_walking;
   PyObject *__pyx_n_s_weekday;
   PyObject *__pyx_n_s_year;
@@ -2836,8 +2842,6 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s__28);
   Py_CLEAR(clear_module_state->__pyx_n_u_agency_name);
   Py_CLEAR(clear_module_state->__pyx_n_s_append);
-  Py_CLEAR(clear_module_state->__pyx_n_s_arrival_datetime);
-  Py_CLEAR(clear_module_state->__pyx_n_u_arrival_day);
   Py_CLEAR(clear_module_state->__pyx_n_u_arrival_time);
   Py_CLEAR(clear_module_state->__pyx_n_s_asyncio_coroutines);
   Py_CLEAR(clear_module_state->__pyx_n_s_cline_in_traceback);
@@ -2847,7 +2851,6 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_datetime);
   Py_CLEAR(clear_module_state->__pyx_n_s_day);
   Py_CLEAR(clear_module_state->__pyx_n_u_day);
-  Py_CLEAR(clear_module_state->__pyx_n_u_departure_day);
   Py_CLEAR(clear_module_state->__pyx_n_s_departure_time);
   Py_CLEAR(clear_module_state->__pyx_n_u_departure_time);
   Py_CLEAR(clear_module_state->__pyx_n_s_detailed);
@@ -2899,18 +2902,24 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_self);
   Py_CLEAR(clear_module_state->__pyx_n_s_setstate);
   Py_CLEAR(clear_module_state->__pyx_n_s_setstate_cython);
+  Py_CLEAR(clear_module_state->__pyx_n_s_source_station_departure_datetim);
+  Py_CLEAR(clear_module_state->__pyx_n_u_source_station_departure_day);
+  Py_CLEAR(clear_module_state->__pyx_n_u_source_station_departure_time);
   Py_CLEAR(clear_module_state->__pyx_n_u_source_transfer_time);
+  Py_CLEAR(clear_module_state->__pyx_n_u_source_waiting_time);
   Py_CLEAR(clear_module_state->__pyx_n_s_spec);
   Py_CLEAR(clear_module_state->__pyx_n_s_src_vec);
   Py_CLEAR(clear_module_state->__pyx_n_u_steps);
   Py_CLEAR(clear_module_state->__pyx_kp_s_stringsource);
+  Py_CLEAR(clear_module_state->__pyx_n_u_target_station_arrival_day);
+  Py_CLEAR(clear_module_state->__pyx_n_u_target_station_arrival_time);
+  Py_CLEAR(clear_module_state->__pyx_n_u_target_transfer_time);
   Py_CLEAR(clear_module_state->__pyx_n_s_test);
   Py_CLEAR(clear_module_state->__pyx_n_s_tgt_vec);
   Py_CLEAR(clear_module_state->__pyx_n_u_to_stop_id);
   Py_CLEAR(clear_module_state->__pyx_n_u_trip_id);
   Py_CLEAR(clear_module_state->__pyx_n_u_trip_time);
   Py_CLEAR(clear_module_state->__pyx_kp_u_utf_8);
-  Py_CLEAR(clear_module_state->__pyx_n_u_waiting_time);
   Py_CLEAR(clear_module_state->__pyx_n_u_walking);
   Py_CLEAR(clear_module_state->__pyx_n_s_weekday);
   Py_CLEAR(clear_module_state->__pyx_n_s_year);
@@ -2994,8 +3003,6 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s__28);
   Py_VISIT(traverse_module_state->__pyx_n_u_agency_name);
   Py_VISIT(traverse_module_state->__pyx_n_s_append);
-  Py_VISIT(traverse_module_state->__pyx_n_s_arrival_datetime);
-  Py_VISIT(traverse_module_state->__pyx_n_u_arrival_day);
   Py_VISIT(traverse_module_state->__pyx_n_u_arrival_time);
   Py_VISIT(traverse_module_state->__pyx_n_s_asyncio_coroutines);
   Py_VISIT(traverse_module_state->__pyx_n_s_cline_in_traceback);
@@ -3005,7 +3012,6 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_datetime);
   Py_VISIT(traverse_module_state->__pyx_n_s_day);
   Py_VISIT(traverse_module_state->__pyx_n_u_day);
-  Py_VISIT(traverse_module_state->__pyx_n_u_departure_day);
   Py_VISIT(traverse_module_state->__pyx_n_s_departure_time);
   Py_VISIT(traverse_module_state->__pyx_n_u_departure_time);
   Py_VISIT(traverse_module_state->__pyx_n_s_detailed);
@@ -3057,18 +3063,24 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_self);
   Py_VISIT(traverse_module_state->__pyx_n_s_setstate);
   Py_VISIT(traverse_module_state->__pyx_n_s_setstate_cython);
+  Py_VISIT(traverse_module_state->__pyx_n_s_source_station_departure_datetim);
+  Py_VISIT(traverse_module_state->__pyx_n_u_source_station_departure_day);
+  Py_VISIT(traverse_module_state->__pyx_n_u_source_station_departure_time);
   Py_VISIT(traverse_module_state->__pyx_n_u_source_transfer_time);
+  Py_VISIT(traverse_module_state->__pyx_n_u_source_waiting_time);
   Py_VISIT(traverse_module_state->__pyx_n_s_spec);
   Py_VISIT(traverse_module_state->__pyx_n_s_src_vec);
   Py_VISIT(traverse_module_state->__pyx_n_u_steps);
   Py_VISIT(traverse_module_state->__pyx_kp_s_stringsource);
+  Py_VISIT(traverse_module_state->__pyx_n_u_target_station_arrival_day);
+  Py_VISIT(traverse_module_state->__pyx_n_u_target_station_arrival_time);
+  Py_VISIT(traverse_module_state->__pyx_n_u_target_transfer_time);
   Py_VISIT(traverse_module_state->__pyx_n_s_test);
   Py_VISIT(traverse_module_state->__pyx_n_s_tgt_vec);
   Py_VISIT(traverse_module_state->__pyx_n_u_to_stop_id);
   Py_VISIT(traverse_module_state->__pyx_n_u_trip_id);
   Py_VISIT(traverse_module_state->__pyx_n_u_trip_time);
   Py_VISIT(traverse_module_state->__pyx_kp_u_utf_8);
-  Py_VISIT(traverse_module_state->__pyx_n_u_waiting_time);
   Py_VISIT(traverse_module_state->__pyx_n_u_walking);
   Py_VISIT(traverse_module_state->__pyx_n_s_weekday);
   Py_VISIT(traverse_module_state->__pyx_n_s_year);
@@ -3176,8 +3188,6 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s__28 __pyx_mstate_global->__pyx_n_s__28
 #define __pyx_n_u_agency_name __pyx_mstate_global->__pyx_n_u_agency_name
 #define __pyx_n_s_append __pyx_mstate_global->__pyx_n_s_append
-#define __pyx_n_s_arrival_datetime __pyx_mstate_global->__pyx_n_s_arrival_datetime
-#define __pyx_n_u_arrival_day __pyx_mstate_global->__pyx_n_u_arrival_day
 #define __pyx_n_u_arrival_time __pyx_mstate_global->__pyx_n_u_arrival_time
 #define __pyx_n_s_asyncio_coroutines __pyx_mstate_global->__pyx_n_s_asyncio_coroutines
 #define __pyx_n_s_cline_in_traceback __pyx_mstate_global->__pyx_n_s_cline_in_traceback
@@ -3187,7 +3197,6 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_datetime __pyx_mstate_global->__pyx_n_s_datetime
 #define __pyx_n_s_day __pyx_mstate_global->__pyx_n_s_day
 #define __pyx_n_u_day __pyx_mstate_global->__pyx_n_u_day
-#define __pyx_n_u_departure_day __pyx_mstate_global->__pyx_n_u_departure_day
 #define __pyx_n_s_departure_time __pyx_mstate_global->__pyx_n_s_departure_time
 #define __pyx_n_u_departure_time __pyx_mstate_global->__pyx_n_u_departure_time
 #define __pyx_n_s_detailed __pyx_mstate_global->__pyx_n_s_detailed
@@ -3239,18 +3248,24 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_self __pyx_mstate_global->__pyx_n_s_self
 #define __pyx_n_s_setstate __pyx_mstate_global->__pyx_n_s_setstate
 #define __pyx_n_s_setstate_cython __pyx_mstate_global->__pyx_n_s_setstate_cython
+#define __pyx_n_s_source_station_departure_datetim __pyx_mstate_global->__pyx_n_s_source_station_departure_datetim
+#define __pyx_n_u_source_station_departure_day __pyx_mstate_global->__pyx_n_u_source_station_departure_day
+#define __pyx_n_u_source_station_departure_time __pyx_mstate_global->__pyx_n_u_source_station_departure_time
 #define __pyx_n_u_source_transfer_time __pyx_mstate_global->__pyx_n_u_source_transfer_time
+#define __pyx_n_u_source_waiting_time __pyx_mstate_global->__pyx_n_u_source_waiting_time
 #define __pyx_n_s_spec __pyx_mstate_global->__pyx_n_s_spec
 #define __pyx_n_s_src_vec __pyx_mstate_global->__pyx_n_s_src_vec
 #define __pyx_n_u_steps __pyx_mstate_global->__pyx_n_u_steps
 #define __pyx_kp_s_stringsource __pyx_mstate_global->__pyx_kp_s_stringsource
+#define __pyx_n_u_target_station_arrival_day __pyx_mstate_global->__pyx_n_u_target_station_arrival_day
+#define __pyx_n_u_target_station_arrival_time __pyx_mstate_global->__pyx_n_u_target_station_arrival_time
+#define __pyx_n_u_target_transfer_time __pyx_mstate_global->__pyx_n_u_target_transfer_time
 #define __pyx_n_s_test __pyx_mstate_global->__pyx_n_s_test
 #define __pyx_n_s_tgt_vec __pyx_mstate_global->__pyx_n_s_tgt_vec
 #define __pyx_n_u_to_stop_id __pyx_mstate_global->__pyx_n_u_to_stop_id
 #define __pyx_n_u_trip_id __pyx_mstate_global->__pyx_n_u_trip_id
 #define __pyx_n_u_trip_time __pyx_mstate_global->__pyx_n_u_trip_time
 #define __pyx_kp_u_utf_8 __pyx_mstate_global->__pyx_kp_u_utf_8
-#define __pyx_n_u_waiting_time __pyx_mstate_global->__pyx_n_u_waiting_time
 #define __pyx_n_u_walking __pyx_mstate_global->__pyx_n_u_walking
 #define __pyx_n_s_weekday __pyx_mstate_global->__pyx_n_s_weekday
 #define __pyx_n_s_year __pyx_mstate_global->__pyx_n_s_year
@@ -5852,7 +5867,7 @@ static void __pyx_pf_10PyPTRouter_10PyPTRouter_2__dealloc__(struct __pyx_obj_10P
  * 
  *     def construct_query(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
 
 /* Python wrapper */
@@ -5863,7 +5878,7 @@ PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_10PyPTRouter_10PyPTRouter_4construct_query, "PyPTRouter.construct_query(self, arrival_datetime, list included_sources, list included_targets, int max_transfers=-1)\nConstruct query information.\n\n        Args:\n            arrival_datetime (datetime): Arrival datetime at the source station\n            included_sources (list): List of source stop IDs and their station stop transfer times\n            included_targets (list): List of target stop IDs and their station stop transfer times\n            max_transfers (int): Maximum number of transfers allowed\n\n        Returns:\n            query (Query)\n        ");
+PyDoc_STRVAR(__pyx_doc_10PyPTRouter_10PyPTRouter_4construct_query, "PyPTRouter.construct_query(self, source_station_departure_datetime, list included_sources, list included_targets, int max_transfers=-1)\nConstruct query information.\n\n        Args:\n            source_station_departure_datetime (datetime): Departure datetime at the source station\n            included_sources (list): List of source stop IDs and their station stop transfer times\n            included_targets (list): List of target stop IDs and their station stop transfer times\n            max_transfers (int): Maximum number of transfers allowed\n\n        Returns:\n            query (Query)\n        ");
 static PyMethodDef __pyx_mdef_10PyPTRouter_10PyPTRouter_5construct_query = {"construct_query", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_10PyPTRouter_10PyPTRouter_5construct_query, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_10PyPTRouter_10PyPTRouter_4construct_query};
 static PyObject *__pyx_pw_10PyPTRouter_10PyPTRouter_5construct_query(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
@@ -5872,7 +5887,7 @@ PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ) {
-  PyObject *__pyx_v_arrival_datetime = 0;
+  PyObject *__pyx_v_source_station_departure_datetime = 0;
   PyObject *__pyx_v_included_sources = 0;
   PyObject *__pyx_v_included_targets = 0;
   int __pyx_v_max_transfers;
@@ -5896,7 +5911,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   #endif
   __pyx_kwvalues = __Pyx_KwValues_FASTCALL(__pyx_args, __pyx_nargs);
   {
-    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_arrival_datetime,&__pyx_n_s_included_sources,&__pyx_n_s_included_targets,&__pyx_n_s_max_transfers,0};
+    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_source_station_departure_datetim,&__pyx_n_s_included_sources,&__pyx_n_s_included_targets,&__pyx_n_s_max_transfers,0};
     if (__pyx_kwds) {
       Py_ssize_t kw_args;
       switch (__pyx_nargs) {
@@ -5914,7 +5929,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       kw_args = __Pyx_NumKwargs_FASTCALL(__pyx_kwds);
       switch (__pyx_nargs) {
         case  0:
-        if (likely((values[0] = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_arrival_datetime)) != 0)) {
+        if (likely((values[0] = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_source_station_departure_datetim)) != 0)) {
           (void)__Pyx_Arg_NewRef_FASTCALL(values[0]);
           kw_args--;
         }
@@ -5963,7 +5978,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
         default: goto __pyx_L5_argtuple_error;
       }
     }
-    __pyx_v_arrival_datetime = values[0];
+    __pyx_v_source_station_departure_datetime = values[0];
     __pyx_v_included_sources = ((PyObject*)values[1]);
     __pyx_v_included_targets = ((PyObject*)values[2]);
     if (values[3]) {
@@ -5990,7 +6005,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   __pyx_L4_argument_unpacking_done:;
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_included_sources), (&PyList_Type), 1, "included_sources", 1))) __PYX_ERR(0, 74, __pyx_L1_error)
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_included_targets), (&PyList_Type), 1, "included_targets", 1))) __PYX_ERR(0, 74, __pyx_L1_error)
-  __pyx_r = __pyx_pf_10PyPTRouter_10PyPTRouter_4construct_query(((struct __pyx_obj_10PyPTRouter_PyPTRouter *)__pyx_v_self), __pyx_v_arrival_datetime, __pyx_v_included_sources, __pyx_v_included_targets, __pyx_v_max_transfers);
+  __pyx_r = __pyx_pf_10PyPTRouter_10PyPTRouter_4construct_query(((struct __pyx_obj_10PyPTRouter_PyPTRouter *)__pyx_v_self), __pyx_v_source_station_departure_datetime, __pyx_v_included_sources, __pyx_v_included_targets, __pyx_v_max_transfers);
 
   /* function exit code */
   goto __pyx_L0;
@@ -6007,7 +6022,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_4construct_query(CYTHON_UNUSED struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_arrival_datetime, PyObject *__pyx_v_included_sources, PyObject *__pyx_v_included_targets, int __pyx_v_max_transfers) {
+static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_4construct_query(CYTHON_UNUSED struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_source_station_departure_datetime, PyObject *__pyx_v_included_sources, PyObject *__pyx_v_included_targets, int __pyx_v_max_transfers) {
   int __pyx_v_year;
   int __pyx_v_month;
   int __pyx_v_day;
@@ -6046,11 +6061,11 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_4construct_query(CYTHON_UNUS
   /* "PyPTRouter.pyx":88
  *         """
  *         # Calculate day of week using Python's datetime
- *         cdef int year = arrival_datetime.year             # <<<<<<<<<<<<<<
- *         cdef int month = arrival_datetime.month
- *         cdef int day = arrival_datetime.day
+ *         cdef int year = source_station_departure_datetime.year             # <<<<<<<<<<<<<<
+ *         cdef int month = source_station_departure_datetime.month
+ *         cdef int day = source_station_departure_datetime.day
  */
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_arrival_datetime, __pyx_n_s_year); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 88, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_source_station_departure_datetime, __pyx_n_s_year); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 88, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_t_2 = __Pyx_PyInt_As_int(__pyx_t_1); if (unlikely((__pyx_t_2 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 88, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
@@ -6058,38 +6073,38 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_4construct_query(CYTHON_UNUS
 
   /* "PyPTRouter.pyx":89
  *         # Calculate day of week using Python's datetime
- *         cdef int year = arrival_datetime.year
- *         cdef int month = arrival_datetime.month             # <<<<<<<<<<<<<<
- *         cdef int day = arrival_datetime.day
- *         cdef int weekday = arrival_datetime.weekday()
+ *         cdef int year = source_station_departure_datetime.year
+ *         cdef int month = source_station_departure_datetime.month             # <<<<<<<<<<<<<<
+ *         cdef int day = source_station_departure_datetime.day
+ *         cdef int weekday = source_station_departure_datetime.weekday()
  */
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_arrival_datetime, __pyx_n_s_month); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 89, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_source_station_departure_datetime, __pyx_n_s_month); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 89, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_t_2 = __Pyx_PyInt_As_int(__pyx_t_1); if (unlikely((__pyx_t_2 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 89, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __pyx_v_month = __pyx_t_2;
 
   /* "PyPTRouter.pyx":90
- *         cdef int year = arrival_datetime.year
- *         cdef int month = arrival_datetime.month
- *         cdef int day = arrival_datetime.day             # <<<<<<<<<<<<<<
- *         cdef int weekday = arrival_datetime.weekday()
- *         cdef int hours = arrival_datetime.hour
+ *         cdef int year = source_station_departure_datetime.year
+ *         cdef int month = source_station_departure_datetime.month
+ *         cdef int day = source_station_departure_datetime.day             # <<<<<<<<<<<<<<
+ *         cdef int weekday = source_station_departure_datetime.weekday()
+ *         cdef int hours = source_station_departure_datetime.hour
  */
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_arrival_datetime, __pyx_n_s_day); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 90, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_source_station_departure_datetime, __pyx_n_s_day); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 90, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_t_2 = __Pyx_PyInt_As_int(__pyx_t_1); if (unlikely((__pyx_t_2 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 90, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __pyx_v_day = __pyx_t_2;
 
   /* "PyPTRouter.pyx":91
- *         cdef int month = arrival_datetime.month
- *         cdef int day = arrival_datetime.day
- *         cdef int weekday = arrival_datetime.weekday()             # <<<<<<<<<<<<<<
- *         cdef int hours = arrival_datetime.hour
- *         cdef int minutes = arrival_datetime.minute
+ *         cdef int month = source_station_departure_datetime.month
+ *         cdef int day = source_station_departure_datetime.day
+ *         cdef int weekday = source_station_departure_datetime.weekday()             # <<<<<<<<<<<<<<
+ *         cdef int hours = source_station_departure_datetime.hour
+ *         cdef int minutes = source_station_departure_datetime.minute
  */
-  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_v_arrival_datetime, __pyx_n_s_weekday); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 91, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_v_source_station_departure_datetime, __pyx_n_s_weekday); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 91, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __pyx_t_4 = NULL;
   __pyx_t_5 = 0;
@@ -6118,39 +6133,39 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_4construct_query(CYTHON_UNUS
   __pyx_v_weekday = __pyx_t_2;
 
   /* "PyPTRouter.pyx":92
- *         cdef int day = arrival_datetime.day
- *         cdef int weekday = arrival_datetime.weekday()
- *         cdef int hours = arrival_datetime.hour             # <<<<<<<<<<<<<<
- *         cdef int minutes = arrival_datetime.minute
- *         cdef int seconds = arrival_datetime.second
+ *         cdef int day = source_station_departure_datetime.day
+ *         cdef int weekday = source_station_departure_datetime.weekday()
+ *         cdef int hours = source_station_departure_datetime.hour             # <<<<<<<<<<<<<<
+ *         cdef int minutes = source_station_departure_datetime.minute
+ *         cdef int seconds = source_station_departure_datetime.second
  */
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_arrival_datetime, __pyx_n_s_hour); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 92, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_source_station_departure_datetime, __pyx_n_s_hour); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 92, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_t_2 = __Pyx_PyInt_As_int(__pyx_t_1); if (unlikely((__pyx_t_2 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 92, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __pyx_v_hours = __pyx_t_2;
 
   /* "PyPTRouter.pyx":93
- *         cdef int weekday = arrival_datetime.weekday()
- *         cdef int hours = arrival_datetime.hour
- *         cdef int minutes = arrival_datetime.minute             # <<<<<<<<<<<<<<
- *         cdef int seconds = arrival_datetime.second
+ *         cdef int weekday = source_station_departure_datetime.weekday()
+ *         cdef int hours = source_station_departure_datetime.hour
+ *         cdef int minutes = source_station_departure_datetime.minute             # <<<<<<<<<<<<<<
+ *         cdef int seconds = source_station_departure_datetime.second
  * 
  */
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_arrival_datetime, __pyx_n_s_minute); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 93, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_source_station_departure_datetime, __pyx_n_s_minute); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 93, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_t_2 = __Pyx_PyInt_As_int(__pyx_t_1); if (unlikely((__pyx_t_2 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 93, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __pyx_v_minutes = __pyx_t_2;
 
   /* "PyPTRouter.pyx":94
- *         cdef int hours = arrival_datetime.hour
- *         cdef int minutes = arrival_datetime.minute
- *         cdef int seconds = arrival_datetime.second             # <<<<<<<<<<<<<<
+ *         cdef int hours = source_station_departure_datetime.hour
+ *         cdef int minutes = source_station_departure_datetime.minute
+ *         cdef int seconds = source_station_departure_datetime.second             # <<<<<<<<<<<<<<
  * 
  *         # Create date, time objects for C++
  */
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_arrival_datetime, __pyx_n_s_second); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 94, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_source_station_departure_datetime, __pyx_n_s_second); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 94, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_t_2 = __Pyx_PyInt_As_int(__pyx_t_1); if (unlikely((__pyx_t_2 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 94, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
@@ -6574,7 +6589,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_4construct_query(CYTHON_UNUS
  * 
  *     def construct_query(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
 
   /* function exit code */
@@ -6598,7 +6613,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_4construct_query(CYTHON_UNUS
  * 
  *     def return_pt_journeys_1to1(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
 
 /* Python wrapper */
@@ -6609,7 +6624,7 @@ PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1, "PyPTRouter.return_pt_journeys_1to1(self, arrival_datetime, list included_sources, list included_targets, int max_transfers=-1, bool detailed=False)\nFind the best public transport journey from source to target\n\n        This method queries the RAPTOR router to find the optimal journey between two stops\n        at a specified departure time.\n\n        Args:\n            arrival_datetime (datetime): Arrival datetime at the source station\n            included_sources (list): List of source stop IDs and their station stop transfer times\n            included_targets (list): List of target stop IDs and their station stop transfer times\n            max_transfers (int): Maximum number of transfers allowed (-1 for unlimited)\n            detailed (bool): Whether to return the detailed journey plan.\n\n        Returns:\n            dict: A dictionary containing journey details, or None if no journey is found.\n                 The dictionary includes:\n                 - duration: Total journey duration in seconds\n        ");
+PyDoc_STRVAR(__pyx_doc_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1, "PyPTRouter.return_pt_journeys_1to1(self, source_station_departure_datetime, list included_sources, list included_targets, int max_transfers=-1, bool detailed=False)\nFind the best public transport journey from source to target\n\n        This method queries the RAPTOR router to find the optimal journey between two stops\n        at a specified departure time.\n\n        Args:\n            source_station_departure_datetime (datetime): Departure datetime at the source station\n            included_sources (list): List of source stop IDs and their station stop transfer times\n            included_targets (list): List of target stop IDs and their station stop transfer times\n            max_transfers (int): Maximum number of transfers allowed (-1 for unlimited)\n            detailed (bool): Whether to return the detailed journey plan.\n\n        Returns:\n            dict: A dictionary containing journey details, or None if no journey is found.\n                 The dictionary includes:\n                 - duration: Total journey duration in seconds\n        ");
 static PyMethodDef __pyx_mdef_10PyPTRouter_10PyPTRouter_7return_pt_journeys_1to1 = {"return_pt_journeys_1to1", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_10PyPTRouter_10PyPTRouter_7return_pt_journeys_1to1, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1};
 static PyObject *__pyx_pw_10PyPTRouter_10PyPTRouter_7return_pt_journeys_1to1(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
@@ -6618,7 +6633,7 @@ PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ) {
-  PyObject *__pyx_v_arrival_datetime = 0;
+  PyObject *__pyx_v_source_station_departure_datetime = 0;
   PyObject *__pyx_v_included_sources = 0;
   PyObject *__pyx_v_included_targets = 0;
   int __pyx_v_max_transfers;
@@ -6643,7 +6658,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   #endif
   __pyx_kwvalues = __Pyx_KwValues_FASTCALL(__pyx_args, __pyx_nargs);
   {
-    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_arrival_datetime,&__pyx_n_s_included_sources,&__pyx_n_s_included_targets,&__pyx_n_s_max_transfers,&__pyx_n_s_detailed,0};
+    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_source_station_departure_datetim,&__pyx_n_s_included_sources,&__pyx_n_s_included_targets,&__pyx_n_s_max_transfers,&__pyx_n_s_detailed,0};
     if (__pyx_kwds) {
       Py_ssize_t kw_args;
       switch (__pyx_nargs) {
@@ -6663,7 +6678,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       kw_args = __Pyx_NumKwargs_FASTCALL(__pyx_kwds);
       switch (__pyx_nargs) {
         case  0:
-        if (likely((values[0] = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_arrival_datetime)) != 0)) {
+        if (likely((values[0] = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_source_station_departure_datetim)) != 0)) {
           (void)__Pyx_Arg_NewRef_FASTCALL(values[0]);
           kw_args--;
         }
@@ -6721,7 +6736,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
         default: goto __pyx_L5_argtuple_error;
       }
     }
-    __pyx_v_arrival_datetime = values[0];
+    __pyx_v_source_station_departure_datetime = values[0];
     __pyx_v_included_sources = ((PyObject*)values[1]);
     __pyx_v_included_targets = ((PyObject*)values[2]);
     if (values[3]) {
@@ -6734,7 +6749,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
     } else {
 
       /* "PyPTRouter.pyx":125
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  *         list included_sources, list included_targets, int max_transfers=-1,
  *         bool detailed=False,             # <<<<<<<<<<<<<<
  *     ):
@@ -6761,14 +6776,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   __pyx_L4_argument_unpacking_done:;
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_included_sources), (&PyList_Type), 1, "included_sources", 1))) __PYX_ERR(0, 124, __pyx_L1_error)
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_included_targets), (&PyList_Type), 1, "included_targets", 1))) __PYX_ERR(0, 124, __pyx_L1_error)
-  __pyx_r = __pyx_pf_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1(((struct __pyx_obj_10PyPTRouter_PyPTRouter *)__pyx_v_self), __pyx_v_arrival_datetime, __pyx_v_included_sources, __pyx_v_included_targets, __pyx_v_max_transfers, __pyx_v_detailed);
+  __pyx_r = __pyx_pf_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1(((struct __pyx_obj_10PyPTRouter_PyPTRouter *)__pyx_v_self), __pyx_v_source_station_departure_datetime, __pyx_v_included_sources, __pyx_v_included_targets, __pyx_v_max_transfers, __pyx_v_detailed);
 
   /* "PyPTRouter.pyx":121
  *         return Query(src_vec, tgt_vec, date, departure_time, max_transfers)
  * 
  *     def return_pt_journeys_1to1(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
 
   /* function exit code */
@@ -6786,7 +6801,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1(struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_arrival_datetime, PyObject *__pyx_v_included_sources, PyObject *__pyx_v_included_targets, int __pyx_v_max_transfers, bool __pyx_v_detailed) {
+static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1(struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_source_station_departure_datetime, PyObject *__pyx_v_included_sources, PyObject *__pyx_v_included_targets, int __pyx_v_max_transfers, bool __pyx_v_detailed) {
   PyObject *__pyx_v_query = NULL;
   std::vector<struct Journey>  __pyx_v_journeys;
   PyObject *__pyx_v_journeys_list = NULL;
@@ -6846,7 +6861,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1(str
  *             raise RuntimeError("RAPTOR router not initialized. Please initialize first.")
  * 
  *         query = self.construct_query(             # <<<<<<<<<<<<<<
- *             arrival_datetime, included_sources, included_targets, max_transfers,
+ *             source_station_departure_datetime, included_sources, included_targets, max_transfers,
  *         )
  */
   __pyx_t_3 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_n_s_construct_query); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 147, __pyx_L1_error)
@@ -6855,7 +6870,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1(str
   /* "PyPTRouter.pyx":148
  * 
  *         query = self.construct_query(
- *             arrival_datetime, included_sources, included_targets, max_transfers,             # <<<<<<<<<<<<<<
+ *             source_station_departure_datetime, included_sources, included_targets, max_transfers,             # <<<<<<<<<<<<<<
  *         )
  * 
  */
@@ -6876,7 +6891,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1(str
   }
   #endif
   {
-    PyObject *__pyx_callargs[5] = {__pyx_t_5, __pyx_v_arrival_datetime, __pyx_v_included_sources, __pyx_v_included_targets, __pyx_t_4};
+    PyObject *__pyx_callargs[5] = {__pyx_t_5, __pyx_v_source_station_departure_datetime, __pyx_v_included_sources, __pyx_v_included_targets, __pyx_t_4};
     __pyx_t_2 = __Pyx_PyObject_FastCall(__pyx_t_3, __pyx_callargs+1-__pyx_t_6, 4+__pyx_t_6);
     __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
@@ -6999,7 +7014,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1(str
  * 
  *     def return_pt_journeys_1to1(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
 
   /* function exit code */
@@ -7024,7 +7039,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_6return_pt_journeys_1to1(str
  * 
  *     def return_fastest_pt_journey_1to1(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
 
 /* Python wrapper */
@@ -7035,7 +7050,7 @@ PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1to1, "PyPTRouter.return_fastest_pt_journey_1to1(self, arrival_datetime, list included_sources, list included_targets, int max_transfers=-1, bool detailed=False)\nFind the fastest public transport journey from source to target\n\n        This method queries the RAPTOR router to find the optimal journey between two stops\n        at a specified departure time.\n\n        Args:\n            arrival_datetime (datetime): Arrival datetime at the source station\n            included_sources (list): List of source stop IDs and their station stop transfer times\n            included_targets (list): List of target stop IDs and their station stop transfer times\n            max_transfers (int): Maximum number of transfers allowed (-1 for unlimited)\n            detailed (bool): Whether to return the detailed journey plan.\n\n        Returns:\n            dict: A dictionary containing journey details, or None if no journey is found.\n                 The dictionary includes:\n                 - duration: Total journey duration in seconds\n        ");
+PyDoc_STRVAR(__pyx_doc_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1to1, "PyPTRouter.return_fastest_pt_journey_1to1(self, source_station_departure_datetime, list included_sources, list included_targets, int max_transfers=-1, bool detailed=False)\nFind the fastest public transport journey from source station to target station\n\n        Args:\n            source_station_departure_datetime (datetime): Departure datetime at the source station\n            included_sources (list): List of source stop IDs and their station stop transfer times\n            included_targets (list): List of target stop IDs and their station stop transfer times\n            max_transfers (int): Maximum number of transfers allowed (-1 for unlimited)\n            detailed (bool): Whether to return the detailed journey plan.\n\n        Returns:\n            dict: A dictionary containing journey details, or None if no journey is found.\n                 The dictionary includes:\n                 - duration: Total journey duration in seconds\n        ");
 static PyMethodDef __pyx_mdef_10PyPTRouter_10PyPTRouter_9return_fastest_pt_journey_1to1 = {"return_fastest_pt_journey_1to1", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_10PyPTRouter_10PyPTRouter_9return_fastest_pt_journey_1to1, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1to1};
 static PyObject *__pyx_pw_10PyPTRouter_10PyPTRouter_9return_fastest_pt_journey_1to1(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
@@ -7044,7 +7059,7 @@ PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ) {
-  PyObject *__pyx_v_arrival_datetime = 0;
+  PyObject *__pyx_v_source_station_departure_datetime = 0;
   PyObject *__pyx_v_included_sources = 0;
   PyObject *__pyx_v_included_targets = 0;
   int __pyx_v_max_transfers;
@@ -7069,7 +7084,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   #endif
   __pyx_kwvalues = __Pyx_KwValues_FASTCALL(__pyx_args, __pyx_nargs);
   {
-    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_arrival_datetime,&__pyx_n_s_included_sources,&__pyx_n_s_included_targets,&__pyx_n_s_max_transfers,&__pyx_n_s_detailed,0};
+    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_source_station_departure_datetim,&__pyx_n_s_included_sources,&__pyx_n_s_included_targets,&__pyx_n_s_max_transfers,&__pyx_n_s_detailed,0};
     if (__pyx_kwds) {
       Py_ssize_t kw_args;
       switch (__pyx_nargs) {
@@ -7089,7 +7104,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       kw_args = __Pyx_NumKwargs_FASTCALL(__pyx_kwds);
       switch (__pyx_nargs) {
         case  0:
-        if (likely((values[0] = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_arrival_datetime)) != 0)) {
+        if (likely((values[0] = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_source_station_departure_datetim)) != 0)) {
           (void)__Pyx_Arg_NewRef_FASTCALL(values[0]);
           kw_args--;
         }
@@ -7147,7 +7162,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
         default: goto __pyx_L5_argtuple_error;
       }
     }
-    __pyx_v_arrival_datetime = values[0];
+    __pyx_v_source_station_departure_datetime = values[0];
     __pyx_v_included_sources = ((PyObject*)values[1]);
     __pyx_v_included_targets = ((PyObject*)values[2]);
     if (values[3]) {
@@ -7160,11 +7175,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
     } else {
 
       /* "PyPTRouter.pyx":171
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  *         list included_sources, list included_targets, int max_transfers=-1,
  *         bool detailed=False,             # <<<<<<<<<<<<<<
  *     ):
- *         """Find the fastest public transport journey from source to target
+ *         """Find the fastest public transport journey from source station to target station
  */
       __pyx_v_detailed = ((bool)0);
     }
@@ -7187,14 +7202,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   __pyx_L4_argument_unpacking_done:;
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_included_sources), (&PyList_Type), 1, "included_sources", 1))) __PYX_ERR(0, 170, __pyx_L1_error)
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_included_targets), (&PyList_Type), 1, "included_targets", 1))) __PYX_ERR(0, 170, __pyx_L1_error)
-  __pyx_r = __pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1to1(((struct __pyx_obj_10PyPTRouter_PyPTRouter *)__pyx_v_self), __pyx_v_arrival_datetime, __pyx_v_included_sources, __pyx_v_included_targets, __pyx_v_max_transfers, __pyx_v_detailed);
+  __pyx_r = __pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1to1(((struct __pyx_obj_10PyPTRouter_PyPTRouter *)__pyx_v_self), __pyx_v_source_station_departure_datetime, __pyx_v_included_sources, __pyx_v_included_targets, __pyx_v_max_transfers, __pyx_v_detailed);
 
   /* "PyPTRouter.pyx":167
  *         return journeys_list
  * 
  *     def return_fastest_pt_journey_1to1(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
 
   /* function exit code */
@@ -7212,7 +7227,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1to1(struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_arrival_datetime, PyObject *__pyx_v_included_sources, PyObject *__pyx_v_included_targets, int __pyx_v_max_transfers, bool __pyx_v_detailed) {
+static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1to1(struct __pyx_obj_10PyPTRouter_PyPTRouter *__pyx_v_self, PyObject *__pyx_v_source_station_departure_datetime, PyObject *__pyx_v_included_sources, PyObject *__pyx_v_included_targets, int __pyx_v_max_transfers, bool __pyx_v_detailed) {
   PyObject *__pyx_v_query = NULL;
   std::optional<struct Journey>  __pyx_v_journey_opt;
   struct Journey __pyx_v_journey;
@@ -7232,7 +7247,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("return_fastest_pt_journey_1to1", 1);
 
-  /* "PyPTRouter.pyx":190
+  /* "PyPTRouter.pyx":187
  *                  - duration: Total journey duration in seconds
  *         """
  *         if self.raptor_ptr == NULL:             # <<<<<<<<<<<<<<
@@ -7242,20 +7257,20 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1
   __pyx_t_1 = (__pyx_v_self->raptor_ptr == NULL);
   if (unlikely(__pyx_t_1)) {
 
-    /* "PyPTRouter.pyx":191
+    /* "PyPTRouter.pyx":188
  *         """
  *         if self.raptor_ptr == NULL:
  *             raise RuntimeError("RAPTOR router not initialized. Please initialize first.")             # <<<<<<<<<<<<<<
  * 
  *         query = self.construct_query(
  */
-    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_RuntimeError, __pyx_tuple__13, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 191, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_RuntimeError, __pyx_tuple__13, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 188, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_Raise(__pyx_t_2, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __PYX_ERR(0, 191, __pyx_L1_error)
+    __PYX_ERR(0, 188, __pyx_L1_error)
 
-    /* "PyPTRouter.pyx":190
+    /* "PyPTRouter.pyx":187
  *                  - duration: Total journey duration in seconds
  *         """
  *         if self.raptor_ptr == NULL:             # <<<<<<<<<<<<<<
@@ -7264,24 +7279,24 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1
  */
   }
 
-  /* "PyPTRouter.pyx":193
+  /* "PyPTRouter.pyx":190
  *             raise RuntimeError("RAPTOR router not initialized. Please initialize first.")
  * 
  *         query = self.construct_query(             # <<<<<<<<<<<<<<
- *             arrival_datetime, included_sources, included_targets, max_transfers,
+ *             source_station_departure_datetime, included_sources, included_targets, max_transfers,
  *         )
  */
-  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_n_s_construct_query); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 193, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_n_s_construct_query); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 190, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
 
-  /* "PyPTRouter.pyx":194
+  /* "PyPTRouter.pyx":191
  * 
  *         query = self.construct_query(
- *             arrival_datetime, included_sources, included_targets, max_transfers,             # <<<<<<<<<<<<<<
+ *             source_station_departure_datetime, included_sources, included_targets, max_transfers,             # <<<<<<<<<<<<<<
  *         )
  * 
  */
-  __pyx_t_4 = __Pyx_PyInt_From_int(__pyx_v_max_transfers); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 194, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyInt_From_int(__pyx_v_max_transfers); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 191, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __pyx_t_5 = NULL;
   __pyx_t_6 = 0;
@@ -7298,28 +7313,28 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1
   }
   #endif
   {
-    PyObject *__pyx_callargs[5] = {__pyx_t_5, __pyx_v_arrival_datetime, __pyx_v_included_sources, __pyx_v_included_targets, __pyx_t_4};
+    PyObject *__pyx_callargs[5] = {__pyx_t_5, __pyx_v_source_station_departure_datetime, __pyx_v_included_sources, __pyx_v_included_targets, __pyx_t_4};
     __pyx_t_2 = __Pyx_PyObject_FastCall(__pyx_t_3, __pyx_callargs+1-__pyx_t_6, 4+__pyx_t_6);
     __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 193, __pyx_L1_error)
+    if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 190, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   }
   __pyx_v_query = __pyx_t_2;
   __pyx_t_2 = 0;
 
-  /* "PyPTRouter.pyx":198
+  /* "PyPTRouter.pyx":195
  * 
  *         # Set query and find journeys
  *         self.raptor_ptr.setQuery(query)             # <<<<<<<<<<<<<<
  *         cdef optional[Journey] journey_opt = self.raptor_ptr.findOptimalJourney()
  * 
  */
-  __pyx_t_7 = __pyx_convert__from_py_struct__Query(__pyx_v_query); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 198, __pyx_L1_error)
+  __pyx_t_7 = __pyx_convert__from_py_struct__Query(__pyx_v_query); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 195, __pyx_L1_error)
   __pyx_v_self->raptor_ptr->setQuery(__pyx_t_7);
 
-  /* "PyPTRouter.pyx":199
+  /* "PyPTRouter.pyx":196
  *         # Set query and find journeys
  *         self.raptor_ptr.setQuery(query)
  *         cdef optional[Journey] journey_opt = self.raptor_ptr.findOptimalJourney()             # <<<<<<<<<<<<<<
@@ -7328,7 +7343,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1
  */
   __pyx_v_journey_opt = __pyx_v_self->raptor_ptr->findOptimalJourney();
 
-  /* "PyPTRouter.pyx":202
+  /* "PyPTRouter.pyx":199
  * 
  *         # Check if journey was found
  *         if not journey_opt.has_value():             # <<<<<<<<<<<<<<
@@ -7338,7 +7353,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1
   __pyx_t_1 = (!(__pyx_v_journey_opt.has_value() != 0));
   if (__pyx_t_1) {
 
-    /* "PyPTRouter.pyx":203
+    /* "PyPTRouter.pyx":200
  *         # Check if journey was found
  *         if not journey_opt.has_value():
  *             return None             # <<<<<<<<<<<<<<
@@ -7349,7 +7364,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1
     __pyx_r = Py_None; __Pyx_INCREF(Py_None);
     goto __pyx_L0;
 
-    /* "PyPTRouter.pyx":202
+    /* "PyPTRouter.pyx":199
  * 
  *         # Check if journey was found
  *         if not journey_opt.has_value():             # <<<<<<<<<<<<<<
@@ -7358,7 +7373,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1
  */
   }
 
-  /* "PyPTRouter.pyx":206
+  /* "PyPTRouter.pyx":203
  * 
  *         # Get the actual journey from optional
  *         cdef Journey journey = journey_opt.value()             # <<<<<<<<<<<<<<
@@ -7369,23 +7384,23 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1
     __pyx_t_8 = __pyx_v_journey_opt.value();
   } catch(...) {
     __Pyx_CppExn2PyErr();
-    __PYX_ERR(0, 206, __pyx_L1_error)
+    __PYX_ERR(0, 203, __pyx_L1_error)
   }
   __pyx_v_journey = __pyx_t_8;
 
-  /* "PyPTRouter.pyx":209
+  /* "PyPTRouter.pyx":206
  * 
  *         # Convert journey to Python dictionary
  *         journey_dict = self._convert_journey_to_dict(journey, detailed)             # <<<<<<<<<<<<<<
  * 
  *         return journey_dict
  */
-  __pyx_t_2 = ((struct __pyx_vtabstruct_10PyPTRouter_PyPTRouter *)__pyx_v_self->__pyx_vtab)->_convert_journey_to_dict(__pyx_v_self, __pyx_v_journey, __pyx_v_detailed); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 209, __pyx_L1_error)
+  __pyx_t_2 = ((struct __pyx_vtabstruct_10PyPTRouter_PyPTRouter *)__pyx_v_self->__pyx_vtab)->_convert_journey_to_dict(__pyx_v_self, __pyx_v_journey, __pyx_v_detailed); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 206, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_v_journey_dict = __pyx_t_2;
   __pyx_t_2 = 0;
 
-  /* "PyPTRouter.pyx":211
+  /* "PyPTRouter.pyx":208
  *         journey_dict = self._convert_journey_to_dict(journey, detailed)
  * 
  *         return journey_dict             # <<<<<<<<<<<<<<
@@ -7402,7 +7417,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1
  * 
  *     def return_fastest_pt_journey_1to1(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
 
   /* function exit code */
@@ -7421,7 +7436,7 @@ static PyObject *__pyx_pf_10PyPTRouter_10PyPTRouter_8return_fastest_pt_journey_1
   return __pyx_r;
 }
 
-/* "PyPTRouter.pyx":213
+/* "PyPTRouter.pyx":210
  *         return journey_dict
  * 
  *     cdef _convert_journey_to_dict(self, Journey journey, bool detailed):             # <<<<<<<<<<<<<<
@@ -7447,131 +7462,143 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_to_dict(stru
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("_convert_journey_to_dict", 1);
 
-  /* "PyPTRouter.pyx":228
+  /* "PyPTRouter.pyx":225
  *         journey_dict = {
  *             # Overall journey information
  *             "duration": journey.duration,             # <<<<<<<<<<<<<<
- *             "source_transfer_time": journey.source_transfer_time,
- *             "waiting_time": journey.waiting_time,
- */
-  __pyx_t_1 = __Pyx_PyDict_NewPresized(10); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 228, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.duration); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 228, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_duration, __pyx_t_2) < 0) __PYX_ERR(0, 228, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-
-  /* "PyPTRouter.pyx":229
- *             # Overall journey information
- *             "duration": journey.duration,
- *             "source_transfer_time": journey.source_transfer_time,             # <<<<<<<<<<<<<<
- *             "waiting_time": journey.waiting_time,
- *             "trip_time": journey.trip_time,
- */
-  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.source_transfer_time); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 229, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_source_transfer_time, __pyx_t_2) < 0) __PYX_ERR(0, 228, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-
-  /* "PyPTRouter.pyx":230
- *             "duration": journey.duration,
- *             "source_transfer_time": journey.source_transfer_time,
- *             "waiting_time": journey.waiting_time,             # <<<<<<<<<<<<<<
  *             "trip_time": journey.trip_time,
  *             "num_transfers": journey.num_transfers,
  */
-  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.waiting_time); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 230, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyDict_NewPresized(11); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 225, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.duration); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 225, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_waiting_time, __pyx_t_2) < 0) __PYX_ERR(0, 228, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_duration, __pyx_t_2) < 0) __PYX_ERR(0, 225, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "PyPTRouter.pyx":231
- *             "source_transfer_time": journey.source_transfer_time,
- *             "waiting_time": journey.waiting_time,
+  /* "PyPTRouter.pyx":226
+ *             # Overall journey information
+ *             "duration": journey.duration,
  *             "trip_time": journey.trip_time,             # <<<<<<<<<<<<<<
  *             "num_transfers": journey.num_transfers,
  * 
  */
-  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.trip_time); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 231, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.trip_time); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 226, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_trip_time, __pyx_t_2) < 0) __PYX_ERR(0, 228, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_trip_time, __pyx_t_2) < 0) __PYX_ERR(0, 225, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "PyPTRouter.pyx":232
- *             "waiting_time": journey.waiting_time,
+  /* "PyPTRouter.pyx":227
+ *             "duration": journey.duration,
  *             "trip_time": journey.trip_time,
  *             "num_transfers": journey.num_transfers,             # <<<<<<<<<<<<<<
  * 
  *             # Departure information
  */
-  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.num_transfers); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 232, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.num_transfers); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 227, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_num_transfers, __pyx_t_2) < 0) __PYX_ERR(0, 228, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_num_transfers, __pyx_t_2) < 0) __PYX_ERR(0, 225, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "PyPTRouter.pyx":235
+  /* "PyPTRouter.pyx":230
  * 
  *             # Departure information
- *             "departure_time": journey.departure_secs,             # <<<<<<<<<<<<<<
- *             "departure_day": self._day_to_str(journey.departure_day),
+ *             "source_transfer_time": journey.source_transfer_time,             # <<<<<<<<<<<<<<
+ *             "source_waiting_time": journey.source_waiting_time,
+ *             "source_station_departure_time": journey.source_station_departure_secs,
+ */
+  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.source_transfer_time); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 230, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_source_transfer_time, __pyx_t_2) < 0) __PYX_ERR(0, 225, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+  /* "PyPTRouter.pyx":231
+ *             # Departure information
+ *             "source_transfer_time": journey.source_transfer_time,
+ *             "source_waiting_time": journey.source_waiting_time,             # <<<<<<<<<<<<<<
+ *             "source_station_departure_time": journey.source_station_departure_secs,
+ *             "source_station_departure_day": self._day_to_str(journey.source_station_departure_day),
+ */
+  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.source_waiting_time); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 231, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_source_waiting_time, __pyx_t_2) < 0) __PYX_ERR(0, 225, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+  /* "PyPTRouter.pyx":232
+ *             "source_transfer_time": journey.source_transfer_time,
+ *             "source_waiting_time": journey.source_waiting_time,
+ *             "source_station_departure_time": journey.source_station_departure_secs,             # <<<<<<<<<<<<<<
+ *             "source_station_departure_day": self._day_to_str(journey.source_station_departure_day),
  * 
  */
-  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.departure_secs); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 235, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.source_station_departure_secs); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 232, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_departure_time, __pyx_t_2) < 0) __PYX_ERR(0, 228, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_source_station_departure_time, __pyx_t_2) < 0) __PYX_ERR(0, 225, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+  /* "PyPTRouter.pyx":233
+ *             "source_waiting_time": journey.source_waiting_time,
+ *             "source_station_departure_time": journey.source_station_departure_secs,
+ *             "source_station_departure_day": self._day_to_str(journey.source_station_departure_day),             # <<<<<<<<<<<<<<
+ * 
+ *             # Arrival information
+ */
+  __pyx_t_2 = ((struct __pyx_vtabstruct_10PyPTRouter_PyPTRouter *)__pyx_v_self->__pyx_vtab)->_day_to_str(__pyx_v_self, __pyx_v_journey.source_station_departure_day); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 233, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_source_station_departure_day, __pyx_t_2) < 0) __PYX_ERR(0, 225, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
   /* "PyPTRouter.pyx":236
- *             # Departure information
- *             "departure_time": journey.departure_secs,
- *             "departure_day": self._day_to_str(journey.departure_day),             # <<<<<<<<<<<<<<
  * 
  *             # Arrival information
+ *             "target_station_arrival_time": journey.target_station_arrival_secs,             # <<<<<<<<<<<<<<
+ *             "target_station_arrival_day": self._day_to_str(journey.target_station_arrival_day),
+ *             "target_transfer_time": journey.target_transfer_time,
  */
-  __pyx_t_2 = ((struct __pyx_vtabstruct_10PyPTRouter_PyPTRouter *)__pyx_v_self->__pyx_vtab)->_day_to_str(__pyx_v_self, __pyx_v_journey.departure_day); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 236, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.target_station_arrival_secs); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 236, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_departure_day, __pyx_t_2) < 0) __PYX_ERR(0, 228, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_target_station_arrival_time, __pyx_t_2) < 0) __PYX_ERR(0, 225, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "PyPTRouter.pyx":239
- * 
+  /* "PyPTRouter.pyx":237
  *             # Arrival information
- *             "arrival_time": journey.arrival_secs,             # <<<<<<<<<<<<<<
- *             "arrival_day": self._day_to_str(journey.arrival_day),
+ *             "target_station_arrival_time": journey.target_station_arrival_secs,
+ *             "target_station_arrival_day": self._day_to_str(journey.target_station_arrival_day),             # <<<<<<<<<<<<<<
+ *             "target_transfer_time": journey.target_transfer_time,
  * 
  */
-  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.arrival_secs); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 239, __pyx_L1_error)
+  __pyx_t_2 = ((struct __pyx_vtabstruct_10PyPTRouter_PyPTRouter *)__pyx_v_self->__pyx_vtab)->_day_to_str(__pyx_v_self, __pyx_v_journey.target_station_arrival_day); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 237, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_arrival_time, __pyx_t_2) < 0) __PYX_ERR(0, 228, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_target_station_arrival_day, __pyx_t_2) < 0) __PYX_ERR(0, 225, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "PyPTRouter.pyx":240
- *             # Arrival information
- *             "arrival_time": journey.arrival_secs,
- *             "arrival_day": self._day_to_str(journey.arrival_day),             # <<<<<<<<<<<<<<
+  /* "PyPTRouter.pyx":238
+ *             "target_station_arrival_time": journey.target_station_arrival_secs,
+ *             "target_station_arrival_day": self._day_to_str(journey.target_station_arrival_day),
+ *             "target_transfer_time": journey.target_transfer_time,             # <<<<<<<<<<<<<<
  * 
  *             # Journey steps
  */
-  __pyx_t_2 = ((struct __pyx_vtabstruct_10PyPTRouter_PyPTRouter *)__pyx_v_self->__pyx_vtab)->_day_to_str(__pyx_v_self, __pyx_v_journey.arrival_day); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 240, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_journey.target_transfer_time); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 238, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_arrival_day, __pyx_t_2) < 0) __PYX_ERR(0, 228, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_target_transfer_time, __pyx_t_2) < 0) __PYX_ERR(0, 225, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "PyPTRouter.pyx":243
+  /* "PyPTRouter.pyx":241
  * 
  *             # Journey steps
  *             "steps": []             # <<<<<<<<<<<<<<
  *         }
  * 
  */
-  __pyx_t_2 = PyList_New(0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 243, __pyx_L1_error)
+  __pyx_t_2 = PyList_New(0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 241, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_steps, __pyx_t_2) < 0) __PYX_ERR(0, 228, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_u_steps, __pyx_t_2) < 0) __PYX_ERR(0, 225, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __pyx_v_journey_dict = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "PyPTRouter.pyx":246
+  /* "PyPTRouter.pyx":244
  *         }
  * 
  *         if not detailed:             # <<<<<<<<<<<<<<
@@ -7581,7 +7608,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_to_dict(stru
   __pyx_t_3 = (!(__pyx_v_detailed != 0));
   if (__pyx_t_3) {
 
-    /* "PyPTRouter.pyx":247
+    /* "PyPTRouter.pyx":245
  * 
  *         if not detailed:
  *             return journey_dict             # <<<<<<<<<<<<<<
@@ -7593,7 +7620,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_to_dict(stru
     __pyx_r = __pyx_v_journey_dict;
     goto __pyx_L0;
 
-    /* "PyPTRouter.pyx":246
+    /* "PyPTRouter.pyx":244
  *         }
  * 
  *         if not detailed:             # <<<<<<<<<<<<<<
@@ -7602,7 +7629,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_to_dict(stru
  */
   }
 
-  /* "PyPTRouter.pyx":250
+  /* "PyPTRouter.pyx":248
  * 
  *         # Convert each journey step
  *         for i in range(journey.steps.size()):             # <<<<<<<<<<<<<<
@@ -7614,32 +7641,32 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_to_dict(stru
   for (__pyx_t_6 = 0; __pyx_t_6 < __pyx_t_5; __pyx_t_6+=1) {
     __pyx_v_i = __pyx_t_6;
 
-    /* "PyPTRouter.pyx":251
+    /* "PyPTRouter.pyx":249
  *         # Convert each journey step
  *         for i in range(journey.steps.size()):
  *             step_dict = self._convert_journey_step(journey.steps[i])             # <<<<<<<<<<<<<<
  *             journey_dict["steps"].append(step_dict)
  * 
  */
-    __pyx_t_1 = ((struct __pyx_vtabstruct_10PyPTRouter_PyPTRouter *)__pyx_v_self->__pyx_vtab)->_convert_journey_step(__pyx_v_self, (__pyx_v_journey.steps[__pyx_v_i])); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 251, __pyx_L1_error)
+    __pyx_t_1 = ((struct __pyx_vtabstruct_10PyPTRouter_PyPTRouter *)__pyx_v_self->__pyx_vtab)->_convert_journey_step(__pyx_v_self, (__pyx_v_journey.steps[__pyx_v_i])); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 249, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
     __Pyx_XDECREF_SET(__pyx_v_step_dict, __pyx_t_1);
     __pyx_t_1 = 0;
 
-    /* "PyPTRouter.pyx":252
+    /* "PyPTRouter.pyx":250
  *         for i in range(journey.steps.size()):
  *             step_dict = self._convert_journey_step(journey.steps[i])
  *             journey_dict["steps"].append(step_dict)             # <<<<<<<<<<<<<<
  * 
  *         return journey_dict
  */
-    __pyx_t_1 = __Pyx_PyDict_GetItem(__pyx_v_journey_dict, __pyx_n_u_steps); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 252, __pyx_L1_error)
+    __pyx_t_1 = __Pyx_PyDict_GetItem(__pyx_v_journey_dict, __pyx_n_u_steps); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 250, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_7 = __Pyx_PyObject_Append(__pyx_t_1, __pyx_v_step_dict); if (unlikely(__pyx_t_7 == ((int)-1))) __PYX_ERR(0, 252, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_Append(__pyx_t_1, __pyx_v_step_dict); if (unlikely(__pyx_t_7 == ((int)-1))) __PYX_ERR(0, 250, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   }
 
-  /* "PyPTRouter.pyx":254
+  /* "PyPTRouter.pyx":252
  *             journey_dict["steps"].append(step_dict)
  * 
  *         return journey_dict             # <<<<<<<<<<<<<<
@@ -7651,7 +7678,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_to_dict(stru
   __pyx_r = __pyx_v_journey_dict;
   goto __pyx_L0;
 
-  /* "PyPTRouter.pyx":213
+  /* "PyPTRouter.pyx":210
  *         return journey_dict
  * 
  *     cdef _convert_journey_to_dict(self, Journey journey, bool detailed):             # <<<<<<<<<<<<<<
@@ -7673,7 +7700,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_to_dict(stru
   return __pyx_r;
 }
 
-/* "PyPTRouter.pyx":256
+/* "PyPTRouter.pyx":254
  *         return journey_dict
  * 
  *     cdef str _day_to_str(self, Day day):             # <<<<<<<<<<<<<<
@@ -7687,7 +7714,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__day_to_str(CYTHON_UNUSED str
   int __pyx_t_1;
   __Pyx_RefNannySetupContext("_day_to_str", 1);
 
-  /* "PyPTRouter.pyx":258
+  /* "PyPTRouter.pyx":256
  *     cdef str _day_to_str(self, Day day):
  *         """Convert Day enum to string"""
  *         if day == Day.CurrentDay:             # <<<<<<<<<<<<<<
@@ -7697,7 +7724,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__day_to_str(CYTHON_UNUSED str
   __pyx_t_1 = (__pyx_v_day == Day::CurrentDay);
   if (__pyx_t_1) {
 
-    /* "PyPTRouter.pyx":259
+    /* "PyPTRouter.pyx":257
  *         """Convert Day enum to string"""
  *         if day == Day.CurrentDay:
  *             return "current_day"             # <<<<<<<<<<<<<<
@@ -7709,7 +7736,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__day_to_str(CYTHON_UNUSED str
     __pyx_r = __pyx_n_u_current_day;
     goto __pyx_L0;
 
-    /* "PyPTRouter.pyx":258
+    /* "PyPTRouter.pyx":256
  *     cdef str _day_to_str(self, Day day):
  *         """Convert Day enum to string"""
  *         if day == Day.CurrentDay:             # <<<<<<<<<<<<<<
@@ -7718,7 +7745,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__day_to_str(CYTHON_UNUSED str
  */
   }
 
-  /* "PyPTRouter.pyx":261
+  /* "PyPTRouter.pyx":259
  *             return "current_day"
  *         else:
  *             return "next_day"             # <<<<<<<<<<<<<<
@@ -7732,7 +7759,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__day_to_str(CYTHON_UNUSED str
     goto __pyx_L0;
   }
 
-  /* "PyPTRouter.pyx":256
+  /* "PyPTRouter.pyx":254
  *         return journey_dict
  * 
  *     cdef str _day_to_str(self, Day day):             # <<<<<<<<<<<<<<
@@ -7747,7 +7774,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__day_to_str(CYTHON_UNUSED str
   return __pyx_r;
 }
 
-/* "PyPTRouter.pyx":263
+/* "PyPTRouter.pyx":261
  *             return "next_day"
  * 
  *     cdef _convert_journey_step(self, JourneyStep step):             # <<<<<<<<<<<<<<
@@ -7771,7 +7798,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_step(struct 
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("_convert_journey_step", 1);
 
-  /* "PyPTRouter.pyx":266
+  /* "PyPTRouter.pyx":264
  *         """Convert a JourneyStep to Python dictionary"""
  * 
  *         cdef string stop_id_str = string(b"stop_id")             # <<<<<<<<<<<<<<
@@ -7782,87 +7809,87 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_step(struct 
     __pyx_t_1 = std::string(((char const *)"stop_id"));
   } catch(...) {
     __Pyx_CppExn2PyErr();
-    __PYX_ERR(0, 266, __pyx_L1_error)
+    __PYX_ERR(0, 264, __pyx_L1_error)
   }
   __pyx_v_stop_id_str = __PYX_STD_MOVE_IF_SUPPORTED(__pyx_t_1);
 
-  /* "PyPTRouter.pyx":270
+  /* "PyPTRouter.pyx":268
  *         step_dict = {
  *             # Basic information
  *             "duration": step.duration,             # <<<<<<<<<<<<<<
  * 
  *             # Time information
  */
-  __pyx_t_2 = __Pyx_PyDict_NewPresized(6); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 270, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyDict_NewPresized(6); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 268, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_3 = __Pyx_PyInt_From_int(__pyx_v_step.duration); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 270, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyInt_From_int(__pyx_v_step.duration); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 268, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_t_2, __pyx_n_u_duration, __pyx_t_3) < 0) __PYX_ERR(0, 270, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_2, __pyx_n_u_duration, __pyx_t_3) < 0) __PYX_ERR(0, 268, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "PyPTRouter.pyx":273
+  /* "PyPTRouter.pyx":271
  * 
  *             # Time information
  *             "departure_time": step.departure_secs,             # <<<<<<<<<<<<<<
  *             "arrival_time": step.arrival_secs,
  *             "day": self._day_to_str(step.day),
  */
-  __pyx_t_3 = __Pyx_PyInt_From_int(__pyx_v_step.departure_secs); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 273, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyInt_From_int(__pyx_v_step.departure_secs); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 271, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_t_2, __pyx_n_u_departure_time, __pyx_t_3) < 0) __PYX_ERR(0, 270, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_2, __pyx_n_u_departure_time, __pyx_t_3) < 0) __PYX_ERR(0, 268, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "PyPTRouter.pyx":274
+  /* "PyPTRouter.pyx":272
  *             # Time information
  *             "departure_time": step.departure_secs,
  *             "arrival_time": step.arrival_secs,             # <<<<<<<<<<<<<<
  *             "day": self._day_to_str(step.day),
  * 
  */
-  __pyx_t_3 = __Pyx_PyInt_From_int(__pyx_v_step.arrival_secs); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 274, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyInt_From_int(__pyx_v_step.arrival_secs); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 272, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_t_2, __pyx_n_u_arrival_time, __pyx_t_3) < 0) __PYX_ERR(0, 270, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_2, __pyx_n_u_arrival_time, __pyx_t_3) < 0) __PYX_ERR(0, 268, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "PyPTRouter.pyx":275
+  /* "PyPTRouter.pyx":273
  *             "departure_time": step.departure_secs,
  *             "arrival_time": step.arrival_secs,
  *             "day": self._day_to_str(step.day),             # <<<<<<<<<<<<<<
  * 
  *             # Stop information
  */
-  __pyx_t_3 = ((struct __pyx_vtabstruct_10PyPTRouter_PyPTRouter *)__pyx_v_self->__pyx_vtab)->_day_to_str(__pyx_v_self, __pyx_v_step.day); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 275, __pyx_L1_error)
+  __pyx_t_3 = ((struct __pyx_vtabstruct_10PyPTRouter_PyPTRouter *)__pyx_v_self->__pyx_vtab)->_day_to_str(__pyx_v_self, __pyx_v_step.day); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 273, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_t_2, __pyx_n_u_day, __pyx_t_3) < 0) __PYX_ERR(0, 270, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_2, __pyx_n_u_day, __pyx_t_3) < 0) __PYX_ERR(0, 268, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "PyPTRouter.pyx":278
+  /* "PyPTRouter.pyx":276
  * 
  *             # Stop information
  *             "from_stop_id": step.src_stop.getField(stop_id_str).decode('utf-8'),             # <<<<<<<<<<<<<<
  *             "to_stop_id": step.dest_stop.getField(stop_id_str).decode('utf-8'),
  *         }
  */
-  __pyx_t_3 = __Pyx_decode_cpp_string(__pyx_v_step.src_stop->getField(__pyx_v_stop_id_str), 0, PY_SSIZE_T_MAX, NULL, NULL, PyUnicode_DecodeUTF8); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 278, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_decode_cpp_string(__pyx_v_step.src_stop->getField(__pyx_v_stop_id_str), 0, PY_SSIZE_T_MAX, NULL, NULL, PyUnicode_DecodeUTF8); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 276, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_t_2, __pyx_n_u_from_stop_id, __pyx_t_3) < 0) __PYX_ERR(0, 270, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_2, __pyx_n_u_from_stop_id, __pyx_t_3) < 0) __PYX_ERR(0, 268, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "PyPTRouter.pyx":279
+  /* "PyPTRouter.pyx":277
  *             # Stop information
  *             "from_stop_id": step.src_stop.getField(stop_id_str).decode('utf-8'),
  *             "to_stop_id": step.dest_stop.getField(stop_id_str).decode('utf-8'),             # <<<<<<<<<<<<<<
  *         }
  * 
  */
-  __pyx_t_3 = __Pyx_decode_cpp_string(__pyx_v_step.dest_stop->getField(__pyx_v_stop_id_str), 0, PY_SSIZE_T_MAX, NULL, NULL, PyUnicode_DecodeUTF8); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 279, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_decode_cpp_string(__pyx_v_step.dest_stop->getField(__pyx_v_stop_id_str), 0, PY_SSIZE_T_MAX, NULL, NULL, PyUnicode_DecodeUTF8); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 277, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_t_2, __pyx_n_u_to_stop_id, __pyx_t_3) < 0) __PYX_ERR(0, 270, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_2, __pyx_n_u_to_stop_id, __pyx_t_3) < 0) __PYX_ERR(0, 268, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __pyx_v_step_dict = ((PyObject*)__pyx_t_2);
   __pyx_t_2 = 0;
 
-  /* "PyPTRouter.pyx":283
+  /* "PyPTRouter.pyx":281
  * 
  *         # Handle optional fields
  *         if step.trip_id.has_value():             # <<<<<<<<<<<<<<
@@ -7872,7 +7899,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_step(struct 
   __pyx_t_4 = (__pyx_v_step.trip_id.has_value() != 0);
   if (__pyx_t_4) {
 
-    /* "PyPTRouter.pyx":284
+    /* "PyPTRouter.pyx":282
  *         # Handle optional fields
  *         if step.trip_id.has_value():
  *             step_dict["trip_id"] = step.trip_id.value().decode('utf-8')             # <<<<<<<<<<<<<<
@@ -7883,14 +7910,14 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_step(struct 
       __pyx_t_5 = __pyx_v_step.trip_id.value();
     } catch(...) {
       __Pyx_CppExn2PyErr();
-      __PYX_ERR(0, 284, __pyx_L1_error)
+      __PYX_ERR(0, 282, __pyx_L1_error)
     }
-    __pyx_t_2 = __Pyx_decode_cpp_string(__pyx_t_5, 0, PY_SSIZE_T_MAX, NULL, NULL, PyUnicode_DecodeUTF8); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 284, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_decode_cpp_string(__pyx_t_5, 0, PY_SSIZE_T_MAX, NULL, NULL, PyUnicode_DecodeUTF8); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 282, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (unlikely((PyDict_SetItem(__pyx_v_step_dict, __pyx_n_u_trip_id, __pyx_t_2) < 0))) __PYX_ERR(0, 284, __pyx_L1_error)
+    if (unlikely((PyDict_SetItem(__pyx_v_step_dict, __pyx_n_u_trip_id, __pyx_t_2) < 0))) __PYX_ERR(0, 282, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-    /* "PyPTRouter.pyx":283
+    /* "PyPTRouter.pyx":281
  * 
  *         # Handle optional fields
  *         if step.trip_id.has_value():             # <<<<<<<<<<<<<<
@@ -7900,7 +7927,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_step(struct 
     goto __pyx_L3;
   }
 
-  /* "PyPTRouter.pyx":286
+  /* "PyPTRouter.pyx":284
  *             step_dict["trip_id"] = step.trip_id.value().decode('utf-8')
  *         else:
  *             step_dict["trip_id"] = "walking"             # <<<<<<<<<<<<<<
@@ -7908,11 +7935,11 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_step(struct 
  *         if step.agency_name.has_value():
  */
   /*else*/ {
-    if (unlikely((PyDict_SetItem(__pyx_v_step_dict, __pyx_n_u_trip_id, __pyx_n_u_walking) < 0))) __PYX_ERR(0, 286, __pyx_L1_error)
+    if (unlikely((PyDict_SetItem(__pyx_v_step_dict, __pyx_n_u_trip_id, __pyx_n_u_walking) < 0))) __PYX_ERR(0, 284, __pyx_L1_error)
   }
   __pyx_L3:;
 
-  /* "PyPTRouter.pyx":288
+  /* "PyPTRouter.pyx":286
  *             step_dict["trip_id"] = "walking"
  * 
  *         if step.agency_name.has_value():             # <<<<<<<<<<<<<<
@@ -7922,7 +7949,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_step(struct 
   __pyx_t_4 = (__pyx_v_step.agency_name.has_value() != 0);
   if (__pyx_t_4) {
 
-    /* "PyPTRouter.pyx":289
+    /* "PyPTRouter.pyx":287
  * 
  *         if step.agency_name.has_value():
  *             step_dict["agency_name"] = step.agency_name.value().decode('utf-8')             # <<<<<<<<<<<<<<
@@ -7933,14 +7960,14 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_step(struct 
       __pyx_t_6 = __pyx_v_step.agency_name.value();
     } catch(...) {
       __Pyx_CppExn2PyErr();
-      __PYX_ERR(0, 289, __pyx_L1_error)
+      __PYX_ERR(0, 287, __pyx_L1_error)
     }
-    __pyx_t_2 = __Pyx_decode_cpp_string(__pyx_t_6, 0, PY_SSIZE_T_MAX, NULL, NULL, PyUnicode_DecodeUTF8); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 289, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_decode_cpp_string(__pyx_t_6, 0, PY_SSIZE_T_MAX, NULL, NULL, PyUnicode_DecodeUTF8); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 287, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (unlikely((PyDict_SetItem(__pyx_v_step_dict, __pyx_n_u_agency_name, __pyx_t_2) < 0))) __PYX_ERR(0, 289, __pyx_L1_error)
+    if (unlikely((PyDict_SetItem(__pyx_v_step_dict, __pyx_n_u_agency_name, __pyx_t_2) < 0))) __PYX_ERR(0, 287, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-    /* "PyPTRouter.pyx":288
+    /* "PyPTRouter.pyx":286
  *             step_dict["trip_id"] = "walking"
  * 
  *         if step.agency_name.has_value():             # <<<<<<<<<<<<<<
@@ -7950,7 +7977,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_step(struct 
     goto __pyx_L4;
   }
 
-  /* "PyPTRouter.pyx":291
+  /* "PyPTRouter.pyx":289
  *             step_dict["agency_name"] = step.agency_name.value().decode('utf-8')
  *         else:
  *             step_dict["agency_name"] = "Unknown"             # <<<<<<<<<<<<<<
@@ -7958,11 +7985,11 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_step(struct 
  *         return step_dict
  */
   /*else*/ {
-    if (unlikely((PyDict_SetItem(__pyx_v_step_dict, __pyx_n_u_agency_name, __pyx_n_u_Unknown) < 0))) __PYX_ERR(0, 291, __pyx_L1_error)
+    if (unlikely((PyDict_SetItem(__pyx_v_step_dict, __pyx_n_u_agency_name, __pyx_n_u_Unknown) < 0))) __PYX_ERR(0, 289, __pyx_L1_error)
   }
   __pyx_L4:;
 
-  /* "PyPTRouter.pyx":293
+  /* "PyPTRouter.pyx":291
  *             step_dict["agency_name"] = "Unknown"
  * 
  *         return step_dict             # <<<<<<<<<<<<<<
@@ -7972,7 +7999,7 @@ static PyObject *__pyx_f_10PyPTRouter_10PyPTRouter__convert_journey_step(struct 
   __pyx_r = __pyx_v_step_dict;
   goto __pyx_L0;
 
-  /* "PyPTRouter.pyx":263
+  /* "PyPTRouter.pyx":261
  *             return "next_day"
  * 
  *     cdef _convert_journey_step(self, JourneyStep step):             # <<<<<<<<<<<<<<
@@ -8416,8 +8443,6 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s__28, __pyx_k__28, sizeof(__pyx_k__28), 0, 0, 1, 1},
     {&__pyx_n_u_agency_name, __pyx_k_agency_name, sizeof(__pyx_k_agency_name), 0, 1, 0, 1},
     {&__pyx_n_s_append, __pyx_k_append, sizeof(__pyx_k_append), 0, 0, 1, 1},
-    {&__pyx_n_s_arrival_datetime, __pyx_k_arrival_datetime, sizeof(__pyx_k_arrival_datetime), 0, 0, 1, 1},
-    {&__pyx_n_u_arrival_day, __pyx_k_arrival_day, sizeof(__pyx_k_arrival_day), 0, 1, 0, 1},
     {&__pyx_n_u_arrival_time, __pyx_k_arrival_time, sizeof(__pyx_k_arrival_time), 0, 1, 0, 1},
     {&__pyx_n_s_asyncio_coroutines, __pyx_k_asyncio_coroutines, sizeof(__pyx_k_asyncio_coroutines), 0, 0, 1, 1},
     {&__pyx_n_s_cline_in_traceback, __pyx_k_cline_in_traceback, sizeof(__pyx_k_cline_in_traceback), 0, 0, 1, 1},
@@ -8427,7 +8452,6 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s_datetime, __pyx_k_datetime, sizeof(__pyx_k_datetime), 0, 0, 1, 1},
     {&__pyx_n_s_day, __pyx_k_day, sizeof(__pyx_k_day), 0, 0, 1, 1},
     {&__pyx_n_u_day, __pyx_k_day, sizeof(__pyx_k_day), 0, 1, 0, 1},
-    {&__pyx_n_u_departure_day, __pyx_k_departure_day, sizeof(__pyx_k_departure_day), 0, 1, 0, 1},
     {&__pyx_n_s_departure_time, __pyx_k_departure_time, sizeof(__pyx_k_departure_time), 0, 0, 1, 1},
     {&__pyx_n_u_departure_time, __pyx_k_departure_time, sizeof(__pyx_k_departure_time), 0, 1, 0, 1},
     {&__pyx_n_s_detailed, __pyx_k_detailed, sizeof(__pyx_k_detailed), 0, 0, 1, 1},
@@ -8479,18 +8503,24 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s_self, __pyx_k_self, sizeof(__pyx_k_self), 0, 0, 1, 1},
     {&__pyx_n_s_setstate, __pyx_k_setstate, sizeof(__pyx_k_setstate), 0, 0, 1, 1},
     {&__pyx_n_s_setstate_cython, __pyx_k_setstate_cython, sizeof(__pyx_k_setstate_cython), 0, 0, 1, 1},
+    {&__pyx_n_s_source_station_departure_datetim, __pyx_k_source_station_departure_datetim, sizeof(__pyx_k_source_station_departure_datetim), 0, 0, 1, 1},
+    {&__pyx_n_u_source_station_departure_day, __pyx_k_source_station_departure_day, sizeof(__pyx_k_source_station_departure_day), 0, 1, 0, 1},
+    {&__pyx_n_u_source_station_departure_time, __pyx_k_source_station_departure_time, sizeof(__pyx_k_source_station_departure_time), 0, 1, 0, 1},
     {&__pyx_n_u_source_transfer_time, __pyx_k_source_transfer_time, sizeof(__pyx_k_source_transfer_time), 0, 1, 0, 1},
+    {&__pyx_n_u_source_waiting_time, __pyx_k_source_waiting_time, sizeof(__pyx_k_source_waiting_time), 0, 1, 0, 1},
     {&__pyx_n_s_spec, __pyx_k_spec, sizeof(__pyx_k_spec), 0, 0, 1, 1},
     {&__pyx_n_s_src_vec, __pyx_k_src_vec, sizeof(__pyx_k_src_vec), 0, 0, 1, 1},
     {&__pyx_n_u_steps, __pyx_k_steps, sizeof(__pyx_k_steps), 0, 1, 0, 1},
     {&__pyx_kp_s_stringsource, __pyx_k_stringsource, sizeof(__pyx_k_stringsource), 0, 0, 1, 0},
+    {&__pyx_n_u_target_station_arrival_day, __pyx_k_target_station_arrival_day, sizeof(__pyx_k_target_station_arrival_day), 0, 1, 0, 1},
+    {&__pyx_n_u_target_station_arrival_time, __pyx_k_target_station_arrival_time, sizeof(__pyx_k_target_station_arrival_time), 0, 1, 0, 1},
+    {&__pyx_n_u_target_transfer_time, __pyx_k_target_transfer_time, sizeof(__pyx_k_target_transfer_time), 0, 1, 0, 1},
     {&__pyx_n_s_test, __pyx_k_test, sizeof(__pyx_k_test), 0, 0, 1, 1},
     {&__pyx_n_s_tgt_vec, __pyx_k_tgt_vec, sizeof(__pyx_k_tgt_vec), 0, 0, 1, 1},
     {&__pyx_n_u_to_stop_id, __pyx_k_to_stop_id, sizeof(__pyx_k_to_stop_id), 0, 1, 0, 1},
     {&__pyx_n_u_trip_id, __pyx_k_trip_id, sizeof(__pyx_k_trip_id), 0, 1, 0, 1},
     {&__pyx_n_u_trip_time, __pyx_k_trip_time, sizeof(__pyx_k_trip_time), 0, 1, 0, 1},
     {&__pyx_kp_u_utf_8, __pyx_k_utf_8, sizeof(__pyx_k_utf_8), 0, 1, 0, 0},
-    {&__pyx_n_u_waiting_time, __pyx_k_waiting_time, sizeof(__pyx_k_waiting_time), 0, 1, 0, 1},
     {&__pyx_n_u_walking, __pyx_k_walking, sizeof(__pyx_k_walking), 0, 1, 0, 1},
     {&__pyx_n_s_weekday, __pyx_k_weekday, sizeof(__pyx_k_weekday), 0, 0, 1, 1},
     {&__pyx_n_s_year, __pyx_k_year, sizeof(__pyx_k_year), 0, 0, 1, 1},
@@ -8664,9 +8694,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  *     def construct_query(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
-  __pyx_tuple__16 = PyTuple_Pack(19, __pyx_n_s_self, __pyx_n_s_arrival_datetime, __pyx_n_s_included_sources, __pyx_n_s_included_targets, __pyx_n_s_max_transfers, __pyx_n_s_year, __pyx_n_s_month, __pyx_n_s_day, __pyx_n_s_weekday, __pyx_n_s_hours, __pyx_n_s_minutes, __pyx_n_s_seconds, __pyx_n_s_date, __pyx_n_s_departure_time, __pyx_n_s_query, __pyx_n_s_src_vec, __pyx_n_s_tgt_vec, __pyx_n_s_inc_src, __pyx_n_s_inc_tgt); if (unlikely(!__pyx_tuple__16)) __PYX_ERR(0, 71, __pyx_L1_error)
+  __pyx_tuple__16 = PyTuple_Pack(19, __pyx_n_s_self, __pyx_n_s_source_station_departure_datetim, __pyx_n_s_included_sources, __pyx_n_s_included_targets, __pyx_n_s_max_transfers, __pyx_n_s_year, __pyx_n_s_month, __pyx_n_s_day, __pyx_n_s_weekday, __pyx_n_s_hours, __pyx_n_s_minutes, __pyx_n_s_seconds, __pyx_n_s_date, __pyx_n_s_departure_time, __pyx_n_s_query, __pyx_n_s_src_vec, __pyx_n_s_tgt_vec, __pyx_n_s_inc_src, __pyx_n_s_inc_tgt); if (unlikely(!__pyx_tuple__16)) __PYX_ERR(0, 71, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__16);
   __Pyx_GIVEREF(__pyx_tuple__16);
   __pyx_codeobj__17 = (PyObject*)__Pyx_PyCode_New(5, 0, 0, 19, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__16, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_PyPTRouter_pyx, __pyx_n_s_construct_query, 71, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__17)) __PYX_ERR(0, 71, __pyx_L1_error)
@@ -8679,9 +8709,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  *     def return_pt_journeys_1to1(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
-  __pyx_tuple__19 = PyTuple_Pack(11, __pyx_n_s_self, __pyx_n_s_arrival_datetime, __pyx_n_s_included_sources, __pyx_n_s_included_targets, __pyx_n_s_max_transfers, __pyx_n_s_detailed, __pyx_n_s_query, __pyx_n_s_journeys, __pyx_n_s_journeys_list, __pyx_n_s_i, __pyx_n_s_journey_dict); if (unlikely(!__pyx_tuple__19)) __PYX_ERR(0, 121, __pyx_L1_error)
+  __pyx_tuple__19 = PyTuple_Pack(11, __pyx_n_s_self, __pyx_n_s_source_station_departure_datetim, __pyx_n_s_included_sources, __pyx_n_s_included_targets, __pyx_n_s_max_transfers, __pyx_n_s_detailed, __pyx_n_s_query, __pyx_n_s_journeys, __pyx_n_s_journeys_list, __pyx_n_s_i, __pyx_n_s_journey_dict); if (unlikely(!__pyx_tuple__19)) __PYX_ERR(0, 121, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__19);
   __Pyx_GIVEREF(__pyx_tuple__19);
   __pyx_codeobj__20 = (PyObject*)__Pyx_PyCode_New(6, 0, 0, 11, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__19, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_PyPTRouter_pyx, __pyx_n_s_return_pt_journeys_1to1, 121, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__20)) __PYX_ERR(0, 121, __pyx_L1_error)
@@ -8694,9 +8724,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  *     def return_fastest_pt_journey_1to1(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
-  __pyx_tuple__22 = PyTuple_Pack(10, __pyx_n_s_self, __pyx_n_s_arrival_datetime, __pyx_n_s_included_sources, __pyx_n_s_included_targets, __pyx_n_s_max_transfers, __pyx_n_s_detailed, __pyx_n_s_query, __pyx_n_s_journey_opt, __pyx_n_s_journey, __pyx_n_s_journey_dict); if (unlikely(!__pyx_tuple__22)) __PYX_ERR(0, 167, __pyx_L1_error)
+  __pyx_tuple__22 = PyTuple_Pack(10, __pyx_n_s_self, __pyx_n_s_source_station_departure_datetim, __pyx_n_s_included_sources, __pyx_n_s_included_targets, __pyx_n_s_max_transfers, __pyx_n_s_detailed, __pyx_n_s_query, __pyx_n_s_journey_opt, __pyx_n_s_journey, __pyx_n_s_journey_dict); if (unlikely(!__pyx_tuple__22)) __PYX_ERR(0, 167, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__22);
   __Pyx_GIVEREF(__pyx_tuple__22);
   __pyx_codeobj__23 = (PyObject*)__Pyx_PyCode_New(6, 0, 0, 10, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__22, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_PyPTRouter_pyx, __pyx_n_s_return_fastest_pt_journey_1to1, 167, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__23)) __PYX_ERR(0, 167, __pyx_L1_error)
@@ -9161,7 +9191,7 @@ if (!__Pyx_RefNanny) {
  * 
  *     def construct_query(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
   __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_10PyPTRouter_10PyPTRouter_5construct_query, __Pyx_CYFUNCTION_CCLASS, __pyx_n_s_PyPTRouter_construct_query, NULL, __pyx_n_s_PyPTRouter, __pyx_d, ((PyObject *)__pyx_codeobj__17)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 71, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
@@ -9175,7 +9205,7 @@ if (!__Pyx_RefNanny) {
  * 
  *     def return_pt_journeys_1to1(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
   __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_10PyPTRouter_10PyPTRouter_7return_pt_journeys_1to1, __Pyx_CYFUNCTION_CCLASS, __pyx_n_s_PyPTRouter_return_pt_journeys_1t, NULL, __pyx_n_s_PyPTRouter, __pyx_d, ((PyObject *)__pyx_codeobj__20)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 121, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
@@ -9189,7 +9219,7 @@ if (!__Pyx_RefNanny) {
  * 
  *     def return_fastest_pt_journey_1to1(             # <<<<<<<<<<<<<<
  *         self,
- *         arrival_datetime,
+ *         source_station_departure_datetime,
  */
   __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_10PyPTRouter_10PyPTRouter_9return_fastest_pt_journey_1to1, __Pyx_CYFUNCTION_CCLASS, __pyx_n_s_PyPTRouter_return_fastest_pt_jou, NULL, __pyx_n_s_PyPTRouter, __pyx_d, ((PyObject *)__pyx_codeobj__23)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 167, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);

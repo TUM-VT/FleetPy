@@ -24,13 +24,13 @@ Raptor::Raptor(const std::unordered_map<std::string, Agency> &agencies,
   k = 1;
 
   // TODO: Remove this part
-  std::cout << "CPP PT Router: "
-            << "Raptor initialized with "
+  std::cout << "Raptor Router (C++): "
+            << "initialized with "
             << agencies_.size() << " agencies, "
             << services_.size() << " services, "
-            << stops.size() << " stops, "
-            << routes.size() << " routes, and "
-            << trips.size() << " trips." << std::endl;
+            << stops_.size() << " stops, "
+            << routes_.size() << " routes, and "
+            << trips_.size() << " trips." << std::endl;
 }
 
 void Raptor::setQuery(const Query &query) {
@@ -185,7 +185,7 @@ std::vector<Journey> Raptor::findJourneys() {
 
 std::optional<Journey> Raptor::findOptimalJourney() {
   Journey optimal_journey;
-  int optimal_arrival_secs = std::numeric_limits<int>::max();
+  int optimal_target_station_arrival_secs = std::numeric_limits<int>::max();
 
   initializeAlgorithm();
 
@@ -213,13 +213,14 @@ std::optional<Journey> Raptor::findOptimalJourney() {
     // Stopping criterion: if no stops are marked, then stop
     if (marked_stops.empty()) break;   
     
-    for (const auto& [target_id, station_stop_transfer_time] : query_.included_targets) {
+    for (const auto& [target_id, target_station_stop_transfer_time] : query_.included_targets) {
       if (marked_stops.find(target_id) != marked_stops.end()) {
-        int arrival_secs = arrivals_[target_id][k].arrival_seconds.value();
-        if (arrival_secs < optimal_arrival_secs) {
-          Journey possible_journey = reconstructJourney(target_id, station_stop_transfer_time);
+        int target_station_arrival_secs = arrivals_[target_id][k].arrival_seconds.value() + target_station_stop_transfer_time;
+        // TODO: add more criteria for optimality if needed, such as number of transfers, walking time, etc.
+        if (target_station_arrival_secs < optimal_target_station_arrival_secs) {
+          Journey possible_journey = reconstructJourney(target_id, target_station_stop_transfer_time);
           if (isValidJourney(possible_journey)) {
-            optimal_arrival_secs = arrival_secs;
+            optimal_target_station_arrival_secs = target_station_arrival_secs;
             optimal_journey = possible_journey;
           }
         }
@@ -430,7 +431,7 @@ bool Raptor::isFootpath(const StopInfo &stop_info) {
 
 Journey Raptor::reconstructJourney(
   const std::string &target_id,
-  const int station_stop_transfer_time
+  const int target_station_stop_transfer_time
   ) {
   Journey journey;
   std::string current_stop_id = target_id;
@@ -451,7 +452,11 @@ Journey Raptor::reconstructJourney(
         arrival_seconds = arrivals_[current_stop_id][k].arrival_seconds.value();
         
         const auto& footpaths = stops_[parent_stop_id].getFootpaths();
-        duration = footpaths.at(current_stop_id);
+        if (footpaths.find(current_stop_id) != footpaths.end()) {
+             duration = footpaths.at(current_stop_id);
+        } else {
+             duration = 0; // Should not happen
+        }
         departure_seconds = arrival_seconds - duration;
       } else { // PT leg
         const std::string &parent_trip_id = parent_trip_id_opt.value();
@@ -497,17 +502,22 @@ Journey Raptor::reconstructJourney(
     }
 
     // Set journey departure time and day
-    journey.departure_secs = Utils::timeToSeconds(query_.departure_time);
-    journey.departure_day = Day::CurrentDay;
+    journey.source_station_departure_secs = Utils::timeToSeconds(query_.departure_time);
+    journey.source_station_departure_day = Day::CurrentDay;
 
     // Set journey arrival time and day
-    journey.arrival_secs = journey.steps.back().arrival_secs + station_stop_transfer_time;
-    journey.arrival_day = journey.steps.back().day;
-
+    journey.target_station_arrival_secs = journey.steps.back().arrival_secs + target_station_stop_transfer_time;
+    // Update arrival day based on arrival seconds
+    if (journey.target_station_arrival_secs > MIDNIGHT) {
+      journey.target_station_arrival_day = Day::NextDay;
+    } else {
+      journey.target_station_arrival_day = Day::CurrentDay;
+    }
     // Set journey duration, source transfer time, waiting time, trip time and transfer numbers
-    journey.duration = journey.arrival_secs - journey.departure_secs;
+    journey.duration = journey.target_station_arrival_secs - journey.source_station_departure_secs;
     
     // Get station stop transfer time from Query
+    journey.source_transfer_time = 0;
     Stop src_stop = *journey.steps.front().src_stop;
     for (const auto &source : query_.included_sources) {
       if (source.first == src_stop.getField("stop_id")) {
@@ -516,9 +526,20 @@ Journey Raptor::reconstructJourney(
       }
     }
 
-    journey.waiting_time = journey.steps.front().departure_secs - journey.departure_secs - journey.source_transfer_time;
-    journey.trip_time = journey.duration - journey.waiting_time;
-    journey.num_transfers = static_cast<int>(journey.steps.size()) - 1;
+    journey.target_transfer_time = target_station_stop_transfer_time;
+
+    journey.source_waiting_time = journey.steps.front().departure_secs - journey.source_station_departure_secs - journey.source_transfer_time;
+    if (journey.source_waiting_time < 0) journey.source_waiting_time = 0;
+
+    journey.trip_time = journey.duration - journey.source_waiting_time - journey.target_transfer_time - journey.source_transfer_time;
+
+    int vehicle_legs = 0;
+    for (const auto& step : journey.steps) {
+        if (step.trip_id.has_value() && step.trip_id.value() != "walking") {
+            vehicle_legs++;
+        }
+    }
+    journey.num_transfers = (vehicle_legs > 0) ? (vehicle_legs - 1) : 0;
   } catch (const std::exception& e) {
     std::cerr << "Exception in reconstructJourney: " << e.what() << std::endl;
   }

@@ -37,7 +37,7 @@ struct Query {
   std::vector<std::pair<std::string, int>> included_sources;   ///< Stops in the source station with its station_stop_transfer_time (in seconds).
   std::vector<std::pair<std::string, int>> included_targets;   ///< Stops in the target station with its station_stop_transfer_time (in seconds).
   Date date;               ///< Date of the journey (year, month, day).
-  Time departure_time;     ///< Desired departure time in the source station (in seconds from midnight).
+  Time departure_time;     ///< Desired departure time at the source station (in seconds from midnight).
   int max_transfers;  ///< Maximum number of transfers.
 };
 
@@ -81,19 +81,22 @@ struct JourneyStep {
  *
  * The `Journey` structure contains details about all steps in the journey,
  * as well as overall departure and arrival times and durations.
+ * source_station_departure_secs|source_transfer_time|source_waiting_time|trip_time|target_transfer_time|target_station_arrival_secs
+ * |------------------------------------------------duration-----------------------------------------------------------------------|
  */
 struct Journey {
   std::vector<JourneyStep> steps;          ///< Steps making up the journey.
-  int departure_secs;                      ///< Overall departure time in seconds from midnight of the query day at source station.
-  Day departure_day;                       ///< Departure day of the journey at source station.
+  int source_station_departure_secs;       ///< Overall departure time in seconds from midnight of the query day at source station.
+  Day source_station_departure_day;        ///< Departure day of the journey at source station.
 
-  int arrival_secs;                        ///< Overall arrival time in seconds from midnight of the query day at target station.
-  Day arrival_day;                         ///< Arrival day of the journey at target station.
+  int target_station_arrival_secs;         ///< Overall arrival time in seconds from midnight of the query day at target station.
+  Day target_station_arrival_day;          ///< Arrival day of the journey at target station.
 
-  int duration;                            ///< Total duration of the journey in seconds.
+  int duration;                            ///< Total duration of the journey from source station to target station in seconds.
   int source_transfer_time;                ///< Transfer time from source station to source station stop in seconds.
-  int waiting_time;                        ///< Waiting time at the source station in seconds.
-  int trip_time;                           ///< Trip time from source station stops to target station in seconds.
+  int source_waiting_time;                 ///< Waiting time at the source station in seconds.
+  int trip_time;                           ///< Trip time from source station stop to target station stop in seconds.
+  int target_transfer_time;                ///< Transfer time from target station stop to target station in seconds.
   
   int num_transfers;                       ///< Number of transfers in the journey.
 };

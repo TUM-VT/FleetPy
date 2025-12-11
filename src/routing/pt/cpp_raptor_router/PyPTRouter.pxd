@@ -54,14 +54,15 @@ cdef extern from "NetworkObjects/DataStructures.h":
     
     cdef struct Journey:
         vector[JourneyStep] steps
-        int departure_secs
-        Day departure_day
-        int arrival_secs
-        Day arrival_day
+        int source_station_departure_secs
+        Day source_station_departure_day
+        int target_station_arrival_secs
+        Day target_station_arrival_day
         int duration
         int source_transfer_time
-        int waiting_time
+        int source_waiting_time
         int trip_time
+        int target_transfer_time
         int num_transfers
 
 cdef extern from "NetworkObjects/GTFSObjects/GTFSObject.h":

@@ -70,13 +70,13 @@ cdef class PyPTRouter:
 
     def construct_query(
         self,
-        arrival_datetime,
+        source_station_departure_datetime,
         list included_sources, list included_targets, int max_transfers=-1,
     ):
         """Construct query information.
 
         Args:
-            arrival_datetime (datetime): Arrival datetime at the source station
+            source_station_departure_datetime (datetime): Departure datetime at the source station
             included_sources (list): List of source stop IDs and their station stop transfer times
             included_targets (list): List of target stop IDs and their station stop transfer times
             max_transfers (int): Maximum number of transfers allowed
@@ -85,13 +85,13 @@ cdef class PyPTRouter:
             query (Query)
         """
         # Calculate day of week using Python's datetime
-        cdef int year = arrival_datetime.year
-        cdef int month = arrival_datetime.month
-        cdef int day = arrival_datetime.day
-        cdef int weekday = arrival_datetime.weekday()
-        cdef int hours = arrival_datetime.hour
-        cdef int minutes = arrival_datetime.minute
-        cdef int seconds = arrival_datetime.second
+        cdef int year = source_station_departure_datetime.year
+        cdef int month = source_station_departure_datetime.month
+        cdef int day = source_station_departure_datetime.day
+        cdef int weekday = source_station_departure_datetime.weekday()
+        cdef int hours = source_station_departure_datetime.hour
+        cdef int minutes = source_station_departure_datetime.minute
+        cdef int seconds = source_station_departure_datetime.second
         
         # Create date, time objects for C++
         cdef Date date = Date(year, month, day, weekday)
@@ -120,7 +120,7 @@ cdef class PyPTRouter:
 
     def return_pt_journeys_1to1(
         self,
-        arrival_datetime,
+        source_station_departure_datetime,
         list included_sources, list included_targets, int max_transfers=-1,
         bool detailed=False,
     ):
@@ -130,7 +130,7 @@ cdef class PyPTRouter:
         at a specified departure time.
 
         Args:
-            arrival_datetime (datetime): Arrival datetime at the source station
+            source_station_departure_datetime (datetime): Departure datetime at the source station
             included_sources (list): List of source stop IDs and their station stop transfer times
             included_targets (list): List of target stop IDs and their station stop transfer times
             max_transfers (int): Maximum number of transfers allowed (-1 for unlimited)
@@ -145,7 +145,7 @@ cdef class PyPTRouter:
             raise RuntimeError("RAPTOR router not initialized. Please initialize first.")  
 
         query = self.construct_query(
-            arrival_datetime, included_sources, included_targets, max_transfers,
+            source_station_departure_datetime, included_sources, included_targets, max_transfers,
         )
             
         # Set query and find journeys
@@ -166,17 +166,14 @@ cdef class PyPTRouter:
 
     def return_fastest_pt_journey_1to1(
         self,
-        arrival_datetime,
+        source_station_departure_datetime,
         list included_sources, list included_targets, int max_transfers=-1,
         bool detailed=False,
     ):
-        """Find the fastest public transport journey from source to target
-
-        This method queries the RAPTOR router to find the optimal journey between two stops
-        at a specified departure time.
+        """Find the fastest public transport journey from source station to target station
 
         Args:
-            arrival_datetime (datetime): Arrival datetime at the source station
+            source_station_departure_datetime (datetime): Departure datetime at the source station
             included_sources (list): List of source stop IDs and their station stop transfer times
             included_targets (list): List of target stop IDs and their station stop transfer times
             max_transfers (int): Maximum number of transfers allowed (-1 for unlimited)
@@ -191,7 +188,7 @@ cdef class PyPTRouter:
             raise RuntimeError("RAPTOR router not initialized. Please initialize first.")      
         
         query = self.construct_query(
-            arrival_datetime, included_sources, included_targets, max_transfers,
+            source_station_departure_datetime, included_sources, included_targets, max_transfers,
         )
         
         # Set query and find journeys
@@ -226,18 +223,19 @@ cdef class PyPTRouter:
         journey_dict = {
             # Overall journey information
             "duration": journey.duration,
-            "source_transfer_time": journey.source_transfer_time,
-            "waiting_time": journey.waiting_time,
             "trip_time": journey.trip_time,
             "num_transfers": journey.num_transfers,
             
             # Departure information
-            "departure_time": journey.departure_secs,
-            "departure_day": self._day_to_str(journey.departure_day),
+            "source_transfer_time": journey.source_transfer_time,
+            "source_waiting_time": journey.source_waiting_time,
+            "source_station_departure_time": journey.source_station_departure_secs,
+            "source_station_departure_day": self._day_to_str(journey.source_station_departure_day),
             
             # Arrival information
-            "arrival_time": journey.arrival_secs,
-            "arrival_day": self._day_to_str(journey.arrival_day),
+            "target_station_arrival_time": journey.target_station_arrival_secs,
+            "target_station_arrival_day": self._day_to_str(journey.target_station_arrival_day),
+            "target_transfer_time": journey.target_transfer_time,
             
             # Journey steps
             "steps": []
