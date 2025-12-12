@@ -52,6 +52,9 @@ src/routing/road/cpp_router/build/*
 src/routing/road/cpp_router/PyNetwork.cpp
 src/routing/road/extractors/cache/*
 
+src/routing/pt/cpp_raptor_router/PyPTRouter.cpp
+src/routing/pt/cpp_raptor_router/build/*
+
 # IDE-related files
 *.idea
 .vscode/*
