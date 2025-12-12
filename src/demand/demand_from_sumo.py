@@ -50,7 +50,7 @@ def transform_demand_SUMO_to_fp(xmlfile,demand_type,nw_name):
             start_nodes.append(get_fp_start_node_from_SUMO_edge(start_edge,edges_df))
             end_edge = trip.get("to")
             end_nodes.append(get_fp_end_node_from_SUMO_edge(end_edge,edges_df))
-            request_ids.append(int(trip.get('id')))
+            request_ids.append(trip.get('id'))
             rq_times.append(float(trip.get("depart")))
             orig_ids.append(trip.get('id'))
         
