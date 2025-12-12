@@ -45,15 +45,16 @@ def transform_demand_SUMO_to_fp(xmlfile,demand_type,nw_name):
     orig_ids =[]
 
     if demand_type == "trips":
+        count = 0
         for trip in tqdm(demand_root.findall("trip"), desc="Iterating over all Routes"):
             start_edge = trip.get("from")
             start_nodes.append(get_fp_start_node_from_SUMO_edge(start_edge,edges_df))
             end_edge = trip.get("to")
             end_nodes.append(get_fp_end_node_from_SUMO_edge(end_edge,edges_df))
-            request_ids.append(trip.get('id'))
             rq_times.append(float(trip.get("depart")))
             orig_ids.append(trip.get('id'))
-        
+            request_ids.append(count)
+            count += 1
     elif demand_type == "routes":
         count = 0
         for vehicle in tqdm(demand_root.findall("vehicle"),desc="Iterating over all Routes"):
