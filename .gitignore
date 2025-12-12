@@ -2,6 +2,7 @@
 data/README*
 data/demand/*
 !data/demand/example_demand
+!data/demand/sumo_example
 data/demand/example_parcel_demand
 data/fleetctrl/initial_vehicle_distribution/*
 data/fleetctrl/elastic_pricing/*
@@ -33,6 +34,7 @@ data/zones/*
 # study directories except for example
 studies/*
 !studies/example_study
+!studies/fleetpy_sumo_coupling
 studies/example_study/results/*
 
 # system dependent C++ Router files
