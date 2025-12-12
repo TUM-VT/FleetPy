@@ -553,6 +553,15 @@ G_OFFER_WALKING_DISTANCE_DESTINATION = "walking_distance_destination"
 G_OFFER_ZONAL_ORIGIN_ZONE = "origin_zone"
 G_OFFER_ZONAL_DESTINATION_ZONE = "destination_zone"
 
+G_PT_OFFER_SOURCE_STATION = "source_station_id"
+G_PT_OFFER_TARGET_STATION = "target_station_id"
+G_PT_OFFER_SOURCE_WALKING_TIME = "source_walking_time"
+G_PT_OFFER_SOURCE_TRANSFER_TIME = "source_transfer_time"
+G_PT_OFFER_TRIP_TIME = "pt_trip_time"
+G_PT_OFFER_TARGET_TRANSFER_TIME = "target_transfer_time"
+G_PT_OFFER_TARGET_WALKING_TIME = "target_walking_time"
+G_PT_OFFER_NUM_TRANSFERS = "num_transfers"
+
 # additional parameters for intermodal solutions
 # ----------------------------------------------
 G_IM_OFFER_PT_START = "im_pt_t_start"

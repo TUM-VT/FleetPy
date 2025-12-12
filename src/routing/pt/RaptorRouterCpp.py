@@ -163,9 +163,9 @@ class RaptorRouterCpp():
 
 
 if __name__ == "__main__":
-    # Test the pt router class： python -m src.routing.pt.CppTester
+    # Test/run the pt router module： python -m src.routing.pt.RaptorRouterCpp
 
-    gtfs_dir = r"data\pubtrans\example_network\example_gtfs\matched"
+    gtfs_dir = "data/pubtrans/example_network/example_gtfs/matched"
     router = RaptorRouterCpp(gtfs_dir)
 
     source_station_departure_datetime = datetime(2024, 1, 1, 0, 4, 0)
