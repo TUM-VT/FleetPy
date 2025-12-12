@@ -470,6 +470,44 @@ G_RQ_PA_LPT = "parcel_latest_pickup_time"
 G_RQ_PA_EDT = "parcel_earliest_dropoff_time"
 G_RQ_PA_LDT = "parcel_latest_dropoff_time"
 
+# intermodal specific
+G_RQ_RID_STRUCT = "rid_struct"
+G_RQ_IS_PARENT_REQUEST = "is_parent_request"
+G_RQ_MODAL_STATE = "modal_state"
+G_RQ_MODAL_STATE_VALUE = "modal_state_value"
+G_RQ_TRANSFER_STATION_IDS = "transfer_station_ids"
+G_RQ_MAX_TRANSFERS = "max_transfers"
+G_RQ_SUB_TRIP_ID = "sub_trip_id"
+
+class RQ_MODAL_STATE(Enum):
+    """ This enum is used to identify different modal states of a traveler request.
+    MONOMODAL: only amod is used
+    FIRSTMILE: amod first mile and pt last mile
+    LASTMILE: amod last mile and pt first mile
+    FIRSTLASTMILE: amod first and last miles, pt in between
+    PT: only pt is used
+    ALL_OPTIONS: all options are used
+    """
+    MONOMODAL: int = 0
+    FIRSTMILE: int = 1
+    LASTMILE: int = 2
+    FIRSTLASTMILE: int = 3
+    PT: int = 4
+    ALL_OPTIONS: int = 5
+
+class RQ_SUB_TRIP_ID(Enum):
+    """ This enum is used to identify different sub-trip ids of a traveler request.
+    """
+    AMOD: int = 0
+    FM_AMOD: int = 1
+    FM_PT: int = 2
+    LM_PT: int = 3
+    LM_AMOD: int = 4
+    FLM_AMOD_0: int = 5
+    FLM_PT: int = 6
+    FLM_AMOD_1: int = 7
+    PT: int = 8
+
 # output general
 # --------------
 G_RQ_TYPE = "rq_type"
@@ -485,7 +523,6 @@ G_RQ_DOL = "dropoff_location"
 G_RQ_FARE = "fare"
 G_RQ_ACCESS = "access_time"
 G_RQ_EGRESS = "egress_time"
-G_RQ_MODAL_STATE = "modal_state" # (see traveler modal state -> indicates monomodal/intermodal)
 
 # output environment specific
 # ---------------------------
@@ -553,15 +590,6 @@ G_OFFER_WALKING_DISTANCE_DESTINATION = "walking_distance_destination"
 G_OFFER_ZONAL_ORIGIN_ZONE = "origin_zone"
 G_OFFER_ZONAL_DESTINATION_ZONE = "destination_zone"
 
-G_PT_OFFER_SOURCE_STATION = "source_station_id"
-G_PT_OFFER_TARGET_STATION = "target_station_id"
-G_PT_OFFER_SOURCE_WALKING_TIME = "source_walking_time"
-G_PT_OFFER_SOURCE_TRANSFER_TIME = "source_transfer_time"
-G_PT_OFFER_TRIP_TIME = "pt_trip_time"
-G_PT_OFFER_TARGET_TRANSFER_TIME = "target_transfer_time"
-G_PT_OFFER_TARGET_WALKING_TIME = "target_walking_time"
-G_PT_OFFER_NUM_TRANSFERS = "num_transfers"
-
 # additional parameters for intermodal solutions
 # ----------------------------------------------
 G_IM_OFFER_PT_START = "im_pt_t_start"
@@ -570,6 +598,32 @@ G_IM_OFFER_PT_COST = "im_pt_fare"
 G_IM_OFFER_MOD_DRIVE = "im_mod_t_drive"
 G_IM_OFFER_MOD_COST = "im_mod_fare"
 G_IM_OFFER_MOD_SUB = "im_mod_subsidy"
+
+G_IM_OFFER_OPERATOR_SUB_TRIP_TUPLE = "im_operator_sub_trip_tuple"  # tuple of operator ids for each sub-trip: ((operator_id, sub_trip_id),)
+G_IM_OFFER_TYPE = "im_offer_type"  # type of multi offer: "default firstlastmile", "3phase firstlastmile"
+G_IM_OFFER_FLM_WAIT_0 = "im_t_wait_flm_0" # Only used for FM AMoD segment in FLM
+G_IM_OFFER_FLM_WAIT_1 = "im_t_wait_flm_1" # Only used for LM AMoD segment in FLM
+G_IM_OFFER_FLM_DRIVE_0 = "im_t_drive_flm_0" # Only used for FM AMoD segment in FLM
+G_IM_OFFER_FLM_DRIVE_1 = "im_t_drive_flm_1" # Only used for LM AMoD segment in FLM
+G_IM_OFFER_FM_WAIT = "im_t_wait_fm" # Only used for AMoD segment in FM
+G_IM_OFFER_LM_WAIT = "im_t_wait_lm" # Only used fot AMoD segment in LM
+G_IM_OFFER_FM_DRIVE = "im_t_drive_fm" # Only used for AMoD segment in FM
+G_IM_OFFER_LM_DRIVE = "im_t_drive_lm" # Only used fot AMoD segment in LM
+G_IM_OFFER_DURATION = "im_t_duration" # total duration of intermodal offer
+
+# additional parameters for pt offers
+# ------------------------------------------
+G_PT_OFFER_SOURCE_STATION = "source_station_id"
+G_PT_OFFER_TARGET_STATION = "target_station_id"
+G_PT_OFFER_SOURCE_WALKING_TIME = "source_walking_time"
+G_PT_OFFER_SOURCE_TRANSFER_TIME = "source_transfer_time"
+G_PT_OFFER_TRIP_TIME = "pt_trip_time"
+G_PT_OFFER_TARGET_TRANSFER_TIME = "target_transfer_time"
+G_PT_OFFER_TARGET_WALKING_TIME = "target_walking_time"
+G_PT_OFFER_NUM_TRANSFERS = "num_transfers"
+G_PT_OFFER_WAIT = "pt_t_wait" # PT segment waiting time
+G_PT_OFFER_DURATION = "pt_duration" # PT segment total duration
+G_PT_OFFER_DRIVE = "pt_t_drive" # PT segment driving time --> total pt segment duration - pt waiting time
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Fleet Simulation Pattern

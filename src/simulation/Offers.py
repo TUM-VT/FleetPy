@@ -197,3 +197,100 @@ class PTOffer(TravellerOffer):
         }
 
         super().__init__(traveler_id, operator_id, waiting_time, offered_driving_time, fare, additional_parameters=additional_parameters)
+
+
+class IntermodalOffer(TravellerOffer):
+    """This class represents an intermodal offer that consists of multiple segments served by different operators."""
+    def __init__(
+        self, 
+        traveler_id: int, 
+        sub_trip_offers: tp.Dict[int, TravellerOffer], 
+        rq_modal_state: RQ_MODAL_STATE, 
+    ):
+        """Initialize an intermodal offer that can include multiple sub-trips from different operators.
+        
+        :param traveler_id: traveler_id this offer is sent to
+        :type traveler_id: int
+        :param sub_trip_offers: dictionary of sub-trip offers {sub_trip_id: TravellerOffer}
+        :type sub_trip_offers: dict
+        :param rq_modal_state: modal state of the parent request
+        :type rq_modal_state: RQ_MODAL_STATE
+        :param additional_parameters: dictionary of other offer attributes
+        :type additional_parameters: dict or None
+        """
+        self.rq_modal_state = rq_modal_state 
+        self.sub_trip_offers: tp.Dict[int, TravellerOffer] = sub_trip_offers
+
+        self.additional_offer_parameters: tp.Dict[str, tp.Any] = {}
+
+        # merge sub-trip offers
+        aggregated_offer: tp.Dict[str, tp.Any] = self._merge_sub_trip_offers()
+        operator_sub_trip_tuple: tp.Tuple[tp.Tuple[int, int]] = aggregated_offer[G_IM_OFFER_OPERATOR_SUB_TRIP_TUPLE]  # ((operator_id, sub_trip_id), ...)
+        self.operator_sub_trip_tuple_str = self.convert_operator_sub_trip_tuple_to_str(operator_sub_trip_tuple)
+        offered_waiting_time: int = aggregated_offer[G_OFFER_WAIT]
+        offered_driving_time: int = aggregated_offer[G_OFFER_DRIVE]
+        fare: int = aggregated_offer[G_OFFER_FARE]
+
+        super().__init__(traveler_id, operator_sub_trip_tuple, offered_waiting_time, offered_driving_time, fare, self.additional_offer_parameters)
+
+    def get_sub_trip_offers(self) -> tp.Dict[int, TravellerOffer]:
+        """Get the sub-trip offers for the multimodal offer."""
+        return self.sub_trip_offers
+    
+    def convert_operator_sub_trip_tuple_to_str(
+        self,
+        operator_sub_trip: tp.Tuple[tp.Tuple[int, int]]
+    ) -> str:
+        """Convert the operator sub-trip tuple to a string representation."""
+        return "#".join([f"{op_id}_{sub_trip_id}" for op_id, sub_trip_id in operator_sub_trip])
+    
+    def _merge_sub_trip_offers(self) -> tp.Dict[str, tp.Any]:
+        """Merge sub-trip offers: calculate totals and map specific attributes."""
+        # State -> [(SubTripID, WaitKey, DriveKey)]
+        amod_state_mapping = {
+            RQ_MODAL_STATE.FIRSTMILE: [
+                (RQ_SUB_TRIP_ID.FM_AMOD.value, G_IM_OFFER_FM_WAIT, G_IM_OFFER_FM_DRIVE)
+            ],
+            RQ_MODAL_STATE.LASTMILE: [
+                (RQ_SUB_TRIP_ID.LM_AMOD.value, G_IM_OFFER_LM_WAIT, G_IM_OFFER_LM_DRIVE)
+            ],
+            RQ_MODAL_STATE.FIRSTLASTMILE: [
+                (RQ_SUB_TRIP_ID.FLM_AMOD_0.value, G_IM_OFFER_FLM_WAIT_0, G_IM_OFFER_FLM_DRIVE_0),
+                (RQ_SUB_TRIP_ID.FLM_AMOD_1.value, G_IM_OFFER_FLM_WAIT_1, G_IM_OFFER_FLM_DRIVE_1)
+            ]
+        }
+
+        pt_attributes_to_extract = [G_PT_OFFER_WAIT, G_PT_OFFER_DRIVE, G_PT_OFFER_NUM_TRANSFERS]
+
+        # calculate totals
+        operator_sub_trip_list = []
+        total_fare = 0
+        total_wait = 0
+        total_drive = 0
+
+        for sub_trip_id, sub_trip_offer in self.sub_trip_offers.items():
+            operator_sub_trip_list.append((sub_trip_offer.operator_id, sub_trip_id))
+            total_fare += sub_trip_offer.get(G_OFFER_FARE, 0)
+            total_wait += sub_trip_offer.get(G_OFFER_WAIT, 0)
+            total_drive += sub_trip_offer.get(G_OFFER_DRIVE, 0)
+
+        # add pt attributes into additional parameters
+        pt_offer = self.sub_trip_offers.get(RQ_SUB_TRIP_ID.FLM_PT.value, {})
+        for key in pt_attributes_to_extract:
+            if key in pt_offer:
+                self.additional_offer_parameters[key] = pt_offer[key]
+
+        # map amod attributes into additional parameters
+        mapping_configs = amod_state_mapping.get(self.rq_modal_state, [])
+        
+        for sub_trip_id, wait_key, drive_key in mapping_configs:
+            offer = self.sub_trip_offers.get(sub_trip_id, {})
+            self.additional_offer_parameters[wait_key] = offer.get(G_OFFER_WAIT)
+            self.additional_offer_parameters[drive_key] = offer.get(G_OFFER_DRIVE)
+
+        return {
+            G_IM_OFFER_OPERATOR_SUB_TRIP_TUPLE: tuple(operator_sub_trip_list),
+            G_OFFER_FARE: total_fare,
+            G_OFFER_WAIT: total_wait,
+            G_OFFER_DRIVE: total_drive
+        }
