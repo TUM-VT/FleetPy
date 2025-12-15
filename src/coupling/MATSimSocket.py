@@ -570,7 +570,11 @@ def run(fleetpy_config_path, matsim_network_path, port):
     matsim_socket.keep_socket_alive()    
     
 if __name__ == "__main__":
-    # Example usage of MATSimSocket class
+    """ starts the coupled simulation of fleetpy and matsim
+    the matsim-side has to be run with the start-script "RunSimulationWithFleetPy.java"
+    :param fleetpy_config_path: path the the fleetpy simulation config file (in studies/{study_name}/scenarios folder)
+    :param matsim_network_path: path to the network used in the matsim-simulation (usually where also the matsim population is) | this script assumes that network mathing has been done before; if hash-values dont match between fleetyp- and matsim-network an error is raise
+    :param port: (int) port for the socket communication (same as on matsim side)"""
 
     if len(sys.argv) < 4:
         print("Usage: python MATSimSocket.py <fleetpy_config_path> <matsim_network_path> <port> [profile]")
