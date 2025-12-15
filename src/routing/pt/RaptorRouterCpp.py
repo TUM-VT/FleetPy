@@ -112,7 +112,7 @@ class RaptorRouterCpp():
         }
         return pd.read_csv(os.path.join(gtfs_dir, "street_station_transfers_fp.txt"), dtype=dtypes)
     
-    def return_fastest_pt_journey_1to1(
+    def find_fastest_pt_journey_1to1(
         self,
         source_station_id: str,
         target_station_id: str,
@@ -131,6 +131,25 @@ class RaptorRouterCpp():
             detailed (bool): Whether to return the detailed journey plan.
         Returns:
             tp.Union[tp.Dict[str, tp.Any], None]: The fastest PT journey plan or None if no journey is found.
+            
+            The returned dictionary contains the following keys:
+            * 'duration' (int): duration [s] from departure at the source station to arrival at the target station.
+            * 'trip_time' (int): travel time [s] from departure at the source stop until arrival at the target stop.
+            * 'num_transfers' (int): number of transfers.
+            * 'source_station_departure_time' (int): departure timestamp [s] at the source station.
+            * 'source_station_departure_day' (str): 'current_day' or 'next_day' depending on the departure time.
+            * 'source_transfer_time' (int): transfer time [s] from the source station to the source stop.
+            * 'source_waiting_time' (int): waiting time [s] from arrival at the source stop until departure of the trip., 
+            * 'target_transfer_time' (int): transfer time [s] from the target stop to the target station.
+            * 'target_station_arrival_time' (int):arrival timestamp [s] at the target station.
+            * 'target_station_arrival_day' (str): 'current_day' or 'next_day' depending on the arrival time.
+            * 'steps' (List[dict]): a list of journey steps, where each step contains:
+                - 'duration' (int): step duration [s] from departure at the start stop until arrival at the end stop.
+                - 'departure_time' (int): departure timestamp [s] at the start stop.
+                - 'arrival_time' (int): arrival timestamp [s] at the end stop.
+                - 'from_stop_id' (str): ID of the start stop.
+                - 'to_stop_id' (str): ID of the end stop.
+                - ... (other step keys, check the C++ Raptor router documentation for more details).
         """
         # get all included stops for the source and target station
         included_sources = self._get_included_stops_and_transfer_times(source_station_id)

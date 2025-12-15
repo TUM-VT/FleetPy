@@ -8,6 +8,7 @@ if tp.TYPE_CHECKING:
     from src.routing.road.NetworkBase import NetworkBase
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.broker.BrokerBase import BrokerBase
+    from src.ptctrl.PTControlBase import PTControlBase
     from src.demand.TravelerModels import RequestBase
     from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
     from src.fleetctrl.charging.ChargingBase import ChargingBase
@@ -122,6 +123,16 @@ def get_src_broker_modules():
         dev_broker_dict = dev_content.add_broker_modules()
         broker_dict.update(dev_broker_dict)
     return broker_dict
+
+def get_src_pt_control_modules():
+    # FleetPy pt control options
+    ptc_dict = {}  # str -> (module path, class name)
+    ptc_dict["PTControlBasic"] = ("src.ptctrl.PTControlBasic", "PTControlBasic")
+    # add development content
+    if dev_content is not None:
+        dev_ptc_dict = dev_content.add_pt_control_modules()
+        ptc_dict.update(dev_ptc_dict)
+    return ptc_dict
 
 def get_src_repositioning_strategies():
     repo_dict = {}  # str -> (module path, class name)
@@ -284,6 +295,18 @@ def load_broker_module(broker_type) -> BrokerBase:
     broker_dict = get_src_broker_modules()
     # get broker class
     return load_module(broker_dict, broker_type, "Broker module")
+
+def load_pt_control_module(pt_control_type) -> PTControlBase:
+    """This function initiates the required pt control module and returns the PTControl class, which can be used
+    to generate a pt operator instance.
+
+    :param pt_control_type: string that determines which pt control should be used
+    :return: PTControl class
+    """
+    # FleetPy pt control options
+    ptc_dict = get_src_pt_control_modules()
+    # get pt control class
+    return load_module(ptc_dict, pt_control_type, "PT control module")
 
 def load_repositioning_strategy(op_repo_class_string) -> RepositioningBase:
     """This function chooses the repositioning module that should be loaded.

@@ -152,7 +152,7 @@ class PTOffer(TravellerOffer):
     - source_station_departure_time (int): absolute time [s] of the departure at the source station
     - source_transfer_time (int): transfer time [s] from the source station to the source stop
     - waiting_time (int): waiting time [s] from arrival at the source stop until departure; this value is used as the 'offered_waiting_time' in the TravellerOffer
-    - pt_trip_time (int): travel time [s] from departure at the source stop until arrival at the target stop
+    - trip_time (int): travel time [s] from departure at the source stop until arrival at the target stop
     - fare (int): fare of the offer
     - target_transfer_time (int): transfer time [s] from the target stop to the target station
     - target_station_arrival_time (int): absolute time [s] of the arrival at the target station
@@ -168,32 +168,30 @@ class PTOffer(TravellerOffer):
         traveler_id: str, operator_id: int,
         source_station_id: str, target_station_id: str,
         source_walking_time: int, source_station_departure_time: int, source_transfer_time: int,
-        waiting_time: int, pt_trip_time: int, fare: int,
+        waiting_time: int, trip_time: int, fare: int,
         target_transfer_time: int, target_station_arrival_time: int, target_walking_time: int,
         num_transfers: int, pt_journey_duration: int, detailed_journey_plan: tp.List[tp.Dict[str, tp.Any]],
     ):
         self.origin_node_arrival_time = source_station_departure_time - source_walking_time
-        self.source_station_departure_time = source_station_departure_time
+        self.destination_node_arrival_time = target_station_arrival_time + target_walking_time
 
-        self.target_station_arrival_time = target_station_arrival_time
-        self.destination_node_arrival_time = self.target_station_arrival_time + target_walking_time
-
-        self.pt_journey_duration = pt_journey_duration
-        pt_segment_duration = self.destination_node_arrival_time - self.origin_node_arrival_time
+        self.pt_segment_duration = self.destination_node_arrival_time - self.origin_node_arrival_time
+        offered_driving_time = self.pt_segment_duration - waiting_time
 
         self.detailed_journey_plan = detailed_journey_plan
-
-        offered_driving_time = pt_segment_duration - waiting_time
 
         additional_parameters = {
             G_PT_OFFER_SOURCE_STATION: source_station_id,
             G_PT_OFFER_TARGET_STATION: target_station_id,
             G_PT_OFFER_SOURCE_WALKING_TIME: source_walking_time,
+            G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME: source_station_departure_time,
             G_PT_OFFER_SOURCE_TRANSFER_TIME: source_transfer_time,
-            G_PT_OFFER_TRIP_TIME: pt_trip_time,
+            G_PT_OFFER_TRIP_TIME: trip_time,
             G_PT_OFFER_TARGET_TRANSFER_TIME: target_transfer_time,
+            G_PT_OFFER_TARGET_STATION_ARRIVAL_TIME: target_station_arrival_time,
             G_PT_OFFER_TARGET_WALKING_TIME: target_walking_time,
             G_PT_OFFER_NUM_TRANSFERS: num_transfers,
+            G_PT_OFFER_DURATION: pt_journey_duration,
         }
 
         super().__init__(traveler_id, operator_id, waiting_time, offered_driving_time, fare, additional_parameters=additional_parameters)
@@ -249,18 +247,21 @@ class IntermodalOffer(TravellerOffer):
         # State -> [(SubTripID, WaitKey, DriveKey)]
         amod_state_mapping = {
             RQ_MODAL_STATE.FIRSTMILE: [
-                (RQ_SUB_TRIP_ID.FM_AMOD.value, G_IM_OFFER_FM_WAIT, G_IM_OFFER_FM_DRIVE)
+                (RQ_SUB_TRIP_ID.FM_AMOD.value, G_IM_OFFER_FM_WAIT, G_IM_OFFER_FM_DRIVE),
+                (RQ_SUB_TRIP_ID.FM_PT.value, G_IM_OFFER_PT_WAIT, G_IM_OFFER_PT_DRIVE)
             ],
             RQ_MODAL_STATE.LASTMILE: [
-                (RQ_SUB_TRIP_ID.LM_AMOD.value, G_IM_OFFER_LM_WAIT, G_IM_OFFER_LM_DRIVE)
+                (RQ_SUB_TRIP_ID.LM_AMOD.value, G_IM_OFFER_LM_WAIT, G_IM_OFFER_LM_DRIVE),
+                (RQ_SUB_TRIP_ID.LM_PT.value, G_IM_OFFER_PT_WAIT, G_IM_OFFER_PT_DRIVE)
             ],
             RQ_MODAL_STATE.FIRSTLASTMILE: [
                 (RQ_SUB_TRIP_ID.FLM_AMOD_0.value, G_IM_OFFER_FLM_WAIT_0, G_IM_OFFER_FLM_DRIVE_0),
+                (RQ_SUB_TRIP_ID.FLM_PT.value, G_IM_OFFER_PT_WAIT, G_IM_OFFER_PT_DRIVE),
                 (RQ_SUB_TRIP_ID.FLM_AMOD_1.value, G_IM_OFFER_FLM_WAIT_1, G_IM_OFFER_FLM_DRIVE_1)
             ]
         }
 
-        pt_attributes_to_extract = [G_PT_OFFER_WAIT, G_PT_OFFER_DRIVE, G_PT_OFFER_NUM_TRANSFERS]
+        pt_attributes_to_extract = [G_PT_OFFER_NUM_TRANSFERS]
 
         # calculate totals
         operator_sub_trip_list = []
@@ -274,17 +275,15 @@ class IntermodalOffer(TravellerOffer):
             total_wait += sub_trip_offer.get(G_OFFER_WAIT, 0)
             total_drive += sub_trip_offer.get(G_OFFER_DRIVE, 0)
 
-        # add pt attributes into additional parameters
-        pt_offer = self.sub_trip_offers.get(RQ_SUB_TRIP_ID.FLM_PT.value, {})
-        for key in pt_attributes_to_extract:
-            if key in pt_offer:
-                self.additional_offer_parameters[key] = pt_offer[key]
-
         # map amod attributes into additional parameters
         mapping_configs = amod_state_mapping.get(self.rq_modal_state, [])
         
         for sub_trip_id, wait_key, drive_key in mapping_configs:
             offer = self.sub_trip_offers.get(sub_trip_id, {})
+            # map pt specific attributes
+            if sub_trip_id == RQ_SUB_TRIP_ID.FM_PT.value or sub_trip_id == RQ_SUB_TRIP_ID.PT_LM.value or sub_trip_id == RQ_SUB_TRIP_ID.FLM_PT.value:
+                for attr in pt_attributes_to_extract:
+                    self.additional_offer_parameters[attr] = offer.get(attr)
             self.additional_offer_parameters[wait_key] = offer.get(G_OFFER_WAIT)
             self.additional_offer_parameters[drive_key] = offer.get(G_OFFER_DRIVE)
 

@@ -609,6 +609,8 @@ G_IM_OFFER_FM_WAIT = "im_t_wait_fm" # Only used for AMoD segment in FM
 G_IM_OFFER_LM_WAIT = "im_t_wait_lm" # Only used fot AMoD segment in LM
 G_IM_OFFER_FM_DRIVE = "im_t_drive_fm" # Only used for AMoD segment in FM
 G_IM_OFFER_LM_DRIVE = "im_t_drive_lm" # Only used fot AMoD segment in LM
+G_IM_OFFER_PT_WAIT = "im_t_wait_pt" # total pt waiting time
+G_IM_OFFER_PT_DRIVE = "im_t_drive_pt" # total pt driving time
 G_IM_OFFER_DURATION = "im_t_duration" # total duration of intermodal offer
 
 # additional parameters for pt offers
@@ -616,14 +618,16 @@ G_IM_OFFER_DURATION = "im_t_duration" # total duration of intermodal offer
 G_PT_OFFER_SOURCE_STATION = "source_station_id"
 G_PT_OFFER_TARGET_STATION = "target_station_id"
 G_PT_OFFER_SOURCE_WALKING_TIME = "source_walking_time"
+G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME = "source_station_departure_time"
 G_PT_OFFER_SOURCE_TRANSFER_TIME = "source_transfer_time"
-G_PT_OFFER_TRIP_TIME = "pt_trip_time"
+G_PT_OFFER_SOURCE_WAITING_TIME = "source_waiting_time"
+G_PT_OFFER_TRIP_TIME = "trip_time"
 G_PT_OFFER_TARGET_TRANSFER_TIME = "target_transfer_time"
+G_PT_OFFER_TARGET_STATION_ARRIVAL_TIME = "target_station_arrival_time"
 G_PT_OFFER_TARGET_WALKING_TIME = "target_walking_time"
 G_PT_OFFER_NUM_TRANSFERS = "num_transfers"
-G_PT_OFFER_WAIT = "pt_t_wait" # PT segment waiting time
-G_PT_OFFER_DURATION = "pt_duration" # PT segment total duration
-G_PT_OFFER_DRIVE = "pt_t_drive" # PT segment driving time --> total pt segment duration - pt waiting time
+G_PT_OFFER_STEPS = "steps"
+G_PT_OFFER_DURATION = "duration" # PT segment total duration
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Fleet Simulation Pattern
