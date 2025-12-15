@@ -241,7 +241,10 @@ class MATSimSocket:
             self.fs_obj.terminate()
             
             self.fs_obj = None
-
+            
+            if self.log_f is not None and os.path.exists(self.log_f):
+                ## delete old log file
+                os.remove(self.log_f)
         
             scenario_parameters = self.scenario_parameters.copy()
             scenario_parameters["matsim_iteration"] = iteration
