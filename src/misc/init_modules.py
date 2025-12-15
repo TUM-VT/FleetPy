@@ -87,6 +87,7 @@ def get_src_request_modules():
     rm_dict["BrokerDecisionRequest"] = ("src.demand.TravelerModels", "BrokerDecisionRequest")
     rm_dict["UserDecisionRequest"] = ("src.demand.TravelerModels", "UserDecisionRequest")
     rm_dict["PreferredOperatorRequest"] = ("src.demand.TravelerModels", "PreferredOperatorRequest")
+    rm_dict["BasicIntermodalRequest"] = ("src.demand.TravelerModels", "BasicIntermodalRequest")
     # add development content
     if dev_content is not None:
         dev_rm_dict = dev_content.add_request_models()
