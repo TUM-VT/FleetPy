@@ -408,7 +408,8 @@ class FleetControlBase(metaclass=ABCMeta):
         LOG.debug(f"reject customer {prq} at time {simulation_time}")
         prq.set_service_offered(offer)
         if self.repo and not prq.get_reservation_flag():
-            self.repo.register_rejected_customer(prq, simulation_time)
+            if reason is not None and reason == REJECTION_REASON.NO_VEHICLE_AVAILABLE:
+                self.repo.register_rejected_customer(prq, simulation_time)
         return offer
     
     def _is_valid_request(self, sim_time, plan_request: PlanRequest) -> bool:

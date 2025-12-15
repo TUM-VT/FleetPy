@@ -267,12 +267,6 @@ class MATSimSocket:
             with open(self.log_f, "w") as fh_touch:
                 fh_touch.write(f"{self.last_stat_report_time}: Opening socket communication ...\n")
             
-            if iteration >= 15:    
-                level = logging.DEBUG
-                logger = logging.getLogger()
-                logger.setLevel(level)
-                for handler in logger.handlers:
-                    handler.setLevel(level)
                 
             self._simulation_terminated = False
             self._last_network_update_time = None
