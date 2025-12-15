@@ -525,7 +525,7 @@
             </scalingScheme>
         </edges>
         <vehicles vehicleMode="0" vehicleScaleMode="0" vehicleQuality="2" vehicle_minSize="1.00" vehicle_exaggeration="1.00" vehicle_constantSize="1" vehicle_constantSizeSelected="0" vehicleValueHideCheck="0" vehicleValueHideThreshold="0.00" vehicleValueHideCheck2="0" vehicleValueHideThreshold2="100.00" vehicleValueSetNeutral="0" vehicleValueNeutralThreshold="0.00" vehicleValueFixRange="0" vehicleValueRainbowScheme="1" showBlinker="1" drawMinGap="0" drawBrakeGap="0" showBTRange="0" showRouteIndex="0" scaleLength="1" drawReversed="0" showParkingInfo="0" showChargingInfo="0" vehicleParam="PARAM_NUMERICAL" vehicleScaleParam="PARAM_NUMERICAL" vehicleTextParam="PAX"
-                  vehicleName_show="1" vehicleName_size="100.00" vehicleName_color="0,255,72" vehicleName_bgColor="128,0,0,0" vehicleName_constantSize="1" vehicleName_onlySelected="0"
+                  vehicleName_show="1" vehicleName_size="100.00" vehicleName_color="blue" vehicleName_bgColor="128,0,0,0" vehicleName_constantSize="1" vehicleName_onlySelected="0"
                   vehicleValue_show="0" vehicleValue_size="80.00" vehicleValue_color="cyan" vehicleValue_bgColor="128,0,0,0" vehicleValue_constantSize="1" vehicleValue_onlySelected="0"
                   vehicleScaleValue_show="0" vehicleScaleValue_size="80.00" vehicleScaleValue_color="grey" vehicleScaleValue_bgColor="128,0,0,0" vehicleScaleValue_constantSize="1" vehicleScaleValue_onlySelected="0"
                   vehicleText_show="1" vehicleText_size="100.00" vehicleText_color="red" vehicleText_bgColor="128,0,0,0" vehicleText_constantSize="1" vehicleText_onlySelected="0">
