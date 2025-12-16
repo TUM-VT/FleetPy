@@ -14,8 +14,7 @@ def veh_search_for_immediate_request(sim_time, prq, fleetctrl, list_excluded_vid
     :return: list of vehicle objects considered for assignment, routing_results_dict ( (o_pos, d_pos) -> (cfv, tt, dis))
     :rtype: tuple of list of SimulationVehicle, dict
     """
-    # Only once for every timestep
-    # Get a dict with the position of all vehicles currently running in the Simulation {pos_a:[v_1,v_2],pos_b:[v_3]...}
+
     if sim_time != fleetctrl.pos_veh_dict_time or not fleetctrl.pos_veh_dict: 
         veh_locations_to_vid = {}
         for vid, veh_obj in enumerate(fleetctrl.sim_vehicles):
@@ -31,7 +30,7 @@ def veh_search_for_immediate_request(sim_time, prq, fleetctrl, list_excluded_vid
 
     # stop criteria: search radius and possibly max_routes
     prq_o_stop_pos, prq_t_pu_earliest, prq_t_pu_latest = prq.get_o_stop_info()
-    sr = prq_t_pu_latest - sim_time #search radius
+    sr = prq_t_pu_latest - sim_time
     max_routes = fleetctrl.rv_heuristics.get(G_RH_I_NWS)
 
     # backwards Dijkstra

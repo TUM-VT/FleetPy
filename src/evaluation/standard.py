@@ -189,7 +189,6 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
     if print_comments:
         print(f"Evaluating {scenario_parameters[G_SCENARIO_NAME]}\nReading user stats ...")
-    print(f"Evaluation Time start: {evaluation_start_time}, Evaluation Time end: {evaluation_end_time}")
     user_stats = read_user_output_file(output_dir, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
     if print_comments:
         print(f"\t shape of user stats: {user_stats.shape}")

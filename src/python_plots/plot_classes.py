@@ -68,9 +68,8 @@ class PyPlot(Process):
         x[0], y[0] = x[0] - BOARDER_SIZE, y[0] - BOARDER_SIZE
         x[1], y[1] = x[1] + BOARDER_SIZE, y[1] + BOARDER_SIZE
         self.plot_extent_3857 = x + y
-
         # Download the map image using the extent
-        #_, bbox = ctx.bounds2raster(x[0], y[0], x[1], y[1], path=self.bg_map_path, source=CTX_PROVIDER)
+        _, bbox = ctx.bounds2raster(x[0], y[0], x[1], y[1], path=self.bg_map_path, source=CTX_PROVIDER)
         #self.plot_extent_3857 = bbox
         
         self._times = []

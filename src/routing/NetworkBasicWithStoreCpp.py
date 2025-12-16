@@ -98,7 +98,7 @@ class NetworkBasicWithStoreCpp(NetworkBasicCpp):
             destination_overhead = self.get_section_overhead(destination_position, from_start=True)
         if self.travel_time_infos.get( (origin_node, destination_node) ) is not None:
             s = self.travel_time_infos[(origin_node, destination_node)]
-            return (s[0] + origin_overhead[0] + destination_overhead[0], s[1] + origin_overhead[1] + destination_overhead[1], s[2] + origin_overhead[2] + destination_overhead[2])       
+            return (s[0] + origin_overhead[0] + destination_overhead[0], s[1] + origin_overhead[1] + destination_overhead[1], s[2] + origin_overhead[2] + destination_overhead[2])
         else:
             s = self.cpp_router.computeTravelCosts1To1(origin_node, destination_node)
             if self._current_tt_factor is not None:

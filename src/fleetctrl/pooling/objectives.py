@@ -69,7 +69,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
         assignment_reward_per_rq = 10 ** np.ceil(np.log10(assignment_reward_per_rq))
         LOG.info(f" -> assignment_reward_per_rq for objective function: {assignment_reward_per_rq}")
         if not ignore_repo_stop_wt:
-            def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase,prq=None)->float:
+            def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
                 """This function evaluates the total spent time of a vehicle according to a vehicle plan.
 
                 :param simulation_time: current simulation time
@@ -412,8 +412,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             for ps in veh_plan.list_plan_stops:
                 pos = ps.get_pos()
                 if pos != last_pos:
-                    tt , dis, var, cfv = routing_engine.return_travel_costs_1to1(last_pos,pos,mode=routing_engine.routing_mode)
-                    sum_dist += dis
+                    sum_dist += routing_engine.return_travel_costs_1to1(last_pos, pos)[2]
                     last_pos = pos
             # value of time term (treat waiting and in-vehicle time the same)
             sum_user_times = 0
@@ -586,26 +585,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
         raise IOError(f"Did not find valid request assignment control objective string."
                       f" Please check the input parameter {G_OP_VR_CTRL_F}!") 
     return control_f   
-# -------------------------------------------------------------------------------------------------------------------- #
-def get_travel_cost_of_vehplan(routing_engine,veh_plan,veh_obj,prq):
-    stops_list_waiting_time = [veh_obj.pos]
-    waiting_time_boarding_stops = 0
-    
-    for index,stop in enumerate(veh_plan.list_plan_stops):
-        if stop.boarding_dict.get(1) != None and prq.rid in stop.boarding_dict.get(1):
-            stops_list_waiting_time.append(stop.pos)
-            pu_index = index
-            break
-        elif (stop.boarding_dict.get(1) != None and prq.rid not in stop.boarding_dict.get(1)) or stop.boarding_dict.get(-1) != None:
-            stops_list_waiting_time.append(stop.pos) 
-            waiting_time_boarding_stops +=1
-        else:
-            stops_list_waiting_time.append(stop.pos)
-
-    else:
-        raise IOError(f"Did not find valid request assignment control objective string."
-                      f" Please check the input parameter {G_OP_VR_CTRL_F}!")
-        
+# -------------------------------------------------------------------------------------------------------------------- #       
     def embedded_control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
         """This function is the embedded objective function which is returned to the calling function.
 

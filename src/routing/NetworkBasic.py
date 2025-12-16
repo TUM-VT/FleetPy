@@ -107,7 +107,6 @@ class Node():
     def get_travel_infos_from(self, other_node_index):
         return self.travel_infos_from[other_node_index]
 
-
 class Edge():
     def __init__(self, edge_index, distance, travel_time):
         self.edge_index = edge_index
@@ -238,7 +237,6 @@ class NetworkBasic(NetworkBase):
         self.sim_time = simulation_time
         if update_state:
             if self.travel_time_file_infos.get(simulation_time, None) is not None:
-                print(f"update network {simulation_time}")
                 self.load_tt_file(simulation_time)
                 return True
         return False
@@ -625,7 +623,7 @@ class NetworkBasic(NetworkBase):
                 if max_cost_value is not None and trivial_test[1][0] > max_cost_value:
                     continue
                 if trivial_test[1][0] < best_cfv:
-                    return_route = trivial_test[0]        
+                    return_route = trivial_test[0]
                     best_cfv = trivial_test[1][0]
                 continue
             start_node = pos[0]

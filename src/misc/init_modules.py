@@ -48,7 +48,7 @@ def get_src_simulation_environments():
     sim_env_dict["BrokerDecision"] = ("src.BrokerSimulation", "BrokerDecisionSimulation")
     sim_env_dict["UserDecisionSimulation"] = ("src.BrokerSimulation", "UserDecisionSimulation")
     sim_env_dict["PreferredOperatorSimulation"] = ("src.BrokerSimulation", "PreferredOperatorSimulation")
-    sim_env_dict["SUMOcontrolledSim"] = ("src.SUMOcontrolledSim", "SUMOcontrolledSim") ## Should not be here
+    sim_env_dict["SUMOcontrolledSim"] = ("src.SUMOcontrolledSim", "SUMOcontrolledSim")
     # add development content
     if dev_content is not None:
         dev_sim_env_dict = dev_content.add_dev_simulation_environments()
@@ -68,11 +68,6 @@ def get_src_routing_engines():
     re_dict["NetworkTTMatrix"] = ("src.routing.NetworkTTMatrix", "NetworkTTMatrix")
     re_dict["NetworkBasicSumoCoupling"] = ("src.routing.NetworkBasicSumoCoupling", "NetworkBasicSumoCoupling")
     re_dict["NetworkBasicWithStoreCppSumoCoupling"] = ("src.routing.NetworkBasicWithStoreCppSumoCoupling", "NetworkBasicWithStoreCppSumoCoupling")
-    re_dict["NetworkBasicReliability"] = ("src.routing.NetworkBasicReliability", "NetworkBasicReliability")
-    re_dict["NetworkBasicReliabilityWithStore"] = ("src.routing.NetworkBasicReliabilityWithStore", "NetworkBasicReliabilityWithStore")
-    re_dict["NetworkBasicReliabilitySumoCoupling"] = ("src.routing.NetworkBasicReliabilitySumoCoupling", "NetworkBasicReliabilitySumoCoupling")
-    re_dict["NetworkBasicReliabilityWithStoreCppSumoCoupling"] = ("src.routing.NetworkBasicReliabilityWithStoreCppSumoCoupling", "NetworkBasicReliabilityWithStoreCppSumoCoupling")
-    re_dict["_NetworkBasicReliabilityWithStoreCppSumoCoupling"] = ("src.routing._NetworkBasicReliabilityWithStoreCppSumoCoupling", "_NetworkBasicReliabilityWithStoreCppSumoCoupling")
     # add development content
     if dev_content is not None:
         dev_re_dict = dev_content.add_dev_routing_engines()

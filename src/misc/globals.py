@@ -331,9 +331,6 @@ G_OP_PA_ASSTH = "op_parcel_assignment_threshold"
 G_OP_PA_OBASS = "op_parcel_passenger_ob_assignment"
 G_OP_PA_REDEL = "op_parcel_remaining_delivery_time"
 
-# Routing Engine Mode
-G_OP_ROUTING_MODE = "op_routing_mode"
-
 # -------------------------------------------------------------------------------------------------------------------- #
 # Charging Stations/Depots
 # ------------------------
@@ -402,7 +399,6 @@ G_EDGE_FROM = "from_node"
 G_EDGE_TO = "to_node"
 G_EDGE_DIST = "distance"
 G_EDGE_TT = "travel_time"
-G_EDGE_TT_STD = "edge_std"
 G_EDGE_SC = "shortcut_def"
 G_EDGE_SOURCE = "source_edge_id"
 

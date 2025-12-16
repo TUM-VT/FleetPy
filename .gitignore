@@ -3,7 +3,7 @@ data/README*
 data/demand/*
 !data/demand/example_demand
 !data/demand/sumo_example
-data/demand/example_parcel_demand
+!data/demand/example_parcel_demand
 data/fleetctrl/initial_vehicle_distribution/*
 data/fleetctrl/elastic_pricing/*
 data/fleetctrl/elastic_fleet_size/*
@@ -14,7 +14,7 @@ data/fleetctrl/offline_reservation_solution/*
 !data/fleetctrl/elastic_fleet_size/example_active_fleetsize.csv
 data/infra/*
 data/networks/*
-data/networks/example_network
+!data/networks/example_network
 data/networks/example_network/ff/*
 data/networks/example_network/ch_graph/*
 data/networks/example_network/base/*.graph
@@ -29,13 +29,23 @@ data/vehicles/*
 data/zones/*
 !data/zones/example_zones
 !data/infra/example_infra
-**/results/*
+
 
 # study directories except for example
 studies/*
 !studies/example_study
 !studies/fleetpy_sumo_coupling
+studies/fleetpy_sumo_coupling/results/*
 studies/example_study/results/*
+!studies/module_tests/*
+studies/module_tests/results/*
+!studies/module_tests/results/benchmark.csv
+!studies/manhattan_case_study
+studies/manhattan_case_study/results/*
+!studies/chicago_case_study
+studies/chicago_case_study/results/*
+!studies/munich_case_study
+studies/munich_case_study/results/*
 
 # system dependent C++ Router files
 src/routing/cpp_router/*.pyd
@@ -178,4 +188,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-/src/routing/cpp_router/tt_updates
+

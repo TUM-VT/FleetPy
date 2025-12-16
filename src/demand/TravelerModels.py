@@ -251,8 +251,6 @@ class RequestBase(metaclass=ABCMeta):
         self.direct_route_travel_distance = dis
         self.direct_route_travel_time = tt
 
-        
-
     def _add_record(self, record_dict):
         """This method enables the output of Traveler Model specific output
 
