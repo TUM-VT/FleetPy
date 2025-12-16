@@ -43,6 +43,7 @@ std::string& trim(
   return trim_left( trim_right( s, delimiters ), delimiters );
 }
 
+
 Network::Network(string node_path, string edge_path) {
 
     //string node_path = network_path + "\\base\\nodes.csv";
