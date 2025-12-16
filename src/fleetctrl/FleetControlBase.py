@@ -496,7 +496,7 @@ class FleetControlBase(metaclass=ABCMeta):
         :param add_arg: possible additional argument if needed
         :type add_arg: not defined here
         """
-        LOG.debug(f"assign to veh {veh_obj.vid} at time {sim_time} : {vehicle_plan}")
+        LOG.debug(f"assign to {veh_obj.vid} at time {sim_time} : {vehicle_plan}")
         vehicle_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
         if self._vid_to_assigned_charging_process.get(veh_obj.vid) is not None:
             veh_plan_ch_task = None

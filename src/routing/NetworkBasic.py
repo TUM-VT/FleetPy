@@ -107,6 +107,8 @@ class Node():
     def get_travel_infos_from(self, other_node_index):
         return self.travel_infos_from[other_node_index]
 
+
+
 class Edge():
     def __init__(self, edge_index, distance, travel_time):
         self.edge_index = edge_index

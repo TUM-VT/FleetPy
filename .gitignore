@@ -1,3 +1,7 @@
+# private simulation scripts (private copies of bugfix_or_run.py with modifications for specific scenarios)
+run_private*.py
+
+
 # data directories except for example
 data/README*
 data/demand/*
@@ -30,8 +34,7 @@ data/zones/*
 !data/zones/example_zones
 !data/infra/example_infra
 
-
-# study directories except for example
+# study directories except for example and example case studies
 studies/*
 !studies/example_study
 !studies/fleetpy_sumo_coupling

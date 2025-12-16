@@ -14,7 +14,6 @@ def veh_search_for_immediate_request(sim_time, prq, fleetctrl, list_excluded_vid
     :return: list of vehicle objects considered for assignment, routing_results_dict ( (o_pos, d_pos) -> (cfv, tt, dis))
     :rtype: tuple of list of SimulationVehicle, dict
     """
-
     if sim_time != fleetctrl.pos_veh_dict_time or not fleetctrl.pos_veh_dict: 
         veh_locations_to_vid = {}
         for vid, veh_obj in enumerate(fleetctrl.sim_vehicles):
