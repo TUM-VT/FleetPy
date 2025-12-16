@@ -231,7 +231,7 @@ def load_simulation_environment(scenario_parameters) -> FleetSimulationBase:
     sim_env_dict = get_src_simulation_environments()
     # load simulation environment instance
     sim_env_class = load_module(sim_env_dict, sim_env_str, "Simulation environment")
-    return sim_env_class(scenario_parameters) 
+    return sim_env_class(scenario_parameters)
 
 
 def load_routing_engine(network_type, network_dir, network_dynamics_file_name=None) -> NetworkBase:

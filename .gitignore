@@ -1,7 +1,6 @@
 # private simulation scripts (private copies of bugfix_or_run.py with modifications for specific scenarios)
 run_private*.py
 
-
 # data directories except for example
 data/README*
 data/demand/*
