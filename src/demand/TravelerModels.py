@@ -17,6 +17,9 @@ pd.options.mode.chained_assignment = None  # TODO # disables warning when overwr
 # -----------
 from src.misc.functions import PiecewiseContinuousLinearFunction
 from src.routing.road.NetworkBase import return_position_str
+if tp.TYPE_CHECKING:
+    from src.routing.road.NetworkBase import NetworkBase
+
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------
@@ -53,6 +56,7 @@ class RequestBase(metaclass=ABCMeta):
     def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
         # input
         self.rid = int(rq_row.get(G_RQ_ID, rq_row.name))  # request id is index of dataframe
+        self.subtrip_id: int = None
         self.sub_rid_struct = None
         self.is_parcel = False  # requests are usually persons
         self.rq_time = rq_row[G_RQ_TIME] - rq_row[G_RQ_TIME] % simulation_time_step
@@ -91,7 +95,7 @@ class RequestBase(metaclass=ABCMeta):
         self.direct_route_travel_time = None
         self.direct_route_travel_distance = None
         # 
-        self.modal_state = G_RQ_STATE_MONOMODAL # mono-modal trip by default 
+        self.modal_state = RQ_MODAL_STATE.MONOMODAL # mono-modal trip by default 
 
     def get_rid(self):
         return self.rid
@@ -113,6 +117,9 @@ class RequestBase(metaclass=ABCMeta):
 
     def get_destination_node(self):
         return self.d_node
+    
+    def get_modal_state(self) -> RQ_MODAL_STATE:
+        return self.modal_state
 
     def return_offer(self, op_id):
         return self.offer.get(op_id)
@@ -214,17 +221,25 @@ class RequestBase(metaclass=ABCMeta):
         self.do_pos = do_pos
         self.t_egress = t_egress
 
-    def create_SubTripRequest(self, subtrip_id, mod_o_node=None, mod_d_node=None, mod_start_time=None, modal_state = None):
+    def create_SubTripRequest(
+            self, 
+            subtrip_id: int, 
+            leg_o_node: tp.Optional[int] = None, 
+            leg_d_node: tp.Optional[int] = None, 
+            leg_start_time: tp.Optional[int] = None, 
+            modal_state: tp.Optional[RQ_MODAL_STATE] = None,
+            routing_engine : tp.Optional['NetworkBase'] = None,
+        ):
         """ this function creates subtriprequests (i.e. a customer sends multiple requests) based on a attributes of itself. different subtrip-customers
         can vary in start and target node, earlest start time and modal_state (monomodal, firstmile, lastmile, firstlastmile)
         :param subtrip_id: identifier of the subtrip (this is not the customer id!)
         :type subtrip_id: int
-        :param mod_o_node: new origin node index of subtrip
-        :type mod_o_node: int
-        :param mod_d_node: new destination node index of subtrip
-        :type mod_d_node: int
-        :param mod_start_time: new earliest start time of the trip
-        :type mod_start_time: int
+        :param leg_o_node: new origin node index of subtrip
+        :type leg_o_node: int
+        :param leg_d_node: new destination node index of subtrip
+        :type leg_d_node: int
+        :param leg_start_time: new earliest start time of the trip
+        :type leg_start_time: int
         :param modal_state: indicator of modality (indicator if monomodal, first, last or firstlast mile trip)
         :type modal_state: int in G_RQ_STATE_MONOMODAL, G_RQ_STATE_FIRSTMILE, G_RQ_STATE_LASTMILE, G_RQ_STATE_FIRSTLASTMILE (globals)
         :return: new traveler with specified attributes
@@ -233,14 +248,22 @@ class RequestBase(metaclass=ABCMeta):
         sub_rq_obj = deepcopy(self)
         old_rid = sub_rq_obj.get_rid()
         sub_rq_obj.sub_rid_struct = f"{old_rid}_{subtrip_id}"
-        if mod_o_node is not None:
-            sub_rq_obj.o_node = mod_o_node
-        if mod_d_node is not None:
-            sub_rq_obj.d_node = mod_d_node
-        if mod_start_time is not None:
-            sub_rq_obj.earliest_start_time = mod_start_time
+        sub_rq_obj.subtrip_id = subtrip_id
+        if leg_o_node is not None:
+            sub_rq_obj.o_node = leg_o_node
+        if leg_d_node is not None:
+            sub_rq_obj.d_node = leg_d_node
+        if leg_start_time is not None:
+            sub_rq_obj.earliest_start_time = leg_start_time
         if modal_state is not None:
             sub_rq_obj.modal_state = modal_state
+        # update travel times and distances
+        if routing_engine is not None:
+            sub_rq_obj.o_pos = routing_engine.return_node_position(leg_o_node)
+            sub_rq_obj.d_pos = routing_engine.return_node_position(leg_d_node)
+            _, tt, dis = routing_engine.return_travel_costs_1to1(sub_rq_obj.o_pos, sub_rq_obj.d_pos)
+            sub_rq_obj.direct_route_travel_distance = dis
+            sub_rq_obj.direct_route_travel_time = tt
         return sub_rq_obj
 
     def set_direct_route_travel_infos(self, routing_engine):
@@ -744,8 +767,8 @@ class BasicIntermodalRequest(RequestBase):
     def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
         super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
         # intermodal attributes
-        modal_state_int: int = rq_row.get(G_RQ_MODAL_STATE, RQ_MODAL_STATE.MONOMODAL.value)  # mono-modal trip by default 
-        self.modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE(modal_state_int)
+        self.modal_state_int: int = rq_row.get(G_RQ_MODAL_STATE_VALUE, RQ_MODAL_STATE.MONOMODAL.value)  # mono-modal trip by default 
+        self.modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE(self.modal_state_int)
         self.transfer_station_ids: tp.Optional[tp.List[str]] = self._load_transfer_station_ids(rq_row)
         self.max_transfers: int = rq_row.get(G_RQ_MAX_TRANSFERS, 999)  # 999 means no limit
 
@@ -810,6 +833,7 @@ class BasicIntermodalRequest(RequestBase):
         record_dict[G_RQ_DO] = self.do_time
         record_dict[G_RQ_FARE] = self.fare
         record_dict[G_RQ_MODAL_STATE] = self.modal_state
+        record_dict[G_RQ_MODAL_STATE_VALUE] = self.modal_state_int
         return self._add_record(record_dict)
         
     def choose_offer(self, scenario_parameters, simulation_time):

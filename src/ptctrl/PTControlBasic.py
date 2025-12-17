@@ -42,25 +42,21 @@ class PTControlBasic(PTControlBase):
     def __init__(self, gtfs_dir: str, pt_operator_id: int = -2):
         super().__init__()
 
-        self.pt_router: RaptorRouterCpp = self._load_pt_router(gtfs_dir)
+        self.gtfs_dir: str = gtfs_dir
         self.pt_operator_id: int = pt_operator_id
-
         self.pt_offer_db: tp.Dict[str, 'PTOffer'] = {}  # rid_struct -> PTOffer
-
+        self.pt_router: RaptorRouterCpp = self._load_pt_router()
         LOG.info("PT operator initialized successfully.")
 
-    def _load_pt_router(self, gtfs_dir: str) -> RaptorRouterCpp:
+    def _load_pt_router(self) -> RaptorRouterCpp:
         """This method will load and initialize the pt router instance.
-
-        Args:
-            gtfs_dir (str): the directory path where the GTFS files are stored.
         """
-        return RaptorRouterCpp(gtfs_dir)
+        return RaptorRouterCpp(self.gtfs_dir)
     
     def return_fastest_pt_journey_1to1(
         self,
         source_station_id: str, target_station_id: str,
-        source_station_departure_time: int,
+        source_station_departure_datetime: datetime,
         max_transfers: int = 999,
         detailed: bool = False,
     ) -> tp.Union[tp.Dict[str, tp.Any], None]:
@@ -69,7 +65,7 @@ class PTControlBasic(PTControlBase):
         Args:
             source_station_id (str): id of the source station.
             target_station_id (str): id of the target station.
-            source_station_departure_time (int): departure timestamp [s] from source station.
+            source_station_departure_datetime (datetime): departure datetime from source station.
             max_transfers (int, optional): maximum number of transfers allowed. Defaults to 999 (no limit).
             detailed (bool, optional): whether to return a detailed journey plan. Defaults to False.
         Returns:
@@ -78,7 +74,7 @@ class PTControlBasic(PTControlBase):
         pt_journey_plan_dict: tp.Union[tp.Dict[str, tp.Any], None] = self.pt_router.find_fastest_pt_journey_1to1(
             source_station_id = source_station_id,
             target_station_id = target_station_id,
-            source_station_departure_time = source_station_departure_time,
+            source_station_departure_datetime = source_station_departure_datetime,
             max_transfers = max_transfers,
             detailed = detailed,
         )
@@ -89,9 +85,8 @@ class PTControlBasic(PTControlBase):
         rid_struct: str, operator_id: int,
         source_station_id: str, target_station_id: str,
         source_walking_time: int,target_walking_time: int,
-        source_station_departure_time: int,
         pt_journey_plan_dict: tp.Union[tp.Dict[str, tp.Any], None],
-        previous_amod_operator_id: int = None,
+        firstmile_amod_operator_id: int = None,
     ):
         """This method will create a PTOffer for the pt request and record it in the pt offer database.
 
@@ -102,19 +97,18 @@ class PTControlBasic(PTControlBase):
             target_station_id (str): id of the target station.
             source_walking_time (int): walking time [s] from origin street node to source station.
             target_walking_time (int): walking time [s] from target station to destination street node.
-            source_station_departure_time (int): departure timestamp [s] from source station.
             pt_journey_plan_dict (tp.Union[tp.Dict[str, tp.Any], None]): The pt journey plan dictionary or None if no journey is found.
-            previous_amod_operator_id (int, optional): The operator id of the previous amod operator. Defaults to None.
+            firstmile_amod_operator_id (int, optional): The operator id of the firstmile amod operator. Defaults to None.
         """
         if pt_journey_plan_dict is None:
-            self.pt_offer_db[(rid_struct, previous_amod_operator_id)] = Rejection(rid_struct, operator_id)
+            self.pt_offer_db[(rid_struct, firstmile_amod_operator_id)] = Rejection(rid_struct, operator_id)
         else:
             fare: int = self._compute_fare()
             # old offer will always be overwritten
-            self.pt_offer_db[(rid_struct, previous_amod_operator_id)] = PTOffer(
+            self.pt_offer_db[(rid_struct, firstmile_amod_operator_id)] = PTOffer(
                 traveler_id = rid_struct, operator_id = operator_id,
                 source_station_id = source_station_id, target_station_id = target_station_id,
-                source_walking_time = source_walking_time, source_station_departure_time = source_station_departure_time,
+                source_walking_time = source_walking_time, source_station_departure_time = pt_journey_plan_dict.get(G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME, None),
                 source_transfer_time = pt_journey_plan_dict.get(G_PT_OFFER_SOURCE_TRANSFER_TIME, None),
                 waiting_time = pt_journey_plan_dict.get(G_PT_OFFER_SOURCE_WAITING_TIME, None),
                 trip_time = pt_journey_plan_dict.get(G_PT_OFFER_TRIP_TIME, None),
@@ -137,31 +131,31 @@ class PTControlBasic(PTControlBase):
     def get_current_offer(
         self, 
         rid_struct: str,
-        previous_amod_operator_id: int = None,
+        firstmile_amod_operator_id: int = None,
     ) -> tp.Optional[PTOffer]:
         """This method will return the current offer for the pt request.
 
         Args:
             rid_struct (str): The sub-request id struct of the journey.
-            previous_amod_operator_id (int, optional): The operator id of the previous amod operator. Defaults to None.
+            firstmile_amod_operator_id (int, optional): The operator id of the firstmile amod operator. Defaults to None.
         Returns:
             tp.Optional[PTOffer]: The current offer for the pt request.
         """
-        return self.pt_offer_db.get((rid_struct, previous_amod_operator_id), None)
+        return self.pt_offer_db.get((rid_struct, firstmile_amod_operator_id), None)
     
     def user_confirms_booking(
         self,
         pt_sub_rq_obj: 'BasicIntermodalRequest',
-        previous_amod_operator_id: int = None
+        firstmile_amod_operator_id: int = None
     ):
         """This method is used to confirm a customer booking. This can trigger some database processes.
 
         Args:
-            pt_sub_rq_obj (BasicMultimodalRequest): The pt sub-request object.
-            previous_amod_operator_id (int, optional): The operator id of the previous amod operator. Defaults to None.
+            pt_sub_rq_obj (BasicIntermodalRequest): The pt sub-request object.
+            firstmile_amod_operator_id (int): the id of the firstmile amod operator, only used for FM and FLM requests
         """
         pt_rid_struct: str = pt_sub_rq_obj.get_rid_struct()
-        pt_offer: 'PTOffer' = self.get_current_offer(pt_rid_struct, previous_amod_operator_id)
+        pt_offer: 'PTOffer' = self.get_current_offer(pt_rid_struct, firstmile_amod_operator_id)
         pt_sub_rq_obj.user_boards_vehicle(
             simulation_time = pt_offer.get(G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME, None),
             op_id = self.pt_operator_id,

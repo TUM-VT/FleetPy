@@ -10,6 +10,9 @@ from abc import abstractmethod, ABCMeta
 
 # src imports
 # -----------
+if tp.TYPE_CHECKING:
+    from src.routing.pt.RaptorRouterCpp import RaptorRouterCpp
+    from src.simulation.Offers import PTOffer
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -33,7 +36,10 @@ INPUT_PARAMETERS_PTControlBase = {
 class PTControlBase(metaclass=ABCMeta):
     @abstractmethod
     def __init__(self):
-        pass
+        self.pt_router: RaptorRouterCpp = None
+        self.pt_operator_id: int = None
+        self.pt_offer_db: tp.Dict[str, 'PTOffer'] = {}
+        self.gtfs_dir: str = None
 
     @abstractmethod
     def _load_pt_router(self):

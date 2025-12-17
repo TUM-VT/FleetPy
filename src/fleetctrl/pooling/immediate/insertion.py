@@ -387,7 +387,13 @@ def single_insertion(veh_obj_list : List[SimulationVehicle], current_vid_to_vehp
     return current_best_vid, current_best_plan, current_best_obj_delta
 
 
-def insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase, force_feasible_assignment : bool=True) -> List[Tuple[Any, VehiclePlan, float]]:
+def insertion_with_heuristics(
+    sim_time : int,
+    prq : PlanRequest,
+    fleetctrl : FleetControlBase,
+    force_feasible_assignment : bool = True,
+    excluded_vid = []
+) -> List[Tuple[Any, VehiclePlan, float]]:
     """This function searches for suitable vehicles and return vehicle plans with insertions. Different heuristics
     depending on whether it is an immediate or reservation request can be triggered. See the respective functions
     for more details.
@@ -395,13 +401,14 @@ def insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : Fle
     :param prq: PlanRequest to insert
     :param fleetctrl: FleetControl instance
     :param force_feasible_assignment: if True, a feasible solution is assigned even with positive control function value
+    :param excluded_vid: list of vehicle ids that should not be considered for assignment
     :return: list of (vid, vehplan, delta_cfv) tuples
     :rtype: list
     """
     if prq.get_reservation_flag():
-        return reservation_insertion_with_heuristics(sim_time, prq, fleetctrl, force_feasible_assignment)
+        return reservation_insertion_with_heuristics(sim_time, prq, fleetctrl, force_feasible_assignment, excluded_vid=excluded_vid)
     else:
-        return immediate_insertion_with_heuristics(sim_time, prq, fleetctrl, force_feasible_assignment)
+        return immediate_insertion_with_heuristics(sim_time, prq, fleetctrl, force_feasible_assignment, excluded_vid=excluded_vid)
 
 
 def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase,
@@ -491,7 +498,14 @@ def immediate_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleet
     return return_rv_tuples
 
 
-def reservation_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fleetctrl : FleetControlBase, force_feasible_assignment : bool=True, veh_plans : Dict[int, VehiclePlan] = None) -> List[Tuple[Any, VehiclePlan, float]]:
+def reservation_insertion_with_heuristics(
+    sim_time : int,
+    prq : PlanRequest,
+    fleetctrl : FleetControlBase,
+    force_feasible_assignment : bool = True,
+    veh_plans : Dict[int, VehiclePlan] = None,
+    excluded_vid: list[int] = [],
+) -> List[Tuple[Any, VehiclePlan, float]]:
     """This function has access to all FleetControl attributes and therefore can trigger different heuristics and
     is easily extendable if new ideas for heuristics are developed.
 
@@ -521,6 +535,7 @@ def reservation_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fle
     :param fleetctrl: FleetControl instance
     :param force_feasible_assignment: if True, a feasible solution is assigned even with positive control function value
     :param veh_plans: dict vehicle id -> vehicle plan to insert to; if non fleetctrl.veh_plans is used
+    :param excluded_vid: list of vehicle ids that should not be considered for assignment
     :return: list of (vid, vehplan, delta_cfv) tuples
     :rtype: list
     """
@@ -533,7 +548,7 @@ def reservation_insertion_with_heuristics(sim_time : int, prq : PlanRequest, fle
         veh_plans_to_insert_to = fleetctrl.veh_plans
 
     # 1) pre vehicle-search processes
-    excluded_vid = []
+    # excluded_vid = []
 
     # 2) vehicle-search process
     dict_veh_to_av_infos = veh_search_for_reservation_request(sim_time, prq, fleetctrl, list_excluded_vid=excluded_vid, veh_plans=veh_plans_to_insert_to)

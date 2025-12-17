@@ -65,14 +65,15 @@ class RollingHorizonReservation(ReservationBase):
         :return: list of (position, latest arrival time)"""
         return []
 
-    def return_immediate_reservation_offer(self, rid, sim_time):
+    def return_immediate_reservation_offer(self, rid, sim_time, excluded_vid=[]):
         """ this function returns an offer if possible for an reservation request which has been added to the reservation module before 
         in this implementation, an offer is always returned discribed by the earliest and latest pick up time
         :param rid: request id
         :param sim_time: current simulation time
+        :param excluded_vid: list of vehicle ids that should not be considered for assignment
         :return: offer for request """
         prq = self.active_reservation_requests[rid]
-        tuple_list = reservation_insertion_with_heuristics(sim_time, prq, self.fleetctrl, force_feasible_assignment=True)
+        tuple_list = reservation_insertion_with_heuristics(sim_time, prq, self.fleetctrl, force_feasible_assignment=True, excluded_vid=excluded_vid)
         if len(tuple_list) > 0:
             best_tuple = min(tuple_list, key=lambda x:x[2])
             best_vid, best_plan, _ = best_tuple
@@ -101,9 +102,9 @@ class RollingHorizonReservation(ReservationBase):
         :param simulation_time: current simulation time
         """
         if self.rid_to_assigned_vid.get(rid) is not None:
-            vid = self.rid_to_assigned_vid.get[rid]
+            vid = self.rid_to_assigned_vid[rid]
             assigned_plan = self.fleetctrl.veh_plans[vid]
-            veh_obj = self.fleetctrl.veh_plans[vid]
+            veh_obj = self.fleetctrl.sim_vehicles[vid]
             new_plan = simple_remove(veh_obj, assigned_plan, rid, simulation_time,
                 self.routing_engine, self.fleetctrl.vr_ctrl_f, self.fleetctrl.rq_dict, self.fleetctrl.const_bt, self.fleetctrl.add_bt)
             self.fleetctrl.assign_vehicle_plan(veh_obj, new_plan, simulation_time)

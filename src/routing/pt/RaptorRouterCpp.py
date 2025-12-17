@@ -47,9 +47,6 @@ class RaptorRouterCpp():
         # load the stations: used for station-stop mapping
         self.stations_fp_df = self._load_stations_from_gtfs(gtfs_dir)
 
-        # load the street-station transfers: used for finding closest station to a street node, or vice versa
-        self.street_station_transfers_fp_df = self._load_street_station_transfers_from_gtfs(gtfs_dir)
-
     def _initialize_pt_router(self, gtfs_dir: str):
         """This method initializes the PT router.
 
@@ -97,28 +94,13 @@ class RaptorRouterCpp():
         }
         return pd.read_csv(os.path.join(gtfs_dir, "stations_fp.txt"), dtype=dtypes)
     
-    def _load_street_station_transfers_from_gtfs(self, gtfs_dir: str) -> pd.DataFrame:
-        """This method loads the FleetPy-specific street station transfers file.
-
-        Args:
-            gtfs_dir (str): The directory containing the GTFS data of the operator.
-        Returns:
-            pd.DataFrame: The transfer data between the street nodes and the PT stations.
-        """
-        dtypes = {
-            'node_id': 'int',
-            'closest_station_id': 'str',
-            'street_transfer_time': 'int',
-        }
-        return pd.read_csv(os.path.join(gtfs_dir, "street_station_transfers_fp.txt"), dtype=dtypes)
-    
     def find_fastest_pt_journey_1to1(
         self,
         source_station_id: str,
         target_station_id: str,
         source_station_departure_datetime: datetime,
-        max_transfers: int=999,
-        detailed: bool=False,
+        max_transfers: int = 999,
+        detailed: bool = False,
     ) -> tp.Union[tp.Dict[str, tp.Any], None]:
         """This method returns the fastest PT journey plan between two PT stations.
         A station may consist of multiple stops.
@@ -183,6 +165,7 @@ class RaptorRouterCpp():
 
 if __name__ == "__main__":
     # Test/run the pt router module： python -m src.routing.pt.RaptorRouterCpp
+    # To prepare the GTFS data, please check: src/preprocessing/pubtrans/PTRouterGTFSPreperation.ipynb
 
     gtfs_dir = "data/pubtrans/example_network/example_gtfs/matched"
     router = RaptorRouterCpp(gtfs_dir)

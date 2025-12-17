@@ -36,7 +36,8 @@ data/zones/*
 studies/*
 !studies/example_study
 studies/example_study/results/*
-!studies/module_tests/*
+!studies/module_tests
+studies/module_tests/benchmark_comparison.csv
 studies/module_tests/results/*
 !studies/module_tests/results/benchmark.csv
 !studies/manhattan_case_study
@@ -193,4 +194,7 @@ dmypy.json
 
 # MacOS
 .DS_Store
+
+# GTFS preprocessing file
+!src/preprocessing/pubtrans/PTRouterGTFSPreperation.ipynb
 

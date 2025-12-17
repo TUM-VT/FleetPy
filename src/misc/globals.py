@@ -73,6 +73,8 @@ G_TOLL_COST_SCALE = "toll_cost_scale"
 
 # broker specific attributes
 G_BROKER_TYPE = "broker_type"
+G_BROKER_TPCS_USE_DEFAULT = "broker_tpcs_use_default"  # if True, only Phase 1 of TPCS communication strategy is used
+G_BROKER_TRANSFER_SEARCH_METHOD = "broker_transfer_search_method"  # method for finding transfer stations: "closest" or "best_overall"
 
 # public transport specific attributes
 G_PT_TYPE = "pt_type"
@@ -105,6 +107,9 @@ G_PT_DISPATCH_DELAY = "pt_dispatch_delay"
 G_PT_ROUTE_ID = "pt_route_id"
 G_PT_WALK_LOGIT_BETA = "pt_walk_logit_beta"
 G_PT_X_TOL = 0.01
+G_PT_SIM_START_DATE = "pt_simulation_start_date"  # data string in format YYYYMMDD; this is a mandatory parameter for the Raptor Router
+G_PT_OPERATOR_ID = "pt_operator_id"  # id of the public transport operator
+G_PT_OPERATOR_TYPE = "pt_operator_type"  # type of the public transport operator
 
 # zonal control reward attributes
 G_PT_ZC_RID_SIM_TIME = 0
@@ -360,6 +365,7 @@ G_DIR_DEMAND = "demand"
 G_DIR_ZONES = "zones"
 G_DIR_FC = "forecasts"
 G_DIR_PT = "pubtrans"
+G_DIR_GTFS = "gtfs"
 G_DIR_VEH = "vehicles"
 G_DIR_FCTRL = "fleetctrl"
 G_DIR_BP = "boardingpoints"
@@ -544,12 +550,6 @@ G_RQ_DEC_GROUP = "decision_group"
 G_RQ_DEC_WT_FAC = "waiting_time_factor"
 G_RQ_DEC_REAC = "reaction_time"
 
-# traveler modal state
-G_RQ_STATE_MONOMODAL = 0
-G_RQ_STATE_FIRSTMILE = 1
-G_RQ_STATE_LASTMILE = 2
-G_RQ_STATE_FIRSTLASTMILE = 3
-
 # -------------------------------------------------------------------------------------------------------------------- #
 # Mode Choice Model
 # -----------------
@@ -612,6 +612,7 @@ G_IM_OFFER_LM_DRIVE = "im_t_drive_lm" # Only used fot AMoD segment in LM
 G_IM_OFFER_PT_WAIT = "im_t_wait_pt" # total pt waiting time
 G_IM_OFFER_PT_DRIVE = "im_t_drive_pt" # total pt driving time
 G_IM_OFFER_DURATION = "im_t_duration" # total duration of intermodal offer
+G_IM_OFFER_TYPE = "im_offer_type" # type of intermodal offer: "TPCS Phase 2", "TPCS Phase 1", "TPCS Default"
 
 # additional parameters for pt offers
 # ------------------------------------------
@@ -760,6 +761,8 @@ G_FCTRL_CT_RES = "reservation_time_trigger"
 #--------------------------------------------------------------------------------------------------------------#
 # Evaluation specific params
 # ####################
+# which evaluation method to use
+G_EVAL_METHOD = "evaluation_method"
 
 # only evaluate data within specific interval
 G_EVAL_INT_START = "evaluation_int_start"
@@ -816,6 +819,7 @@ def get_directory_dict(scenario_parameters, list_operator_dicts, abs_fleetpy_dir
         dirs[G_DIR_ZONES] = os.path.join(dirs[G_DIR_DATA], "zones", zone_name, network_name)
     if gtfs_name is not None:
         dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pubtrans", gtfs_name)
+        dirs[G_DIR_GTFS] = os.path.join(dirs[G_DIR_DATA], "pubtrans", network_name, gtfs_name, "matched")
     if infra_name is not None:
         dirs[G_DIR_INFRA] = os.path.join(dirs[G_DIR_DATA], "infra", infra_name, network_name)
     if parcel_demand_name is not None:

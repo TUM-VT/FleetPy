@@ -207,6 +207,11 @@ class PlanRequest:
             self.t_pu_earliest = new_earliest_pu_time
         # LOG.debug("after: {}".format(self))
 
+    def set_new_dropoff_time_constraint(self, new_latest_do_time : int):
+        """ this function is used to update dropoff time constraints of the plan request
+        :param new_latest_do_time: new latest dropoff time"""
+        self.t_do_latest = new_latest_do_time
+
     def set_new_max_trip_time(self, new_max_trip_time : float):
         """ this function updates the maximum trip time constraint
         :param new_max_trip_time: new maximum trip time"""

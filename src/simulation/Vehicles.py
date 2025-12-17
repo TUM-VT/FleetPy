@@ -339,8 +339,8 @@ class SimulationVehicle:
         # transform rq from PlanRequest to SimulationRequest (based on RequestBase)
         # LOG.info(f"Vehicle {self.vid} before new assignment: {[str(x) for x in self.assigned_route]} at time {sim_time}")
         for vrl in list_route_legs:
-            boarding_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(1,[])]
-            alighting_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(-1,[])]
+            boarding_list = [self.rq_db[prq.get_rid_struct()] for prq in vrl.rq_dict.get(1,[])]
+            alighting_list = [self.rq_db[prq.get_rid_struct()] for prq in vrl.rq_dict.get(-1,[])]
             vrl.rq_dict = {1:boarding_list, -1:alighting_list}
         LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
         LOG.debug(f"  -> current assignment: {[str(x) for x in self.assigned_route]}")

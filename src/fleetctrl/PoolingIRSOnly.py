@@ -62,6 +62,8 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         self.tmp_assignment = {}  # rid -> VehiclePlan
         self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_RQU)
 
+        self.flm_excluded_vid = {} # flm rid -> [vid]
+
     def receive_status_update(self, vid, simulation_time, list_finished_VRL, force_update=True):
         """This method can be used to update plans and trigger processes whenever a simulation vehicle finished some
          VehicleRouteLegs.
@@ -107,6 +109,13 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         rid_struct = rq.get_rid_struct()
         self.rq_dict[rid_struct] = prq
 
+        parent_rid: int = rq.get_rid()
+        # get excluded vids for flm request
+        if rid_struct == f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}":
+            excluded_vid: list[int] = self.flm_excluded_vid.get(parent_rid, [])
+        else:
+            excluded_vid = []
+
         if prq.o_pos == prq.d_pos:
             LOG.debug(f"automatic decline for rid {rid_struct}!")
             self._create_rejection(prq, sim_time)
@@ -115,14 +124,34 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
         if t_pu_earliest - sim_time > self.opt_horizon:
             self.reservation_module.add_reservation_request(prq, sim_time)
-            offer = self.reservation_module.return_immediate_reservation_offer(prq.get_rid_struct(), sim_time)
+            offer = self.reservation_module.return_immediate_reservation_offer(prq.get_rid_struct(), sim_time, excluded_vid=excluded_vid)
+
+            # # record excluded vids for flm request
+            # if rq_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
+            #     assigned_vid: int = self.reservation_module.rid_to_assigned_vid.get(rid_struct)
+            #     if assigned_vid is not None:
+            #         if parent_rid in self.flm_excluded_vid:
+            #             self.flm_excluded_vid[parent_rid].append(assigned_vid)
+            #         else:
+            #             self.flm_excluded_vid[parent_rid] = [assigned_vid]
+            #         print(f"excluded vid {assigned_vid} for request {rid_struct}")
+
             LOG.debug(f"reservation offer for rid {rid_struct} : {offer}")
         else:
-            list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
+            list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True, excluded_vid=excluded_vid)
             if len(list_tuples) > 0:
                 (vid, vehplan, delta_cfv) = min(list_tuples, key=lambda x:x[2])
                 self.tmp_assignment[rid_struct] = vehplan
                 offer = self._create_user_offer(prq, sim_time, vehplan)
+
+                if rid_struct == f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_0.value}":
+                    assigned_vid: int = vehplan.vid
+                    if parent_rid in self.flm_excluded_vid:
+                        self.flm_excluded_vid[parent_rid].append(assigned_vid)
+                    else:
+                        self.flm_excluded_vid[parent_rid] = [assigned_vid]
+                    LOG.debug(f"FLM: assigned vid {assigned_vid} to fisrt mile amod sub-request {rid_struct}, excluding it for the last mile sub-request {parent_rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}")
+
                 LOG.debug(f"new offer for rid {rid_struct} : {offer}")
             else:
                 LOG.debug(f"rejection for rid {rid_struct}")

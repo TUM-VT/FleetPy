@@ -281,15 +281,18 @@ class IntermodalOffer(TravellerOffer):
         for sub_trip_id, wait_key, drive_key in mapping_configs:
             offer = self.sub_trip_offers.get(sub_trip_id, {})
             # map pt specific attributes
-            if sub_trip_id == RQ_SUB_TRIP_ID.FM_PT.value or sub_trip_id == RQ_SUB_TRIP_ID.PT_LM.value or sub_trip_id == RQ_SUB_TRIP_ID.FLM_PT.value:
+            if sub_trip_id == RQ_SUB_TRIP_ID.FM_PT.value or sub_trip_id == RQ_SUB_TRIP_ID.LM_PT.value or sub_trip_id == RQ_SUB_TRIP_ID.FLM_PT.value:
                 for attr in pt_attributes_to_extract:
                     self.additional_offer_parameters[attr] = offer.get(attr)
             self.additional_offer_parameters[wait_key] = offer.get(G_OFFER_WAIT)
             self.additional_offer_parameters[drive_key] = offer.get(G_OFFER_DRIVE)
 
+        duration = total_wait + total_drive
+        self.additional_offer_parameters[G_IM_OFFER_DURATION] = duration
+
         return {
             G_IM_OFFER_OPERATOR_SUB_TRIP_TUPLE: tuple(operator_sub_trip_list),
             G_OFFER_FARE: total_fare,
             G_OFFER_WAIT: total_wait,
-            G_OFFER_DRIVE: total_drive
+            G_OFFER_DRIVE: total_drive,
         }
