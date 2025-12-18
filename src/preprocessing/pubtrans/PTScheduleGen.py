@@ -782,7 +782,7 @@ if __name__ == "__main__":
     data_p = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "data")
 
     demand_csv =  os.path.join(data_p, "demand", "SoD_demand", "sample.csv") #'data/demand/SoD_demand/sample.csv'
-    GTFS_folder = os.path.join(data_p, "pubtrans", "MVG_GTFS_2025-03-04") # "data/pubtrans/MVG_GTFS"
+    GTFS_folder = os.path.join(data_p, "pt", "MVG_GTFS_2025-03-04") # "data/pt/MVG_GTFS"
     network_path = os.path.join(data_p, "networks", "osm_route_MVG_road") # "data/networks/osm_route_MVG_road"
 
     route_no = 193
@@ -824,7 +824,7 @@ if __name__ == "__main__":
     veh_size = 20  # veh size (passenger)
 
     pt_gen.load_demand(demand_csv)
-    pt_gen.save_alignment_geojson(os.path.join(data_p, "pubtrans", f"route_{route_no}"))
+    pt_gen.save_alignment_geojson(os.path.join(data_p, "pt", f"route_{route_no}"))
 
     hourly_demand = pt_gen.return_hourly_demand(time_range=(start_time, end_time))
     print(f"Route {route_no} hourly demand: {hourly_demand}")
@@ -835,12 +835,12 @@ if __name__ == "__main__":
     route_len = pt_gen.return_route_length()
     print(f"Route {route_no} length: {route_len}")
 
-    pt_gen.output_station(os.path.join(data_p, "pubtrans", f"route_{route_no}"))
+    pt_gen.output_station(os.path.join(data_p, "pt", f"route_{route_no}"))
 
     # schedule is now standard instead of dependent on headway and n_veh
     schedule_file_name = f"{route_no}_schedules.csv"
     veh_type = f"veh_{veh_size}"
-    pt_gen.output_schedule(os.path.join(data_p, "pubtrans", f"route_{route_no}"),
+    pt_gen.output_schedule(os.path.join(data_p, "pt", f"route_{route_no}"),
                            schedules_file=schedule_file_name, veh_type=veh_type)
     gtfs_name = f"route_{route_no}"
     demand_name = f"route_{route_no}_demand"
@@ -848,7 +848,7 @@ if __name__ == "__main__":
     pt_gen.plot_route_with_demand(
         terminus_stop,
         time_range=(start_time, end_time),
-        html_name=os.path.join(data_p, "pubtrans", f"route_{route_no}", f"route_{route_no}_demand_sample.html")
+        html_name=os.path.join(data_p, "pt", f"route_{route_no}", f"route_{route_no}_demand_sample.html")
     )
 
     terminus_id = pt_gen.return_terminus_id()

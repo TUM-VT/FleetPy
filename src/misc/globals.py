@@ -364,7 +364,7 @@ G_DIR_NETWORK = "network"
 G_DIR_DEMAND = "demand"
 G_DIR_ZONES = "zones"
 G_DIR_FC = "forecasts"
-G_DIR_PT = "pubtrans"
+G_DIR_PT = "pt"
 G_DIR_GTFS = "gtfs"
 G_DIR_VEH = "vehicles"
 G_DIR_FCTRL = "fleetctrl"
@@ -818,8 +818,8 @@ def get_directory_dict(scenario_parameters, list_operator_dicts, abs_fleetpy_dir
     if zone_name is not None:
         dirs[G_DIR_ZONES] = os.path.join(dirs[G_DIR_DATA], "zones", zone_name, network_name)
     if gtfs_name is not None:
-        dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pubtrans", gtfs_name)
-        dirs[G_DIR_GTFS] = os.path.join(dirs[G_DIR_DATA], "pubtrans", network_name, gtfs_name, "matched")
+        dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pt", gtfs_name)
+        dirs[G_DIR_GTFS] = os.path.join(dirs[G_DIR_DATA], "pt", network_name, gtfs_name, "matched")
     if infra_name is not None:
         dirs[G_DIR_INFRA] = os.path.join(dirs[G_DIR_DATA], "infra", infra_name, network_name)
     if parcel_demand_name is not None:

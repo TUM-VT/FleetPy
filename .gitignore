@@ -20,9 +20,9 @@ data/networks/*
 data/networks/example_network/ff/*
 data/networks/example_network/ch_graph/*
 data/networks/example_network/base/*.graph
-data/pubtrans/*
-!data/pubtrans/route_193
-!data/pubtrans/example_network
+data/pt/*
+!data/pt/route_193
+!data/pt/example_network
 data/vehicles/*
 !data/vehicles/default_vehtype.csv
 !data/vehicles/low_range_vehtype.csv
@@ -196,5 +196,5 @@ dmypy.json
 .DS_Store
 
 # GTFS preprocessing file
-!src/preprocessing/pubtrans/PTRouterGTFSPreperation.ipynb
+!src/preprocessing/pt/PTRouterGTFSPreperation.ipynb
 
