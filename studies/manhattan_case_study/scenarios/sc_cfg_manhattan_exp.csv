@@ -1,0 +1,2 @@
+scenario_name,rq_file,op_fleet_composition,op_rp_batch_optimizer,end_time,op_enable_ml_training,op_enable_ml_inference,nw_dynamic_f
+gnn_week,2018-11-11_to_2018-11-18_requests_sample_20_1.csv,default_vehtype:330,GNNAlonsoMora,691200,True,False,2018-11-11_to_2018-11-18_tt_factors_hourly.csv

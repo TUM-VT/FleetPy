@@ -19,7 +19,7 @@ if __name__ == "__main__":
     try:
         log_level = "info"
         cc = os.path.join(SC_PATH, r"const_cfg_manhattan_case_study.yaml")
-        sc = os.path.join(SC_PATH, r"scenario_cfg_manhattan_case_study_gnn.csv")
+        sc = os.path.join(SC_PATH, r"sc_cfg_manhattan_exp.csv")
         run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=1)
     except:
         traceback.print_exc()

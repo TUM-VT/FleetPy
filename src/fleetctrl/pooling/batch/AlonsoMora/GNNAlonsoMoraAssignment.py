@@ -203,52 +203,94 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
     def get_v2r_graph_with_features(self):
         """Return v2r graph with travel-time features.
 
-        This now includes locked v2r connections provided in `self.v2r_locked`.
-        We merge rids from `self.v2r` and `self.v2r_locked`, skip missing vehicles
-        or requests, and only include entries for which travel-time features
-        could be computed.
+        This now includes:
+        - Current v2r connections from self.v2r
+        - Locked v2r connections from self.v2r_locked
+        - Existing assignments from previous timestamps via self.fleetcontrol.veh_plans
+        
+        We merge rids from all sources, skip missing vehicles or requests, 
+        and only include entries for which travel-time features could be computed.
         """
         v2r_graph = {}
         v2r_locked = getattr(self, 'v2r_locked', {})
 
-        # Union of vehicle ids present in either map
+        if 28530 <= self.sim_time <= 29000:
+            logging.info('Debugging v2r graph at sim_time ' + str(self.sim_time))
+            logging.info('V2r for vehicle 12' + str(self.v2r.get(12, {})))
+            logging.info('V2r_locked for vehicle 12' + str(v2r_locked.get(12, {})))
+            logging.info('Request 2977902' + str(self.active_requests.get(2977902, None)))
+            logging.info('Existing rids for vehicle 12' + str(getattr(self.fleetcontrol, 'veh_plans', {}).get(12, None)).get_involved_request_ids())
+
+        # Union of vehicle ids present in v2r, v2r_locked, or with existing plans
         all_vids = set(self.v2r.keys()) | set(v2r_locked.keys())
+        # Also include vehicles with existing assignments
+        if hasattr(self.fleetcontrol, 'veh_plans'):
+            all_vids.update(self.fleetcontrol.veh_plans.keys())
 
         for vid in all_vids:
             # Skip if vehicle object isn't available
             if vid not in self.veh_objs:
                 continue
 
-            # Collect rids from both maps; handle dict or iterable values
+            # Collect rids from all sources
             rids = set()
+            
+            # 1. From v2r (current connections)
             v2r_entry = self.v2r.get(vid, {})
+            v2r_rids = set()
             if isinstance(v2r_entry, dict):
-                rids.update(v2r_entry.keys())
+                v2r_rids.update(v2r_entry.keys())
             else:
                 try:
-                    rids.update(v2r_entry)
+                    v2r_rids.update(v2r_entry)
                 except Exception:
                     pass
+            rids.update(v2r_rids)
 
+            # 2. From v2r_locked (locked connections)
             locked_entry = v2r_locked.get(vid, {})
+            locked_rids = set()
             if isinstance(locked_entry, dict):
-                rids.update(locked_entry.keys())
+                locked_rids.update(locked_entry.keys())
             else:
                 try:
-                    rids.update(locked_entry)
+                    locked_rids.update(locked_entry)
                 except Exception:
                     pass
+            rids.update(locked_rids)
+
+            # 3. From existing assignments (previous timestamps)
+            existing_rids = set()
+            if hasattr(self.fleetcontrol, 'veh_plans') and vid in self.fleetcontrol.veh_plans:
+                try:
+                    existing_rids = set(self.fleetcontrol.veh_plans[vid].get_involved_request_ids())
+                    rids.update(existing_rids)
+                except Exception as e:
+                    LOG.debug(f"Could not get existing assignments for vehicle {vid}: {e}")
+
+            # Debugging: Log sources of requests for this vehicle
+            if len(rids) > 0:
+                LOG.debug(f"Vehicle {vid} at sim_time {self.sim_time}: "
+                         f"v2r={len(v2r_rids)}, locked={len(locked_rids)}, "
+                         f"existing={len(existing_rids)}, total={len(rids)}")
 
             # Build feature map for this vehicle, skipping missing requests
             features = {}
+            missing_requests = []
             for rid in rids:
                 if rid not in self.active_requests:
+                    missing_requests.append(rid)
                     continue
                 try:
                     features[rid] = self.get_travel_time_v2r(vid, rid)
-                except Exception:
+                except Exception as e:
                     # If travel time computation fails for this pair, skip it
+                    LOG.debug(f"Failed to compute travel time for v{vid}-r{rid}: {e}")
                     continue
+
+            # Log if we had to skip any requests
+            if missing_requests:
+                LOG.debug(f"Vehicle {vid}: Skipped {len(missing_requests)} missing requests: {missing_requests[:5]}...")
 
             if features:
                 v2r_graph[vid] = features
