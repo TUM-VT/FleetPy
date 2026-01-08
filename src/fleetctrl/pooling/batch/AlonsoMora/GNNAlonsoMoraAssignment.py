@@ -214,13 +214,6 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         v2r_graph = {}
         v2r_locked = getattr(self, 'v2r_locked', {})
 
-        if 28530 <= self.sim_time <= 29000:
-            logging.info('Debugging v2r graph at sim_time ' + str(self.sim_time))
-            logging.info('V2r for vehicle 12' + str(self.v2r.get(12, {})))
-            logging.info('V2r_locked for vehicle 12' + str(v2r_locked.get(12, {})))
-            logging.info('Request 2977902' + str(self.active_requests.get(2977902, None)))
-            logging.info('Existing rids for vehicle 12' + str(getattr(self.fleetcontrol, 'veh_plans', {}).get(12, None)).get_involved_request_ids())
-
         # Union of vehicle ids present in v2r, v2r_locked, or with existing plans
         all_vids = set(self.v2r.keys()) | set(v2r_locked.keys())
         # Also include vehicles with existing assignments
