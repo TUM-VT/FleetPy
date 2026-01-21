@@ -30,7 +30,7 @@ class Router():
     with_arc_flags: if True -> arc_flag filtering for next arcs is used
     ch_flag: contraction hierarchy is used
     """
-    def __init__(self, nw, start_node, destination_nodes = [], mode = None, time_radius = None, max_settled_targets = None, forward_flag = True, ch_flag = False, customized_section_cost_function = None):
+    def __init__(self, nw, start_node, destination_nodes = [], mode = None, time_radius = None, max_settled_targets = None, forward_flag = True, ch_flag = False, customized_section_cost_function = None, , start_time: float = 0.0):
         self.nw = nw
         self.start = start_node
         self.back_end = None
@@ -86,6 +86,7 @@ class Router():
         #                 pref.settled_back = self.dijkstra_number
 
         self.n_settled = 0
+        self.start_time = float(start_time)
 
     def compute(self, return_route = True):
         """computes routes for start -> destination_nodes
@@ -111,13 +112,26 @@ class Router():
             out = self.computeBidirectional(return_route = return_route)
             self.nw.current_dijkstra_number += 1
             ret = out
+        
+        # TODO: CPP later
+        elif self.mode == "time_dependent":
+            if not self.forward_flag:
+                raise ValueError("time_dependent routing only supports forward routing.")
+            if not hasattr(self.nw, "get_section_tt_at"):
+                raise ValueError("Network must implement get_section_tt_at(o, d, depart_time) for time_dependent mode.")
+            self.dijkstraForwardTimeDependent(start_time=self.start_time)
+            self.nw.current_dijkstra_number += 1
+            ret = self.createRoutes(return_route=return_route)
+
+        else:
+            raise ValueError(f"Unknown routing mode: {self.mode}")
 
         for n in self.destination_nodes.keys():
             self.nw.nodes[n].is_target_node = False
 
-        if ret[0][1][0] < 0:
-            print(ret, self.mode)
-            exit()
+        # if ret[0][1][0] < 0:
+        #     print(ret, self.mode)
+        #     exit()
         return ret
 
     def computeBidirectional(self, return_route = True):
@@ -619,3 +633,103 @@ class Router():
                         next_node_obj.cost_back = (new_end_cost, current_node_obj.cost_back[1] + edge_tt, current_node_obj.cost_back[2] + edge_distance )
                         next_node_obj.next = current_node_obj
                         frontier.addTask(next_node_obj, new_end_cost)
+
+    def dijkstraForwardTimeDependent(self, start_time: float):
+        """
+        Forward time-dependent Dijkstra (one-to-many).
+        Keeps node.cost format: (cfv, tt, dis), where
+        - cfv is cost_function value (default: tt)
+        - tt is total travel time from start
+        - dis is total distance from start
+
+        Time-dependency enters via edge travel time:
+        tt_uv = nw.get_section_tt_at(u, v, depart_time)
+        where depart_time = start_time + current_node_tt.
+        """
+        frontier = PQ.PriorityQueue()
+
+        destinations_reached = 0
+        destinations_to_reach = self.number_destinations
+
+        start_node = self.nw.nodes[self.start]
+        start_node.settled = self.dijkstra_number
+        start_node.cost_index = -self.dijkstra_number
+        start_node.cost = (0.0, 0.0, 0.0)   # (cfv, tt, dis)
+        start_node.prev = None
+
+        frontier.addTask(start_node, 0.0)
+
+        while True:
+            if not frontier.hasElements():
+                break
+
+            current_node_obj, current_cost = frontier.popTaskPriority()
+
+            # If this PQ entry is stale (node improved after it was pushed), skip it
+            # current_cost corresponds to node.cost[0] at insertion time
+            if current_node_obj.cost_index != -self.dijkstra_number:
+                continue
+            if current_node_obj.cost is None:
+                continue
+            if current_cost > current_node_obj.cost[0]:
+                continue
+
+            if current_node_obj.is_target_node:
+                destinations_reached += 1
+                current_node_obj.settled = self.dijkstra_number
+                if destinations_reached == destinations_to_reach:
+                    break
+
+            if self.time_radius is not None and current_cost > self.time_radius:
+                break
+
+            self.dijkstraStepForwardsTimeDependent(frontier, current_node_obj, start_time)
+
+
+    def dijkstraStepForwardsTimeDependent(self, frontier, current_node_obj, start_time: float):
+        """
+        TD version of dijkstraStepForwards.
+        Uses depart_time = start_time + current_node_obj.cost[1].
+        """
+        current_node_obj.settled = self.dijkstra_number
+        self.n_settled += 1
+
+        if current_node_obj.node_index != self.start and current_node_obj.must_stop():
+            return
+
+        # current cfv is current_node_obj.cost[0]
+        if self.time_radius is not None and current_node_obj.cost[0] > self.time_radius:
+            return
+
+        depart_time = float(start_time + current_node_obj.cost[1])
+
+        for next_node_obj, next_edge_obj in current_node_obj.get_next_node_edge_pairs(ch_flag=self.ch_flag):
+            # TD edge travel time
+            tt_uv = self.nw.get_section_tt_at(
+                current_node_obj.node_index,
+                next_node_obj.node_index,
+                depart_time=depart_time,
+            )
+            edge_distance = next_edge_obj.get_distance()
+
+            # accumulate totals
+            new_tt = current_node_obj.cost[1] + tt_uv
+            new_dis = current_node_obj.cost[2] + edge_distance
+
+            # cost function value based on your configured section cost fn
+            # (default is travel_time -> so cfv == new_tt)
+            step_cfv = self.customized_section_cost_function(tt_uv, edge_distance, next_node_obj.node_index)
+            new_cfv = current_node_obj.cost[0] + step_cfv
+
+            if next_node_obj.settled != self.dijkstra_number:
+                if next_node_obj.cost_index != -self.dijkstra_number:
+                    next_node_obj.cost = (new_cfv, new_tt, new_dis)
+                    next_node_obj.prev = current_node_obj
+                    next_node_obj.cost_index = -self.dijkstra_number
+                    frontier.addTask(next_node_obj, new_cfv)
+                else:
+                    if next_node_obj.cost[0] > new_cfv:
+                        next_node_obj.cost = (new_cfv, new_tt, new_dis)
+                        next_node_obj.prev = current_node_obj
+                        frontier.addTask(next_node_obj, new_cfv)
+
