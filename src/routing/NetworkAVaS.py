@@ -74,7 +74,8 @@ class NetworkAVaS(NetworkBasic):
     def load_tt_from_avas(self, simulation_time) -> bool:
         """
         Load travel times predicted/estimated by AVaS and update edge objects.
-        Expected file format: columns [from_node,to_node,edge_tt]
+        Expected file format: columns [from_node,to_node,edge_tt] 
+        TODO: add prediction horizon support.
         """
         self._reset_internal_attributes_after_travel_time_update()
 
@@ -82,7 +83,7 @@ class NetworkAVaS(NetworkBasic):
         # e.g., avas_tt_dir/edges_td_att.csv
         f = os.path.join(self.avas_tt_dir, self.avas_file_pattern)
 
-        # Case 2: time-stamped files
+        # Case 2: time-stamped files (e.g., avas_tt_dir/tt_{t}.csv like in existing Munich networks)
         # f = os.path.join(self.avas_tt_dir, self.avas_file_pattern.format(t=int(simulation_time)))
 
         if not os.path.exists(f):
