@@ -7,6 +7,7 @@ import pandas as pd
 
 from src.routing.NetworkBasic import NetworkBasic
 from src.misc.globals import *
+from src.routing.routing_imports.Router import Router
 
 LOG = logging.getLogger(__name__)
 
@@ -139,3 +140,90 @@ class NetworkAVaS(NetworkBasic):
         tt0, tt1 = arr[idx], arr[idx + 1]
         w = (dt - h0) / (h1 - h0)
         return float(tt0 + w * (tt1 - tt0))
+
+    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function=None):
+        """
+        Same as NetworkBasic.return_travel_costs_1to1 but forces mode='time_dependent'
+        and passes start_time into the router.
+        """
+        trivial_test = self.test_and_get_trivial_route_tt_and_dis(origin_position, destination_position)
+        if trivial_test is not None:
+            return trivial_test[1]
+
+        origin_node = origin_position[0]
+        origin_overhead = (0.0, 0.0, 0.0)
+        if origin_position[1] is not None:
+            origin_node = origin_position[1]
+            origin_overhead = self.get_section_overhead(origin_position, from_start=False)
+
+        destination_node = destination_position[0]
+        destination_overhead = (0.0, 0.0, 0.0)
+        if destination_position[1] is not None:
+            destination_overhead = self.get_section_overhead(destination_position, from_start=True)
+
+        # IMPORTANT: the routing "departure time" at origin_node should include overhead already traveled on the start edge
+        # In NetworkBasic, this is handled by adding overhead afterwards (static tt).
+        # For TD, the departure time matters, so we shift start_time by origin_overhead travel time.
+        start_time_effective = float(self.sim_time + origin_overhead[1])
+
+        R = Router(
+            self,
+            origin_node,
+            destination_nodes=[destination_node],
+            mode="time_dependent",
+            forward_flag=True,
+            customized_section_cost_function=customized_section_cost_function,
+            start_time=start_time_effective,
+        )
+
+        s = R.compute(return_route=False)[0][1]  # (cfv, tt, dis) from origin_node to destination_node
+
+        # Add overheads back (same semantics as NetworkBasic)
+        res = (
+            s[0] + origin_overhead[0] + destination_overhead[0],
+            s[1] + origin_overhead[1] + destination_overhead[1],
+            s[2] + origin_overhead[2] + destination_overhead[2],
+        )
+        return res
+
+
+    def return_best_route_1to1(self, origin_position, destination_position, customized_section_cost_function=None):
+        """
+        Same as NetworkBasic.return_best_route_1to1 but forces mode='time_dependent'
+        and passes start_time into the router.
+        """
+        trivial_test = self.test_and_get_trivial_route_tt_and_dis(origin_position, destination_position)
+        if trivial_test is not None:
+            return trivial_test[0]
+
+        origin_node = origin_position[0]
+        if origin_position[1] is not None:
+            origin_node = origin_position[1]
+
+        destination_node = destination_position[0]
+
+        # Effective departure time at origin_node (accounts for remaining fraction on first edge if applicable)
+        origin_overhead = (0.0, 0.0, 0.0)
+        if origin_position[1] is not None:
+            origin_overhead = self.get_section_overhead(origin_position, from_start=False)
+        start_time_effective = float(self.sim_time + origin_overhead[1])
+
+        R = Router(
+            self,
+            origin_node,
+            destination_nodes=[destination_node],
+            mode="time_dependent",
+            forward_flag=True,
+            customized_section_cost_function=customized_section_cost_function,
+            start_time=start_time_effective,
+        )
+
+        node_list = R.compute(return_route=True)[0][0]
+
+        # Same post-processing as NetworkBasic: include original origin/destination edge endpoints if needed
+        if origin_node != origin_position[0]:
+            node_list = [origin_position[0]] + node_list
+        if destination_position[1] is not None:
+            node_list.append(destination_position[1])
+
+        return node_list
