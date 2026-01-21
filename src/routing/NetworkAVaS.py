@@ -2,6 +2,7 @@
 
 import os
 import logging
+import numpy as np
 import pandas as pd
 
 from src.routing.NetworkBasic import NetworkBasic
@@ -72,39 +73,69 @@ class NetworkAVaS(NetworkBasic):
         return updated
 
     def load_tt_from_avas(self, simulation_time) -> bool:
-        """
-        Load travel times predicted/estimated by AVaS and update edge objects.
-        Expected file format: columns [from_node,to_node,edge_tt] 
-        TODO: add prediction horizon support.
-        """
-        self._reset_internal_attributes_after_travel_time_update()
-
-        # Case 1: single file that is overwritten continuously (latest snapshot)
-        # e.g., avas_tt_dir/edges_td_att.csv
         f = os.path.join(self.avas_tt_dir, self.avas_file_pattern)
-
-        # Case 2: time-stamped files (e.g., avas_tt_dir/tt_{t}.csv like in existing Munich networks)
-        # f = os.path.join(self.avas_tt_dir, self.avas_file_pattern.format(t=int(simulation_time)))
-
         if not os.path.exists(f):
-            LOG.debug(f"NetworkAVaS: no AVaS tt file found at {f}")
             return False
 
-        try:
-            df = pd.read_csv(f)
-        except Exception as e:
-            LOG.warning(f"NetworkAVaS: failed to read {f}: {e}")
+        df = pd.read_csv(f)
+
+        # Identify horizon columns: edge_tt_0, edge_tt_30, ...
+        tt_cols = [c for c in df.columns if c.startswith("edge_tt_")]
+        if not tt_cols:
+            LOG.warning(f"No tt_* horizon columns found in {f}")
             return False
 
-        # Require these columns
-        required = {"from_node", "to_node", "edge_tt"}
-        if not required.issubset(df.columns):
-            LOG.warning(f"NetworkAVaS: file {f} missing columns {required}; got {set(df.columns)}")
-            return False
+        # Parse horizon seconds from column names
+        horizons = np.array([int(c.split("_")[2]) for c in tt_cols], dtype=float)
+        order = np.argsort(horizons)
+        horizons = horizons[order]
+        tt_cols = [tt_cols[i] for i in order]
 
-        # Update edges
-        # This uses NetworkBasic._set_edge_tt which also updates cached node travel_infos_*
+        # Determine snapshot base time t0
+        # Option 1: use simulation_time as t0 (works if file is updated exactly at that time)
+        t0 = simulation_time
+
+        # Option 2 (preferred): read from a meta file or a column
+        # t0 = float(df["t0"].iloc[0])
+
+        # Build dict: (from,to) -> array(tt at horizons)
+        edge_tt = {}
         for _, row in df.iterrows():
-            self._set_edge_tt(int(row["from_node"]), int(row["to_node"]), float(row["edge_tt"]))
+            key = (int(row["from_node"]), int(row["to_node"]))
+            edge_tt[key] = row[tt_cols].to_numpy(dtype=float)
+
+        self._tt_t0 = float(t0)
+        self._tt_horizons = horizons
+        self._edge_tt_table = edge_tt
 
         return True
+    
+    def get_section_tt_at(self, o_node_index: int, d_node_index: int, depart_time: float) -> float:
+        """
+        Time-dependent travel time tt_e(depart_time) using the latest AVaS horizon snapshot.
+        Falls back to static tt if no AVaS table loaded for this edge.
+        """
+        # fallback: if no dynamic table available
+        if not hasattr(self, "_edge_tt_table") or self._edge_tt_table is None:
+            return super().get_section_infos(o_node_index, d_node_index)[0]
+
+        arr = self._edge_tt_table.get((o_node_index, d_node_index))
+        if arr is None:
+            return super().get_section_infos(o_node_index, d_node_index)[0]
+
+        t0 = self._tt_t0
+        H = self._tt_horizons
+        dt = float(depart_time - t0)
+
+        if dt <= H[0]:
+            return float(arr[0])
+        if dt >= H[-1]:
+            return float(arr[-1])
+
+        # linear interpolation
+        # TODO: could be optimized
+        idx = int(np.searchsorted(H, dt, side="right") - 1)
+        h0, h1 = H[idx], H[idx + 1]
+        tt0, tt1 = arr[idx], arr[idx + 1]
+        w = (dt - h0) / (h1 - h0)
+        return float(tt0 + w * (tt1 - tt0))
