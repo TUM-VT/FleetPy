@@ -30,7 +30,7 @@ class Router():
     with_arc_flags: if True -> arc_flag filtering for next arcs is used
     ch_flag: contraction hierarchy is used
     """
-    def __init__(self, nw, start_node, destination_nodes = [], mode = None, time_radius = None, max_settled_targets = None, forward_flag = True, ch_flag = False, customized_section_cost_function = None, , start_time: float = 0.0):
+    def __init__(self, nw, start_node, destination_nodes = [], mode = None, time_radius = None, max_settled_targets = None, forward_flag = True, ch_flag = False, customized_section_cost_function = None, start_time: float = 0.0):
         self.nw = nw
         self.start = start_node
         self.back_end = None
