@@ -771,6 +771,7 @@ class BasicIntermodalRequest(RequestBase):
         self.modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE(self.modal_state_int)
         self.transfer_station_ids: tp.Optional[tp.List[str]] = self._load_transfer_station_ids(rq_row)
         self.max_transfers: int = rq_row.get(G_RQ_MAX_TRANSFERS, 999)  # 999 means no limit
+        self.chosen_tpcs_phase = None
 
     def _load_transfer_station_ids(self, rq_row) -> tp.Optional[tp.List[str]]:
         raw_transfer_station_ids = rq_row.get(G_RQ_TRANSFER_STATION_IDS, None)
@@ -834,6 +835,7 @@ class BasicIntermodalRequest(RequestBase):
         record_dict[G_RQ_FARE] = self.fare
         record_dict[G_RQ_MODAL_STATE] = self.modal_state
         record_dict[G_RQ_MODAL_STATE_VALUE] = self.modal_state_int
+        record_dict[G_IM_OFFER_TYPE] = self.chosen_tpcs_phase
         return self._add_record(record_dict)
         
     def choose_offer(self, scenario_parameters, simulation_time):
@@ -859,6 +861,7 @@ class BasicIntermodalRequest(RequestBase):
             return None
         elif len(opts) == 1: # only one offer: pure pt or amod+pt
             self.fare = self.offer[opts[0]].get(G_OFFER_FARE, 0)
+            self.chosen_tpcs_phase = self.offer[opts[0]].get(G_IM_OFFER_TYPE, None)
             self.chosen_operator_id = opts[0]
             return opts[0]
         elif len(opts) == 2: # two offers: pure pt and amod+pt
@@ -867,6 +870,7 @@ class BasicIntermodalRequest(RequestBase):
                 op_id = operator_offer.operator_id
                 if op_id != -2:
                     self.fare = operator_offer.get(G_OFFER_FARE, 0)
+                    self.chosen_tpcs_phase = operator_offer.get(G_IM_OFFER_TYPE, None)
                     self.chosen_operator_id = op_id
                     return offer_id
         else:

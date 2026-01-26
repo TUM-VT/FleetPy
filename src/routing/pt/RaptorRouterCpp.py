@@ -173,8 +173,8 @@ if __name__ == "__main__":
     source_station_departure_datetime = datetime(2024, 1, 1, 0, 4, 0)
     import time
     start_time = time.time()
-    print(router.return_fastest_pt_journey_1to1("s1", "s14", source_station_departure_datetime, 3, detailed=False))
+    print(router.find_fastest_pt_journey_1to1("s1", "s14", source_station_departure_datetime, 3, detailed=False))
     print(f"Time taken: {time.time() - start_time} seconds")
     start_time = time.time()
-    print(router.return_fastest_pt_journey_1to1("s1", "s14", source_station_departure_datetime, 3, detailed=True))
+    print(router.find_fastest_pt_journey_1to1("s1", "s14", source_station_departure_datetime, 3, detailed=True))
     print(f"Time taken: {time.time() - start_time} seconds")

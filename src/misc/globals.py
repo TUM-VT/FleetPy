@@ -607,7 +607,6 @@ G_IM_OFFER_MOD_COST = "im_mod_fare"
 G_IM_OFFER_MOD_SUB = "im_mod_subsidy"
 
 G_IM_OFFER_OPERATOR_SUB_TRIP_TUPLE = "im_operator_sub_trip_tuple"  # tuple of operator ids for each sub-trip: ((operator_id, sub_trip_id),)
-G_IM_OFFER_TYPE = "im_offer_type"  # type of multi offer: "default firstlastmile", "3phase firstlastmile"
 G_IM_OFFER_FLM_WAIT_0 = "im_t_wait_flm_0" # Only used for FM AMoD segment in FLM
 G_IM_OFFER_FLM_WAIT_1 = "im_t_wait_flm_1" # Only used for LM AMoD segment in FLM
 G_IM_OFFER_FLM_DRIVE_0 = "im_t_drive_flm_0" # Only used for FM AMoD segment in FLM
