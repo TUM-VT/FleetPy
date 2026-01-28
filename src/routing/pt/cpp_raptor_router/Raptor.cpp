@@ -22,15 +22,6 @@ Raptor::Raptor(const std::unordered_map<std::string, Agency> &agencies,
                const std::unordered_map<std::string, Trip> &trips)
         : agencies_(agencies), services_(services), stops_(stops), routes_(routes), trips_(trips) {
   k = 1;
-
-  // TODO: Remove this part
-  std::cout << "Raptor Router (C++): "
-            << "initialized with "
-            << agencies_.size() << " agencies, "
-            << services_.size() << " services, "
-            << stops_.size() << " stops, "
-            << routes_.size() << " routes, and "
-            << trips_.size() << " trips." << std::endl;
 }
 
 void Raptor::setQuery(const Query &query) {
@@ -413,7 +404,13 @@ void Raptor::handleFootpaths() {
       int p_arrival = arrivals_[stop_id][k].arrival_seconds.value();
 
       // For each footpath (p, p')
-      for (const auto &[dest_id, duration]: stops_[stop_id].getFootpaths()) {       
+      for (const auto &[dest_id, duration]: stops_[stop_id].getFootpaths()) {
+        // DRT Constraint: Skip if destination is a target stop (prevents walking last leg)
+        if (included_target_ids_.find(dest_id) != included_target_ids_.end()) continue;
+
+        // DRT Constraint: Skip if destination is a source stop (prevents walking first leg)
+        if (included_source_ids_.find(dest_id) != included_source_ids_.end()) continue;
+
         int new_arrival = p_arrival + duration;
         if (improvesArrivalTime(new_arrival, dest_id)) {
           markStop(dest_id, new_arrival, std::nullopt, stop_id);
@@ -548,16 +545,24 @@ Journey Raptor::reconstructJourney(
 }
 
 bool Raptor::isValidJourney(Journey journey) const {
-  // TODO: add more checks?
-
-  if (journey.steps.empty()) 
+  if (journey.steps.empty())
     return false;
-  
+
   // Get the starting stop ID of the journey
   std::string start_stop_id = journey.steps.front().src_stop->getField("stop_id");
-    
+
   // Check if the starting stop is one of the included source IDs
   if (included_source_ids_.find(start_stop_id) == included_source_ids_.end()) {
+    return false;
+  }
+
+  // DRT Constraint: First leg must be a vehicle trip (not walking)
+  if (!journey.steps.front().trip_id.has_value()) {
+    return false;
+  }
+
+  // DRT Constraint: Last leg must be a vehicle trip (not walking)
+  if (!journey.steps.back().trip_id.has_value()) {
     return false;
   }
 
