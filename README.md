@@ -66,10 +66,17 @@ conda activate fleetpy
 
 ### 2️⃣ Install C++ Router (Recommended)
 
-For improved routing efficiency, compile the C++ router:
+For improved road network routing efficiency, compile the C++ road router:
 
 ```bash
 cd FleetPy/src/routing/road/cpp_router
+python setup.py build_ext --inplace
+```
+
+To enable public transport routing, compile the C++ RAPTOR router:
+
+```bash
+cd FleetPy/src/routing/pt/cpp_raptor_router
 python setup.py build_ext --inplace
 ```
 
