@@ -42,6 +42,8 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
     models (XGBoost or GNN) for predicting feasible vehicle-request connections. By default,
     it uses the original implementation unless ML is explicitly enabled.
 
+    Training data is stored in parquet format with snappy compression for optimal storage efficiency.
+
     Configuration via operator_attributes:
         enable_ml_training (bool): Whether to enable ML training. Default: False
         enable_ml_inference (bool): Whether to enable ML inference. Default: False
@@ -80,7 +82,13 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
             self.top_k_rr = operator_attributes.get(G_OP_TOP_K_RR, self.TOP_K_RR_DEFAULT)
             self.prediction_threshold = operator_attributes.get(
                 G_OP_PREDICTION_THRESHOLD, self.PREDICTION_THRESHOLD_DEFAULT)
-        self.train_data_path = os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT], G_DIR_TRAIN)
+        
+        # Allow overriding the training-data directory via operator attributes.
+        # If the operator provides `G_OP_TRAIN_DATA_DIR`, prefer it; otherwise use the existing default.
+        self.train_data_path = operator_attributes.get(
+            G_OP_TRAIN_DATA_DIR,
+            os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT], G_DIR_TRAIN),
+        )
         
         # Initialize Config
         self.config = Config(
@@ -101,6 +109,10 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         # TODO clear after each time step
         self.rv_predictions = {}
         self.rr_predictions = {}
+        
+        # Cache for travel time calculations to avoid recomputation
+        self._travel_time_cache = {}
+        self._coord_cache = {}  # Cache for coordinate transformations
 
     def compute_new_vehicle_assignments(self, sim_time: int, vid_to_list_passed_VRLs: Dict[int, List[VehicleRouteLeg]],
                                         veh_objs_to_build: Dict[int, SimulationVehicle] = {
@@ -112,15 +124,15 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         self.write_train_data(sim_time)
 
     def write_train_data(self, sim_time: int):
-        """Writes training data for the current timestep to disk."""
+        """Writes training data for the current timestep to disk in parquet format."""
         if not self.enable_ml_training:
             return
         dir_path = os.path.join(self.train_data_path, str(sim_time))
         os.makedirs(dir_path, exist_ok=True)
         train_data = self.get_train_data()
         for name, data in train_data.items():
-            path = os.path.join(dir_path, f'{name}.pkl')
-            self.write_pickle(path, data)
+            path = os.path.join(dir_path, f'{name}.parquet')
+            self.write_parquet(path, data, compress=True)
 
     def get_train_data(self) -> dict[str, dict]:
         """Collects training data for the current timestep."""
@@ -135,31 +147,54 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         return train_data
 
     def get_veh_features(self):
-        """Collects vehicle features for training data."""
+        """Collects vehicle features for training data with optimized coordinate batching."""
+        # Batch coordinate transformations for efficiency
+        all_positions = [vehicle.pos for vehicle in self.veh_objs.values()]
+        if all_positions:
+            coords = self.routing_engine.return_positions_lon_lat(all_positions)
+            coord_dict = {vid: coords[i] for i, vid in enumerate(self.veh_objs.keys())}
+        else:
+            coord_dict = {}
+            
         veh_features = {vid: {
-            G_TRAIN_FEATURE_TYPE: vehicle.veh_type,
-            G_TRAIN_FEATURE_STATUS: vehicle.status.value,
-            G_TRAIN_FEATURE_SOC: vehicle.soc,
-            G_TRAIN_FEATURE_V_POS_LAT: self.routing_engine.return_positions_lon_lat([vehicle.pos])[0][0],
-            G_TRAIN_FEATURE_V_POS_LON: self.routing_engine.return_positions_lon_lat([vehicle.pos])[0][1],
+            G_TRAIN_FEATURE_TYPE: vehicle.veh_type,  # Keep as string
+            G_TRAIN_FEATURE_STATUS: int(vehicle.status.value),  # Convert enum value to int
+            G_TRAIN_FEATURE_SOC: round(float(vehicle.soc), 4),  # Reduce precision
+            G_TRAIN_FEATURE_V_POS_LAT: round(coord_dict[vid][0], 6) if vid in coord_dict else 0.0,  # 6 decimal places ~0.1m precision
+            G_TRAIN_FEATURE_V_POS_LON: round(coord_dict[vid][1], 6) if vid in coord_dict else 0.0,  # 6 decimal places
         }
             for vid, vehicle in self.veh_objs.items()}
         return veh_features
 
     def get_req_features(self):
-        """Collects request features for training data."""
+        """Collects request features for training data with optimized coordinate batching."""
+        # Batch coordinate transformations for all origin and destination positions
+        all_positions = []
+        req_pos_mapping = {}
+        for rid, req in self.active_requests.items():
+            o_idx = len(all_positions)
+            all_positions.append(req.o_pos)
+            d_idx = len(all_positions)
+            all_positions.append(req.d_pos)
+            req_pos_mapping[rid] = (o_idx, d_idx)
+            
+        if all_positions:
+            coords = self.routing_engine.return_positions_lon_lat(all_positions)
+        else:
+            coords = []
+            
         req_features = {
-            rid: {G_TRAIN_FEATURE_O_POS_LAT: self.routing_engine.return_positions_lon_lat([req.o_pos])[0][0],
-                  G_TRAIN_FEATURE_O_POS_LON: self.routing_engine.return_positions_lon_lat([req.o_pos])[0][1],
-                  G_TRAIN_FEATURE_D_POS_LAT: self.routing_engine.return_positions_lon_lat([req.d_pos])[0][0],
-                  G_TRAIN_FEATURE_D_POS_LON: self.routing_engine.return_positions_lon_lat([req.d_pos])[0][1],
-                  G_TRAIN_FEATURE_RQ_TIME: req.rq_time,
-                  G_TRAIN_FEATURE_TW_PE: req.t_pu_earliest,
-                  G_TRAIN_FEATURE_TW_PL: req.t_pu_latest,
-                  G_TRAIN_FEATURE_DIRECT_TT: req.init_direct_tt,
-                  G_TRAIN_FEATURE_DIRECT_TD: req.init_direct_td,
-                  G_TRAIN_FEATURE_MAX_TRIP_TIME: req.max_trip_time,
-                  G_TRAIN_FEATURE_STATUS: req.status,
+            rid: {G_TRAIN_FEATURE_O_POS_LAT: round(coords[req_pos_mapping[rid][0]][0], 6) if coords else 0.0,
+                  G_TRAIN_FEATURE_O_POS_LON: round(coords[req_pos_mapping[rid][0]][1], 6) if coords else 0.0,
+                  G_TRAIN_FEATURE_D_POS_LAT: round(coords[req_pos_mapping[rid][1]][0], 6) if coords else 0.0,
+                  G_TRAIN_FEATURE_D_POS_LON: round(coords[req_pos_mapping[rid][1]][1], 6) if coords else 0.0,
+                  G_TRAIN_FEATURE_RQ_TIME: int(req.rq_time),  # Convert to int (seconds)
+                  G_TRAIN_FEATURE_TW_PE: int(req.t_pu_earliest),  # Convert to int
+                  G_TRAIN_FEATURE_TW_PL: int(req.t_pu_latest),  # Convert to int
+                  G_TRAIN_FEATURE_DIRECT_TT: round(req.init_direct_tt, 1),  # 0.1s precision
+                  G_TRAIN_FEATURE_DIRECT_TD: round(req.init_direct_td, 0),  # 1m precision
+                  G_TRAIN_FEATURE_MAX_TRIP_TIME: int(req.max_trip_time),  # Convert to int
+                  G_TRAIN_FEATURE_STATUS: req.status,  # Keep original type
                   G_TRAIN_FEATURE_LOCKED: 1 if self.r2v_locked.get(
                       rid, None) else 0
                   }
@@ -167,22 +202,37 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         return req_features
 
     def get_travel_time_v2r(self, vid: int, rid: int) -> dict:
-        """get travel times between vehicle vid and request rid origin position"""
+        """get travel times between vehicle vid and request rid origin position with caching"""
+        # Create cache key
         v_pos = self.veh_objs[vid].pos
         r_pos = self.active_requests[rid].get_o_stop_info()[0]
-        return {key: val for key, val in
-                zip([G_TRAIN_FEATURE_TRAVEL_COST, G_TRAIN_FEATURE_TRAVEL_TIME, G_TRAIN_FEATURE_TRAVEL_DIST],
-                    self.routing_engine.return_travel_costs_1to1(v_pos, r_pos))}
+        cache_key = (v_pos, r_pos)
+        
+        # Check cache first
+        if cache_key in self._travel_time_cache:
+            cost, time, dist = self._travel_time_cache[cache_key]
+        else:
+            cost, time, dist = self.routing_engine.return_travel_costs_1to1(v_pos, r_pos)
+            self._travel_time_cache[cache_key] = (cost, time, dist)
+            
+        return {
+            G_TRAIN_FEATURE_TRAVEL_COST: round(cost, 2),  # 2 decimal places for cost
+            G_TRAIN_FEATURE_TRAVEL_TIME: round(time, 1),  # 0.1s precision
+            G_TRAIN_FEATURE_TRAVEL_DIST: round(dist, 0)   # 1m precision
+        }
 
     def get_travel_time_r2r(self, rid1: int, rid2: int) -> dict:
         """get all travel times between the 6 combinations of rid1 and rid2 origins and destination positions"""
         req1, req2 = self.active_requests[rid1], self.active_requests[rid2]
-        return {G_TRAIN_FEATURE_TRAVEL_COST: {name: {key: val for key, val in
-                       zip([G_TRAIN_FEATURE_TRAVEL_COST, G_TRAIN_FEATURE_TRAVEL_TIME,
-                            G_TRAIN_FEATURE_TRAVEL_DIST],
-                           self.routing_engine.return_travel_costs_1to1(pos1, pos2))} for
-                name, pos1, pos2 in
-                self.get_od_pool_pairs(req1, req2)}}
+        travel_times = {}
+        
+        for name, pos1, pos2 in self.get_od_pool_pairs(req1, req2):
+            cost, time, dist = self.routing_engine.return_travel_costs_1to1(pos1, pos2)
+            travel_times[f"{name}_{G_TRAIN_FEATURE_TRAVEL_COST}"] = round(cost, 2)
+            travel_times[f"{name}_{G_TRAIN_FEATURE_TRAVEL_TIME}"] = round(time, 1)
+            travel_times[f"{name}_{G_TRAIN_FEATURE_TRAVEL_DIST}"] = round(dist, 0)
+            
+        return travel_times
 
     @staticmethod
     def get_od_pool_pairs(req1: PlanRequest, req2: PlanRequest) -> List[tuple]:
@@ -194,24 +244,25 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
                 ('o1_d1', req1.o_pos, req1.d_pos), ('o2_d2', req2.o_pos, req2.d_pos)]
 
     def get_rr_graph_with_features(self):
-        """Return rr graph with travel-time features."""
-        rr_graph = defaultdict(dict)
+        """Return rr graph with travel-time features as flattened list for direct DataFrame conversion."""
+        rr_edges = []
         for rid1, rid2 in self.rr:
-            rr_graph[rid1][rid2] = self.get_travel_time_r2r(rid1, rid2)
-        return rr_graph
+            edge_features = {'source': rid1, 'target': rid2}
+            edge_features.update(self.get_travel_time_r2r(rid1, rid2))
+            rr_edges.append(edge_features)
+        return rr_edges
 
     def get_v2r_graph_with_features(self):
-        """Return v2r graph with travel-time features.
+        """Return v2r graph with travel-time features as flattened list for direct DataFrame conversion.
 
         This now includes:
         - Current v2r connections from self.v2r
         - Locked v2r connections from self.v2r_locked
         - Existing assignments from previous timestamps via self.fleetcontrol.veh_plans
         
-        We merge rids from all sources, skip missing vehicles or requests, 
-        and only include entries for which travel-time features could be computed.
+        Returns flattened list of edges with source/target/features for direct DataFrame conversion.
         """
-        v2r_graph = {}
+        v2r_edges = []
         v2r_locked = getattr(self, 'v2r_locked', {})
 
         # Union of vehicle ids present in v2r, v2r_locked, or with existing plans
@@ -267,15 +318,16 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
                          f"v2r={len(v2r_rids)}, locked={len(locked_rids)}, "
                          f"existing={len(existing_rids)}, total={len(rids)}")
 
-            # Build feature map for this vehicle, skipping missing requests
-            features = {}
+            # Build flattened edge list for this vehicle, skipping missing requests
             missing_requests = []
             for rid in rids:
                 if rid not in self.active_requests:
                     missing_requests.append(rid)
                     continue
                 try:
-                    features[rid] = self.get_travel_time_v2r(vid, rid)
+                    edge_features = {'source': vid, 'target': rid}
+                    edge_features.update(self.get_travel_time_v2r(vid, rid))
+                    v2r_edges.append(edge_features)
                 except Exception as e:
                     # If travel time computation fails for this pair, skip it
                     LOG.debug(f"Failed to compute travel time for v{vid}-r{rid}: {e}")
@@ -285,16 +337,52 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
             if missing_requests:
                 LOG.debug(f"Vehicle {vid}: Skipped {len(missing_requests)} missing requests: {missing_requests[:5]}...")
 
-            if features:
-                v2r_graph[vid] = features
-
-        return v2r_graph
+        return v2r_edges
 
     @staticmethod
-    def write_pickle(path, data: Dict):
-        """Writes data to a pickle file at the specified path."""
-        with open(path, 'wb') as f:
-            pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+    def write_parquet(path, data: Dict, compress: bool = True):
+        """Writes data to a parquet file at the specified path with optional compression."""
+        try:
+            # Use .parquet extension
+            if not path.endswith('.parquet'):
+                path = path.replace('.pkl', '.parquet')
+                if not path.endswith('.parquet'):
+                    path = path + '.parquet'
+            
+            # Handle different data types
+            if 'graph' in path.lower() or 'request_request' in path or 'vehicle_request' in path:
+                # Graph data - flatten to DataFrame  
+                df = GNNAlonsoMoraAssignment.flatten_graph_data(data)
+            elif isinstance(data, dict) and data:
+                # Check if it's a nested dict structure
+                sample_value = next(iter(data.values()))
+                if isinstance(sample_value, dict):
+                    # Dict of dicts to DataFrame
+                    df = pd.DataFrame.from_dict(data, orient='index')
+                else:
+                    # Simple dict to DataFrame
+                    df = pd.DataFrame([data])
+            else:
+                # Complex structure - use pickle fallback
+                raise ValueError("Complex nested structure, using pickle")
+                
+            # Write with compression
+            compression = 'snappy' if compress else None
+            df.to_parquet(path, compression=compression, index=True)
+            
+        except Exception as e:
+            # Fallback to pickle for complex nested structures
+            pickle_path = path.replace('.parquet', '.pkl')
+            import gzip
+            if compress:
+                pickle_path = pickle_path + '.gz'
+                with gzip.open(pickle_path, 'wb', compresslevel=6) as f:
+                    pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            else:
+                with open(pickle_path, 'wb') as f:
+                    pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+
 
     def _score_RV_RR_connections(self):
         """Predicts the rv-connections using either GNN or XGBoost model and stores them in dictionaries. Updates self.rv_predictions and self.rr_predictions."""
@@ -723,7 +811,10 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
                                   for row in rr_edges.itertuples()}
 
     def clear_databases(self):
-        """Clears the stored prediction databases."""
+        """Clears the stored prediction databases and caches."""
         self.rv_predictions = {}
         self.rr_predictions = {}
+        # Clear travel time and coordinate caches to prevent memory buildup
+        self._travel_time_cache.clear()
+        self._coord_cache.clear()
         return super().clear_databases()
