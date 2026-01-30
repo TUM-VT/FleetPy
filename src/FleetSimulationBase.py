@@ -466,12 +466,12 @@ class FleetSimulationBase:
             LOG.info(prt_msg)
             BrokerClass = load_broker_module("BrokerBasic")
             self.broker = BrokerClass(self.n_op, self.operators)
-        elif broker_type == "PTBrokerTPCS":
-            prt_msg: str = "PTBroker specified, using PTBrokerTPCS"
+        elif broker_type == "PTBroker":
+            prt_msg: str = "PTBroker specified, using PTBroker"
             LOG.info(prt_msg)
             if self.pt_operator is None:
                 raise ValueError("PT operator should be loaded before loading PTBroker.")
-            BrokerClass = load_broker_module("PTBrokerTPCS")
+            BrokerClass = load_broker_module("PTBroker")
             self.broker = BrokerClass(self.n_op, self.operators, self.pt_operator, self.demand, self.routing_engine, self.scenario_parameters)
         else:
             raise ValueError(f"Unknown broker type: {broker_type}!")
