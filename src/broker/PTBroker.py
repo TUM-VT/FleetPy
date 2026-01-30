@@ -199,14 +199,17 @@ class PTBroker(BrokerBasic):
             self.pt_operator.user_confirms_booking(pt_sub_rq_obj, None)   
         # 2. AMoD involved offer has been selected
         else:
+            # non-intermodal offer has been selected
             if parent_modal_state == RQ_MODAL_STATE.MONOMODAL or parent_modal_state == RQ_MODAL_STATE.PT:
                 for i, operator in enumerate(self.amod_operators):
-                    if i != chosen_operator:  # Non-multimodal requests: the chosen operator has the data type int
+                    if i != chosen_operator:  # Non-intermodal requests: the chosen operator has the data type int
                         operator.user_cancels_request(rid, sim_time)
                     else:
                         operator.user_confirms_booking(rid, sim_time)
                         amod_confirmed_rids.append((rid, rq_obj))
+            # intermodal offer has been selected
             elif parent_modal_state.value > RQ_MODAL_STATE.MONOMODAL.value and parent_modal_state.value < RQ_MODAL_STATE.PT.value:
+                # chosen_operator has the data type tuple: ((operator_id, sub_trip_id), ...)
                 for operator_id, sub_trip_id in chosen_operator:
                     if operator_id == self.pt_operator_id:
                         # inform the pt operator that the request is confirmed

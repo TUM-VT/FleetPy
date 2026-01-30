@@ -863,6 +863,7 @@ class BasicIntermodalRequest(RequestBase):
             self.fare = self.offer[opts[0]].get(G_OFFER_FARE, 0)
             self.chosen_tpcs_phase = self.offer[opts[0]].get(G_IM_OFFER_TYPE, None)
             self.chosen_operator_id = opts[0]
+            # offer_id is a tuple: ((operator_id, sub_trip_id), ...)
             return opts[0]
         elif len(opts) == 2: # two offers: pure pt and amod+pt
             # always choose amod+pt
@@ -872,6 +873,7 @@ class BasicIntermodalRequest(RequestBase):
                     self.fare = operator_offer.get(G_OFFER_FARE, 0)
                     self.chosen_tpcs_phase = operator_offer.get(G_IM_OFFER_TYPE, None)
                     self.chosen_operator_id = op_id
+                    # offer_id is a tuple: ((operator_id, sub_trip_id), ...)
                     return offer_id
         else:
             LOG.error(f"not implemented {offer_str(self.offer)}")
