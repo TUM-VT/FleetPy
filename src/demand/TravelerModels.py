@@ -859,7 +859,7 @@ class BasicIntermodalRequest(RequestBase):
                 operator_offer is not None and not operator_offer.service_declined()]
         if len(opts) == 0:
             return None
-        elif len(opts) == 1: # only one offer: pure pt or amod+pt
+        elif len(opts) == 1: # only one offer: pure amod, pt or amod+pt
             self.fare = self.offer[opts[0]].get(G_OFFER_FARE, 0)
             self.chosen_tpcs_phase = self.offer[opts[0]].get(G_IM_OFFER_TYPE, None)
             self.chosen_operator_id = opts[0]
