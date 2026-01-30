@@ -85,7 +85,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
             self.pos_veh_dict[veh_obj.pos] = [veh_obj]
         LOG.debug(f"veh {veh_obj} | after status update: {self.veh_plans[vid]}")
 
-    def user_request(self, rq, sim_time):
+    def user_request(self, rq, sim_time, max_wait_time=None):
         """This method is triggered for a new incoming request. It generally adds the rq to the database. It has to
         return an offer to the user. This operator class only works with immediate responses and therefore either
         sends an offer or a rejection.
@@ -94,14 +94,18 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         :type rq: RequestDesign
         :param sim_time: current simulation time
         :type sim_time: float
+        :param max_wait_time: maximum wait time (for LM leg of intermodal requests); None if not specified
+        :type max_wait_time: float or None
         :return: offer
         :rtype: TravellerOffer
         """
         t0 = time.perf_counter()
         LOG.debug(f"Incoming request {rq.__dict__} at time {sim_time}")
         self.sim_time = sim_time
+        if max_wait_time is None:  # if not specified, use operator default settings
+            max_wait_time = self.max_wait_time
         prq = PlanRequest(rq, self.routing_engine, min_wait_time=self.min_wait_time,
-                          max_wait_time=self.max_wait_time,
+                          max_wait_time=max_wait_time,
                           max_detour_time_factor=self.max_dtf, max_constant_detour_time=self.max_cdt,
                           add_constant_detour_time=self.add_cdt, min_detour_time_window=self.min_dtw,
                           boarding_time=self.const_bt)

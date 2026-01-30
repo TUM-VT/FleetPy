@@ -772,6 +772,7 @@ class BasicIntermodalRequest(RequestBase):
         self.transfer_station_ids: tp.Optional[tp.List[str]] = self._load_transfer_station_ids(rq_row)
         self.max_transfers: int = rq_row.get(G_RQ_MAX_TRANSFERS, 999)  # 999 means no limit
         self.chosen_tpcs_phase = None
+        self.lastmile_max_wait_time: tp.Optional[int] = rq_row.get(G_IM_LM_WAIT_TIME, None)  # the customizable max waiting time for lastmile amod service
 
     def _load_transfer_station_ids(self, rq_row) -> tp.Optional[tp.List[str]]:
         raw_transfer_station_ids = rq_row.get(G_RQ_TRANSFER_STATION_IDS, None)
@@ -785,6 +786,9 @@ class BasicIntermodalRequest(RequestBase):
 
     def get_max_transfers(self) -> int:
         return self.max_transfers
+    
+    def get_lastmile_max_wait_time(self) -> tp.Optional[int]:
+        return self.lastmile_max_wait_time
     
     def record_data(self):
         record_dict = {}

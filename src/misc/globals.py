@@ -73,15 +73,7 @@ G_TOLL_COST_SCALE = "toll_cost_scale"
 
 # broker specific attributes
 G_BROKER_TYPE = "broker_type"
-G_BROKER_COMM_METHOD = "broker_communication_method"  # method for communication between AMoD and PT operators: "default", "tpcs"
 G_BROKER_TRANSFER_SEARCH_METHOD = "broker_transfer_search_method"  # method for finding transfer stations: "closest" or "best_overall"
-
-class BROKER_COMM_METHOD(Enum):
-    """ This enum is used to identify different communication methods between AMoD and PT operators.
-    """
-    DUP: str = "Decoupled User-led Planning"
-    EI: str = "Estimation-based Integration"
-    DCC: str = "Dynamic Collaborative Coordination"
 
 # public transport specific attributes
 G_PT_TYPE = "pt_type"
@@ -159,6 +151,7 @@ G_MAX_WALKING_DIST = "max_walking_dist"
 G_IM_MIN_MOD_DISTANCE = "min_IM_MOD_distance"
 G_IM_PER_KM_SUBSIDY = "subsidy_IM_MOD_per_km"
 G_IM_TRANSFER_TIME = "im_transfer_time"
+G_IM_LM_WAIT_TIME = "im_lastmile_wait_time"  # customizable wait time for last mile AMoD pickup
 
 
 # operator general attributes
