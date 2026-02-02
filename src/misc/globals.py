@@ -611,7 +611,6 @@ G_IM_OFFER_LM_DRIVE = "im_t_drive_lm" # Only used fot AMoD segment in LM
 G_IM_OFFER_PT_WAIT = "im_t_wait_pt" # total pt waiting time
 G_IM_OFFER_PT_DRIVE = "im_t_drive_pt" # total pt driving time
 G_IM_OFFER_DURATION = "im_t_duration" # total duration of intermodal offer
-G_IM_OFFER_TYPE = "im_offer_type" # type of intermodal offer: "TPCS Phase 2", "TPCS Phase 1", "TPCS Default"
 
 # additional parameters for pt offers
 # ------------------------------------------

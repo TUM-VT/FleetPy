@@ -259,7 +259,11 @@ class PTBroker(BrokerBasic):
             flm_amod_rid_struct_1: str = f"{rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}"
             for _, operator in enumerate(self.amod_operators):
                 operator.user_cancels_request(flm_amod_rid_struct_0, sim_time)
-                operator.user_cancels_request(flm_amod_rid_struct_1, sim_time)
+                try:
+                    operator.user_cancels_request(flm_amod_rid_struct_1, sim_time)
+                except KeyError:
+                    # LM AMoD sub-request may not be created if no PT offer is available
+                    LOG.info(f"LM AMoD sub-request {flm_amod_rid_struct_1} not found when user leaves system, possibly no FM or PT offer available so the LM sub-request was not created.")
 
         else:
             raise ValueError(f"Invalid modal state: {parent_modal_state}")
