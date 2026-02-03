@@ -175,6 +175,9 @@ class PTOffer(TravellerOffer):
         self.origin_node_arrival_time = source_station_departure_time - source_walking_time
         self.destination_node_arrival_time = target_station_arrival_time + target_walking_time
 
+        # the latest arrival time at the origin node is the arrival time plus the waiting time buffer
+        self.origin_node_latest_arrival_time = self.origin_node_arrival_time + waiting_time
+
         self.pt_segment_duration = self.destination_node_arrival_time - self.origin_node_arrival_time
         offered_driving_time = self.pt_segment_duration - waiting_time
 
