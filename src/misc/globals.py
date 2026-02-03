@@ -74,6 +74,7 @@ G_TOLL_COST_SCALE = "toll_cost_scale"
 # broker specific attributes
 G_BROKER_TYPE = "broker_type"
 G_BROKER_TRANSFER_SEARCH_METHOD = "broker_transfer_search_method"  # method for finding transfer stations: "closest" or "best_overall"
+G_BROKER_MAAS_DETOUR_TIME_FACTOR = "broker_maas_detour_time_factor"  # factor to estimate detour time for MaaS intermodal trips (default: 1.0)
 
 # public transport specific attributes
 G_PT_TYPE = "pt_type"
