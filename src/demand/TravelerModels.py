@@ -772,6 +772,7 @@ class BasicIntermodalRequest(RequestBase):
         self.transfer_station_ids: tp.Optional[tp.List[str]] = self._load_transfer_station_ids(rq_row)
         self.max_transfers: int = rq_row.get(G_RQ_MAX_TRANSFERS, 999)  # 999 means no limit
         self.lastmile_max_wait_time: tp.Optional[int] = rq_row.get(G_IM_LM_WAIT_TIME, None)  # the customizable max waiting time for lastmile amod service
+        self.uncatchable_pt: bool = False  # flag for requests that missed their PT connection after FM leg
 
     def _load_transfer_station_ids(self, rq_row) -> tp.Optional[tp.List[str]]:
         raw_transfer_station_ids = rq_row.get(G_RQ_TRANSFER_STATION_IDS, None)
@@ -788,6 +789,14 @@ class BasicIntermodalRequest(RequestBase):
     
     def get_lastmile_max_wait_time(self) -> tp.Optional[int]:
         return self.lastmile_max_wait_time
+    
+    def set_uncatchable_pt(self, value: bool):
+        """Set the uncatchable_pt flag indicating the passenger missed their PT connection."""
+        self.uncatchable_pt = value
+
+    def is_uncatchable_pt(self) -> bool:
+        """Return whether this request missed its PT connection after FM leg."""
+        return self.uncatchable_pt
     
     def record_data(self):
         record_dict = {}
@@ -837,6 +846,7 @@ class BasicIntermodalRequest(RequestBase):
         record_dict[G_RQ_DO] = self.do_time
         record_dict[G_RQ_FARE] = self.fare
         record_dict[G_RQ_MODAL_STATE_VALUE] = self.modal_state_int
+        record_dict[G_RQ_UNCATCHABLE_PT] = self.uncatchable_pt
         return self._add_record(record_dict)
         
     def choose_offer(self, scenario_parameters, simulation_time):

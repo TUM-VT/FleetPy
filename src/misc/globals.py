@@ -486,6 +486,7 @@ G_RQ_MODAL_STATE_VALUE = "modal_state_value"
 G_RQ_TRANSFER_STATION_IDS = "transfer_station_ids"
 G_RQ_MAX_TRANSFERS = "max_transfers"
 G_RQ_SUB_TRIP_ID = "sub_trip_id"
+G_RQ_UNCATCHABLE_PT = "uncatchable_pt"  # flag for requests that missed their PT connection after FM leg
 
 class RQ_MODAL_STATE(Enum):
     """ This enum is used to identify different modal states of a traveler request.

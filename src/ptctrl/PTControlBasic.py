@@ -168,6 +168,26 @@ class PTControlBasic(PTControlBase):
             do_pos = None,
             t_egress = pt_offer.get(G_PT_OFFER_TARGET_WALKING_TIME, None),
         )
+
+    def user_cancels_request(
+        self,
+        rid_struct: str,
+        sim_time: int,
+        firstmile_amod_operator_id: int = None
+    ):
+        """This method is used to cancel a pt request. This removes the offer from the database.
+
+        Args:
+            rid_struct (str): The sub-request id struct of the journey.
+            sim_time (int): The simulation time when the cancellation occurs.
+            firstmile_amod_operator_id (int, optional): The operator id of the firstmile amod operator. Defaults to None.
+        """
+        offer_key = (rid_struct, firstmile_amod_operator_id)
+        if offer_key in self.pt_offer_db:
+            del self.pt_offer_db[offer_key]
+            LOG.debug(f"PT request {rid_struct} cancelled at time {sim_time}")
+        else:
+            LOG.debug(f"PT request {rid_struct} not found in offer database, may have been cancelled already")
         
     def _update_gtfs_data(self):
         """This method will update the gtfs data of the pt router to reflect any changes in the pt network or schedule.
