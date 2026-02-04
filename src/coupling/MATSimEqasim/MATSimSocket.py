@@ -17,8 +17,8 @@ for p in to_del:
 os.sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.misc.globals import *
-from src.coupling.misc import *
-from src.coupling.MATSimSimulationClass import MATSimSimulationClass
+from src.coupling.MATSimEqasim.misc import *
+from src.coupling.MATSimEqasim.MATSimSimulationClass import MATSimSimulationClass
 from src.FleetSimulationBase import build_operator_attribute_dicts
 
 if TYPE_CHECKING:
