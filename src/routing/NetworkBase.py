@@ -72,16 +72,24 @@ def return_position_str(position_tuple):
 
 
 def return_position_from_str(position_str):
-    entries = position_str.split(";")
-    if len(entries) == 1:
-        return (int(entries[0]), None, None)
-    first_entry = int(entries[0])
-    second_entry = int(entries[1])
-    if second_entry < 0:
+    if type(position_str) == str:
+        entries = position_str.split(";")
+        if len(entries) == 1:
+            return (int(entries[0]), None, None)
+        first_entry = int(entries[0])
+        second_entry = int(entries[1])
+        if second_entry < 0:
+            second_entry = None
+            third_entry = None
+        else:
+            third_entry = float(entries[2])
+    else:
+        try:
+            first_entry = int(position_str)
+        except:
+            raise Exception("position_str has to be of type str or int, but is of type {}".format(type(position_str)))
         second_entry = None
         third_entry = None
-    else:
-        third_entry = float(entries[2])
     return (first_entry, second_entry, third_entry)
 
 

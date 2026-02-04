@@ -303,13 +303,6 @@ class NetworkBasic(NetworkBase):
         """ returns a list of node-indices with all nodes with a stop_only attribute """
         return [n.node_index for n in self.nodes if n.must_stop()]
 
-    def return_position_from_str(self, position_str):
-        a, b, c = position_str.split(";")
-        if b == "-1":
-            return (int(a), None, None)
-        else:
-            return (int(a), int(b), float(c))
-
     def return_node_coordinates(self, node_index):
         return self.nodes[node_index].get_position()
 

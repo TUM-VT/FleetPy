@@ -19,7 +19,7 @@ import sys
 # -----------
 from src.FleetSimulationBase import FleetSimulationBase
 from src.fleetctrl.FleetControlBase import FleetControlBase
-from src.simulation.Vehicles import SUMOMovingSimulationVehicle
+from src.simulation.Vehicles import ExternallyMovingSimulationVehicle
 from src.misc.init_modules import load_fleet_control_module
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -134,6 +134,23 @@ class SUMOcontrolledSim(FleetSimulationBase):
     
     def _load_fleetctr_vehicles(self):
         """ Loads the fleet controller and vehicles """
+        
+        veh_type_attributes = {}
+        def load_vehicle_attributes(vehicle_type):
+            if veh_type_attributes.get(vehicle_type) is None:
+                veh_data_f = os.path.join(self.dir_names[G_DIR_VEH], f"{vehicle_type}.csv")
+                veh_data = pd.read_csv(veh_data_f, header=None, index_col=0).squeeze("columns")
+                veh_type_attributes[vehicle_type] = {
+                    G_VTYPE_NAME: veh_data[G_VTYPE_NAME],
+                    G_VTYPE_MAX_PAX: int(veh_data[G_VTYPE_MAX_PAX]),
+                    G_VTYPE_MAX_PARCELS: int(veh_data.get(G_VTYPE_MAX_PARCELS, 0)),
+                    G_VTYPE_FIX_COST: float(veh_data[G_VTYPE_FIX_COST]),
+                    G_VTYPE_DIST_COST: float(veh_data[G_VTYPE_DIST_COST])/1000.0,
+                    G_VTYPE_BATTERY_SIZE: float(veh_data[G_VTYPE_BATTERY_SIZE]),
+                    G_VTYPE_RANGE: float(veh_data[G_VTYPE_RANGE]),
+                    "soc_per_m": 1/(float(veh_data[G_VTYPE_RANGE])*1000)
+                }
+            return veh_type_attributes[vehicle_type]
 
         # simulation vehicles and fleet control modules
         LOG.info("Initialization of MoD fleets...")
@@ -151,7 +168,7 @@ class SUMOcontrolledSim(FleetSimulationBase):
                 for veh_type, nr_veh in fleet_composition_dict.items():
                     for _ in range(nr_veh):
                         veh_type_list.append([op_id, vid, veh_type])
-                        tmp_veh_obj = SUMOMovingSimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+                        tmp_veh_obj = ExternallyMovingSimulationVehicle(op_id, vid, load_vehicle_attributes(veh_type),
                                                         self.routing_engine, self.demand.rq_db,
                                                         self.op_output[op_id], route_output_flag,
                                                         replay_flag)
@@ -168,7 +185,7 @@ class SUMOcontrolledSim(FleetSimulationBase):
                 list_vehicles = []
                 for vid, veh_type in init_vids.items():
                     veh_type_list.append([op_id, vid, veh_type])
-                    tmp_veh_obj = SUMOMovingSimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+                    tmp_veh_obj = ExternallyMovingSimulationVehicle(op_id, vid, load_vehicle_attributes(veh_type),
                                                         self.routing_engine, self.demand.rq_db,
                                                         self.op_output[op_id], route_output_flag,
                                                         replay_flag)

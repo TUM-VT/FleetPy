@@ -757,6 +757,35 @@ def indent_xml(elem, level=0):
     else:
         if level and (not elem.tail or not elem.tail.strip()):
             elem.tail = i
+            
+            
+def run_fleetpy_sumo_simulation(constant_config_path: str, scenario_config_path: str, sumo_config: str, sumoBinary: str = "sumo-gui", log_level: str = "info"):
+    """
+    This method creates a co-simulation coupling FleetPy (mobility-on-demand simulation) with SUMO (traffic simulation).
+    FleetPy handles customer requests, routing decisions, and fleet control logic, while SUMO simulates the actual 
+    vehicle movements in a microscopic traffic simulation environment.
+
+    DESCRIPTION:
+    -----------
+    The coupling works by synchronizing two simulation environments:
+    - FleetPy computes routes and manages fleet operations
+    - SUMO executes vehicle movements and provides realistic travel times
+    - Vehicles are dynamically created/removed in SUMO based on FleetPy route assignments
+    - Travel time feedback from SUMO updates FleetPy's routing engine in real-time
+
+    INPUT ARGUMENTS (Command Line):
+    -------------------------------
+    :param constant_config_path: Path to the FleetPy constant configuration file containing study-wide parameters (e.g., network paths, vehicle types, evaluation settings)
+    :param scenario_config_path: Path to the FleetPy scenario configuration file containing scenario-specific parameters (e.g., demand levels, fleet sizes, operator strategies)
+    :param sumo_config: Path to the SUMO configuration file (.sumocfg) defining the SUMO simulation setup (network, routes, simulation time, etc.)
+    :param sumoBinary: SUMO executable to use: "sumo" for command-line or "sumo-gui" for graphical interface
+    :param log_level: Logging verbosity level: "verbose", "debug", "info", or "warning"
+    """
+    SUMOFleetPyCoupling = SUMOFleetPyServer(constant_config_path=constant_config_path, scenario_config_path=scenario_config_path, sumo_config=sumo_config, sumoBinary=sumoBinary, log_level=log_level)
+    SUMOFleetPyCoupling.setup_fleetsimulation()
+    SUMOFleetPyCoupling.setup_sumo_simulation()
+    SUMOFleetPyCoupling.setup_network_translation()
+    SUMOFleetPyCoupling.run_coupled_simulation()
 
 
 
@@ -777,10 +806,5 @@ if __name__ == "__main__":
     except:
         print("something is wrong with the input given: ", sys.argv)
         exit()
-
-
-    SUMOFleetPyCoupling = SUMOFleetPyServer(constant_config_path=constant_config_path, scenario_config_path=scenario_config_path, sumo_config=sumo_config, sumoBinary=sumoBinary, log_level=log_level)
-    SUMOFleetPyCoupling.setup_fleetsimulation()
-    SUMOFleetPyCoupling.setup_sumo_simulation()
-    SUMOFleetPyCoupling.setup_network_translation()
-    SUMOFleetPyCoupling.run_coupled_simulation()
+        
+    run_fleetpy_sumo_simulation(constant_config_path, scenario_config_path, sumo_config, sumoBinary, log_level)
