@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 import time
 import numpy as np
 import pathlib
-from src.SUMOcontrolledSim import SUMOcontrolledSim
+from src.coupling.SUMO.SUMOcontrolledSim import SUMOcontrolledSim
 from src.misc.init_modules import load_simulation_environment
 import src.misc.config as config
 from src.misc.globals import *
