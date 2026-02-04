@@ -352,8 +352,8 @@ class SUMOFleetPyServer():
 
                 res_list = []  # Clear res_list to prevent unlimited growth
                 if self.g_update_fleetsim_traveltimes==True:
-                    self.fp_sim_env.update_network_travel_times(time_update_dict, sim_time)
-                    self.fp_sim_env.routing_engine.load_tt_file_SUMO(resultsPath,sim_time)  
+                    tt_file_path = os.path.join(resultsPath, "EdgeTravelTimes", f"SUMO_travel_times_{sim_time}.csv")
+                    self.fp_sim_env.routing_engine.load_tt_file(sim_time, ext_path=tt_file_path)  
 
             # 6) collect the current positions of all fleet vehicles in SUMO
             vehicle_to_position_dict = self._get_current_vehicle_positions()

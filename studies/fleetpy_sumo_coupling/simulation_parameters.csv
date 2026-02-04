@@ -1,2 +1,0 @@
-"simulation_index","MOD_demand_subset","fleet_size","network_name","vehtype","objective_function","evaluation_int_start","evaluation_int_end","random_seed","start_time","end_time","op_module","simulation_network","network_type","sim_env","sumo_t_update","sumo_fcd_vehicles","rerouting_sc","hybrid_router","p_opt"
-"1","0.02","10","sumo_berlin","default_vehtype","total_system_time","0","1200","0","0","1200","PoolingIRSOnly","sumo_berlin","NetworkBasicWithStoreCppSumoCoupling","SUMOcontrolledSim","",,,"0",""

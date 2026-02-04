@@ -286,17 +286,6 @@ class SUMOcontrolledSim(FleetSimulationBase):
         LOG.warning("gut unserved request information not implemented yet") # TODO
         return {}
 
-    def update_network_travel_times(self, new_travel_time_dict, sim_time):
-        '''This method takes new edge travel time information from sumo and updates the network in the fleet simulation
-        :param new_travel_time_dict: dict edge_id (o_node, d_node) -> edge_traveltime [s]
-        :param sim_time: current simulation time
-        :return None'''
-        LOG.warning(f'new_travel_time_dict{new_travel_time_dict}')
-        self.routing_engine.external_update_edge_travel_times(new_travel_time_dict)
-        LOG.warning(f'self.operators {self.operators}')
-        #for op in self.operators.values():
-        #    op.inform_network_travel_time_update(sim_time)  # TODO # this wont work for multiprocessing!
-
     def vehicles_reached_destination(self, simulation_time, vids_reached_destination):
         """ this function is triggered if fleet vehicles in SUMO reached its destination;
         updates vehicle states, triggers start of boarding processes, adds information to stats
