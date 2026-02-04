@@ -87,6 +87,12 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
         total_wait_time = 0
         total_travel_time = 0
 
+        # AMoD-only metrics (excluding PT segments for comparability with standard evaluation)
+        amod_fare = 0
+        amod_wait_time = 0  # Only AMoD wait time (initial wait + LM wait if applicable)
+        amod_travel_time = 0  # Only AMoD in-vehicle time
+        amod_direct_distance = 0  # Direct distance for AMoD segments
+
         # Store leg-specific information
         leg_info = {}
 
@@ -97,6 +103,11 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                 total_fare = parent_row.get(G_RQ_FARE, 0)
                 total_wait_time = parent_row.get(G_RQ_PU, 0) - parent_row.get(G_RQ_TIME, 0)
                 total_travel_time = parent_row.get(G_RQ_DO, 0) - parent_row.get(G_RQ_PU, 0)
+                # AMoD-only metrics (same as total for MONOMODAL)
+                amod_fare = total_fare
+                amod_wait_time = total_wait_time
+                amod_travel_time = total_travel_time
+                amod_direct_distance = parent_row.get(G_RQ_DRD, 0)
 
         elif modal_state == RQ_MODAL_STATE.FIRSTMILE.value:
             # FM: Need FM_AMOD (1) and FM_PT (2)
@@ -127,11 +138,19 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                     # Total travel time from AMoD pickup to PT drop-off
                     total_travel_time = fm_pt_row.get(G_RQ_DO, 0) - fm_amod_row.get(G_RQ_PU, 0)
 
+                    # AMoD-only metrics (FM has one AMoD leg)
+                    amod_fare = fm_amod_row.get(G_RQ_FARE, 0)
+                    amod_wait_time = fm_amod_wait  # Only initial AMoD wait
+                    amod_travel_time = fm_amod_row.get(G_RQ_DO, 0) - fm_amod_row.get(G_RQ_PU, 0)
+                    amod_direct_distance = fm_amod_row.get(G_RQ_DRD, 0)
+
                     # Store leg info
                     leg_info['fm_amod_pu'] = fm_amod_row.get(G_RQ_PU)
                     leg_info['fm_amod_do'] = fm_amod_row.get(G_RQ_DO)
                     leg_info['fm_amod_wait'] = fm_amod_wait
                     leg_info['fm_amod_fare'] = fm_amod_row.get(G_RQ_FARE, 0)
+                    leg_info['fm_amod_travel_time'] = amod_travel_time
+                    leg_info['fm_amod_direct_distance'] = amod_direct_distance
                     leg_info['fm_pt_pu'] = fm_pt_row.get(G_RQ_PU)
                     leg_info['fm_pt_do'] = fm_pt_row.get(G_RQ_DO)
                     leg_info['fm_pt_wait'] = fm_pt_wait
@@ -165,6 +184,13 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                     # Total travel time from PT pickup to AMoD drop-off
                     total_travel_time = lm_amod_row.get(G_RQ_DO, 0) - lm_pt_row.get(G_RQ_PU, 0)
 
+                    # AMoD-only metrics (LM has one AMoD leg)
+                    amod_fare = lm_amod_row.get(G_RQ_FARE, 0)
+                    amod_wait_time = lm_amod_wait  # AMoD wait after PT
+                    lm_amod_travel_time = lm_amod_row.get(G_RQ_DO, 0) - lm_amod_row.get(G_RQ_PU, 0)
+                    amod_travel_time = lm_amod_travel_time
+                    amod_direct_distance = lm_amod_row.get(G_RQ_DRD, 0)
+
                     # Store leg info
                     leg_info['lm_pt_pu'] = lm_pt_row.get(G_RQ_PU)
                     leg_info['lm_pt_do'] = lm_pt_row.get(G_RQ_DO)
@@ -174,6 +200,8 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                     leg_info['lm_amod_do'] = lm_amod_row.get(G_RQ_DO)
                     leg_info['lm_amod_wait'] = lm_amod_wait
                     leg_info['lm_amod_fare'] = lm_amod_row.get(G_RQ_FARE, 0)
+                    leg_info['lm_amod_travel_time'] = lm_amod_travel_time
+                    leg_info['lm_amod_direct_distance'] = amod_direct_distance
 
         elif modal_state == RQ_MODAL_STATE.FIRSTLASTMILE.value:
             # FLM: Need FLM_AMOD_0 (5), FLM_PT (6), FLM_AMOD_1 (7)
@@ -208,11 +236,21 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                     # Total travel time from first AMoD pickup to last AMoD drop-off
                     total_travel_time = flm_amod_1_row.get(G_RQ_DO, 0) - flm_amod_0_row.get(G_RQ_PU, 0)
 
+                    # AMoD-only metrics (FLM has two AMoD legs)
+                    amod_fare = flm_amod_0_row.get(G_RQ_FARE, 0) + flm_amod_1_row.get(G_RQ_FARE, 0)
+                    amod_wait_time = flm_amod_0_wait + flm_amod_1_wait  # Both AMoD wait times
+                    flm_amod_0_travel_time = flm_amod_0_row.get(G_RQ_DO, 0) - flm_amod_0_row.get(G_RQ_PU, 0)
+                    flm_amod_1_travel_time = flm_amod_1_row.get(G_RQ_DO, 0) - flm_amod_1_row.get(G_RQ_PU, 0)
+                    amod_travel_time = flm_amod_0_travel_time + flm_amod_1_travel_time
+                    amod_direct_distance = flm_amod_0_row.get(G_RQ_DRD, 0) + flm_amod_1_row.get(G_RQ_DRD, 0)
+
                     # Store leg info
                     leg_info['flm_amod_0_pu'] = flm_amod_0_row.get(G_RQ_PU)
                     leg_info['flm_amod_0_do'] = flm_amod_0_row.get(G_RQ_DO)
                     leg_info['flm_amod_0_wait'] = flm_amod_0_wait
                     leg_info['flm_amod_0_fare'] = flm_amod_0_row.get(G_RQ_FARE, 0)
+                    leg_info['flm_amod_0_travel_time'] = flm_amod_0_travel_time
+                    leg_info['flm_amod_0_direct_distance'] = flm_amod_0_row.get(G_RQ_DRD, 0)
                     leg_info['flm_pt_pu'] = flm_pt_row.get(G_RQ_PU)
                     leg_info['flm_pt_do'] = flm_pt_row.get(G_RQ_DO)
                     leg_info['flm_pt_wait'] = flm_pt_wait
@@ -221,12 +259,20 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                     leg_info['flm_amod_1_do'] = flm_amod_1_row.get(G_RQ_DO)
                     leg_info['flm_amod_1_wait'] = flm_amod_1_wait
                     leg_info['flm_amod_1_fare'] = flm_amod_1_row.get(G_RQ_FARE, 0)
+                    leg_info['flm_amod_1_travel_time'] = flm_amod_1_travel_time
+                    leg_info['flm_amod_1_direct_distance'] = flm_amod_1_row.get(G_RQ_DRD, 0)
 
         # Update parent aggregation with computed values
         parent_agg['is_served'] = is_served
         parent_agg['total_fare'] = total_fare if is_served else np.nan
         parent_agg['total_wait_time'] = total_wait_time if is_served else np.nan
         parent_agg['total_travel_time'] = total_travel_time if is_served else np.nan
+
+        # AMoD-only metrics (excluding PT segments for comparability with standard evaluation)
+        parent_agg['amod_fare'] = amod_fare if is_served else np.nan
+        parent_agg['amod_wait_time'] = amod_wait_time if is_served else np.nan
+        parent_agg['amod_travel_time'] = amod_travel_time if is_served else np.nan
+        parent_agg['amod_direct_distance'] = amod_direct_distance if is_served else np.nan
 
         # Add leg info as columns
         for key, val in leg_info.items():
@@ -345,6 +391,46 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
         service_rates[f'{category}_service_rate'] = cat_served / cat_total * 100 if cat_total > 0 else np.nan
         service_rates[f'{category}_count'] = cat_served
 
+    # Calculate uncatchable PT statistics (requests that missed their PT connection after FM leg)
+    uncatchable_stats = {}
+    if G_RQ_UNCATCHABLE_PT in parent_user_stats.columns:
+        # Count uncatchable requests by category (only FM and FLM can be uncatchable)
+        fm_uncatchable = parent_user_stats[
+            (parent_user_stats[G_RQ_MODAL_STATE_VALUE].apply(categorize_modal_state) == 'FM') &
+            (parent_user_stats[G_RQ_UNCATCHABLE_PT] == True)
+        ]
+        flm_uncatchable = parent_user_stats[
+            (parent_user_stats[G_RQ_MODAL_STATE_VALUE].apply(categorize_modal_state) == 'FLM') &
+            (parent_user_stats[G_RQ_UNCATCHABLE_PT] == True)
+        ]
+        total_uncatchable = len(fm_uncatchable) + len(flm_uncatchable)
+
+        uncatchable_stats['FM_uncatchable_count'] = len(fm_uncatchable)
+        uncatchable_stats['FLM_uncatchable_count'] = len(flm_uncatchable)
+        uncatchable_stats['total_uncatchable_count'] = total_uncatchable
+
+        # Calculate uncatchable rate (as % of FM+FLM requests)
+        fm_total = len(parent_user_stats[parent_user_stats[G_RQ_MODAL_STATE_VALUE].apply(categorize_modal_state) == 'FM'])
+        flm_total = len(parent_user_stats[parent_user_stats[G_RQ_MODAL_STATE_VALUE].apply(categorize_modal_state) == 'FLM'])
+        intermodal_with_fm_total = fm_total + flm_total
+
+        uncatchable_stats['FM_uncatchable_rate'] = len(fm_uncatchable) / fm_total * 100 if fm_total > 0 else np.nan
+        uncatchable_stats['FLM_uncatchable_rate'] = len(flm_uncatchable) / flm_total * 100 if flm_total > 0 else np.nan
+        uncatchable_stats['total_uncatchable_rate'] = total_uncatchable / intermodal_with_fm_total * 100 if intermodal_with_fm_total > 0 else np.nan
+
+        if print_comments and total_uncatchable > 0:
+            print(f"  Uncatchable PT requests: {total_uncatchable} (FM: {len(fm_uncatchable)}, FLM: {len(flm_uncatchable)})")
+    else:
+        # No uncatchable_pt column, set defaults
+        uncatchable_stats = {
+            'FM_uncatchable_count': 0,
+            'FLM_uncatchable_count': 0,
+            'total_uncatchable_count': 0,
+            'FM_uncatchable_rate': np.nan,
+            'FLM_uncatchable_rate': np.nan,
+            'total_uncatchable_rate': np.nan
+        }
+
     # Calculate PT wait times for FM and FLM
     fm_requests = served_requests[served_requests['modal_category'] == 'FM']
     flm_requests = served_requests[served_requests['modal_category'] == 'FLM']
@@ -377,8 +463,47 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
     # Overall metrics
     avg_wait_time = served_requests['total_wait_time'].mean()
     med_wait_time = served_requests['total_wait_time'].median()
+    quantile_90_wait_time = served_requests['total_wait_time'].quantile(q=0.9)
     avg_travel_time = served_requests['total_travel_time'].mean()
     total_revenue = served_requests['total_fare'].sum()
+
+    # AMoD-only metrics (excluding PT segments for comparability with standard evaluation)
+    amod_avg_wait_time = served_requests['amod_wait_time'].mean()
+    amod_med_wait_time = served_requests['amod_wait_time'].median()
+    amod_quantile_90_wait_time = served_requests['amod_wait_time'].quantile(q=0.9)
+    amod_avg_travel_time = served_requests['amod_travel_time'].mean()
+    amod_total_revenue = served_requests['amod_fare'].sum()
+    amod_total_direct_distance = served_requests['amod_direct_distance'].sum() / 1000.0  # Convert to km
+
+    # Detour time calculation (AMoD segments only, excluding PT)
+    # Detour = actual_travel_time - direct_route_time - boarding_time
+    # Get boarding time from operator attributes (will be set later when processing operators)
+    boarding_time = scenario_parameters.get("op_const_boarding_time", 30)  # Default 30s
+
+    # Calculate detour for each request based on AMoD segments
+    # For requests with direct_route_time available
+    if G_RQ_DRT in served_requests.columns:
+        # MONOMODAL: use parent's direct route time
+        monomodal_mask = served_requests['modal_category'] == 'DRT_only'
+        served_requests.loc[monomodal_mask, 'amod_direct_route_time'] = served_requests.loc[monomodal_mask, G_RQ_DRT]
+
+    # Calculate detour time for AMoD segments
+    served_requests['amod_detour_time'] = served_requests['amod_travel_time'] - served_requests.get('amod_direct_route_time', served_requests['amod_travel_time']) - boarding_time
+    # For intermodal, estimate direct route time from direct distance (assuming avg speed ~30 km/h = 8.33 m/s)
+    avg_speed_ms = 8.33  # m/s, approximately 30 km/h
+    served_requests.loc[served_requests['amod_detour_time'].isna(), 'amod_detour_time'] = (
+        served_requests.loc[served_requests['amod_detour_time'].isna(), 'amod_travel_time'] -
+        served_requests.loc[served_requests['amod_detour_time'].isna(), 'amod_direct_distance'] / avg_speed_ms - boarding_time
+    )
+
+    amod_avg_detour_time = served_requests['amod_detour_time'].mean()
+
+    # Relative detour (percentage)
+    served_requests['amod_rel_detour'] = (
+        (served_requests['amod_travel_time'] - boarding_time - served_requests['amod_direct_distance'] / avg_speed_ms) /
+        (served_requests['amod_direct_distance'] / avg_speed_ms)
+    ) * 100.0
+    amod_avg_rel_detour = served_requests['amod_rel_detour'].mean()
 
     # Standard metrics (matching standard_eval.csv format)
     result_dict = {
@@ -403,15 +528,34 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
         'FLM_service_rate [%]': service_rates.get('FLM_service_rate', np.nan),
         'PT_only_service_rate [%]': service_rates.get('PT_only_service_rate', np.nan),
 
-        # Wait times
+        # Uncatchable PT statistics (requests that missed their PT connection after FM leg)
+        'FM_uncatchable_count': uncatchable_stats.get('FM_uncatchable_count', 0),
+        'FLM_uncatchable_count': uncatchable_stats.get('FLM_uncatchable_count', 0),
+        'total_uncatchable_count': uncatchable_stats.get('total_uncatchable_count', 0),
+        'FM_uncatchable_rate [%]': uncatchable_stats.get('FM_uncatchable_rate', np.nan),
+        'FLM_uncatchable_rate [%]': uncatchable_stats.get('FLM_uncatchable_rate', np.nan),
+        'total_uncatchable_rate [%]': uncatchable_stats.get('total_uncatchable_rate', np.nan),
+
+        # Wait times (total, including PT wait)
         'waiting time': avg_wait_time,
         'waiting time (median)': med_wait_time,
+        'waiting time (90% quantile)': quantile_90_wait_time,
         'PT_Wait_Time_FM [s]': pt_wait_time_fm,
         'PT_Wait_Time_FLM [s]': pt_wait_time_flm,
         'PT_Wait_Time_Combined [s]': pt_wait_time_combined,
         'LM_Wait_Time_LM [s]': lm_wait_time_lm,
         'LM_Wait_Time_FLM [s]': lm_wait_time_flm,
         'LM_Wait_Time_Combined [s]': lm_wait_time_combined,
+
+        # AMoD-only metrics (excluding PT, for comparability with standard evaluation)
+        'amod_waiting_time': amod_avg_wait_time,
+        'amod_waiting_time (median)': amod_med_wait_time,
+        'amod_waiting_time (90% quantile)': amod_quantile_90_wait_time,
+        'amod_travel_time': amod_avg_travel_time,
+        'amod_detour_time': amod_avg_detour_time,
+        'amod_rel_detour [%]': amod_avg_rel_detour,
+        'amod_revenue': amod_total_revenue,
+        'amod_customer_direct_distance [km]': amod_total_direct_distance,
 
         # Travel metrics
         'travel time': avg_travel_time,
@@ -463,9 +607,21 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
             empty_df = op_vehicle_df[op_vehicle_df[G_VR_OB_RID].isnull()]
             empty_vkm = empty_df[G_VR_LEG_DISTANCE].sum() / 1000.0 / total_km * 100.0 if total_km > 0 else 0
 
+            # Repositioning VKM (new)
+            repositioning_df = empty_df[empty_df[G_VR_STATUS] == "reposition"]
+            repositioning_vkm = repositioning_df[G_VR_LEG_DISTANCE].sum() / 1000.0 / total_km * 100.0 if total_km > 0 else 0
+
             # Revenue metrics
             rev_df = op_vehicle_df[op_vehicle_df["status"].isin([x.display_name for x in G_REVENUE_STATUS])]
             vehicle_revenue_hours = (rev_df["VRL_end_sim_end_time"].sum() - rev_df["VRL_start_sim_end_time"].sum()) / 3600.0
+
+            # Rides per vehicle revenue hours (new)
+            rides_per_veh_rev_hours = total_served_pax / vehicle_revenue_hours if vehicle_revenue_hours > 0 else 0
+            rides_per_veh_rev_hours_rq = total_served / vehicle_revenue_hours if vehicle_revenue_hours > 0 else 0
+
+            # Shared rides and customer in-vehicle distance (new)
+            op_shared_rides = shared_rides(op_vehicle_df)
+            op_customer_in_vehicle_distance = avg_in_vehicle_distance(op_vehicle_df)
 
             # By-vehicle stats
             op_veh_types = veh_type_stats[veh_type_stats[G_V_OP_ID] == op_id]
@@ -502,15 +658,24 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
             fix_costs = all_vid_df["fix costs"].sum() if len(all_vid_df) > 0 else 0
             var_costs = all_vid_df["total variable costs"].sum() if len(all_vid_df) > 0 else 0
 
+            # External emission costs (new)
+            external_emission_costs = np.rint(EMISSION_CPG * total_co2)
+
             # Add to result dict with operator prefix
             result_dict[f'op{op_id}_fleet_utilization [%]'] = fleet_utilization
             result_dict[f'op{op_id}_total_vkm'] = total_km
             result_dict[f'op{op_id}_occupancy'] = distance_avg_occupancy
             result_dict[f'op{op_id}_empty_vkm [%]'] = empty_vkm
+            result_dict[f'op{op_id}_repositioning_vkm [%]'] = repositioning_vkm
             result_dict[f'op{op_id}_vehicle_revenue_hours'] = vehicle_revenue_hours
+            result_dict[f'op{op_id}_rides_per_veh_rev_hours'] = rides_per_veh_rev_hours
+            result_dict[f'op{op_id}_rides_per_veh_rev_hours_rq'] = rides_per_veh_rev_hours_rq
             result_dict[f'op{op_id}_total_CO2_emissions [t]'] = total_co2 / 10**6
+            result_dict[f'op{op_id}_external_emission_costs'] = external_emission_costs
             result_dict[f'op{op_id}_fix_costs'] = fix_costs
             result_dict[f'op{op_id}_var_costs'] = var_costs
+            result_dict[f'op{op_id}_shared_rides [%]'] = op_shared_rides
+            result_dict[f'op{op_id}_customer_in_vehicle_distance'] = op_customer_in_vehicle_distance
 
         except FileNotFoundError:
             if print_comments:

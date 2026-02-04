@@ -302,3 +302,115 @@ class PTBrokerEI(PTBrokerBasic):
 
         maas_estimated_latest_dropoff_time: int = prq_pu_latest + int(maas_estimated_prq_max_trip_time)
         return maas_estimated_latest_dropoff_time
+
+    def acknowledge_user_alighting(self, op_id: int, rid_struct: str, vid: int, alighting_time: int):
+        """Override to check if FM passenger can catch their PT connection.
+
+        After FM AMoD alighting completes, check if the alighting time is still
+        within the PT offer's origin_node_latest_arrival_time. If not, cancel
+        subsequent offers and mark the request as uncatchable.
+
+        Args:
+            op_id (int): the AMoD operator id
+            rid_struct (str): the request id struct (e.g., "123_1" for sub-request)
+            vid (int): the vehicle id
+            alighting_time (int): the simulation time when alighting completes
+        """
+        # Call parent implementation first
+        super().acknowledge_user_alighting(op_id, rid_struct, vid, alighting_time)
+
+        # Check if this is a FM or FLM first-leg AMoD sub-request
+        rid_struct_str = str(rid_struct)
+        if "_" in rid_struct_str:
+            parts = rid_struct_str.rsplit("_", 1)
+            parent_rid = int(parts[0])
+            sub_trip_id = int(parts[1])
+
+            # Check FM case: FM_AMOD alighting completed
+            if sub_trip_id == RQ_SUB_TRIP_ID.FM_AMOD.value:
+                self._check_fm_pt_catchability(parent_rid, sub_trip_id, alighting_time, RQ_SUB_TRIP_ID.FM_PT.value, op_id)
+            # Check FLM case: FLM_AMOD_0 alighting completed
+            elif sub_trip_id == RQ_SUB_TRIP_ID.FLM_AMOD_0.value:
+                self._check_fm_pt_catchability(parent_rid, sub_trip_id, alighting_time, RQ_SUB_TRIP_ID.FLM_PT.value, op_id)
+
+    def _check_fm_pt_catchability(self, parent_rid: int, _amod_sub_trip_id: int, alighting_time: int, pt_sub_trip_id: int, amod_op_id: int):
+        """Check if passenger can catch their PT connection after FM AMoD alighting.
+
+        Args:
+            parent_rid (int): the parent request id
+            _amod_sub_trip_id (int): the sub-trip id of the completed AMoD leg (unused, kept for API consistency)
+            alighting_time (int): the simulation time when alighting completes
+            pt_sub_trip_id (int): the sub-trip id of the PT leg to check
+            amod_op_id (int): the AMoD operator id that served the FM leg
+        """
+        # Get PT offer
+        pt_rid_struct = f"{parent_rid}_{pt_sub_trip_id}"
+
+        # Get the PT offer for the specific AMoD operator that served the FM leg
+        pt_offer: 'PTOffer' = self.pt_operator.get_current_offer(pt_rid_struct, amod_op_id)
+
+        if pt_offer is None or pt_offer.service_declined():
+            LOG.debug(f"No PT offer found for {pt_rid_struct}, skipping catchability check")
+            return
+
+        # Check catchability: alighting_time vs origin_node_latest_arrival_time
+        origin_node_latest_arrival_time = pt_offer.origin_node_latest_arrival_time
+
+        if alighting_time > origin_node_latest_arrival_time:
+            LOG.warning(f"Request {parent_rid}: PT uncatchable! "
+                       f"Alighting time {alighting_time} > PT latest arrival {origin_node_latest_arrival_time} "
+                       f"(delay: {alighting_time - origin_node_latest_arrival_time}s)")
+            self._handle_uncatchable_pt(parent_rid, alighting_time, amod_op_id)
+        else:
+            LOG.debug(f"Request {parent_rid}: PT catchable. "
+                     f"Alighting time {alighting_time} <= PT latest arrival {origin_node_latest_arrival_time} "
+                     f"(buffer: {origin_node_latest_arrival_time - alighting_time}s)")
+
+    def _handle_uncatchable_pt(self, parent_rid: int, sim_time: int, amod_op_id: int):
+        """Handle the case when passenger cannot catch their PT connection.
+
+        This method:
+        1. Marks the parent request as uncatchable
+        2. Cancels subsequent sub-requests (PT and any LM AMoD)
+
+        Args:
+            parent_rid (int): the parent request id
+            sim_time (int): the current simulation time
+            amod_op_id (int): the AMoD operator id that served the FM leg
+        """
+        parent_rq_obj: 'BasicIntermodalRequest' = self.demand[parent_rid]
+        parent_modal_state: RQ_MODAL_STATE = parent_rq_obj.get_modal_state()
+
+        # Mark the request as uncatchable
+        parent_rq_obj.set_uncatchable_pt(True)
+        LOG.info(f"Request {parent_rid} marked as uncatchable_pt")
+
+        # Cancel subsequent sub-requests based on modal state
+        if parent_modal_state == RQ_MODAL_STATE.FIRSTMILE:
+            # For FM: cancel PT sub-request
+            pt_rid_struct = f"{parent_rid}_{RQ_SUB_TRIP_ID.FM_PT.value}"
+            try:
+                self.pt_operator.user_cancels_request(pt_rid_struct, sim_time, amod_op_id)
+                LOG.info(f"Cancelled PT sub-request {pt_rid_struct} due to uncatchable PT")
+            except (KeyError, AttributeError) as e:
+                LOG.debug(f"Could not cancel PT sub-request {pt_rid_struct}: {e}")
+
+        elif parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
+            # For FLM: cancel PT and last-mile AMoD sub-requests
+            pt_rid_struct = f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}"
+            lm_amod_rid_struct = f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}"
+
+            # Cancel PT sub-request
+            try:
+                self.pt_operator.user_cancels_request(pt_rid_struct, sim_time, amod_op_id)
+                LOG.info(f"Cancelled PT sub-request {pt_rid_struct} due to uncatchable PT")
+            except (KeyError, AttributeError) as e:
+                LOG.debug(f"Could not cancel PT sub-request {pt_rid_struct}: {e}")
+
+            # Cancel last-mile AMoD sub-request
+            for op in self.amod_operators:
+                try:
+                    op.user_cancels_request(lm_amod_rid_struct, sim_time)
+                    LOG.info(f"Cancelled LM AMoD sub-request {lm_amod_rid_struct} due to uncatchable PT")
+                except KeyError:
+                    LOG.debug(f"LM AMoD sub-request {lm_amod_rid_struct} not found for operator, may not exist")
