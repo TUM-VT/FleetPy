@@ -49,6 +49,7 @@ def get_src_simulation_environments():
     sim_env_dict["UserDecisionSimulation"] = ("src.BrokerSimulation", "UserDecisionSimulation")
     sim_env_dict["PreferredOperatorSimulation"] = ("src.BrokerSimulation", "PreferredOperatorSimulation")
     sim_env_dict["MATSim"] = ("src.coupling.MATSimSimulationClass", "MATSimSimulationClass")
+    sim_env_dict["SUMOcontrolledSim"] = ("src.SUMOcontrolledSim", "SUMOcontrolledSim")
     # add development content
     if dev_content is not None:
         dev_sim_env_dict = dev_content.add_dev_simulation_environments()
@@ -67,6 +68,8 @@ def get_src_routing_engines():
     re_dict["NetworkPartialPreprocessedCpp"] = ("src.routing.NetworkPartialPreprocessedCpp", "NetworkPartialPreprocessedCpp")
     re_dict["NetworkTTMatrix"] = ("src.routing.NetworkTTMatrix", "NetworkTTMatrix")
     re_dict["NetworkBasicWithStoreOnlineMatrixCpp"] = ("src.routing.NetworkBasicWithStoreOnlineMatrixCpp", "NetworkBasicWithStoreOnlineMatrixCpp")
+    re_dict["NetworkBasicSumoCoupling"] = ("src.routing.NetworkBasicSumoCoupling", "NetworkBasicSumoCoupling")
+    re_dict["NetworkBasicWithStoreCppSumoCoupling"] = ("src.routing.NetworkBasicWithStoreCppSumoCoupling", "NetworkBasicWithStoreCppSumoCoupling")
     # add development content
     if dev_content is not None:
         dev_re_dict = dev_content.add_dev_routing_engines()
@@ -78,6 +81,7 @@ def get_src_request_modules():
     rm_dict = {}  # str -> (module path, class name)
     rm_dict["BasicRequest"] = ("src.demand.TravelerModels", "BasicRequest")
     rm_dict["SoDRequest"] = ("src.demand.SoDTravelerModels", "SoDRequest")
+    rm_dict["UserUtilityRequest"] = ("src.demand.TravelerModels", "UserUtilityRequest")
     rm_dict["IndividualConstraintRequest"] = ("src.demand.TravelerModels", "IndividualConstraintRequest")
     rm_dict["PriceSensitiveIndividualConstraintRequest"] = ("src.demand.TravelerModels", "PriceSensitiveIndividualConstraintRequest")
     rm_dict["MasterRandomChoiceRequest"] = ("src.demand.TravelerModels", "MasterRandomChoiceRequest")

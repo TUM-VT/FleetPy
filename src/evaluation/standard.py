@@ -577,6 +577,5 @@ def evaluate_folder(path, evaluation_start_time = None, evaluation_end_time = No
 if __name__ == "__main__":
     import sys
     sc = sys.argv[1]
-    # sc = r'C:\Users\ge37ser\Documents\Coding\TUM_VT_FleetSimulation\tum-vt-fleet-simulation\results\FabianRPPsc01\sc01_200_1'
     #evaluate_folder(sc, print_comments=True)
     standard_evaluation(sc, print_comments=True)

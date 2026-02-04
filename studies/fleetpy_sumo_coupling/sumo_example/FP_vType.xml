@@ -1,0 +1,9 @@
+<!--Settings for vType that is used bny Fleetpy/-->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+     <vType id="default_vehtype" vClass="passenger" color="blue" desiredMaxSpeed="36.11">
+          <param key="has.rerouting.device" value="false"/>
+     </vType>
+     <vType id="single_user_vehtype" vClass="passenger" color="green" desiredMaxSpeed="36.11">
+          <param key="has.rerouting.device" value="false"/>
+     </vType>
+</routes> 

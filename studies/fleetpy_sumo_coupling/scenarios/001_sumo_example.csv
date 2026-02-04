@@ -1,0 +1,2 @@
+scenario_name,op_module,rq_file,demand_name,op_fleet_composition,network_type,op_vr_control_func_dict,sim_env,network_name,start_time,end_time,evaluation_int_start,evaluation_int_end,sumo_t_update,sumo_fcd_vehicles,random_seed
+001_sumo_example,PoolingIRSOnly,sumo_example.csv,sumo_example,default_vehtype:80,NetworkBasicWithStoreCppSumoCoupling,func_key:total_system_time,SUMOcontrolledSim,sumo_example,0,1200,0,1200,86400,,0

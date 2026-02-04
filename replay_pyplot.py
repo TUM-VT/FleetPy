@@ -16,7 +16,8 @@ def main(output_dir, sim_seconds_per_real_second, start_time_in_seconds = None, 
     :param end_time_in_seconds: determines simulation time when replay ends
     :param plot_extent: Tuple of (lon_1, lon_2, lat_1, lat_2) marking the left bottom and top right boundary of
                         the map (EPSG_WGS = 4326); if None -> extend of loaded network chosen
-    :param live_plot: if True: plots directly shown; else: figures stored in ouputdir/plots    :param parcels: if True: plots parcel data
+    :param live_plot: if True: plots directly shown; else: figures stored in ouputdir/plots    
+    :param parcels: if True: plots parcel data
     :param passengers: if True: plots passenger data
     :param map_plot: options: "vehicle_status", "occupancy"
     :param plot_1: top axis, options are (str): status_count, occupancy_average, occupancy_stack_chart, waiting_time_average, ride_time_average, detour_time_average

@@ -32,10 +32,6 @@ from src.routing.routing_imports.Router import Router
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
-# import os
-# import pandas as pd
-# import imports.Router as Router
-
 INPUT_PARAMETERS_NetworkBasic = {
     "doc" : "this routing class does all routing computations based on dijkstras algorithm",
     "inherit" : "NetworkBase",
@@ -180,7 +176,6 @@ class NetworkBasic(NetworkBase):
         LOG.info(f"Loading nodes from {nodes_f} ...")
         nodes_df = pd.read_csv(nodes_f)
         self.nodes = nodes_df.apply(read_node_line, axis=1)
-        #
         edges_f = os.path.join(network_name_dir, "base", "edges.csv")
         LOG.info(f"Loading edges from {edges_f} ...")
         edges_df = pd.read_csv(edges_f)

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2025-12-12 16:36:31 by Eclipse SUMO GUI Version 1.24.0
+<sumoConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+
+    <input>
+        <net-file value="C:\Users\joel\Documents\GitHub\FleetPy\studies\fleetpy_sumo_coupling\sumo_example\sumo_example.net.xml.gz"/>
+        <route-files value="C:\Users\joel\Documents\GitHub\FleetPy\studies\fleetpy_sumo_coupling\sumo_example\sumo_example.passenger.trips.xml"/>
+        <additional-files value="C:\Users\joel\Documents\GitHub\FleetPy\studies\fleetpy_sumo_coupling\sumo_example\sumo_example.poly.xml.gz,C:\Users\joel\Documents\GitHub\FleetPy\studies\fleetpy_sumo_coupling\sumo_example\output.add.xml"/>
+    </input>
+
+    <output>
+        <tripinfo-output value="C:\Users\joel\Documents\GitHub\FleetPy\studies\fleetpy_sumo_coupling\sumo_example\tripinfos.xml"/>
+        <statistic-output value="C:\Users\joel\Documents\GitHub\FleetPy\studies\fleetpy_sumo_coupling\sumo_example\stats.xml"/>
+    </output>
+
+    <processing>
+        <ignore-route-errors value="true"/>
+        <tls.actuated.jam-threshold value="30"/>
+    </processing>
+
+    <routing>
+        <device.rerouting.adaptation-steps value="18"/>
+        <device.rerouting.adaptation-interval value="10"/>
+    </routing>
+
+    <report>
+        <verbose value="true"/>
+        <duration-log.statistics value="true"/>
+        <no-step-log value="true"/>
+    </report>
+
+    <gui_only>
+        <gui-settings-file value="C:\Users\joel\Documents\GitHub\FleetPy\studies\fleetpy_sumo_coupling\sumo_example\sumo_example.view.xml"/>
+    </gui_only>
+
+</sumoConfiguration>
+-->
+
+<statistics xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/statistic_file.xsd">
+    <performance clockBegin="126049.19" clockEnd="126241.26" clockDuration="192.08" traciDuration="27.95" realTimeFactor="26.61" vehicleUpdatesPerSecond="33669.89" personUpdatesPerSecond="0.00" begin="0.00" end="5111.00" duration="5111.00"/>
+    <vehicles loaded="9161" inserted="9161" running="0" waiting="0"/>
+    <teleports total="3" jam="0" yield="3" wrongLane="0"/>
+    <safety collisions="0" emergencyStops="0" emergencyBraking="0"/>
+    <persons loaded="0" running="0" jammed="0"/>
+    <personTeleports total="0" abortWait="0" wrongDest="0"/>
+    <vehicleTripStatistics count="9161" routeLength="5751.18" speed="8.35" duration="705.95" waitingTime="108.35" timeLoss="224.77" departDelay="1.05" departDelayWaiting="-1.00" totalTravelTime="6467178.00" totalDepartDelay="9591.97"/>
+    <pedestrianStatistics number="0" routeLength="0.00" duration="0.00" timeLoss="0.00"/>
+    <rideStatistics number="0"/>
+    <transportStatistics number="0"/>
+</statistics>
