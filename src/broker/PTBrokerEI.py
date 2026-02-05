@@ -67,7 +67,7 @@ class PTBrokerEI(PTBrokerBasic):
         super().__init__(n_amod_op, amod_operators, pt_operator, demand, routing_engine, scenario_parameters)
 
         # set MaaS detour time estimation parameter
-        self.maas_detour_time_factor: float = self.scenario_parameters.get(G_BROKER_MAAS_DETOUR_TIME_FACTOR , 100)  
+        self.maas_detour_time_factor: float = self.scenario_parameters.get(G_BROKER_MAAS_DETOUR_TIME_FACTOR , 100) / 100 
 
     def _process_inform_firstmile_request(self, rid: int, rq_obj: 'BasicIntermodalRequest', sim_time: int, parent_modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE.FIRSTMILE):
         """This method processes the new firstmile request.
@@ -297,8 +297,11 @@ class PTBrokerEI(PTBrokerBasic):
 
         prq_direct_tt = sub_prq_obj.init_direct_tt
         amod_boarding_time = self.amod_operators[amod_op_id].const_bt
+        amod_max_dtf = self.amod_operators[amod_op_id].max_dtf / 100 
         prq_pu_latest = sub_prq_obj.t_pu_latest
-        maas_estimated_prq_max_trip_time = (100 + self.maas_detour_time_factor) * (prq_direct_tt + amod_boarding_time) / 100
+
+        # MaaS estimates that only a certain percentage of the operator maximum detour time will be realized
+        maas_estimated_prq_max_trip_time = (1 + self.maas_detour_time_factor * amod_max_dtf) * (prq_direct_tt + amod_boarding_time)
 
         maas_estimated_latest_dropoff_time: int = prq_pu_latest + int(maas_estimated_prq_max_trip_time)
         return maas_estimated_latest_dropoff_time
