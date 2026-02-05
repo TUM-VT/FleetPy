@@ -773,6 +773,10 @@ class BasicIntermodalRequest(RequestBase):
         self.max_transfers: int = rq_row.get(G_RQ_MAX_TRANSFERS, 999)  # 999 means no limit
         self.lastmile_max_wait_time: tp.Optional[int] = rq_row.get(G_IM_LM_WAIT_TIME, None)  # the customizable max waiting time for lastmile amod service
         self.uncatchable_pt: bool = False  # flag for requests that missed their PT connection after FM leg
+        # PAYG (Plan-As-You-Go) specific attributes
+        self.payg_interrupted: bool = False  # flag for PAYG trips that were interrupted
+        self.payg_interrupt_state: tp.Optional[int] = None  # PAYG_TRIP_STATE value when interrupted
+        self.payg_interrupt_time: tp.Optional[int] = None  # simulation time when interrupted
 
     def _load_transfer_station_ids(self, rq_row) -> tp.Optional[tp.List[str]]:
         raw_transfer_station_ids = rq_row.get(G_RQ_TRANSFER_STATION_IDS, None)
@@ -797,6 +801,22 @@ class BasicIntermodalRequest(RequestBase):
     def is_uncatchable_pt(self) -> bool:
         """Return whether this request missed its PT connection after FM leg."""
         return self.uncatchable_pt
+    
+    def set_payg_interrupted(self, interrupted: bool, interrupt_state: tp.Optional[int] = None, interrupt_time: tp.Optional[int] = None):
+        """Set the PAYG interrupted flag and related information.
+
+        Args:
+            interrupted: Whether the trip was interrupted
+            interrupt_state: PAYG_TRIP_STATE value (e.g., -1 for NO_PT, -2 for NO_LM_AMOD)
+            interrupt_time: Simulation time when the interruption occurred
+        """
+        self.payg_interrupted = interrupted
+        self.payg_interrupt_state = interrupt_state
+        self.payg_interrupt_time = interrupt_time
+
+    def is_payg_interrupted(self) -> bool:
+        """Return whether this PAYG trip was interrupted."""
+        return self.payg_interrupted
     
     def record_data(self):
         record_dict = {}
@@ -847,6 +867,10 @@ class BasicIntermodalRequest(RequestBase):
         record_dict[G_RQ_FARE] = self.fare
         record_dict[G_RQ_MODAL_STATE_VALUE] = self.modal_state_int
         record_dict[G_RQ_UNCATCHABLE_PT] = self.uncatchable_pt
+        # PAYG specific records
+        record_dict[G_RQ_PAYG_INTERRUPTED] = self.payg_interrupted
+        record_dict[G_RQ_PAYG_INTERRUPT_STATE] = self.payg_interrupt_state
+        record_dict[G_RQ_PAYG_INTERRUPT_TIME] = self.payg_interrupt_time
         return self._add_record(record_dict)
         
     def choose_offer(self, scenario_parameters, simulation_time):
