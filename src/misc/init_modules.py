@@ -120,6 +120,7 @@ def get_src_broker_modules():
     broker_dict["BrokerBasic"] = ("src.broker.BrokerBasic", "BrokerBasic")
     broker_dict["PTBroker"] = ("src.broker.PTBroker", "PTBroker")
     broker_dict["PTBrokerEI"] = ("src.broker.PTBrokerEI", "PTBrokerEI")
+    broker_dict["PTBrokerPAYG"] = ("src.broker.PTBrokerPAYG", "PTBrokerPAYG")
     # add development content
     if dev_content is not None:
         dev_broker_dict = dev_content.add_broker_modules()

@@ -461,12 +461,13 @@ class FleetSimulationBase:
         """ Loads the broker """
 
         broker_type: str = self.scenario_parameters.get(G_BROKER_TYPE, None)
+        implemented_brokers = ["PTBroker", "PTBrokerEI", "PTBrokerPAYG"]
         if broker_type is None:
             prt_msg: str = "No broker type specified, using default BrokerBasic"
             LOG.info(prt_msg)
             BrokerClass = load_broker_module("BrokerBasic")
             self.broker = BrokerClass(self.n_op, self.operators)
-        elif broker_type == "PTBroker" or broker_type == "PTBrokerEI":
+        elif broker_type in implemented_brokers:
             prt_msg: str = f"Broker specified, using {broker_type}"
             LOG.info(prt_msg)
             if self.pt_operator is None:

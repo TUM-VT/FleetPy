@@ -487,6 +487,10 @@ G_RQ_TRANSFER_STATION_IDS = "transfer_station_ids"
 G_RQ_MAX_TRANSFERS = "max_transfers"
 G_RQ_SUB_TRIP_ID = "sub_trip_id"
 G_RQ_UNCATCHABLE_PT = "uncatchable_pt"  # flag for requests that missed their PT connection after FM leg
+# PAYG (Plan-As-You-Go) specific
+G_RQ_PAYG_INTERRUPTED = "payg_interrupted"  # flag for PAYG trips that were interrupted
+G_RQ_PAYG_INTERRUPT_STATE = "payg_interrupt_state"  # PAYG_TRIP_STATE value when interrupted
+G_RQ_PAYG_INTERRUPT_TIME = "payg_interrupt_time"  # simulation time when interrupted
 
 class RQ_MODAL_STATE(Enum):
     """ This enum is used to identify different modal states of a traveler request.
@@ -516,6 +520,18 @@ class RQ_SUB_TRIP_ID(Enum):
     FLM_PT: int = 6
     FLM_AMOD_1: int = 7
     PT: int = 8
+
+class PAYG_TRIP_STATE(Enum):
+    """PAYG trip state tracking"""
+    PENDING = 0                    # Waiting for processing
+    FM_AMOD_BOOKED = 1             # FM/FLM: First AMoD leg booked
+    FM_AMOD_COMPLETED = 2          # FM/FLM: First AMoD leg completed
+    PT_BOOKED = 3                  # PT leg booked
+    PT_COMPLETED = 4               # PT leg completed
+    LM_AMOD_BOOKED = 5             # LM/FLM: Last AMoD leg booked
+    COMPLETED = 10                 # Trip completed
+    INTERRUPTED_NO_PT = -1         # Interrupted: No PT available
+    INTERRUPTED_NO_LM_AMOD = -2    # Interrupted: No LM AMoD available
 
 # output general
 # --------------

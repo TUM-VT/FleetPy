@@ -313,6 +313,96 @@ def categorize_modal_state(modal_state_value):
         return 'Unknown'
 
 
+def calculate_payg_metrics(parent_user_stats, is_payg_scenario=False, print_comments=False):
+    """
+    Calculate PAYG-specific metrics from parent user stats.
+
+    PAYG (Plan-As-You-Go) trips may be interrupted if:
+    - No PT available after FM alighting (INTERRUPTED_NO_PT)
+    - No LM AMoD available after PT alighting (INTERRUPTED_NO_LM_AMOD)
+
+    :param parent_user_stats: DataFrame with parent request data
+    :param is_payg_scenario: whether this is a PAYG scenario (determined by broker_type in config)
+    :param print_comments: whether to print status messages
+    :return: dict with PAYG-specific metrics, empty dict if not a PAYG scenario
+    """
+    payg_stats = {}
+
+    # Check if this is a PAYG scenario based on broker type from config
+    if not is_payg_scenario:
+        return {}  # Not a PAYG scenario
+
+    # Check if PAYG columns exist (for backwards compatibility)
+    if G_RQ_PAYG_INTERRUPTED not in parent_user_stats.columns:
+        if print_comments:
+            print("  Warning: PAYG scenario but no payg_interrupted column found")
+        return {}
+
+    # Filter to intermodal requests only (FM, LM, FLM) - these are the ones that can be interrupted
+    intermodal_mask = parent_user_stats[G_RQ_MODAL_STATE_VALUE].isin([
+        RQ_MODAL_STATE.FIRSTMILE.value,
+        RQ_MODAL_STATE.LASTMILE.value,
+        RQ_MODAL_STATE.FIRSTLASTMILE.value
+    ])
+    intermodal_df = parent_user_stats[intermodal_mask].copy()
+
+    total_intermodal = len(intermodal_df)
+    if total_intermodal == 0:
+        return {}
+
+    # Count interrupted requests
+    interrupted_df = intermodal_df[intermodal_df[G_RQ_PAYG_INTERRUPTED] == True]
+    interrupted_count = len(interrupted_df)
+    completed_count = total_intermodal - interrupted_count
+
+    # Overall rates
+    payg_stats['payg_total_intermodal_requests'] = total_intermodal
+    payg_stats['payg_completed_count'] = completed_count
+    payg_stats['payg_interrupted_count'] = interrupted_count
+    payg_stats['payg_completion_rate [%]'] = completed_count / total_intermodal * 100
+    payg_stats['payg_interrupt_rate [%]'] = interrupted_count / total_intermodal * 100
+
+    # Breakdown by interrupt state
+    if G_RQ_PAYG_INTERRUPT_STATE in interrupted_df.columns:
+        no_pt_count = len(interrupted_df[
+            interrupted_df[G_RQ_PAYG_INTERRUPT_STATE] == PAYG_TRIP_STATE.INTERRUPTED_NO_PT.value
+        ])
+        no_amod_count = len(interrupted_df[
+            interrupted_df[G_RQ_PAYG_INTERRUPT_STATE] == PAYG_TRIP_STATE.INTERRUPTED_NO_LM_AMOD.value
+        ])
+    else:
+        no_pt_count = 0
+        no_amod_count = 0
+
+    payg_stats['payg_interrupt_no_pt_count'] = no_pt_count
+    payg_stats['payg_interrupt_no_pt_rate [%]'] = no_pt_count / total_intermodal * 100 if total_intermodal > 0 else 0
+    payg_stats['payg_interrupt_no_amod_count'] = no_amod_count
+    payg_stats['payg_interrupt_no_amod_rate [%]'] = no_amod_count / total_intermodal * 100 if total_intermodal > 0 else 0
+
+    # Breakdown by modal state
+    for category, modal_value in [('FM', RQ_MODAL_STATE.FIRSTMILE.value),
+                                   ('LM', RQ_MODAL_STATE.LASTMILE.value),
+                                   ('FLM', RQ_MODAL_STATE.FIRSTLASTMILE.value)]:
+        cat_df = intermodal_df[intermodal_df[G_RQ_MODAL_STATE_VALUE] == modal_value]
+        cat_total = len(cat_df)
+        if cat_total > 0:
+            cat_interrupted = len(cat_df[cat_df[G_RQ_PAYG_INTERRUPTED] == True])
+            payg_stats[f'payg_{category}_total'] = cat_total
+            payg_stats[f'payg_{category}_interrupted_count'] = cat_interrupted
+            payg_stats[f'payg_{category}_interrupt_rate [%]'] = cat_interrupted / cat_total * 100
+        else:
+            payg_stats[f'payg_{category}_total'] = 0
+            payg_stats[f'payg_{category}_interrupted_count'] = 0
+            payg_stats[f'payg_{category}_interrupt_rate [%]'] = np.nan
+
+    if print_comments and interrupted_count > 0:
+        print(f"  PAYG Interruptions: {interrupted_count}/{total_intermodal} ({payg_stats['payg_interrupt_rate [%]']:.1f}%)")
+        print(f"    - No PT available: {no_pt_count}")
+        print(f"    - No LM AMoD available: {no_amod_count}")
+
+    return payg_stats
+
+
 def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end_time=None, print_comments=False, dir_names_in={}):
     """
     Main intermodal evaluation function.
@@ -430,6 +520,12 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
             'FLM_uncatchable_rate': np.nan,
             'total_uncatchable_rate': np.nan
         }
+
+    # Calculate PAYG-specific metrics (if applicable)
+    # Determine if this is a PAYG scenario based on broker_type in config
+    broker_type = scenario_parameters.get(G_BROKER_TYPE, "")
+    is_payg_scenario = broker_type == "PTBrokerPAYG"
+    payg_stats = calculate_payg_metrics(parent_user_stats, is_payg_scenario, print_comments)
 
     # Calculate PT wait times for FM and FLM
     fm_requests = served_requests[served_requests['modal_category'] == 'FM']
@@ -561,6 +657,10 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
         'travel time': avg_travel_time,
         'mod revenue': total_revenue,
     }
+
+    # Add PAYG-specific metrics if available
+    if payg_stats:
+        result_dict.update(payg_stats)
 
     # Vehicle-level analysis for AMoD operators
     if print_comments:
