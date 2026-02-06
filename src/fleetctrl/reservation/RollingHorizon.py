@@ -101,6 +101,7 @@ class RollingHorizonReservation(ReservationBase):
         :param rid: request id
         :param simulation_time: current simulation time
         """
+        # If assigned to a vehicle, remove from vehicle plan
         if self.rid_to_assigned_vid.get(rid) is not None:
             vid = self.rid_to_assigned_vid[rid]
             assigned_plan = self.fleetctrl.veh_plans[vid]
@@ -109,7 +110,15 @@ class RollingHorizonReservation(ReservationBase):
                 self.routing_engine, self.fleetctrl.vr_ctrl_f, self.fleetctrl.rq_dict, self.fleetctrl.const_bt, self.fleetctrl.add_bt)
             self.fleetctrl.assign_vehicle_plan(veh_obj, new_plan, simulation_time)
             del self.rid_to_assigned_vid[rid]
+
+        # FIX: Unconditionally clean up active_reservation_requests and sorted_rids_with_epa
+        # This fixes a bug discovered in PTBrokerEI where cancellation after user_confirms_booking
+        # (e.g., LM AMoD sub-request cancelled due to uncatchable PT) left stale entries in
+        # sorted_rids_with_epa, causing KeyError in reveal_requests_for_online_optimization.
+        # Reference: RollingHorizonNoGuarantee has the correct implementation.
+        if rid in self.active_reservation_requests:
             del self.active_reservation_requests[rid]
+        self.sorted_rids_with_epa = [(r, epa) for r, epa in self.sorted_rids_with_epa if r != rid]
 
     def time_trigger(self, sim_time):
         """ this function is triggered during the simulation time and might trigger reoptimization processes for example 
