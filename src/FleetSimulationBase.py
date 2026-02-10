@@ -29,6 +29,7 @@ if tp.TYPE_CHECKING:
     from src.routing.NetworkBase import NetworkBase
     from src.broker.BrokerBase import BrokerBase
     from src.python_plots.plot_classes import PyPlot
+    from src.ml_gym.HookManager import HookManager
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -121,7 +122,7 @@ def build_operator_attribute_dicts(parameters, n_op, prefix="op_"):
 # ----
 
 class FleetSimulationBase:
-    def __init__(self, scenario_parameters: dict):
+    def __init__(self, scenario_parameters: dict, hook_manager: 'HookManager' = None):
         self.t_init_start = time.perf_counter()
         # config
         self.scenario_name = scenario_parameters[G_SCENARIO_NAME]
@@ -166,6 +167,8 @@ class FleetSimulationBase:
         self._plot_class_instance: tp.Optional[PyPlot] = None
         self.realtime_plot_flag = self.scenario_parameters.get(G_SIM_REALTIME_PLOT_FLAG, 0)
         self.skip_output = True if scenario_parameters.get(G_SKIP_OUTPUT, 0) > 0 else False
+        
+        self.hook_manager = hook_manager
 
         # take care of random seeds at beginning of simulations
         random.seed(self.scenario_parameters[G_RANDOM_SEED])

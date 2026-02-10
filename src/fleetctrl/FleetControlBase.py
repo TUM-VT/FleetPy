@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from src.infra.Zoning import ZoneSystem
     from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
     from src.simulation.StationaryProcess import ChargingProcess
+    from src.ml_gym.HookManager import HookManager
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -64,7 +65,7 @@ class FleetControlBase(metaclass=ABCMeta):
     def __init__(self, op_id : int, operator_attributes : Dict, list_vehicles : List[SimulationVehicle],
                  routing_engine : NetworkBase, zone_system : ZoneSystem, scenario_parameters : Dict,
                  dir_names : Dict, op_charge_depot_infra : OperatorChargingAndDepotInfrastructure=None,
-                 list_pub_charging_infra: List[PublicChargingInfrastructureOperator]= []):
+                 list_pub_charging_infra: List[PublicChargingInfrastructureOperator]= [], hook_manager: 'HookManager' = None):
         """The general attributes for the fleet control module are initialized. Strategy specific attributes are
         introduced in the children classes.
 
@@ -86,12 +87,15 @@ class FleetControlBase(metaclass=ABCMeta):
         :type OperatorChargingAndDepotInfrastructure: OperatorChargingAndDepotInfrastructure
         :param list_pub_charging_infra: list of PublicChargingInfrastructureOperator classes (optional) (accesible for all agents)
         :type list_pub_charging_infra: list of PublicChargingInfrastructureOperator
+        :param hook_manager: HookManager instance to register ML hooks (optional)
+        :type hook_manager: HookManager
         """
         self.n_cpu = scenario_parameters["n_cpu_per_sim"]
         self.solver: str = operator_attributes.get(G_RA_SOLVER, "Gurobi")
         self.log_gurobi : bool = scenario_parameters.get(G_LOG_GUROBI, False)
         self.op_id = op_id
         self.routing_engine: NetworkBase = routing_engine
+        self.hook_manager = hook_manager
         self._use_own_routing_engine = False
         if operator_attributes.get(G_RA_OP_NW_TYPE):
             LOG.info(f"operator {self.op_id} loads its own network!")
