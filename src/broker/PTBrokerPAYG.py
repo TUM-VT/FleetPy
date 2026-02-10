@@ -361,6 +361,8 @@ class PTBrokerPAYG(PTBrokerBasic):
         # Get PT offer and record it on sub-request
         pt_rid_struct = f"{rid}_{RQ_SUB_TRIP_ID.FM_PT.value}"
         pt_sub_rq_obj = self.demand[pt_rid_struct]
+        # Clear inherited AMOD offers from deepcopy of parent request
+        pt_sub_rq_obj.offer = {}
         pt_offer = self.pt_operator.get_current_offer(pt_rid_struct, amod_op_id)
         if pt_offer is not None:
             pt_sub_rq_obj.receive_offer(self.pt_operator_id, pt_offer, None)
@@ -400,6 +402,8 @@ class PTBrokerPAYG(PTBrokerBasic):
         # Get PT offer and record it on sub-request
         pt_rid_struct = f"{rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}"
         pt_sub_rq_obj = self.demand[pt_rid_struct]
+        # Clear inherited AMOD offers from deepcopy of parent request
+        pt_sub_rq_obj.offer = {}
         pt_offer = self.pt_operator.get_current_offer(pt_rid_struct, amod_op_id)
         if pt_offer is not None:
             pt_sub_rq_obj.receive_offer(self.pt_operator_id, pt_offer, None)

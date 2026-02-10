@@ -50,7 +50,9 @@ Custom extensions go in a `dev/` directory and get auto-discovered.
 
 **Broker/Platform** (`src/broker/`):
 - `BrokerBase.py` (abstract) → `BrokerBasic` → `PTBrokerBasic` → `PTBrokerEI`
-- PTBrokerEI is the latest: estimation-based integration for intermodal trips
+- `PTBrokerBasic` → `PTBrokerPAYG` (Plan-As-You-Go, step-by-step trip planning)
+- PTBrokerEI: estimation-based integration, creates all sub-requests upfront
+- PTBrokerPAYG: real-time step-by-step, creates sub-requests after each leg alighting
 
 **Fleet Control** (`src/fleetctrl/`):
 - `FleetControlBase.py` (abstract) → 20+ implementations (pooling, charging, pricing, etc.)
@@ -107,7 +109,8 @@ Key parameters (150+ documented in `Input_Parameters.md`):
 |------|---------|
 | `src/misc/globals.py` | 400+ constants (G_*), enums (RQ_MODAL_STATE, etc.) |
 | `src/misc/init_modules.py` | Dynamic module loading dictionaries |
-| `src/broker/PTBrokerEI.py` | Latest PT broker with estimation-based integration |
+| `src/broker/PTBrokerEI.py` | Estimation-based integration PT broker |
+| `src/broker/PTBrokerPAYG.py` | Plan-As-You-Go PT broker (step-by-step) |
 | `src/demand/TravelerModels.py` | All request types and decision logic |
 | `src/evaluation/intermodal.py` | Intermodal-specific metrics |
 | `Input_Parameters.md` | Complete parameter documentation |
@@ -188,7 +191,7 @@ example_im_ptbrokerEI_mdtf30,PoolingIRSOnly,example_100_intermodal.csv,PTBrokerE
 
 ### Intermodal Configuration
 For PT+AMoD scenarios:
-- `broker_type: PTBroker` or `PTBrokerEI` - Broker handling intermodal coordination
+- `broker_type: PTBroker`, `PTBrokerEI`, or `PTBrokerPAYG` - Broker handling intermodal coordination
 - `broker_maas_detour_time_factor` - Detour estimation factor for PTBrokerEI
 - `pt_operator_type: PTControlBasic` - PT operator module
 - `gtfs_name` - GTFS data folder name
@@ -207,12 +210,20 @@ The `run_examples.py` script runs various scenario types (in `studies/example_st
 | `example_depot_*` | Fleet size control (time/utilization based) |
 | `example_broker_*` | Multi-operator broker scenarios (broker/user/independent decisions) |
 | `example_rpp_*` | Ride-parcel-pooling (combined passenger + parcel) |
-| `example_im_ptbroker*` | Intermodal PT+AMoD with PTBroker/PTBrokerEI |
+| `example_im_ptbroker*` | Intermodal PT+AMoD with PTBroker/PTBrokerEI/PTBrokerPAYG |
 
 Key fleet control modules (`op_module`):
 - `PoolingIRSOnly` - Insertion heuristic, immediate decisions
 - `PoolingIRSBatchOptimization` - Batch optimization with Gurobi/ORTools
 - `RidePoolingBatchAssignmentFleetcontrol` - Full batch assignment
+
+## Known Issues & Caveats
+
+### Sub-request `deepcopy` inherits parent state
+`create_SubTripRequest` (`TravelerModels.py:248`) uses `deepcopy(self)` which copies the parent request's entire state, including the `self.offer` dict. If the parent has already accumulated offers (e.g. from a previous `collect_offers` cycle), newly created sub-requests will inherit those stale offers. When creating sub-requests **after** the initial request-time (e.g. PAYG's post-alighting PT sub-requests), clear inherited offers with `sub_rq_obj.offer = {}`.
+
+### RollingHorizon reservation data must stay synchronized
+Three data structures (`active_reservation_requests`, `sorted_rids_with_epa`, `rid_to_assigned_vid`) must be kept in sync. Any deletion from one must update all three. See `docs/RollingHorizon_data_structures_and_bug.md`.
 
 ## Dependencies
 

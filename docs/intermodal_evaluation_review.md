@@ -54,6 +54,79 @@ total_wait_time = flm_amod_0_wait + flm_pt_wait + flm_amod_1_wait
 
 **评价**: 逻辑正确，考虑了步行时间和换乘等待。
 
+#### PT Wait Time 详细推导 (`calculate_pt_wait_time`)
+
+**适用场景**: FM 和 FLM 中 AMoD → PT 换乘的等候时间。
+
+**数据来源**:
+
+| 变量 | 来源 | 含义 |
+|------|------|------|
+| `amod_dropoff_time` | `G_RQ_DO` (FM_AMOD sub-request, 仿真结果) | AMoD 真实下车时间（到达 origin street node） |
+| `pt_pickup_time` | `G_RQ_PU` (PT sub-request, 仿真结果) | `source_station_departure_time`（到达 source station 入口的时刻） |
+| `source_walking_time` | PT offer string 中 `source_walking_time:X` | 从 origin street node 步行到 source station 入口的时间 |
+| `pt_station_wait_time` | PT offer string 中 `t_wait:X` | RAPTOR 规划的 `source_waiting_time`（在站台等候 PT 车辆的时间） |
+
+**关于 `G_RQ_PU` 的说明**:
+
+PT sub-request 的 `G_RQ_PU` **不是** FM DRT 的下车时间，而是 `source_station_departure_time`。
+这在 `PTControlBasic.user_confirms_booking()` 中设置：
+```python
+# src/ptctrl/PTControlBasic.py line 159-160
+pt_sub_rq_obj.user_boards_vehicle(
+    simulation_time = pt_offer.get(G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME, None),  # ← pu_time
+    ...)
+```
+
+**RAPTOR 时间线** (来自 `DataStructures.h` line 84):
+
+```
+source_station_departure | source_transfer | source_waiting | trip_time | target_transfer | target_station_arrival
+|----------------------------------------------- duration --------------------------------------------------------|
+```
+
+- `source_station_departure`: 到达 source station **入口**的时刻
+- `source_transfer_time`: station 入口 → source stop (站台)
+- `source_waiting_time`: 在站台等候 PT 车辆
+- PT 车辆从 source stop 出发时刻 = `source_station_departure + source_transfer + source_waiting`
+
+**推导过程**:
+
+```
+用户到达 source stop 的时刻:
+  = amod_dropoff + source_walking + source_transfer
+
+PT 从 source stop 出发的时刻:
+  = source_station_departure + source_transfer + source_waiting
+
+实际 PT 等候时间:
+  = PT出发 - 用户到达
+  = (source_station_departure + source_transfer + source_waiting)
+    - (amod_dropoff + source_walking + source_transfer)
+  = source_station_departure - amod_dropoff - source_walking + source_waiting
+                               ↑ source_transfer 正好抵消
+```
+
+**代码中的公式**:
+```python
+pt_wait_time = (pt_pickup_time - amod_dropoff_time) - source_walking_time + pt_station_wait_time
+             = (source_station_departure - amod_dropoff) - source_walking + source_waiting
+```
+
+**验证（AMoD 准时到达）**:
+
+若 AMoD 在 RAPTOR 规划的最早到达时刻准时下车：
+`amod_dropoff = origin_node_arrival_time = source_station_departure - source_walking`
+
+```
+pt_wait = (source_station_departure - (source_station_departure - source_walking))
+          - source_walking + source_waiting
+        = source_walking - source_walking + source_waiting
+        = source_waiting  ✓ （恰好等于 RAPTOR 规划的站台等候时间）
+```
+
+**结论**: 公式正确。`source_transfer_time` 在计算中自然抵消，无需显式使用。
+
 ### 3.2 Travel Time 计算 ⚠️ 需要确认
 
 当前实现:
