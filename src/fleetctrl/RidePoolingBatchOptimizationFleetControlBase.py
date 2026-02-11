@@ -57,7 +57,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
     def __init__(self, op_id : int, operator_attributes : dict, list_vehicles : List[SimulationVehicle],
                  routing_engine : NetworkBase, zone_system : ZoneSystem, scenario_parameters : dict,
                  dir_names : dict, op_charge_depot_infra : OperatorChargingAndDepotInfrastructure=None,
-                 list_pub_charging_infra: List[PublicChargingInfrastructureOperator]= []):
+                 list_pub_charging_infra: List[PublicChargingInfrastructureOperator]= [], hook_manager=None):
         """The specific attributes for the fleet control module are initialized. Strategy specific attributes are
         introduced in the children classes.
 
@@ -90,7 +90,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         :type list_pub_charging_infra: list of PublicChargingInfrastructureOperator
         """
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra)
+                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra, hook_manager=hook_manager)
         self.sim_time = scenario_parameters[G_SIM_START_TIME]
         self.rid_to_assigned_vid : Dict[Any, int] = {}
         self.pos_veh_dict : Dict[tuple, List[SimulationVehicle]] = {}  # pos -> list_veh

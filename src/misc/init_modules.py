@@ -17,12 +17,7 @@ if tp.TYPE_CHECKING:
     from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
     from src.fleetctrl.forecast.ForecastZoneSystemBase import ForecastZoneSystemBase
 
-# possibly load additional content from development content
-try:
-    dev_content = importlib.import_module("dev.misc.init_modules")
-    print("Loading modules from development content.")
-except ModuleNotFoundError:
-    dev_content = None
+import src.ml_gym.init_ml_modules as ml_modules
 
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -50,10 +45,8 @@ def get_src_simulation_environments():
     sim_env_dict["PreferredOperatorSimulation"] = ("src.BrokerSimulation", "PreferredOperatorSimulation")
     sim_env_dict["MATSim"] = ("src.coupling.MATSimEqasim.MATSimSimulationClass", "MATSimSimulationClass")
     sim_env_dict["SUMOcontrolledSim"] = ("src.coupling.SUMO.SUMOcontrolledSim", "SUMOcontrolledSim")
-    # add development content
-    if dev_content is not None:
-        dev_sim_env_dict = dev_content.add_dev_simulation_environments()
-        sim_env_dict.update(dev_sim_env_dict)
+    # add ml content
+    sim_env_dict.update(ml_modules.add_simulation_environments())
     return sim_env_dict
 
 def get_src_routing_engines():
@@ -70,10 +63,8 @@ def get_src_routing_engines():
     re_dict["NetworkBasicWithStoreOnlineMatrixCpp"] = ("src.routing.NetworkBasicWithStoreOnlineMatrixCpp", "NetworkBasicWithStoreOnlineMatrixCpp")
     re_dict["NetworkBasicSumoCoupling"] = ("src.routing.NetworkBasicSumoCoupling", "NetworkBasicSumoCoupling")
     re_dict["NetworkBasicWithStoreCppSumoCoupling"] = ("src.routing.NetworkBasicWithStoreCppSumoCoupling", "NetworkBasicWithStoreCppSumoCoupling")
-    # add development content
-    if dev_content is not None:
-        dev_re_dict = dev_content.add_dev_routing_engines()
-        re_dict.update(dev_re_dict)
+    # add ml content
+    re_dict.update(ml_modules.add_routing_engines())
     return re_dict
 
 def get_src_request_modules():
@@ -92,10 +83,8 @@ def get_src_request_modules():
     rm_dict["BrokerDecisionRequest"] = ("src.demand.TravelerModels", "BrokerDecisionRequest")
     rm_dict["UserDecisionRequest"] = ("src.demand.TravelerModels", "UserDecisionRequest")
     rm_dict["PreferredOperatorRequest"] = ("src.demand.TravelerModels", "PreferredOperatorRequest")
-    # add development content
-    if dev_content is not None:
-        dev_rm_dict = dev_content.add_request_models()
-        rm_dict.update(dev_rm_dict)
+    # add ml content
+    rm_dict.update(ml_modules.add_request_models())
     return rm_dict
     
 def get_src_fleet_control_modules():
@@ -111,20 +100,16 @@ def get_src_fleet_control_modules():
     op_dict["RPPFleetControlSingleStopInsertion"] = ("src.fleetctrl.RPPFleetControl", "RPPFleetControlSingleStopInsertion")
     op_dict["RPPFleetControlSingleStopInsertionGuided"] = ("src.fleetctrl.RPPFleetControl", "RPPFleetControlSingleStopInsertionGuided")
     op_dict["SemiOnDemandBatchAssignmentFleetcontrol"] = ("src.fleetctrl.SemiOnDemandBatchAssignmentFleetcontrol", "SemiOnDemandBatchAssignmentFleetcontrol")
-    # add development content
-    if dev_content is not None:
-        dev_op_dict = dev_content.add_fleet_control_modules()
-        op_dict.update(dev_op_dict)
+    # add ml content
+    op_dict.update(ml_modules.add_fleet_control_modules())
     return op_dict
 
 def get_src_broker_modules():
     # FleetPy broker options
     broker_dict = {}  # str -> (module path, class name)
     broker_dict["BrokerBasic"] = ("src.broker.BrokerBasic", "BrokerBasic")
-    # add development content
-    if dev_content is not None:
-        dev_broker_dict = dev_content.add_broker_modules()
-        broker_dict.update(dev_broker_dict)
+    # add ml content
+    broker_dict.update(ml_modules.add_broker_modules())
     return broker_dict
 
 def get_src_repositioning_strategies():
@@ -137,10 +122,8 @@ def get_src_repositioning_strategies():
     repo_dict["FullSamplingRidePoolingRebalancingMultiStage"] = ("src.fleetctrl.repositioning.FullSamplingRidePoolingRebalancingMultiStage", "FullSamplingRidePoolingRebalancingMultiStage")
     repo_dict["FullSamplingRidePoolingRebalancingMultiStageReservation"] = ("src.fleetctrl.repositioning.FullSamplingRidePoolingRebalancingMultiStageReservation", "FullSamplingRidePoolingRebalancingMultiStageReservation")
     repo_dict["PavoneContinuous"] = ("src.fleetctrl.repositioning.PavoneContinuous", "PavoneContinuous")
-    # add development content
-    if dev_content is not None:
-        dev_repo_dict = dev_content.add_repositioning_modules()
-        repo_dict.update(dev_repo_dict)
+    # add ml content
+    repo_dict.update(ml_modules.add_repositioning_modules())
     return repo_dict
 
 def get_src_charging_strategies():
@@ -148,10 +131,8 @@ def get_src_charging_strategies():
     # TODO # adapt charging strategy names
     cs_dict = {}  # str -> (module path, class name)
     cs_dict["Threshold_PCI"] = ("src.fleetctrl.charging.Threshold", "ChargingThresholdPublicInfrastructure")
-    # add development content
-    if dev_content is not None:
-        dev_cs_dict = dev_content.add_charging_strategy_modules()
-        cs_dict.update(dev_cs_dict)
+    # add ml content
+    cs_dict.update(ml_modules.add_charging_strategy_modules())
     return cs_dict
 
 def get_src_dynamic_pricing_strategies():
@@ -159,10 +140,8 @@ def get_src_dynamic_pricing_strategies():
     dp_dict = {}  # str -> (module path, class name)
     dp_dict["TimeBasedDP"] = ("src.fleetctrl.pricing.TimeBasedDP", "TimeBasedDP")
     dp_dict["UtilizationBasedDP"] = ("src.fleetctrl.pricing.UtilizationBasedDP", "UtilizationBasedDP")
-    # add development content
-    if dev_content is not None:
-        dev_dp_dict = dev_content.add_dynamic_pricing_strategy_modules()
-        dp_dict.update(dev_dp_dict)
+    # add ml content
+    dp_dict.update(ml_modules.add_dynamic_pricing_strategy_modules())
     return dp_dict
 
 def get_src_dynamic_fleet_sizing_strategies():
@@ -170,10 +149,8 @@ def get_src_dynamic_fleet_sizing_strategies():
     dfs_dict = {}  # str -> (module path, class name)
     dfs_dict["TimeBasedFS"] = ("src.fleetctrl.fleetsizing.TimeBasedFS", "TimeBasedFS")
     dfs_dict["UtilizationBasedFS"] = ("src.fleetctrl.fleetsizing.UtilizationBasedFS", "UtilizationBasedFS")
-    # add development content
-    if dev_content is not None:
-        dev_dfs_dict = dev_content.add_dynamic_fleetsizing_strategy_modules()
-        dfs_dict.update(dev_dfs_dict)
+    # add ml content
+    dfs_dict.update(ml_modules.add_dynamic_fleetsizing_strategy_modules())
     return dfs_dict
 
 def get_src_reservation_strategies():
@@ -182,10 +159,8 @@ def get_src_reservation_strategies():
     res_dict["RollingHorizon"] = ("src.fleetctrl.reservation.RollingHorizon", "RollingHorizonReservation")
     res_dict["RollingHorizonNoGuarantee"] = ("src.fleetctrl.reservation.RollingHorizonNoGuarantee", "RollingHorizonNoGuarantee")
     res_dict["ContinuousBatchRevelationReservation"] = ("src.fleetctrl.reservation.ContinuousBatchRevelationReservation", "ContinuousBatchRevelationReservation")
-    # add development content
-    if dev_content is not None:
-        dev_res_dict = dev_content.add_reservation_strategy_modules()
-        res_dict.update(dev_res_dict)
+    # add ml content
+    res_dict.update(ml_modules.add_reservation_strategy_modules())
     return res_dict
 
 def get_src_ride_pooling_batch_optimizers():
@@ -197,10 +172,8 @@ def get_src_ride_pooling_batch_optimizers():
     rbo_dict["ZonalInsertionHeuristic"] = (
     "src.fleetctrl.pooling.batch.InsertionHeuristic.BatchZonalInsertionHeuristicAssignment",
     "BatchZonalInsertionHeuristicAssignment")
-    # add development content
-    if dev_content is not None:
-        dev_rbo_dict = dev_content.add_ride_pooling_batch_optimizer_modules()
-        rbo_dict.update(dev_rbo_dict)
+    # add ml content
+    rbo_dict.update(ml_modules.add_ride_pooling_batch_optimizer_modules())
     return rbo_dict
 
 def get_src_forecast_models():
@@ -214,10 +187,8 @@ def get_src_forecast_models():
     fc_dict["aggregate_o_and_d"] = ("src.fleetctrl.forecast.AggForecastZoning", "AggForecastZoneSystem")
     fc_dict["perfect_trips"] = ("src.fleetctrl.forecast.AggForecastZoning", "AggForecastZoneSystem")
     fc_dict["aggregate_o_to_d"] = ("src.fleetctrl.forecast.ODForecastZoneSystem", "ODForecastZoneSystem")
-    # add development content
-    if dev_content is not None:
-        dev_fc_dict = dev_content.add_forecast_models()
-        dev_fc_dict.update(dev_fc_dict)
+    # add ml content
+    fc_dict.update(ml_modules.add_forecast_modules())
     return fc_dict
 
 # -------------------------------------------------------------------------------------------------------------------- #

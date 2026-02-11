@@ -9,10 +9,11 @@ class MLEnv():
         # main loop to run the ML environment
         while True:
             observation = self._observe()
-            
+            print(f"MLEnv: get observation {observation}")
             action = self._compute_action(observation)
             
             # 2) trigger action
+            print(f"MLEnv: apply action {action}")
             self.apply_action(action)
             
     def _compute_action(self, observation):

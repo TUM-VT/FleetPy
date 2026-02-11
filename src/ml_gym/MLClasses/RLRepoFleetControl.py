@@ -10,12 +10,12 @@ from typing import Dict, List, Any, Tuple, TYPE_CHECKING
 # -------------------------------------------------------------------------------------------------------------------- #
 # local imports
 from src.fleetctrl.RidePoolingBatchAssignmentFleetcontrol import RidePoolingBatchAssignmentFleetcontrol
-from src.ml_gym.HookManager import Events
+from src.ml_gym.HookManager import Events, Hook
 from src.misc.globals import G_FCTRL_CT_RES, G_FCTRL_CT_CH, G_FCTRL_CT_DFS, G_FCTRL_CT_REPO, G_FCTRL_CT_DP
 if TYPE_CHECKING:
     from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
     from src.infra.Zoning import ZoneSystem
-    from src.ml_gym.HookManager import HookManager, Hook
+    from src.ml_gym.HookManager import HookManager
     from src.routing.NetworkBase import NetworkBase
     from src.simulation.Vehicles import SimulationVehicle
     
@@ -29,11 +29,13 @@ class MLHook(Hook):
         self._q_out = q_out
         
     def on_event(self, event, sim: 'RLRepoFleetControl', **kwargs):
-        if event == Events.ML_OBSERVE.value:
+        if event == Events.ML_OBSERVE:
             observation = self._observe(sim, **kwargs)
+            print(f"Hook: Put observation: {observation}")
             self._q_out.put(observation)
-        elif event == Events.ML_ACTION.value:
+        elif event == Events.ML_ACTION:
             action = self._q_in.get()
+            print(f"Hook: get action: {action}")
             self._act(sim, action, **kwargs)
             
     def _observe(self, sim: 'RLRepoFleetControl', **kwargs):
@@ -51,11 +53,11 @@ class RLRepoFleetControl(RidePoolingBatchAssignmentFleetcontrol):
                  list_pub_charging_infra: List[PublicChargingInfrastructureOperator]= [], hook_manager: 'HookManager' = None):
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
                          dir_names, op_charge_depot_infra, list_pub_charging_infra, hook_manager)
-        if hook_manager is not None:
-            q_in, q_out = hook_manager.get_queues()
+        if self.hook_manager is not None:
+            q_in, q_out = self.hook_manager.get_queues()
             ml_hook = MLHook(q_in, q_out)
-            hook_manager.register(Events.ML_OBSERVE, ml_hook)
-            hook_manager.register(Events.ML_ACTION, ml_hook)
+            self.hook_manager.register(Events.ML_OBSERVE, ml_hook)
+            self.hook_manager.register(Events.ML_ACTION, ml_hook)
         
     def _call_time_trigger_additional_tasks(self, sim_time):
         """This method can be used to trigger all fleet operational tasks that are not related to request assignment:
@@ -96,6 +98,7 @@ class RLRepoFleetControl(RidePoolingBatchAssignmentFleetcontrol):
 
         # 3) Repositioning
         # -------------------
+        print(f"start triggers now {sim_time}")
         self.hook_manager.trigger(Events.ML_OBSERVE, sim=self, sim_time=sim_time)
         self.hook_manager.trigger(Events.ML_ACTION, sim=self, sim_time=sim_time)
         # if self.repo is not None and (sim_time % self.repo_time_step == 0 or repo_activated_veh):

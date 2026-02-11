@@ -410,7 +410,7 @@ class FleetSimulationBase:
                         vid += 1
                 OpClass: FleetControlBase = load_fleet_control_module(operator_module_name)
                 self.operators.append(OpClass(op_id, operator_attributes, list_vehicles, self.routing_engine, self.zones,
-                                            self.scenario_parameters, op_dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values())))
+                                            self.scenario_parameters, op_dir_names, self.charging_operator_dict["op"].get(op_id, None), list(self.charging_operator_dict["pub"].values()), self.hook_manager))
             elif operator_module_name == "SemiOnDemandBatchAssignmentFleetcontrol":  # SemiOnDemandBatchAssignmentFleetcontrol
                 from src.fleetctrl.SemiOnDemandBatchAssignmentFleetcontrol import SemiOnDemandBatchAssignmentFleetcontrol
                 list_vehicles = []

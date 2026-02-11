@@ -22,10 +22,12 @@ class HookManager:
 
     def register(self, event: Events, hook):
         if event not in self._hooks:
-            self._hooks[event.value] = []
-        self._hooks[event.value].append(hook)
+            self._hooks[event] = []
+        self._hooks[event].append(hook)
 
     def trigger(self, event, sim, **kwargs):
+        print(f"trigger {event}")
+        print(f"hooks: {self._hooks}")
         if event in self._hooks:
             for h in self._hooks[event]:
                 h.on_event(event, sim, **kwargs)

@@ -26,7 +26,7 @@ INPUT_PARAMETERS_RidePoolingBatchAssignmentFleetcontrol = {
 
 class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetControlBase):
     def __init__(self, op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                 dir_names, op_charge_depot_infra=None, list_pub_charging_infra= []):
+                 dir_names, op_charge_depot_infra=None, list_pub_charging_infra= [], hook_manager=None):
         """Batch assignment fleet control (i.e. BMW study, ITSC paper 2019)
         ride pooling optimisation is called after every optimisation_time_step and offers are created in the time_trigger function
         if "user_max_wait_time_2" is given:
@@ -52,7 +52,7 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
         :type list_pub_charging_infra: list of PublicChargingInfrastructureOperator
         """
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra)
+                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra, hook_manager=hook_manager)
         self.max_wait_time_2 = operator_attributes.get(G_OP_MAX_WT_2, None)
         if self.max_wait_time_2 != self.max_wait_time_2:
             self.max_wait_time_2 = None
