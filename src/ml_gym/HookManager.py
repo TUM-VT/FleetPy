@@ -29,8 +29,8 @@ class HookManager:
 
     def trigger(self, event, sim, **kwargs):
         # TODO: remove print statements after debugging
-        print(f"trigger {event}")
-        print(f"hooks: {self._hooks}")
+        print(f"\ntrigger {event}")
+        print(f"\nhooks: {self._hooks}")
         if event in self._hooks:
             for h in self._hooks[event]:
                 h.on_event(event, sim, **kwargs)

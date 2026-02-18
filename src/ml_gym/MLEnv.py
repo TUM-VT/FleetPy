@@ -11,14 +11,14 @@ class MLEnv():
             # 1) get observation from fleetpy
             observation = self._observe()
             # TODO: remove print statements after debugging
-            print(f"MLEnv: get observation -  {observation}")
+            print(f"\nMLEnv: get observation -  {observation}")
             if observation == 'SIMULATION_ENDED':
                 break
             action = self._compute_action(observation)
             
             # 2) trigger action
             # TODO: remove print statements after debugging
-            print(f"MLEnv: apply action -  {action}")
+            print(f"\nMLEnv: apply action -  {action}")
             self.apply_action(action)
             
     def _compute_action(self, observation):

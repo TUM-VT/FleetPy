@@ -754,6 +754,8 @@ STOP_COLUMNS = [
     "charging_power", "charging_task_id",
 ]
 
+G_ML_WRITE_FLEET_STATE = "ml_write_fleet_state"
+
 #--------------------------------------------------------------------------------------------------------------#
 # Evaluation specific params
 # ####################

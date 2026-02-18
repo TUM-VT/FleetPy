@@ -54,9 +54,9 @@ class FleetStateHook(Hook):
     def _output(self, **kwargs):
         """If all vehicles have reported for the current time step, assemble and write."""
         if len(self._vehicle_rows) >= self._n_vehicles:
-            self._flush()
+            self._flush(write_to_file=kwargs.get("write_to_file", False))
 
-    def _flush(self):
+    def _flush(self, write_to_file=False):
         """Assemble fleet state from accumulated rows, put on queue for MLEnv, write to file."""
         fleet_state = {
             "time": int(self._current_time),
@@ -68,8 +68,9 @@ class FleetStateHook(Hook):
             "vehicles": self._vehicle_rows,
         }
         self._q_out.put(fleet_state)
-        with open(self.output_f, 'a') as f:
-            f.write(json.dumps(fleet_state, ensure_ascii=False, default=str) + '\n')
+        if write_to_file:
+            with open(self.output_f, 'a') as f:
+                f.write(json.dumps(fleet_state, ensure_ascii=False, default=str) + '\n')
         self._vehicle_rows = []
 
 
@@ -81,6 +82,8 @@ class SLPoolingIRSOnly(PoolingInsertionHeuristicOnly):
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
                          dir_names, op_charge_depot_infra, list_pub_charging_infra, hook_manager)
 
+        # determine whether write fleet state to file or not;
+        self.write_fleet_state = scenario_parameters.get(G_ML_WRITE_FLEET_STATE, False)
         self._fleet_state_hook = None
         if self.hook_manager is not None:
             q_in, q_out = self.hook_manager.get_queues()
@@ -95,4 +98,4 @@ class SLPoolingIRSOnly(PoolingInsertionHeuristicOnly):
             self.hook_manager.trigger(Events.OBSERVE_VEHICLE_STATUS_AFTER_RECEIVE_STATUS_UPDATE,
                                       sim=self, sim_time=simulation_time, vid=vid)
             self.hook_manager.trigger(Events.OUTPUT_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE,
-                                      sim=self, sim_time=simulation_time, vid=vid)
+                                      sim=self, sim_time=simulation_time, vid=vid, write_to_file=self.write_fleet_state)
