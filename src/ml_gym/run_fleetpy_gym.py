@@ -8,9 +8,7 @@ from src.ml_gym.HookManager import HookManager
 # -------------------------------------------------------------------------------------------------------------------- #
 # external imports
 # ----------------
-import sys
 import traceback
-import pandas as pd
 import multiprocessing as mp
 
 # src imports
@@ -24,11 +22,14 @@ from src.misc.globals import *
 # --------------
 def run_fleetpy_sim(scenario_parameters, fleetpy_in_queue, fleetpy_out_queue):
     hook_manager = HookManager(fleetpy_in_queue, fleetpy_out_queue)
-    SF = load_simulation_environment(scenario_parameters,  hook_manager=hook_manager)
+    SF = load_simulation_environment(scenario_parameters, hook_manager=hook_manager)
     try:
         SF.run()
     except:
         traceback.print_exc()
+    finally:
+        # sentinel to signal MLEnv that simulation has ended
+        fleetpy_out_queue.put('SIMULATION_ENDED')
 
 
 def run_fleetpy_gym(scenario_parameters):
@@ -47,6 +48,28 @@ def run_fleetpy_gym(scenario_parameters):
     
     
 if __name__ == "__main__":
-    sc_config = r"C:\Users\ge37ser\Documents\Coding\FleetPy\studies\MLtest\scenarios\sc_config_repo.csv"
-    const_config = r"C:\Users\ge37ser\Documents\Coding\FleetPy\studies\MLtest\scenarios\constant_config.csv"
-    
+    mp.freeze_support()
+
+    MAIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    if len(sys.argv) >= 3:
+        const_config = sys.argv[1]
+        sc_config = sys.argv[2]
+    else:
+        # default: ml_test study
+        scs_path = os.path.join(MAIN_DIR, "studies", "ml_test", "scenarios")
+        const_config = os.path.join(scs_path, "constant_config_ir.csv")
+        sc_config = os.path.join(scs_path, "example_sl_ir_only.csv")
+
+    constant_cfg = config.ConstantConfig(const_config)
+    scenario_cfgs = config.ScenarioConfig(sc_config)
+
+    study_name = os.path.basename(os.path.dirname(os.path.dirname(os.path.abspath(const_config))))
+    constant_cfg[G_STUDY_NAME] = study_name
+    constant_cfg["n_cpu_per_sim"] = 1
+    constant_cfg["evaluate"] = 1
+    constant_cfg["log_level"] = "info"
+
+    for scenario_cfg in scenario_cfgs:
+        scenario_parameters = constant_cfg + scenario_cfg
+        run_fleetpy_gym(scenario_parameters)

@@ -49,6 +49,10 @@ studies/chicago_case_study/results/*
 !studies/munich_case_study
 studies/munich_case_study/results/*
 
+# temporaly included files for ML debugging
+!studies/ml_test
+studies/ml_test/results/*
+
 # system dependent C++ Router files
 src/routing/cpp_router/*.pyd
 src/routing/cpp_router/build/*

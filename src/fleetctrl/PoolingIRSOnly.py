@@ -30,7 +30,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
     """
     # TODO # clarify dependency to fleet simulation module
     def __init__(self, op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                 dir_names, op_charge_depot_infra=None, list_pub_charging_infra= []):
+                 dir_names, op_charge_depot_infra=None, list_pub_charging_infra= [], hook_manager=None):
         """The specific attributes for the fleet control module are initialized. Strategy specific attributes are
         introduced in the children classes.
 
@@ -52,7 +52,8 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         :type list_pub_charging_infra: list of PublicChargingInfrastructureOperator
         """
         super().__init__(op_id, operator_attributes, list_vehicles, routing_engine, zone_system, scenario_parameters,
-                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra)
+                         dir_names=dir_names, op_charge_depot_infra=op_charge_depot_infra, list_pub_charging_infra=list_pub_charging_infra,
+                         hook_manager=hook_manager)
         # TODO # make standard in FleetControlBase
         self.rid_to_assigned_vid = {} # rid -> vid
         self.pos_veh_dict = {}  # pos -> list_veh

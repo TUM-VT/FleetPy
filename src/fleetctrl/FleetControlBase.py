@@ -1029,3 +1029,80 @@ class FleetControlBase(metaclass=ABCMeta):
                                                 duration=stop_duration, earliest_start_time=earliest_start_time, earliest_end_time=departure_time,
                                                 locked=pstop.is_locked(), stationary_process=stationary_process))
         return list_vrl
+    
+    def collect_vehicle_state(self, vid, sim_time):
+        """Collect a single vehicle's state as a compact value list (order matches VEH_COLUMNS)."""
+        veh_obj = self.sim_vehicles[vid]
+        vehicle_plan = self.veh_plans[vid]
+
+        return [
+            vid,
+            veh_obj.op_id,
+            veh_obj.veh_type,
+            veh_obj.status.display_name,
+            veh_obj.status.value,
+            list(veh_obj.pos) if veh_obj.pos else None,
+            veh_obj.soc,
+            veh_obj.battery_size,
+            veh_obj.range,
+            len(veh_obj.pax),
+            veh_obj.max_pax,
+            [pax.get_rid_struct() for pax in veh_obj.pax],
+            veh_obj.cl_start_time,
+            list(veh_obj.cl_start_pos) if veh_obj.cl_start_pos else None,
+            veh_obj.cl_start_soc,
+            veh_obj.cl_driven_distance,
+            veh_obj.cl_remaining_time,
+            len(veh_obj.cl_remaining_route) if veh_obj.cl_remaining_route else 0,
+            veh_obj.cl_remaining_route if veh_obj.cl_remaining_route else [],
+            veh_obj.cl_locked,
+            veh_obj.cumulative_distance,
+            len(veh_obj.assigned_route),
+            self._encode_assigned_route(veh_obj),
+            len(vehicle_plan.list_plan_stops),
+            self._encode_plan_stops(vehicle_plan, sim_time),
+        ]
+
+    def _encode_assigned_route(self, veh_obj):
+        """Encode assigned_route as a list of value arrays (order matches LEG_COLUMNS)."""
+        legs = []
+        for leg in veh_obj.assigned_route:
+            legs.append([
+                leg.status.display_name,
+                leg.status.value,
+                list(leg.destination_pos) if leg.destination_pos else None,
+                leg.duration,
+                leg.power,
+                leg.earliest_start_time,
+                leg.earliest_end_time,
+                leg.locked,
+                leg.started,
+                [rq.get_rid_struct() for rq in leg.rq_dict.get(1, [])],
+                [rq.get_rid_struct() for rq in leg.rq_dict.get(-1, [])],
+                len(leg.route) if leg.route else 0,
+            ])
+        return legs
+
+    def _encode_plan_stops(self, vehicle_plan, sim_time):
+        """Encode plan_stops as a list of value arrays (order matches STOP_COLUMNS)."""
+        stops = []
+        for ps in vehicle_plan.list_plan_stops:
+            arr_time, dep_time = ps.get_planned_arrival_and_departure_time()
+            dur, earliest_dep = ps.get_duration_and_earliest_departure()
+            stops.append([
+                list(ps.get_pos()) if ps.get_pos() else None,
+                ps.get_state().name if ps.get_state() else None,
+                ps.get_list_boarding_rids(),
+                ps.get_list_alighting_rids(),
+                arr_time,
+                dep_time,
+                round(dep_time - sim_time, 1) if dep_time else None,
+                dur,
+                earliest_dep,
+                ps.get_earliest_start_time(),
+                ps.is_locked(),
+                ps.get_change_nr_pax(),
+                ps.get_charging_power(),
+                ps.get_charging_task_id(),
+            ])
+        return stops

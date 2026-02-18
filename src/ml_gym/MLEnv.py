@@ -8,12 +8,17 @@ class MLEnv():
     def run(self):
         # main loop to run the ML environment
         while True:
+            # 1) get observation from fleetpy
             observation = self._observe()
-            print(f"MLEnv: get observation {observation}")
+            # TODO: remove print statements after debugging
+            print(f"MLEnv: get observation -  {observation}")
+            if observation == 'SIMULATION_ENDED':
+                break
             action = self._compute_action(observation)
             
             # 2) trigger action
-            print(f"MLEnv: apply action {action}")
+            # TODO: remove print statements after debugging
+            print(f"MLEnv: apply action -  {action}")
             self.apply_action(action)
             
     def _compute_action(self, observation):

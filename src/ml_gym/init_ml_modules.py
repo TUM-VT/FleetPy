@@ -39,6 +39,7 @@ def add_fleet_control_modules():
     """
     add_op_dict = {}  # str -> (module path, class name)
     add_op_dict["RLRepoFleetControl"] = ("src.ml_gym.MLClasses.RLRepoFleetControl", "RLRepoFleetControl")
+    add_op_dict["SLPoolingIRSOnly"] = ("src.ml_gym.MLClasses.SLPoolingIRSOnly", "SLPoolingIRSOnly")
     return add_op_dict
 
 

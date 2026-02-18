@@ -10,7 +10,9 @@ if tp.TYPE_CHECKING:
     
 class Events(Enum):
     ML_OBSERVE = "ml_observe",
-    ML_ACTION = "ml_action",   
+    ML_ACTION = "ml_action",
+    OBSERVE_VEHICLE_STATUS_AFTER_RECEIVE_STATUS_UPDATE = "observe_vehicle_status_after_receive_status_update",
+    OUTPUT_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE = "output_fleet_state_after_receive_status_update",
 
 
 class HookManager:
@@ -26,6 +28,7 @@ class HookManager:
         self._hooks[event].append(hook)
 
     def trigger(self, event, sim, **kwargs):
+        # TODO: remove print statements after debugging
         print(f"trigger {event}")
         print(f"hooks: {self._hooks}")
         if event in self._hooks:
