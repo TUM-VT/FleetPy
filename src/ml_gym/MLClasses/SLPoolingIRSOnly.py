@@ -33,45 +33,44 @@ class FleetStateHook(Hook):
         self.output_f = output_f
         self._op_id = op_id
         self._n_vehicles = n_vehicles
-        self._current_time = None
         self._vehicle_rows = []
 
     def on_event(self, event, sim: 'SLPoolingIRSOnly', **kwargs):
-        if event == Events.OBSERVE_VEHICLE_STATUS_AFTER_RECEIVE_STATUS_UPDATE:
-            vehicle_row = self._observe(sim, **kwargs)
-            self._vehicle_rows.append(vehicle_row)
-        elif event == Events.OUTPUT_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE:
-            self._output(**kwargs)
+        if event == Events.OBSERVE_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE:
+            self._observe(sim, **kwargs)
+        else:
+            # No implementation for other events yet, but could be extended in the future
+            pass
 
     def _observe(self, sim: 'SLPoolingIRSOnly', **kwargs):
         """Collect one vehicle's state and accumulate it."""
         sim_time = kwargs.get("sim_time")
         vid = kwargs.get("vid")
-        self._current_time = sim_time
         vehicle_row = sim.collect_vehicle_state(vid, sim_time)
-        return vehicle_row
+        self._vehicle_rows.append(vehicle_row)
 
-    def _output(self, **kwargs):
-        """If all vehicles have reported for the current time step, assemble and write."""
+        # If all vehicles have reported for the current time step, assemble and write.
         if len(self._vehicle_rows) >= self._n_vehicles:
-            self._flush(write_to_file=kwargs.get("write_to_file", False))
+            fleet_state = {
+                "time": int(sim_time),
+                "op_id": self._op_id,
+                "n_vehicles": int(self._n_vehicles),
+                "columns": VEH_COLUMNS,
+                "leg_columns": LEG_COLUMNS,
+                "stop_columns": STOP_COLUMNS,
+                "vehicles": self._vehicle_rows,
+            }
 
-    def _flush(self, write_to_file=False):
-        """Assemble fleet state from accumulated rows, put on queue for MLEnv, write to file."""
-        fleet_state = {
-            "time": int(self._current_time),
-            "op_id": self._op_id,
-            "n_vehicles": len(self._vehicle_rows),
-            "columns": VEH_COLUMNS,
-            "leg_columns": LEG_COLUMNS,
-            "stop_columns": STOP_COLUMNS,
-            "vehicles": self._vehicle_rows,
-        }
-        self._q_out.put(fleet_state)
-        if write_to_file:
-            with open(self.output_f, 'a') as f:
-                f.write(json.dumps(fleet_state, ensure_ascii=False, default=str) + '\n')
-        self._vehicle_rows = []
+            # Send the complete fleet state to the output queue for ML processing
+            self._q_out.put(fleet_state)
+
+            # If writing to file is enabled, append the fleet state as a JSON line
+            if kwargs.get("write_to_file", False):
+                with open(self.output_f, 'a') as f:
+                    f.write(json.dumps(fleet_state, ensure_ascii=False, default=str) + '\n')
+
+            # Reset for the next time step
+            self._vehicle_rows = []
 
 
 class SLPoolingIRSOnly(PoolingInsertionHeuristicOnly):
@@ -89,13 +88,10 @@ class SLPoolingIRSOnly(PoolingInsertionHeuristicOnly):
             q_in, q_out = self.hook_manager.get_queues()
             output_f = os.path.join(dir_names[G_DIR_OUTPUT], f"5-{op_id}_fleet_state.jsonl")
             self._fleet_state_hook = FleetStateHook(q_in, q_out, output_f, op_id, len(list_vehicles))
-            self.hook_manager.register(Events.OBSERVE_VEHICLE_STATUS_AFTER_RECEIVE_STATUS_UPDATE, self._fleet_state_hook)
-            self.hook_manager.register(Events.OUTPUT_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE, self._fleet_state_hook)
+            self.hook_manager.register(Events.OBSERVE_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE, self._fleet_state_hook)
 
     def receive_status_update(self, vid, simulation_time, list_finished_VRL, force_update=True):
         super().receive_status_update(vid, simulation_time, list_finished_VRL, force_update)
         if self.hook_manager is not None:
-            self.hook_manager.trigger(Events.OBSERVE_VEHICLE_STATUS_AFTER_RECEIVE_STATUS_UPDATE,
-                                      sim=self, sim_time=simulation_time, vid=vid)
-            self.hook_manager.trigger(Events.OUTPUT_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE,
+            self.hook_manager.trigger(Events.OBSERVE_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE,
                                       sim=self, sim_time=simulation_time, vid=vid, write_to_file=self.write_fleet_state)

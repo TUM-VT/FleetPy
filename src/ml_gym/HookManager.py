@@ -11,8 +11,7 @@ if tp.TYPE_CHECKING:
 class Events(Enum):
     ML_OBSERVE = "ml_observe",
     ML_ACTION = "ml_action",
-    OBSERVE_VEHICLE_STATUS_AFTER_RECEIVE_STATUS_UPDATE = "observe_vehicle_status_after_receive_status_update",
-    OUTPUT_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE = "output_fleet_state_after_receive_status_update",
+    OBSERVE_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE = "observe_fleet_state_after_receive_status_update",
 
 
 class HookManager:
