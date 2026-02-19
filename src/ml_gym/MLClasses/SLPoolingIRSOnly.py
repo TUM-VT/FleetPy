@@ -24,7 +24,7 @@ LOG = logging.getLogger(__name__)
 
 
 class FleetStateHook(Hook):
-    """Accumulates per-vehicle state rows via OBSERVE events and writes
+    """Accumulates per-vehicle status rows via OBSERVE events and writes
     the complete fleet state via OUTPUT events once all vehicles have reported."""
 
     def __init__(self, q_in, q_out, output_f, op_id, n_vehicles):
@@ -43,10 +43,10 @@ class FleetStateHook(Hook):
             pass
 
     def _observe(self, sim: 'SLPoolingIRSOnly', **kwargs):
-        """Collect one vehicle's state and accumulate it."""
+        """Collect one vehicle's status and accumulate it."""
         sim_time = kwargs.get("sim_time")
         vid = kwargs.get("vid")
-        vehicle_row = sim.collect_vehicle_state(vid, sim_time)
+        vehicle_row = sim.collect_vehicle_status(vid, sim_time)
         self._vehicle_rows.append(vehicle_row)
 
         # If all vehicles have reported for the current time step, assemble and write.

@@ -1030,8 +1030,8 @@ class FleetControlBase(metaclass=ABCMeta):
                                                 locked=pstop.is_locked(), stationary_process=stationary_process))
         return list_vrl
     
-    def collect_vehicle_state(self, vid, sim_time):
-        """Collect a single vehicle's state as a compact value list (order matches VEH_COLUMNS)."""
+    def collect_vehicle_status(self, vid, sim_time):
+        """Collect a single vehicle's status as a compact value list (order matches VEH_COLUMNS)."""
         veh_obj = self.sim_vehicles[vid]
         vehicle_plan = self.veh_plans[vid]
 
