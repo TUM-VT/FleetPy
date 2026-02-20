@@ -14,7 +14,7 @@ for p in os.sys.path:
         to_del.append(p)
 for p in to_del:
     os.sys.path.remove(p)
-os.sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+os.sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from src.misc.globals import *
 from src.coupling.MATSimEqasim.misc import *
@@ -28,7 +28,7 @@ LOG = logging.getLogger(__name__)
 
 STAT_INT = 60
 ENCODING = "utf-8"
-LOG_COMMUNICATION = True
+LOG_COMMUNICATION = False
 LARGE_INT = 100000
 
 # TODO : incorporate matsim inactive vehicle status -> new assignment (even if same as before) will trigger error
