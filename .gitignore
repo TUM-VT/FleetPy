@@ -197,7 +197,3 @@ dmypy.json
 
 # GTFS preprocessing file
 !src/preprocessing/pt/PTRouterGTFSPreperation.ipynb
-
-# pixi environments
-.pixi/*
-!.pixi/config.toml
