@@ -11,7 +11,8 @@ if tp.TYPE_CHECKING:
 class Events(Enum):
     ML_OBSERVE = "ml_observe",
     ML_ACTION = "ml_action",
-    OBSERVE_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE = "observe_fleet_state_after_receive_status_update",
+    OBSERVE_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE = "observe_fleet_state_after_receive_status_update", # this event is triggered after the fleetcontrol received a new status update of its vehicle and is about to trigger its optimization
+    OBSERVE_BEFORE_REPOSITIONING = "observe_bevore_repositioning" # this event is triggered directly before the repositioning algorithm would calculate new repositioning trips
 
 
 class HookManager:
@@ -37,7 +38,54 @@ class HookManager:
     def get_queues(self, **kwargs):
         # to be implemented in specific use cases
         return self._fleetpy_q_in, self._fleetpy_q_out
-            
+    
+    def has_hooks(self, event):
+        return event in self._hooks and len(self._hooks[event]) > 0
+    
+    def get_ml_hooks(self, event):
+        if self.has_hooks(event):
+            return [h for h in self._hooks[event] if isinstance(h, MLHook)]
+        else:
+            return []
+
 class Hook:
-    def on_event(self, event, sim: 'FleetSimulationBase', **kwargs):
-        pass
+    def on_event(self, event, fleetpy_module, **kwargs):
+        pass            
+
+class MLHook(Hook):
+    def __init__(self, event: Events, ml_interface):
+        self._registered_observers = []
+        self._actor = None
+        self._event = event
+        self._ml_interface = ml_interface
+    
+    def on_event(self, event, fleetpy_module, **kwargs):
+        if event != self._event:
+            return
+        observation = self._observe(fleetpy_module)
+        action = self._ml_interface.communicate(event, observation)
+        if self._actor is not None and action is not None:
+            self._act(action, fleetpy_module)
+        elif action is None and self._actor is None:
+            return
+        else:
+            raise AttributeError("Either ML communicates and actor and no actor is registered, or the other way around")
+    
+    def register_observer(self, observer_method):
+        if observer_method not in self._registered_observers:
+            self._registered_observers.append(observer_method)
+            
+    def register_actor(self, actor_method):
+        if self._actor is not None:
+            raise ValueError("Only one actor can be registered per hook!")
+        self._actor = actor_method
+        
+    def _observe(self, fleetpy_module):
+        observation = {}
+        for observer in self._registered_observers:
+            observation.update(observer(fleetpy_module))
+        return observation
+    
+    def _act(self, action, fleetpy_module):
+        self._actor(fleetpy_module, action)
+        

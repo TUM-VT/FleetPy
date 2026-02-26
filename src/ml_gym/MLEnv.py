@@ -1,7 +1,7 @@
 
 
 class MLEnv():
-    def __init__(self, fleetpy_in_queue, fleetpy_out_queue):
+    def __init__(self, fleetpy_in_queue=None, fleetpy_out_queue=None):
         self.fleetpy_in_queue = fleetpy_in_queue
         self.fleetpy_out_queue = fleetpy_out_queue
     
@@ -33,3 +33,21 @@ class MLEnv():
         # get observation from fleetpy via queue
         observation = self.fleetpy_out_queue.get()
         return observation
+    
+    def receive_observation(self, event, observation):
+        # receive observation from fleetpy via method call (if not using multiprocessing)
+        self.observation = observation
+        
+    def get_action(self):
+        return self._compute_action(self.observation)
+    
+    
+class GreedyRepositioningEnv(MLEnv):
+    def __init__(self):
+        super().__init__(None, None)
+        
+    def _compute_action(self, observation):
+        # compute greedy repositioning action based on observation
+        print("\nGreedyRepositioningEnv: compute greedy repositioning action")
+        print(f"Observation: {observation}")
+        exit()

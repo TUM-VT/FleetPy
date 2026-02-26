@@ -10,6 +10,7 @@ import pandas as pd
 from src.fleetctrl.planning.VehiclePlan import RoutingTargetPlanStop
 from src.misc.globals import *
 from src.misc.init_modules import load_forecast_model
+from src.ml_gym.HookManager import Events
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -94,6 +95,8 @@ class RepositioningBase(ABC):
         self.sim_time = sim_time
         if lock is None:
             lock = self.lock_repo_assignments
+        if self.fleetctrl.hook_manager:
+            self.fleetctrl.hook_manager.trigger(Events.OBSERVE_BEFORE_REPOSITIONING, self)
         return []
     
     def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> ForecastZoneSystemBase:
