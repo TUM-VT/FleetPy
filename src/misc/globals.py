@@ -722,39 +722,7 @@ G_FCTRL_CT_DP = "dyn_pricing_strategy"
 G_FCTRL_CT_DFS = "dyn_fleetsizing_strategy"
 G_FCTRL_CT_RES = "reservation_time_trigger"
 
-# ML Fleet State Record Structure
-VEH_COLUMNS = [
-    "vid", "op_id", "veh_type",
-    "status", "status_value", "pos",
-    "soc", "battery_size", "range",
-    "n_pax", "max_pax", "pax_rids",
-    "cl_start_time", "cl_start_pos", "cl_start_soc",
-    "cl_driven_distance", "cl_remaining_time",
-    "cl_remaining_route_len", "cl_remaining_route",
-    "cl_locked", "cumulative_distance",
-    "n_assigned_legs", "assigned_route",
-    "n_plan_stops", "plan_stops",
-]
 
-LEG_COLUMNS = [
-    "status", "status_value", "destination_pos",
-    "duration", "power",
-    "earliest_start_time", "earliest_end_time",
-    "locked", "started",
-    "boarding_rids", "alighting_rids", "route_len",
-]
-
-STOP_COLUMNS = [
-    "pos", "state",
-    "boarding_rids", "alighting_rids",
-    "planned_arrival_time", "planned_departure_time",
-    "remaining_time_to_departure",
-    "duration", "earliest_departure", "earliest_start_time",
-    "locked", "change_nr_pax",
-    "charging_power", "charging_task_id",
-]
-
-G_ML_WRITE_FLEET_STATE = "ml_write_fleet_state"
 
 #--------------------------------------------------------------------------------------------------------------#
 # Evaluation specific params
