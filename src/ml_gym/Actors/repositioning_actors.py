@@ -20,6 +20,7 @@ def apply_od_assignment(repo_module: MLZoneBasedRepositioning, od_reposition_tri
     :param repo_module: repositioning module
     :param od_assignment: list of tuple of (origin_zone_id, destination_zone_id) [does not have to be unique!]
     """
+    print("\napply_od_assignment - od_reposition_trips: ", od_reposition_trips)
     list_veh_with_changes = []
     sim_time = repo_module.sim_time
     lock = repo_module.lock_repo_assignments

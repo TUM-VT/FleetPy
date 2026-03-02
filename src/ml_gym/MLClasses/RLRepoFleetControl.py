@@ -10,12 +10,12 @@ from typing import Dict, List, Any, Tuple, TYPE_CHECKING
 # -------------------------------------------------------------------------------------------------------------------- #
 # local imports
 from src.fleetctrl.RidePoolingBatchAssignmentFleetcontrol import RidePoolingBatchAssignmentFleetcontrol
-from src.ml_gym.HookManager import Events, Hook
+from src.ml_gym.Hooks.HookManager import Events, Hook
 from src.misc.globals import G_FCTRL_CT_RES, G_FCTRL_CT_CH, G_FCTRL_CT_DFS, G_FCTRL_CT_REPO, G_FCTRL_CT_DP
 if TYPE_CHECKING:
     from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
     from src.infra.Zoning import ZoneSystem
-    from src.ml_gym.HookManager import HookManager
+    from src.ml_gym.Hooks.HookManager import HookManager
     from src.routing.NetworkBase import NetworkBase
     from src.simulation.Vehicles import SimulationVehicle
     

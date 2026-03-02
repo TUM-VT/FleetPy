@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from src.infra.Zoning import ZoneSystem
     from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
     from src.simulation.StationaryProcess import ChargingProcess
-    from src.ml_gym.HookManager import HookManager
+    from src.ml_gym.Hooks.HookManager import HookManager
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables

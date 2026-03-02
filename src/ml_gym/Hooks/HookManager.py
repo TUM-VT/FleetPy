@@ -83,6 +83,8 @@ class MLHook(Hook):
     def _observe(self, fleetpy_module):
         observation = {}
         for observer in self._registered_observers:
+            print(f"\nMLHook: trigger observer - {observer}")
+            print(f"observer(fleetpy_module): {observer(fleetpy_module)}")
             observation.update(observer(fleetpy_module))
         return observation
     

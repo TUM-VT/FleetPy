@@ -41,13 +41,4 @@ class MLEnv():
     def get_action(self):
         return self._compute_action(self.observation)
     
-    
-class GreedyRepositioningEnv(MLEnv):
-    def __init__(self):
-        super().__init__(None, None)
-        
-    def _compute_action(self, observation):
-        # compute greedy repositioning action based on observation
-        print("\nGreedyRepositioningEnv: compute greedy repositioning action")
-        print(f"Observation: {observation}")
-        exit()
+

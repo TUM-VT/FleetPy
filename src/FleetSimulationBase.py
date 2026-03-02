@@ -29,7 +29,7 @@ if tp.TYPE_CHECKING:
     from src.routing.NetworkBase import NetworkBase
     from src.broker.BrokerBase import BrokerBase
     from src.python_plots.plot_classes import PyPlot
-    from src.ml_gym.HookManager import HookManager
+    from src.ml_gym.Hooks.HookManager import HookManager
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables

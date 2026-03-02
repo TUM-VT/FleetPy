@@ -10,12 +10,12 @@ from typing import Dict, List, Any, Tuple, TYPE_CHECKING
 # -------------------------------------------------------------------------------------------------------------------- #
 # local imports
 from src.fleetctrl.RidePoolingBatchAssignmentFleetcontrol import RidePoolingBatchAssignmentFleetcontrol
-from src.ml_gym.HookManager import Events, Hook
+from src.ml_gym.Hooks.HookManager import Events, Hook
 from src.misc.globals import G_FCTRL_CT_RES, G_FCTRL_CT_CH, G_FCTRL_CT_DFS, G_FCTRL_CT_REPO, G_FCTRL_CT_DP
 if TYPE_CHECKING:
     from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
     from src.infra.Zoning import ZoneSystem
-    from src.ml_gym.HookManager import HookManager
+    from src.ml_gym.Hooks.HookManager import HookManager
     from src.routing.NetworkBase import NetworkBase
     from src.simulation.Vehicles import SimulationVehicle
     from src.fleetctrl.repositioning import RepositioningBase
@@ -24,19 +24,17 @@ if TYPE_CHECKING:
 LOG = logging.getLogger(__name__)
 
 def observe_sim_time(repo_module: RepositioningBase):
-    return repo_module.sim_time
+    return {"sim_time": repo_module.sim_time}
 
 def observe_demand_forecast(repo_module: RepositioningBase):
     sim_time = repo_module.sim_time
     list_zones = repo_module.zone_system.get_all_zones()
     t0 = sim_time + repo_module.list_horizons[0]
     t1 = sim_time + repo_module.list_horizons[1]
-    od_fc = repo_module.zone_system.get_trip_od_forecasts(t0, t1, scale=repo_module._weight_on_forecast)
-    dep_rate_s = {zone_id : sum(od_fc.get(zone_id, {}).values()) for zone_id in list_zones}
-    arr_rate_s = {zone_id : 0 for zone_id in list_zones}
-    for o_zone_id, d_zone_dict in od_fc.items():
-        for d_zone_id, trips in d_zone_dict.items():
-            arr_rate_s[d_zone_id] += trips
+    print("observe_demand_forecast - t0: ", repo_module, repo_module.zone_system)
+    dep_rate_s = repo_module.zone_system.get_trip_departure_forecasts( t0, t1)
+    arr_rate_s = repo_module.zone_system.get_trip_arrival_forecasts( t0, t1)
+
     return {"zone_to_fc_rq_origins" : dep_rate_s,
             "zone_to_fc_rq_destinations" : arr_rate_s}
     

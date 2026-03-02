@@ -2,8 +2,8 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)) ))) # add fleetpy path
 
-from src.ml_gym.MLEnv import MLEnv
-from src.ml_gym.HookManager import HookManager
+from src.ml_gym.MLEnvs.MLEnv import MLEnv
+from src.ml_gym.Hooks.HookManager import HookManager
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # external imports

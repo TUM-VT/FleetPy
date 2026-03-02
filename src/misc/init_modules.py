@@ -17,7 +17,7 @@ if tp.TYPE_CHECKING:
     from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
     from src.fleetctrl.forecast.ForecastZoneSystemBase import ForecastZoneSystemBase
 
-import src.ml_gym.init_ml_modules as ml_modules
+import src.ml_gym.misc.init_ml_modules as ml_modules
 
 
 # -------------------------------------------------------------------------------------------------------------------- #
