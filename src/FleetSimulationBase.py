@@ -700,7 +700,7 @@ class FleetSimulationBase:
                 self.broker.receive_status_update(op_id, vid, next_time, passed_VRL, force_update_plan)
         if self.hook_manager is not None:
             for op in self.operators:
-                self.hook_manager.trigger(Events.OBSERVE_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE, op)
+                self.hook_manager.trigger(Events.OBSERVE_FLEET_STATE_AFTER_RECEIVING_STATUS_UPDATE, op)
         # TODO # after ISTTT: live visualization: send vehicle states (self.live_visualization_flag==True)
 
     def update_vehicle_routes(self, sim_time):

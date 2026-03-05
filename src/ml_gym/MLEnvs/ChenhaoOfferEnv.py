@@ -12,10 +12,9 @@ class ObserveFleetStateEnv(MLEnv):
         self.write_to_file = write_to_file
         
     def _compute_action(self, observation):
-        # compute random repositioning action based on observation
         # only observe and write to file, no action -> for training
-        print("\nObserveFleetStateEnv")
-        print(f"Observation: {observation}")
+        if not observation.get("vehicles"):  # interval gating returns {}
+            return None
         if self.write_to_file:
             with open(self.output_f, 'a') as f:
                 f.write(json.dumps(observation, ensure_ascii=False, default=str) + '\n')

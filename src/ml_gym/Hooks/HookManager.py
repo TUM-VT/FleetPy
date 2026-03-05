@@ -11,7 +11,7 @@ if tp.TYPE_CHECKING:
 class Events(Enum):
     ML_OBSERVE = "ml_observe",
     ML_ACTION = "ml_action",
-    OBSERVE_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE = "observe_fleet_state_after_receive_status_update", # this event is triggered after the fleetcontrol received a new status update of its vehicle and is about to trigger its optimization
+    OBSERVE_FLEET_STATE_AFTER_RECEIVING_STATUS_UPDATE = "observe_fleet_state_after_receiving_status_update", # this event is triggered after the fleetcontrol received a new status update of its vehicle and is about to trigger its optimization
     OBSERVE_BEFORE_REPOSITIONING = "observe_bevore_repositioning" # this event is triggered directly before the repositioning algorithm would calculate new repositioning trips
 
 

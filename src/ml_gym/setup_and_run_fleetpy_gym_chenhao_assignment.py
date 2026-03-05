@@ -2,12 +2,12 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)) ))) # add fleetpy path
 
-from src.ml_gym.FleetPyMLInterface import FleetPyMLInterface 
+from src.ml_gym.FleetPyMLInterface import FleetPyMLInterface
 from src.misc.globals import *
 
 from src.misc.init_modules import load_simulation_environment
 from src.ml_gym.MLEnvs.ChenhaoOfferEnv import ObserveFleetStateEnv
-from src.ml_gym.Hooks.HookManager import HookManager, MLHook, Events
+from src.ml_gym.Hooks.HookManager import Events
 import src.misc.config as config
 
 import traceback
@@ -24,7 +24,7 @@ if __name__ == "__main__":
         # default: ml_test study
         scs_path = os.path.join(MAIN_DIR, "studies", "ml_test", "scenarios")
         const_config = os.path.join(scs_path, "constant_config_ir.csv")
-        sc_config = os.path.join(scs_path, "example_sl_ir_only.csv")
+        sc_config = os.path.join(scs_path, "example_ml_observer.csv")
 
     constant_cfg = config.ConstantConfig(const_config)
     scenario_cfgs = config.ScenarioConfig(sc_config)
@@ -35,25 +35,47 @@ if __name__ == "__main__":
     constant_cfg["evaluate"] = 1
     constant_cfg["log_level"] = "info"
 
-    fleetpy_config = constant_cfg + scenario_cfgs[0]
-    
-    # init ML environment
-    output_f = os.path.join(MAIN_DIR, "studies", study_name, "results", fleetpy_config[G_SCENARIO_NAME], f"5-0_fleet_state.jsonl")
-    ml_environment = ObserveFleetStateEnv(write_to_file=True, output_f=output_f)
-    
-    # init FleetPyMLInterface
-    fp_ml_interface = FleetPyMLInterface(fleetpy_config, ml_environment, multiprocessing=False)
-    
-    # define event for interaction between FleetPy and ML environment
-    event = Events.OBSERVE_FLEET_STATE_AFTER_RECEIVE_STATUS_UPDATE
-    # register observers
-    from src.ml_gym.Observers.fleetcontrol_observers import observe_fleet_state_exhaustive
-    fp_ml_interface.register_observer(event, observe_fleet_state_exhaustive)
-    # register actors (none for this env)
-    
-    # run interface
-    try:
-        fp_ml_interface.run()
-    except Exception as e:
-        print("Error in FleetPyMLInterface:")
-        traceback.print_exc()
+    from src.ml_gym.Observers.fleetcontrol_observers import FleetStateObserver
+
+    for sc_cfg in scenario_cfgs:
+        fleetpy_config = constant_cfg + sc_cfg
+
+        # init ML environment
+        output_f = os.path.join(MAIN_DIR, "studies", study_name, "results", fleetpy_config[G_SCENARIO_NAME], f"5-0_fleet_state.jsonl")
+        write_to_file = bool(fleetpy_config.get(G_ML_WRITE_FLEET_STATE, True))
+        ml_environment = ObserveFleetStateEnv(write_to_file=write_to_file, output_f=output_f)
+
+        # init FleetPyMLInterface
+        fp_ml_interface = FleetPyMLInterface(fleetpy_config, ml_environment, multiprocessing=False)
+
+        # define event for interaction between FleetPy and ML environment
+        event = Events.OBSERVE_FLEET_STATE_AFTER_RECEIVING_STATUS_UPDATE
+
+        # determine detail level and prepare custom fields if needed
+        detail_level = fleetpy_config.get(G_ML_FS_DETAIL, "mini")
+        custom_fields = None
+        if detail_level == "custom":
+            custom_fields = {
+                "veh": fleetpy_config.get(G_ML_FS_CUSTOM_VEH, []),
+                "leg": fleetpy_config.get(G_ML_FS_CUSTOM_LEG, []),
+                "stop": fleetpy_config.get(G_ML_FS_CUSTOM_STOP, []),
+            }
+        # use _raw_interval != _raw_interval to detect NaN (since NaN != NaN is True), falling back to 1 when the value is missing or NaN
+        _raw_interval = fleetpy_config.get(G_ML_FS_INTERVAL)
+        recording_interval = 1 if _raw_interval is None or _raw_interval != _raw_interval else int(_raw_interval)
+
+        fleet_state_observer = FleetStateObserver(
+            detail_level=detail_level,
+            custom_fields=custom_fields,
+            sim_start_time=fleetpy_config[G_SIM_START_TIME],
+            sim_time_step=fleetpy_config[G_SIM_TIME_STEP],
+            recording_interval=recording_interval
+        )
+        fp_ml_interface.register_observer(event, fleet_state_observer.observe)
+
+        # run interface
+        try:
+            fp_ml_interface.run()
+        except Exception as e:
+            print(f"Error in scenario {fleetpy_config[G_SCENARIO_NAME]}:")
+            traceback.print_exc()

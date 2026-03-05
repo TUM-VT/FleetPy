@@ -1,0 +1,4 @@
+op_module,scenario_name,rq_file,op_fleet_composition,ml_fleet_state_detail_level,ml_fleet_state_interval
+PoolingIRSOnly,ml_obs_mini,example_100.csv,default_vehtype:5,mini,1
+PoolingIRSOnly,ml_obs_medium,example_100.csv,default_vehtype:5,medium,1
+PoolingIRSOnly,ml_obs_max,example_100.csv,default_vehtype:5,max,1

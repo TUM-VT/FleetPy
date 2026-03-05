@@ -723,6 +723,15 @@ G_FCTRL_CT_DFS = "dyn_fleetsizing_strategy"
 G_FCTRL_CT_RES = "reservation_time_trigger"
 
 
+# ML Fleet State Config
+G_ML_WRITE_FLEET_STATE = "ml_write_fleet_state"
+G_ML_FS_DETAIL = "ml_fleet_state_detail_level"
+G_ML_FS_CUSTOM_VEH = "ml_fleet_state_custom_veh"
+G_ML_FS_CUSTOM_LEG = "ml_fleet_state_custom_leg"
+G_ML_FS_CUSTOM_STOP = "ml_fleet_state_custom_stop"
+
+# ML Fleet State Recording Interval
+G_ML_FS_INTERVAL = "ml_fleet_state_interval"  # record every N time_steps (default 1 = every step)
 
 #--------------------------------------------------------------------------------------------------------------#
 # Evaluation specific params
