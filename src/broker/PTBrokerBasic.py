@@ -3,6 +3,25 @@
 # - Support multiple AMoD operators for firstlastmile requests.
 
 # -------------------------------------------------------------------------------------------------------------------- #
+# PTBrokerBasic: Base Intermodal Broker
+#
+# Base class for all PTBroker variants. Provides the shared infrastructure for intermodal request handling:
+# - MONOMODAL / PT: Forward the request directly to the AMoD operator or PT operator.
+# - FIRSTMILE (FM): Select a PT boarding transfer stop, create FM_AMOD sub-request
+#   (origin → PT boarding stop), and create PT sub-request (boarding stop → destination).
+# - LASTMILE (LM): Select a PT alighting transfer stop, create PT sub-request
+#   (origin → PT alighting stop), and create LM_AMOD sub-request (PT alighting stop → destination).
+# - FIRSTLASTMILE (FLM): Select boarding and alighting transfer stops, create FLM_AMOD_0 sub-request
+#   (origin → PT boarding stop), PT sub-request (boarding → alighting), and FLM_AMOD_1 sub-request
+#   (PT alighting stop → destination).
+# Subclasses (PTBroker, PTBrokerEI, PTBrokerPAYG) override specific methods to implement different
+# coordination strategies between MaaS and DRT.
+#
+# NOTE: This code has only been tested and applied in the ImmediateDecisionsSimulation environment
+#       combined with the PoolingIRSOnly fleet controller.
+# -------------------------------------------------------------------------------------------------------------------- #
+
+# -------------------------------------------------------------------------------------------------------------------- #
 # standard distribution imports
 # -----------------------------
 import logging

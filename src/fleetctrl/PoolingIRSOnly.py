@@ -129,17 +129,6 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         if t_pu_earliest - sim_time > self.opt_horizon:
             self.reservation_module.add_reservation_request(prq, sim_time)
             offer = self.reservation_module.return_immediate_reservation_offer(prq.get_rid_struct(), sim_time, excluded_vid=excluded_vid)
-
-            # # record excluded vids for flm request
-            # if rq_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
-            #     assigned_vid: int = self.reservation_module.rid_to_assigned_vid.get(rid_struct)
-            #     if assigned_vid is not None:
-            #         if parent_rid in self.flm_excluded_vid:
-            #             self.flm_excluded_vid[parent_rid].append(assigned_vid)
-            #         else:
-            #             self.flm_excluded_vid[parent_rid] = [assigned_vid]
-            #         print(f"excluded vid {assigned_vid} for request {rid_struct}")
-
             LOG.debug(f"reservation offer for rid {rid_struct} : {offer}")
         else:
             list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True, excluded_vid=excluded_vid)

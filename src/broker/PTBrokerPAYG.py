@@ -1,10 +1,19 @@
 # -------------------------------------------------------------------------------------------------------------------- #
-# PTBrokerPAYG: Plan-As-You-Go Broker Strategy
+# PTBrokerPAYG: Plan-As-You-Go (PAYG) Broker Strategy
 #
-# This broker simulates traveler behavior without a MaaS platform - travelers plan their trip step by step:
-# - For FM/FLM: After FM AMoD alighting, query PT in real-time
-# - For LM/FLM: After PT alighting, request LM AMoD in real-time
-# - If any step fails (no offer available), mark the trip as interrupted
+# This broker simulates traveler behavior without a MaaS platform — travelers plan their trip step by step,
+# querying the next leg only after completing the current one:
+# - FIRSTMILE (FM): At request time, create only FM_AMOD (origin → PT boarding stop).
+#   After AMoD alighting, query PT in real-time and create the PT sub-request.
+# - LASTMILE (LM): At request time, query PT (origin → PT alighting stop).
+#   After PT alighting, request LM_AMOD in real-time (PT alighting stop → destination).
+# - FIRSTLASTMILE (FLM): At request time, create only FLM_AMOD_0 (origin → PT boarding stop).
+#   After AMoD alighting, query PT in real-time. After PT alighting, request FLM_AMOD_1 in real-time.
+# If any step fails to find an available service, the trip is marked as interrupted.
+# Unlike PTBrokerBasic (TPCS), no pre-planned combined offer is presented to the user upfront.
+#
+# NOTE: This code has only been tested and applied in the ImmediateDecisionsSimulation environment
+#       combined with the PoolingIRSOnly fleet controller.
 # -------------------------------------------------------------------------------------------------------------------- #
 
 # standard distribution imports

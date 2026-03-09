@@ -3,6 +3,22 @@
 # - Support multiple AMoD operators for firstlastmile requests.
 
 # -------------------------------------------------------------------------------------------------------------------- #
+# PTBroker: Collaborative Coordination Strategy
+#
+# Simulates a future scenario with autonomous DRT and tight MaaS–DRT integration:
+# - MaaS queries DRT for FM and immediately receives a predicted dropoff time (actual offer, not estimated).
+# - MaaS books PT and LM DRT based on that predicted dropoff time.
+# - PT returns the user's expected waiting time at the boarding station; MaaS feeds this back to DRT.
+# - DRT dynamically adjusts the user's latest dropoff deadline, giving DRT more flexibility for
+#   ride-pooling while still ensuring the user catches the PT vehicle.
+# - MaaS can also constrain LM DRT waiting time, minimizing wait at the destination station.
+# Result: higher service rate and shorter travel times through real-time coordination between MaaS and DRT.
+#
+# NOTE: This code has only been tested and applied in the ImmediateDecisionsSimulation environment
+#       combined with the PoolingIRSOnly fleet controller.
+# -------------------------------------------------------------------------------------------------------------------- #
+
+# -------------------------------------------------------------------------------------------------------------------- #
 # standard distribution imports
 # -----------------------------
 import logging

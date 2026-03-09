@@ -1,4 +1,20 @@
 # -------------------------------------------------------------------------------------------------------------------- #
+# PTBrokerEI: Estimation-based Integration Strategy
+#
+# Simulates current MaaS platforms with limited real-time DRT communication:
+# - MaaS cannot obtain an actual FM DRT offer in time, so it *estimates* the FM DRT dropoff time
+#   using a detour time factor (`broker_maas_dtf`).
+# - PT and LM DRT are booked based on this estimated dropoff time.
+# - `broker_maas_dtf` controls estimation conservatism:
+#   - A large (conservative) value ensures the user catches PT but increases overall travel time.
+#   - A small (optimistic) value reduces travel time but risks missing PT due to pooling delays.
+# - In experiments, only `broker_maas_dtf=100` was used (50 was not run).
+#
+# NOTE: This code has only been tested and applied in the ImmediateDecisionsSimulation environment
+#       combined with the PoolingIRSOnly fleet controller.
+# -------------------------------------------------------------------------------------------------------------------- #
+
+# -------------------------------------------------------------------------------------------------------------------- #
 # standard distribution imports
 # -----------------------------
 import logging
