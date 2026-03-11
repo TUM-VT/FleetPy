@@ -546,7 +546,7 @@ class MATSimSocket:
         pd.DataFrame(edge_tt_df_list).to_csv(tt_f_p, index=False)
         self.fs_obj.routing_engine.load_tt_file(sim_time, ext_path=tt_f_p)   
 
-def run(fleetpy_config_path, matsim_network_path, port):
+def run(fleetpy_config_path, matsim_network_path, port, start_iteration=0):
     from src.misc.config import ConstantConfig, ScenarioConfig
     
     const_cfg = ConstantConfig(fleetpy_config_path)
@@ -567,7 +567,7 @@ def run(fleetpy_config_path, matsim_network_path, port):
     
     print("Starting MATSimSocket ...")
     
-    matsim_socket = MATSimSocket(host, port, whole_config, log_communication=LOG_COMMUNICATION)
+    matsim_socket = MATSimSocket(host, port, whole_config, log_communication=LOG_COMMUNICATION, start_iteration=start_iteration)
     print(" -> MATSimSocket started")
     
     matsim_socket.keep_socket_alive()    
@@ -577,7 +577,8 @@ if __name__ == "__main__":
     the matsim-side has to be run with the start-script "RunSimulationWithFleetPy.java"
     :param fleetpy_config_path: path the the fleetpy simulation config file (in studies/{study_name}/scenarios folder)
     :param matsim_network_path: path to the network used in the matsim-simulation (usually where also the matsim population is) | this script assumes that network mathing has been done before; if hash-values dont match between fleetyp- and matsim-network an error is raise
-    :param port: (int) port for the socket communication (same as on matsim side)"""
+    :param port: (int) port for the socket communication (same as on matsim side)
+    :param start_iteration: (int) the iteration to start the simulation from (default: 0) | if > 0, it is assumed that a simulation has already been run up to this iteration and the socket communication is restarted for the next iterations (e.g. to test new assignment algorithms without re-running the whole simulation)"""
 
     if len(sys.argv) < 4:
         print("Usage: python MATSimSocket.py <fleetpy_config_path> <matsim_network_path> <port> [profile]")
@@ -585,11 +586,12 @@ if __name__ == "__main__":
     fleetpy_config_path = sys.argv[1]
     matsim_network_path = sys.argv[2]
     port = int(sys.argv[3])
+    start_iteration = int(sys.argv[4]) if len(sys.argv) > 4 else 0
     
     profile = False
     
     if not profile:
-        run(fleetpy_config_path, matsim_network_path, port)
+        run(fleetpy_config_path, matsim_network_path, port, start_iteration)
     
     else:
         import sys
@@ -599,7 +601,7 @@ if __name__ == "__main__":
         profiler.enable()
         
         try:
-            run(fleetpy_config_path, matsim_network_path, port)
+            run(fleetpy_config_path, matsim_network_path, port, start_iteration)
             
         finally:
             profiler.disable()
