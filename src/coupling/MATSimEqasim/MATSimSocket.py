@@ -37,11 +37,11 @@ class MATSimSocket:
     """
     A class to handle communication with a MATSim server using sockets.
     """
-    def __init__(self, host: str, port: int, scenario_parameters, log_communication: bool = LOG_COMMUNICATION):
+    def __init__(self, host: str, port: int, scenario_parameters, log_communication: bool = LOG_COMMUNICATION, start_iteration: int = 0):
         self.server_ip = host
         self.server_port = port
         self.log_communication = log_communication
-        self.matsim_iteration = 0
+        self.matsim_iteration = start_iteration
         scenario_parameters["matsim_iteration"] = self.matsim_iteration
         self.scenario_parameters = scenario_parameters
         

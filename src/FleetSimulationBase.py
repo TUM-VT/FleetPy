@@ -172,8 +172,7 @@ class FleetSimulationBase:
         np.random.seed(self.scenario_parameters[G_RANDOM_SEED])
 
         # empty output directory
-        if not self.skip_output:
-            create_or_empty_dir(self.dir_names[G_DIR_OUTPUT])
+        self._clear_output_dir()
 
         # write scenario config file in output directory
         self.save_scenario_inputs()
@@ -298,6 +297,11 @@ class FleetSimulationBase:
         # broker
         self.broker: 'BrokerBase' = None
         self._load_broker_module()
+        
+    def _clear_output_dir(self):
+        """ Empties the output directory if it already exists, otherwise creates it. """
+        if not self.skip_output:
+            create_or_empty_dir(self.dir_names[G_DIR_OUTPUT])
 
     def _load_demand_module(self):
         """ Loads some demand modules """

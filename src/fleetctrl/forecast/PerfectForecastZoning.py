@@ -44,6 +44,9 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
         super().__init__(zone_network_dir, scenario_parameters, dir_names, operator_attributes)
         if self.fc_temp_resolution is None:
             self.fc_temp_resolution = operator_attributes[G_RA_FC_TR] # TODO ?
+            
+    def _get_future_requests(self, t):
+        return self.demand.future_requests.get(t, {})
 
     def _get_trip_forecasts(self, trip_type, t0, t1, aggregation_level):
         """This method returns the number of expected trip arrivals or departures inside a zone in the
@@ -73,7 +76,7 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
         return_dict = {}
         if not incoming:
             for t in range(t0, t1):
-                future_rqs = self.demand.future_requests.get(t, {})
+                future_rqs = self._get_future_requests(t)
                 for rq in future_rqs.values():
                     o_zone = self.get_zone_from_node(rq.o_node)
                     if o_zone >= 0:
@@ -83,7 +86,7 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
                             return_dict[o_zone] = 1
         else:
             for t in range(t0, t1):
-                future_rqs = self.demand.future_requests.get(t, {})
+                future_rqs = self._get_future_requests(t)
                 for rq in future_rqs.values():
                     d_zone = self.get_zone_from_node(rq.d_node)
                     if d_zone >= 0:
@@ -144,19 +147,19 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
         future_list = []
         if request_attribute is None and attribute_value is None:
             for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
-                future_rqs = self.demand.future_requests.get(t, {})
+                future_rqs = self._get_future_requests(t)
                 for rq in future_rqs.values():
                     future_list.append( (t, rq.o_node, rq.d_node) )
         elif request_attribute is not None:
             if attribute_value is None:
                 for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
-                    future_rqs = self.demand.future_requests.get(t, {})
+                    future_rqs = self._get_future_requests(t)
                     for rq in future_rqs.values():
                         if rq.__dict__.get(request_attribute) is not None:
                             future_list.append( (t, rq.o_node, rq.d_node) )
             else:
                 for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
-                    future_rqs = self.demand.future_requests.get(t, {})
+                    future_rqs = self._get_future_requests(t)
                     for rq in future_rqs.values():
                         if rq.__dict__.get(request_attribute) is not None and rq.__dict__.get(request_attribute) == attribute_value:
                             future_list.append( (t, rq.o_node, rq.d_node) )
@@ -181,7 +184,7 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
             scale = 1.0
         return_dict = {}
         for t in range(t0, t1):
-            future_rqs = self.demand.future_requests.get(t, {})
+            future_rqs = self._get_future_requests(t)
             for rq in future_rqs.values():
                 o_zone = self.get_zone_from_node(rq.o_node)
                 d_zone = self.get_zone_from_node(rq.d_node)
@@ -230,7 +233,7 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
         x = super().register_demand_ref(demand_ref)
         for time_bin in self._forecast.keys():
             for t in range(time_bin[0], time_bin[1]):
-                future_rqs = self.demand.future_requests.get(t, {})
+                future_rqs = self._get_future_requests(t)
                 for rq in future_rqs.values():
                     o_zone = self.get_zone_from_node(rq.o_node)
                     d_zone = self.get_zone_from_node(rq.d_node)
