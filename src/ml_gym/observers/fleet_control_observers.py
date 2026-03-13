@@ -1,13 +1,9 @@
-from __future__ import annotations
-import logging
-from typing import TYPE_CHECKING, Optional, Dict, List, Any
+from src.ml_gym.observers import AbstractObserver
+from src.fleetctrl.FleetControlBase import FleetControlBase
+from src.simulation.Vehicles import SimulationVehicle
+from src.fleetctrl.planning.VehiclePlan import VehiclePlan
+from typing import Optional, Any
 
-if TYPE_CHECKING:
-    from src.fleetctrl.FleetControlBase import FleetControlBase
-    from src.simulation.Vehicles import SimulationVehicle
-    from src.fleetctrl.planning.VehiclePlan import VehiclePlan
-
-LOG = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Field getter tables
@@ -18,7 +14,7 @@ LOG = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 class FieldGetters:
-    VEH: Dict[str, Any] = {
+    VEH: dict[str, Any] = {
         "vid":                    lambda enc, v, p, t: v.vid,
         "op_id":                  lambda enc, v, p, t: v.op_id,
         "veh_type":               lambda enc, v, p, t: v.veh_type,
@@ -46,7 +42,7 @@ class FieldGetters:
         "plan_stops":             lambda enc, v, p, t: enc._encode_plan_stops(p, t),
     }
 
-    LEG: Dict[str, Any] = {
+    LEG: dict[str, Any] = {
         "status":              lambda leg: leg.status.display_name,
         "status_value":        lambda leg: leg.status.value,
         "destination_pos":     lambda leg: list(leg.destination_pos) if leg.destination_pos else None,
@@ -61,7 +57,7 @@ class FieldGetters:
         "route_len":           lambda leg: len(leg.route) if leg.route else 0,
     }
 
-    STOP: Dict[str, Any] = {
+    STOP: dict[str, Any] = {
         "pos":                        lambda ps, t: list(ps.get_pos()) if ps.get_pos() else None,
         "state":                      lambda ps, t: ps.get_state().name if ps.get_state() else None,
         "boarding_rids":              lambda ps, t: ps.get_list_boarding_rids(),
@@ -83,7 +79,7 @@ class FieldGetters:
 # Detail presets
 # ---------------------------------------------------------------------------
 
-DETAIL_PRESETS: Dict[str, Dict[str, List[str]]] = {
+DETAIL_PRESETS: dict[str, dict[str, list[str]]] = {
     "mini": {
         "veh":  ["vid", "status", "pos", "soc", "n_pax", "max_pax"],
         "leg":  [],
@@ -106,30 +102,10 @@ DETAIL_PRESETS: Dict[str, Dict[str, List[str]]] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Observer class
-# ---------------------------------------------------------------------------
+class FleetStateObserver(AbstractObserver):
 
-class FleetStateObserver:
-    """Collects fleet state observations.
-
-    __init__ runs once (field resolution, getter list building).
-    observe() is called every timestep — no dict lookups, no re-initialization.
-
-    Usage::
-
-        obs = FleetStateObserver(detail_level="mini", sim_start_time=..., sim_time_step=...)
-        fp_ml_interface.register_observer(event, obs.observe)
-    """
-
-    def __init__(
-        self,
-        detail_level: str = "mini",
-        custom_fields: Optional[Dict[str, List[str]]] = None,
-        recording_interval: int = 1,
-        sim_start_time: int = 0,
-        sim_time_step: int = 1,
-    ):
+    def __init__(self, detail_level: str = "mini", custom_fields: Optional[dict[str, list[str]]] = None,
+                 recording_interval: int = 1, sim_start_time: int = 0, sim_time_step: int = 1):
         # 1. Resolve field lists
         if detail_level == "custom":
             if custom_fields is None:
@@ -179,14 +155,16 @@ class FleetStateObserver:
         self._recording_interval_seconds = recording_interval * sim_time_step
 
     # Nested encoding helpers — called by FieldGetters.VEH["assigned_route"] / ["plan_stops"]
-    def _encode_assigned_route(self, veh_obj: SimulationVehicle) -> List[List]:
+    def _encode_assigned_route(self, veh_obj: SimulationVehicle) -> list[list]:
         return [[g(leg) for g in self._leg_getters] for leg in veh_obj.assigned_route]
 
-    def _encode_plan_stops(self, vehicle_plan: VehiclePlan, sim_time: int) -> List[List]:
+    def _encode_plan_stops(self, vehicle_plan: VehiclePlan, sim_time: int) -> list[list]:
         return [[g(ps, sim_time) for g in self._stop_getters] for ps in vehicle_plan.list_plan_stops]
 
-    def observe(self, fleetctrl: FleetControlBase) -> dict:
-        sim_time = fleetctrl.sim_time
+    def observe(self, fleetpy_module) -> dict:
+        assert isinstance(fleetpy_module, FleetControlBase), "FleetStateObserver only works with FleetControl Module"
+
+        sim_time = fleetpy_module.sim_time
 
         # Interval gating
         if self._recording_interval_seconds > 0:
@@ -194,17 +172,18 @@ class FleetStateObserver:
                 return {}
 
         vehicle_rows = [
-            [g(self, fleetctrl.sim_vehicles[vid], fleetctrl.veh_plans[vid], sim_time)
+            [g(self, fleetpy_module.sim_vehicles[vid], fleetpy_module.veh_plans[vid], sim_time)
              for g in self._veh_getters]
-            for vid in range(fleetctrl.nr_vehicles)
+            for vid in range(fleetpy_module.nr_vehicles)
         ]
 
         return {
             "time": int(sim_time),
-            "op_id": fleetctrl.op_id,
-            "n_vehicles": fleetctrl.nr_vehicles,
+            "op_id": fleetpy_module.op_id,
+            "n_vehicles": fleetpy_module.nr_vehicles,
             "columns": self._veh_fields,
             "leg_columns": self._leg_fields,
             "stop_columns": self._stop_fields,
             "vehicles": vehicle_rows,
         }
+

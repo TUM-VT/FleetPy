@@ -24,13 +24,13 @@ import numpy as np
 from src.misc.init_modules import load_fleet_control_module, load_routing_engine, load_broker_module
 from src.demand.demand import Demand, SlaveDemand
 from src.simulation.Vehicles import SimulationVehicle
-from src.ml_gym.Hooks.HookManager import Events
+from src.ml_gym.hooks_manager import Events
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.routing.NetworkBase import NetworkBase
     from src.broker.BrokerBase import BrokerBase
     from src.python_plots.plot_classes import PyPlot
-    from src.ml_gym.Hooks.HookManager import HookManager
+    from src.ml_gym.hooks_manager import HookManager
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables

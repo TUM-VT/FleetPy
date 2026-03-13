@@ -10,7 +10,7 @@ import pandas as pd
 from src.fleetctrl.planning.VehiclePlan import RoutingTargetPlanStop
 from src.misc.globals import *
 from src.misc.init_modules import load_forecast_model
-from src.ml_gym.Hooks.HookManager import Events
+from src.ml_gym.hooks_manager import Events
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
