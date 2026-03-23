@@ -43,6 +43,7 @@ class MATSimSocket:
         self.log_communication = log_communication
         self.matsim_iteration = start_iteration
         scenario_parameters["matsim_iteration"] = self.matsim_iteration
+        scenario_parameters["op_matsim_iteration"] = self.matsim_iteration
         self.scenario_parameters = scenario_parameters
         
         self.context = zmq.Context()
@@ -247,7 +248,10 @@ class MATSimSocket:
                 os.remove(self.log_f)
         
             scenario_parameters = self.scenario_parameters.copy()
-            scenario_parameters["matsim_iteration"] = iteration
+
+            self.matsim_iteration = iteration
+            scenario_parameters["matsim_iteration"] = self.matsim_iteration
+            scenario_parameters["op_matsim_iteration"] = self.matsim_iteration
             
             self.list_op_dicts = build_operator_attribute_dicts(scenario_parameters, scenario_parameters[G_NR_OPERATORS],
                                                                                 prefix="op_")
@@ -296,7 +300,7 @@ class MATSimSocket:
         """
         Handle new time step request from MATSim.
         """
-        new_sim_time = response_obj["time"]
+        new_sim_time = int(float(response_obj["time"]))
         if new_sim_time % 300 == 0:
             print(" -> new sim time: ", new_sim_time)
             
@@ -425,12 +429,12 @@ class MATSimSocket:
                 matsim_edge = self.from_fleetpy_to_matsim_position(stop["pos"])
                 list_pick_up = [self._from_fleetpy_to_matsim_rid(rid) for rid in stop["boarding_rids"]]
                 list_drop_off = [self._from_fleetpy_to_matsim_rid(rid) for rid in stop["alighting_rids"]]
-                stop_duration = stop["duration"]
-                earliest_start_time = stop["earliest_start_time"]
-                stop_id = stop["id"]
+                stop_duration = str(stop["duration"])
+                earliest_start_time = str(stop["earliest_start_time"])
+                stop_id = str(stop["id"])
                 # TODO route?
                 list_stops.append({
-                    "link" : matsim_edge,
+                    "link" : str(matsim_edge),
                     "pickup" : list_pick_up,
                     "dropoff" : list_drop_off,
                     "stopDuration" : stop_duration,
