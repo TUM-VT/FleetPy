@@ -2,24 +2,26 @@ from abc import abstractmethod
 from src.ml_gym.MLClasses.MLZoneBasedRepositioning import MLZoneBasedRepositioning
 from src.ml_gym.actors import AbstractActor
 import random, logging
+from multiprocessing.connection import PipeConnection
 
 LOG = logging.getLogger(__name__)
 
 class ZoneBasedRepositioningActor(AbstractActor):
 
     @abstractmethod
-    def compute_action(self, observation) -> list[tuple[int, int]]:
+    def compute_action(self, observation, process_id) -> list[tuple[int, int]]:
         pass
 
-    def _act(self, observation, fleetpy_module, **kwargs):
+    def _act(self, observation, fleetpy_module, hook_id, process_id: int = None, conn: PipeConnection = None):
         assert isinstance(fleetpy_module, MLZoneBasedRepositioning), "the fleetpy_module ZoneBasedRepositioningActor can only be used MLZoneBasedRepositioning"
-        self._apply_od_assignment(observation, fleetpy_module)
+        self._apply_od_assignment(observation, fleetpy_module, hook_id, process_id, conn)
 
-    def _apply_od_assignment(self, observation, repo_module: MLZoneBasedRepositioning):
+    def _apply_od_assignment(self, observation, repo_module: MLZoneBasedRepositioning, hook_id: int, process_id: int,
+                             conn: PipeConnection):
         """ apply externally computed od assignment for repositioning
         :param repo_module: repositioning module
         """
-        od_reposition_trips = self.compute_action(observation)
+        od_reposition_trips = self._compute_action_via_master_process(observation, hook_id, process_id, conn)
         print("\napply_od_assignment - od_reposition_trips: ", od_reposition_trips)
         list_veh_with_changes = []
         sim_time = repo_module.sim_time

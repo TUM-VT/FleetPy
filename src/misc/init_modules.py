@@ -193,7 +193,7 @@ def get_src_forecast_models():
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # functions for the different modules
-def load_simulation_environment(scenario_parameters, hook_manager=None) -> FleetSimulationBase:
+def load_simulation_environment(scenario_parameters, hook_manager=None, process_id=None) -> FleetSimulationBase:
     """This function returns the simulation environment module.
 
     :param scenario_parameters: scenario parameters with 'sim_env' attribute
@@ -204,7 +204,7 @@ def load_simulation_environment(scenario_parameters, hook_manager=None) -> Fleet
     sim_env_dict = get_src_simulation_environments()
     # load simulation environment instance
     sim_env_class = load_module(sim_env_dict, sim_env_str, "Simulation environment")
-    return sim_env_class(scenario_parameters, hook_manager=hook_manager)
+    return sim_env_class(scenario_parameters, hook_manager, process_id)
 
 
 def load_routing_engine(network_type, network_dir, network_dynamics_file_name=None) -> NetworkBase:

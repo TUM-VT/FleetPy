@@ -9,7 +9,7 @@ class JSONWriter(AbstractActor):
         # another class has to be implemented for applying the trained model
         self.output_f = output_f
 
-    def compute_action(self, observation):
+    def compute_action(self, observation, process_id):
         with open(self.output_f, 'a') as f:
             f.write(json.dumps(observation, ensure_ascii=False, default=str) + '\n')
         return None

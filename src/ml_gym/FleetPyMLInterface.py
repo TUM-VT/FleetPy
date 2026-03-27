@@ -1,6 +1,8 @@
 import sys
-import os 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)) ))) # add fleetpy path
+import os
+import traceback
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))  # add fleetpy path
 
 from src.misc.init_modules import load_simulation_environment
 from src.ml_gym.hooks_manager import HookManager, Events
@@ -9,37 +11,52 @@ from src.ml_gym.actors import AbstractActor
 import multiprocessing as mp
 
 
+def run_single_simulation(scenario_parameters, hooks_manager, process_id):
+    SF = load_simulation_environment(scenario_parameters, hooks_manager, process_id)
+    SF.run(process_id)
+
+
 class FleetPyMLInterface:
-    def __init__(self, scenario_parameters, multiprocessing=False):
-        if multiprocessing:
-            self.fleetpy_in_queue, self.fleetpy_out_queue = mp.Queue(), mp.Queue()
-        else:
-            self.fleetpy_in_queue, self.fleetpy_out_queue = None, None
-        self.hook_manager = HookManager(self.fleetpy_in_queue, self.fleetpy_out_queue)
-        self.multiprocessing = multiprocessing
+    def __init__(self, scenario_parameters, nr_parallel=1):
+        pipes_conn_dict_master = {}
+        pipes_conn_dict_child = {}
+        if nr_parallel > 1:
+            for process_id in range(nr_parallel):
+                pipes_conn_dict_master[process_id], pipes_conn_dict_child[process_id] = mp.Pipe()
+        self.hook_manager = HookManager(pipes_conn_dict_master, pipes_conn_dict_child)
         self.scenario_parameters = scenario_parameters
-                
+        self.nr_parallel = nr_parallel
+        self.fleetpy_process = []
+
     def register_observer(self, event: Events, observer: AbstractObserver):
         self.hook_manager.add_observer(event, observer)
-            
+
     def register_actor(self, event: Events, actor: AbstractActor):
         self.hook_manager.add_actor(event, actor)
 
     def couple_actors_to_observers(self, event: Events, actors: list[AbstractActor], observers: list[AbstractObserver]):
         self.hook_manager.couple_actors_to_observers(event, actors, observers)
-    
+
+    def listen_to_slave_processes(self):
+        self.hook_manager.listen_to_slave_processes()
+
     def run(self):
         # start ML environment (in separate process if multiprocessing is enabled)
-        if self.multiprocessing:
-            ml_process = mp.Process(target=self.ml_environment.run)
-            ml_process.start()
-        
-        # start FleetPy simulation with registered hooks
-        SF = load_simulation_environment(self.scenario_parameters, self.hook_manager)
-        SF.run()
-        
-        # wait for ML process to finish
-        if self.multiprocessing:
-            ml_process.join()
-    
-    
+        if self.nr_parallel > 1:
+            for i in range(self.nr_parallel):
+                ml_process = mp.Process(target=run_single_simulation,
+                                        args=(self.scenario_parameters, self.hook_manager, i))
+                self.fleetpy_process.append(ml_process)
+                ml_process.start()
+            alive_processes = self.fleetpy_process
+            while len(alive_processes) > 0:
+                self.listen_to_slave_processes()
+                for process in alive_processes:
+                    if process.is_alive() is False:
+                        alive_processes.remove(process)
+
+        else:
+            # start FleetPy simulation with registered hooks
+            SF = load_simulation_environment(self.scenario_parameters, self.hook_manager)
+            SF.run()
+

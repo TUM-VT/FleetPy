@@ -15,7 +15,7 @@ import multiprocessing as mp
 
 class RandomReposition(ZoneBasedRepositioningActor):
 
-    def compute_action(self, observation) -> list[tuple[int, int]]:
+    def compute_action(self, observation, process_id) -> list[tuple[int, int]]:
         # compute random repositioning action based on observation
         print("\nRandom Repositioning: compute random repositioning action")
         print(f"Observation: {observation}")
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     fleetpy_config = constant_cfg + scenario_cfgs[0]
     
     # init FleetPyMLInterface
-    fp_ml_interface = FleetPyMLInterface(fleetpy_config, multiprocessing=False)
+    fp_ml_interface = FleetPyMLInterface(fleetpy_config, nr_parallel=1)
     
     # define event for interaction between FleetPy and ML environment
 
