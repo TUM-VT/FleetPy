@@ -6,7 +6,7 @@ from src.ml_gym.FleetPyMLInterface import FleetPyMLInterface
 from src.misc.globals import *
 
 from src.ml_gym.hooks_manager import Events
-from src.ml_gym.actors.repositioning import ZoneBasedRepositioningActor
+from src.ml_gym.Actors.repositioning import ZoneBasedRepositioningActor
 import src.misc.config as config
 import random
 
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     # define event for interaction between FleetPy and ML environment
 
     event = Events.OBSERVE_BEFORE_REPOSITIONING
-    from src.ml_gym.observers.repositioning_observers import SimTimeObserver, DemandForecastObserver, ZoneBasedVehicleStatesObserver
+    from src.ml_gym.Observers.repositioning_observers import SimTimeObserver, DemandForecastObserver, ZoneBasedVehicleStatesObserver
     sim_observer = SimTimeObserver()
     fp_ml_interface.register_observer(event, sim_observer)
     fp_ml_interface.register_observer(event, DemandForecastObserver())
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     fp_ml_interface.register_actor(event, RandomReposition())
 
     event = Events.OBSERVE_FLEET_STATE_AFTER_RECEIVING_STATUS_UPDATE
-    from src.ml_gym.observers.fleet_control_observers import FleetStateObserver
+    from src.ml_gym.Observers.fleet_control_observers import FleetStateObserver
     fp_ml_interface.register_observer(event, FleetStateObserver())
 
     from src.ml_gym.writers import JSONWriter

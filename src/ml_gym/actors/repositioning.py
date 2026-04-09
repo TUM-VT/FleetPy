@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from src.ml_gym.MLClasses.MLZoneBasedRepositioning import MLZoneBasedRepositioning
-from src.ml_gym.actors import AbstractActor
+from src.ml_gym.Actors import AbstractActor
 import random, logging
 from multiprocessing.connection import PipeConnection
 

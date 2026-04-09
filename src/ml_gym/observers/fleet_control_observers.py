@@ -1,4 +1,4 @@
-from src.ml_gym.observers import AbstractObserver
+from src.ml_gym.Observers import AbstractObserver
 from src.fleetctrl.FleetControlBase import FleetControlBase
 from src.simulation.Vehicles import SimulationVehicle
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
