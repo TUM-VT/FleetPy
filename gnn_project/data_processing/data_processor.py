@@ -2,11 +2,12 @@
 import logging
 import math
 import os
-import pickle
 import shutil
 from collections import defaultdict
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+import multiprocessing as mp
 
 # Third-party imports
 import networkx as nx
@@ -96,16 +97,63 @@ class DataProcessor:
         Returns:
             List of processed data dictionaries for each timestep
         """
+        # Use parallel processing if enabled and we have multiple timesteps
+        timesteps = list(range(self.config.sim_start, self.config.sim_end, self.config.sim_step))
+        
+        if getattr(self.config, 'use_parallel_processing', True) and len(timesteps) > 1:
+            return self._process_timesteps_parallel(timesteps)
+        else:
+            # Sequential processing (original behavior)
+            all_data = {}
+            for timestep in timesteps:
+                data = self._load_timestep_data(timestep)
+                data = self._add_graph_features(timestep, data)
+                all_data[timestep] = data
+            return all_data
+    
+    def _process_timesteps_parallel(self, timesteps: List[int]) -> Dict:
+        """Process timesteps in parallel using ThreadPoolExecutor.
+        
+        Uses ThreadExecutor since timestep processing is often I/O bound (file loading).
+        
+        Args:
+            timesteps: List of timesteps to process
+            
+        Returns:
+            Dictionary mapping timesteps to processed data
+        """
+        def process_single_timestep(timestep):
+            try:
+                data = self._load_timestep_data(timestep)
+                data = self._add_graph_features(timestep, data)
+                return timestep, data
+            except Exception as e:
+                logger.error(f"Error processing timestep {timestep}: {e}")
+                return timestep, None
+        
+        # Use ThreadPoolExecutor for I/O-bound timestep processing
+        max_workers = min(getattr(self.config, 'max_workers', 4), len(timesteps), mp.cpu_count())
+        logger.info(f"Processing {len(timesteps)} timesteps in parallel with {max_workers} workers")
+        
         all_data = {}
-        for timestep in range(self.config.sim_start, self.config.sim_end,
-                              self.config.sim_step):
-            data = self._load_timestep_data(timestep)
-            data = self._add_graph_features(timestep, data)
-            all_data[timestep] = data
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            results = list(executor.map(process_single_timestep, timesteps))
+        
+        # Collect results and filter out failed timesteps
+        for timestep, data in results:
+            if data is not None:
+                all_data[timestep] = data
+            else:
+                logger.warning(f"Skipping failed timestep {timestep}")
+                
         return all_data
 
     def _load_timestep_data(self, timestep: int) -> Dict:
         """Load data for a specific timestep.
+        
+        Converts flattened parquet data back to nested dictionary structure:
+        - Request/Vehicle features: DataFrame -> dict of dicts
+        - RR/VR graphs: Edge list DataFrame -> nested dict
 
         Args:
             timestep: The timestep to load data for
@@ -120,11 +168,44 @@ class DataProcessor:
 
         data = {}
         for file in os.scandir(timestep_dir):
-            if file.name.endswith('.pkl'):
+            if file.name.endswith('.parquet'):
                 name = file.name.split('.')[0]
                 try:
-                    with open(file.path, 'rb') as f:
-                        data[name] = pickle.load(f)
+                    df = pd.read_parquet(file.path)
+                    
+                    # Convert to nested dict structure based on data type
+                    if name in [self.r_key, self.v_key]:
+                        # Node features: DataFrame with 'id' column and feature columns
+                        # Convert to dict of dicts: {node_id: {feature: value}}
+                        if not df.empty:
+                            # Look for 'id' column
+                            if 'id' in df.columns:
+                                data[name] = df.set_index('id').to_dict('index')
+                            else:
+                                # Fallback: assume first column is the node ID
+                                id_col = df.columns[0]
+                                data[name] = df.set_index(id_col).to_dict('index')
+                        else:
+                            data[name] = {}
+                    elif name in [self.rr_key, self.vr_key]:
+                        # Edge features: DataFrame with 'source', 'target', and edge features
+                        # Convert to nested dict: {source: {target: {features}}}
+                        nested_dict = {}
+                        if not df.empty and 'source' in df.columns and 'target' in df.columns:
+                            for _, row in df.iterrows():
+                                src = row['source']
+                                tgt = row['target']
+                                # Get all columns except source and target
+                                edge_features = row.drop(['source', 'target']).to_dict()
+                                
+                                if src not in nested_dict:
+                                    nested_dict[src] = {}
+                                nested_dict[src][tgt] = edge_features
+                        data[name] = nested_dict
+                    else:
+                        # Other data types: keep as DataFrame
+                        data[name] = df
+                        
                 except Exception as e:
                     logger.error(f"Error loading {file.name}: {str(e)}")
 
@@ -1326,10 +1407,10 @@ class DataProcessor:
                 # Sort columns alphabetically for consistent ordering with inference
                 combined_df = combined_df[sorted(combined_df.columns)]
 
-                # Save raw features
+                # Save raw features with snappy compression
                 save_path = os.path.join(
                     process_dir, f'{feature_type}.parquet')
-                combined_df.to_parquet(save_path)
+                combined_df.to_parquet(save_path, compression='snappy', index=False)
 
     def _create_node_mapping(self, all_data: List[Dict]) -> Dict[int, Dict[Any, int]]:
         """Create mapping between node IDs and indices.
@@ -1379,9 +1460,9 @@ class DataProcessor:
                 combined_df = combined_df.fillna(0.0)
                 # Sort columns alphabetically for consistent ordering with inference
                 combined_df = combined_df[sorted(combined_df.columns)]
-                # Save raw edge data
+                # Save raw edge data with snappy compression
                 save_path = os.path.join(process_dir, f'{graph_type}.parquet')
-                combined_df.to_parquet(save_path)
+                combined_df.to_parquet(save_path, compression='snappy', index=False)
             else:
                 logger.warning(
                     f"\nNo edges found for {graph_type}, skipping save.")

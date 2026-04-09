@@ -42,7 +42,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
     models (XGBoost or GNN) for predicting feasible vehicle-request connections. By default,
     it uses the original implementation unless ML is explicitly enabled.
 
-    Training data is stored in parquet format with snappy compression for optimal storage efficiency.
+    Training data is stored in compressed pickle format with bz2 compression for optimal storage efficiency.
 
     Configuration via operator_attributes:
         enable_ml_training (bool): Whether to enable ML training. Default: False
@@ -124,15 +124,15 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         self.write_train_data(sim_time)
 
     def write_train_data(self, sim_time: int):
-        """Writes training data for the current timestep to disk in parquet format."""
+        """Writes training data for the current timestep to disk in compressed pickle format."""
         if not self.enable_ml_training:
             return
         dir_path = os.path.join(self.train_data_path, str(sim_time))
         os.makedirs(dir_path, exist_ok=True)
         train_data = self.get_train_data()
         for name, data in train_data.items():
-            path = os.path.join(dir_path, f'{name}.parquet')
-            self.write_parquet(path, data, compress=True)
+            path = os.path.join(dir_path, f'{name}_compressed.pkl')
+            self.write_compressed_pickle(path, data)
 
     def get_train_data(self) -> dict[str, dict]:
         """Collects training data for the current timestep."""
@@ -340,47 +340,25 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         return v2r_edges
 
     @staticmethod
-    def write_parquet(path, data: Dict, compress: bool = True):
-        """Writes data to a parquet file at the specified path with optional compression."""
+    def write_compressed_pickle(path: str, data) -> None:
+        """Write data to a compressed pickle file using bz2 compression.
+        
+        Args:
+            path: File path for the compressed pickle file
+            data: Data to write
+        """
         try:
-            # Use .parquet extension
-            if not path.endswith('.parquet'):
-                path = path.replace('.pkl', '.parquet')
-                if not path.endswith('.parquet'):
-                    path = path + '.parquet'
+            import bz2
+            import pickle
             
-            # Handle different data types
-            if 'graph' in path.lower() or 'request_request' in path or 'vehicle_request' in path:
-                # Graph data - flatten to DataFrame  
-                df = GNNAlonsoMoraAssignment.flatten_graph_data(data)
-            elif isinstance(data, dict) and data:
-                # Check if it's a nested dict structure
-                sample_value = next(iter(data.values()))
-                if isinstance(sample_value, dict):
-                    # Dict of dicts to DataFrame
-                    df = pd.DataFrame.from_dict(data, orient='index')
-                else:
-                    # Simple dict to DataFrame
-                    df = pd.DataFrame([data])
-            else:
-                # Complex structure - use pickle fallback
-                raise ValueError("Complex nested structure, using pickle")
-                
-            # Write with compression
-            compression = 'snappy' if compress else None
-            df.to_parquet(path, compression=compression, index=True)
+            with bz2.BZ2File(path, 'wb') as f:
+                pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            
+            LOG.debug(f"Successfully wrote compressed pickle {path}")
             
         except Exception as e:
-            # Fallback to pickle for complex nested structures
-            pickle_path = path.replace('.parquet', '.pkl')
-            import gzip
-            if compress:
-                pickle_path = pickle_path + '.gz'
-                with gzip.open(pickle_path, 'wb', compresslevel=6) as f:
-                    pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
-            else:
-                with open(pickle_path, 'wb') as f:
-                    pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            LOG.error(f"Failed to write compressed pickle file {path}: {e}")
+            raise
 
 
 

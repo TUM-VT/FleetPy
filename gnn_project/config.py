@@ -3,6 +3,7 @@ import os
 from typing import Dict, List
 import torch
 from pathlib import Path
+import multiprocessing as mp
 
 from gnn_project.defaults import *
 
@@ -97,6 +98,11 @@ class Config:
     alpha: float = 0.25  # Focal loss alpha parameter
     print_interval: int = 10  # Interval for printing training progress
     load_saved_model: bool = True
+    
+    # ----- Performance optimization settings -----
+    use_parallel_processing: bool = True
+    max_workers: int = field(default_factory=lambda: max(1, mp.cpu_count() - 1))
+    chunk_size: int = 1000
 
     def __post_init__(self):
         self.scenario_paths = [

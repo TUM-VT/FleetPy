@@ -186,3 +186,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Ignore GNN project data
+gnn_project/data/
+.DS_Store
