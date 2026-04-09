@@ -2,7 +2,7 @@ from src.ml_gym.Observers import AbstractObserver
 from src.fleetctrl.FleetControlBase import FleetControlBase
 from src.simulation.Vehicles import SimulationVehicle
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
-from typing import Optional, Any
+from typing import List, Optional, Any, Dict
 
 
 # ---------------------------------------------------------------------------
@@ -14,7 +14,7 @@ from typing import Optional, Any
 # ---------------------------------------------------------------------------
 
 class FieldGetters:
-    VEH: dict[str, Any] = {
+    VEH: Dict[str, Any] = {
         "vid":                    lambda enc, v, p, t: v.vid,
         "op_id":                  lambda enc, v, p, t: v.op_id,
         "veh_type":               lambda enc, v, p, t: v.veh_type,
@@ -42,7 +42,7 @@ class FieldGetters:
         "plan_stops":             lambda enc, v, p, t: enc._encode_plan_stops(p, t),
     }
 
-    LEG: dict[str, Any] = {
+    LEG: Dict[str, Any] = {
         "status":              lambda leg: leg.status.display_name,
         "status_value":        lambda leg: leg.status.value,
         "destination_pos":     lambda leg: list(leg.destination_pos) if leg.destination_pos else None,
@@ -57,7 +57,7 @@ class FieldGetters:
         "route_len":           lambda leg: len(leg.route) if leg.route else 0,
     }
 
-    STOP: dict[str, Any] = {
+    STOP: Dict[str, Any] = {
         "pos":                        lambda ps, t: list(ps.get_pos()) if ps.get_pos() else None,
         "state":                      lambda ps, t: ps.get_state().name if ps.get_state() else None,
         "boarding_rids":              lambda ps, t: ps.get_list_boarding_rids(),
@@ -79,7 +79,7 @@ class FieldGetters:
 # Detail presets
 # ---------------------------------------------------------------------------
 
-DETAIL_PRESETS: dict[str, dict[str, list[str]]] = {
+DETAIL_PRESETS: Dict[str, Dict[str, List[str]]] = {
     "mini": {
         "veh":  ["vid", "status", "pos", "soc", "n_pax", "max_pax"],
         "leg":  [],
@@ -104,7 +104,7 @@ DETAIL_PRESETS: dict[str, dict[str, list[str]]] = {
 
 class FleetStateObserver(AbstractObserver):
 
-    def __init__(self, detail_level: str = "mini", custom_fields: Optional[dict[str, list[str]]] = None,
+    def __init__(self, detail_level: str = "mini", custom_fields: Optional[Dict[str, List[str]]] = None,
                  recording_interval: int = 1, sim_start_time: int = 0, sim_time_step: int = 1):
         # 1. Resolve field lists
         if detail_level == "custom":
@@ -155,10 +155,10 @@ class FleetStateObserver(AbstractObserver):
         self._recording_interval_seconds = recording_interval * sim_time_step
 
     # Nested encoding helpers — called by FieldGetters.VEH["assigned_route"] / ["plan_stops"]
-    def _encode_assigned_route(self, veh_obj: SimulationVehicle) -> list[list]:
+    def _encode_assigned_route(self, veh_obj: SimulationVehicle) -> List[List[Any]]:
         return [[g(leg) for g in self._leg_getters] for leg in veh_obj.assigned_route]
 
-    def _encode_plan_stops(self, vehicle_plan: VehiclePlan, sim_time: int) -> list[list]:
+    def _encode_plan_stops(self, vehicle_plan: VehiclePlan, sim_time: int) -> List[List[Any]]:
         return [[g(ps, sim_time) for g in self._stop_getters] for ps in vehicle_plan.list_plan_stops]
 
     def observe(self, fleetpy_module) -> dict:

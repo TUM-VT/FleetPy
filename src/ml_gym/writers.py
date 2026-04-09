@@ -1,4 +1,4 @@
-from src.ml_gym.actors import AbstractActor
+from src.ml_gym.Actors import AbstractActor
 import json
 
 

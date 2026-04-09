@@ -3,13 +3,14 @@ from src.ml_gym.MLClasses.MLZoneBasedRepositioning import MLZoneBasedRepositioni
 from src.ml_gym.Actors import AbstractActor
 import random, logging
 from multiprocessing.connection import PipeConnection
+from typing import List, Tuple
 
 LOG = logging.getLogger(__name__)
 
 class ZoneBasedRepositioningActor(AbstractActor):
 
     @abstractmethod
-    def compute_action(self, observation, process_id) -> list[tuple[int, int]]:
+    def compute_action(self, observation, process_id) -> List[Tuple[int, int]]:
         pass
 
     def _act(self, observation, fleetpy_module, hook_id, process_id: int = None, conn: PipeConnection = None):

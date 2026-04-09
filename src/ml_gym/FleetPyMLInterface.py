@@ -6,9 +6,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from src.misc.init_modules import load_simulation_environment
 from src.ml_gym.hooks_manager import HookManager, Events
-from src.ml_gym.observers import AbstractObserver
-from src.ml_gym.actors import AbstractActor
+from src.ml_gym.Observers import AbstractObserver
+from src.ml_gym.Actors import AbstractActor
 import multiprocessing as mp
+
+from typing import List
 
 
 def run_single_simulation(scenario_parameters, hooks_manager, process_id):
@@ -34,7 +36,7 @@ class FleetPyMLInterface:
     def register_actor(self, event: Events, actor: AbstractActor):
         self.hook_manager.add_actor(event, actor)
 
-    def couple_actors_to_observers(self, event: Events, actors: list[AbstractActor], observers: list[AbstractObserver]):
+    def couple_actors_to_observers(self, event: Events, actors: List[AbstractActor], observers: List[AbstractObserver]):
         self.hook_manager.couple_actors_to_observers(event, actors, observers)
 
     def listen_to_slave_processes(self):

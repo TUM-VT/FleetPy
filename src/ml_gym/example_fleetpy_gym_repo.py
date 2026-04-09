@@ -13,9 +13,11 @@ import random
 import traceback
 import multiprocessing as mp
 
+from typing import List, Tuple
+
 class RandomReposition(ZoneBasedRepositioningActor):
 
-    def compute_action(self, observation, process_id) -> list[tuple[int, int]]:
+    def compute_action(self, observation, process_id) -> List[Tuple[int, int]]:
         # compute random repositioning action based on observation
         print("\nRandom Repositioning: compute random repositioning action")
         print(f"Observation: {observation}")

@@ -6,8 +6,10 @@ from multiprocessing.connection import PipeConnection
 import logging
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)) ))) # add fleetpy path
 
-from src.ml_gym.observers import AbstractObserver
-from src.ml_gym.actors import AbstractActor
+from src.ml_gym.Observers import AbstractObserver
+from src.ml_gym.Actors import AbstractActor
+
+from typing import List
 
 LOG = logging.getLogger(__name__)
     
@@ -66,7 +68,7 @@ class HookManager:
         for hook in self._hooks[event]:
             hook.add_actor(actor)
 
-    def couple_actors_to_observers(self, event: Events, actors: list[AbstractActor], observers: list[AbstractObserver]):
+    def couple_actors_to_observers(self, event: Events, actors: List[AbstractActor], observers: List[AbstractObserver]):
         """ Limits the given actors to the given observers. The rest of the actors will continue to recieve
         observations from all observers, unless they are previously limited to specific observers. """
 
