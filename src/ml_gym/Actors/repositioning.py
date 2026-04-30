@@ -9,9 +9,10 @@ LOG = logging.getLogger(__name__)
 
 class ZoneBasedRepositioningActor(AbstractActor):
 
-    @abstractmethod
     def compute_action(self, observation, process_id) -> List[Tuple[int, int]]:
-        pass
+        raise NotImplementedError("The compute_action method not implemented!. If you are using FleetPy as "
+                                  "gymnasium.Env then the code should not have reached here. Otherwise, if you want to"
+                                  "manually calculate the action, then override this method with you custom logic")
 
     def _act(self, observation, fleetpy_module, hook_id, process_id: int = None, conn: PipeConnection = None):
         assert isinstance(fleetpy_module, MLZoneBasedRepositioning), "the fleetpy_module ZoneBasedRepositioningActor can only be used MLZoneBasedRepositioning"
