@@ -53,8 +53,8 @@ class FleetPyRepoRL(FleetPyGym):
         self.nr_zones = config["nr_zones"]
         fleet_size = sum(fleetpy_config["op_fleet_composition"].values())
 
-        self.action_space = spaces.MultiDiscrete(self.nr_zones*[fleet_size])
-        self.observation_space = spaces.Box(low=0.0, high=1000.0, shape=(3 * fleet_size * self.nr_zones,), dtype=np.float32)
+        self.action_space = spaces.MultiDiscrete(self.nr_zones * self.nr_zones * [fleet_size])
+        self.observation_space = spaces.Box(low=0.0, high=1000.0, shape=(3 * self.nr_zones,), dtype=np.float32)
 
         # Register FleetPy observers
         event = Events.OBSERVE_BEFORE_REPOSITIONING
@@ -84,7 +84,7 @@ class FleetPyRepoRL(FleetPyGym):
         processed_observation = np.concatenate([idle, req_origins, req_destinations], axis=0).astype(np.float32)
         return processed_observation
 
-    def reward(self, observation, action):
+    def reward(self, observation, action, actor_type):
         return 0.001
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))  # add fleetpy path
 
 from src.misc.init_modules import load_simulation_environment
-from src.ml_gym.hooks_manager_gym import HookManager, Events
+from src.ml_gym.hooks_manager import HookManager, Events
 from src.ml_gym.Observers import AbstractObserver
 from src.ml_gym.Actors import AbstractActor
 from threading import Thread
@@ -12,7 +12,7 @@ import gymnasium as gym
 from abc import ABC, abstractmethod
 
 
-def run_single_simulation(scenario_parameters, hooks_manager, process_id):
+def run_single_simulation(scenario_parameters, hooks_manager: HookManager, process_id: int):
     SF = load_simulation_environment(scenario_parameters, hooks_manager, process_id)
     SF.run(process_id)
 
@@ -20,8 +20,8 @@ def run_single_simulation(scenario_parameters, hooks_manager, process_id):
 class FleetPyGym(gym.Env, ABC):
 
     def __init__(self, scenario_parameters):
-        self._comm_queue = Queue()
-        self._hook_manager = HookManager(self._comm_queue)
+        in_out_queue = {0: (Queue(), Queue())}
+        self._hook_manager = HookManager(in_out_queue)
         self.scenario_parameters = scenario_parameters
         self.last_observation = None
         self.last_reward = None
@@ -35,13 +35,14 @@ class FleetPyGym(gym.Env, ABC):
         self._hook_manager.add_actor(event, actor)
 
     def reset(self, *, seed=None, options=None):
-        self.fleetpy_thread = Thread(target=run_single_simulation,
-                                        args=(self.scenario_parameters, self._hook_manager, None))
-        self.fleetpy_thread.start()
-        observation = self._hook_manager.get_observations()
+        self._fleetpy_thread = Thread(target=run_single_simulation,
+                                        args=(self.scenario_parameters, self._hook_manager, 0))
+        self._fleetpy_thread.start()
+        observation, actor_type = self._hook_manager.get_observations(process_id=0)
 
         self.last_observation = observation
-        return observation, {}
+        translated_observation = self.translate_observation(observation)
+        return translated_observation, {}
 
     @abstractmethod
     def translate_observation(self, observation):
@@ -49,24 +50,26 @@ class FleetPyGym(gym.Env, ABC):
         pass
 
     @abstractmethod
-    def reward(self, observation, action):
+    def reward(self, observation, action, actor_type):
         """ Implement this method to calculate the reward based on the received observation and the action taken by the agent """
         pass
 
     def step(self, action):
-        self._hook_manager.send_actor_response(action)
+        self._hook_manager.send_actor_response(0, action)
         observation, reward = self.last_observation, self.last_reward
         done = False
         while True:
             try:
-                observation = self._hook_manager.get_observations(block=False, timeout=1)
+                observation, actor_type = self._hook_manager.get_observations(process_id=0, timeout=1)
                 self.last_observation = observation
-                reward = self.reward(observation, action)
+                reward = self.reward(observation, action, actor_type)
+                break
             except Empty:
-                if not self.fleetpy_thread.is_alive():
+                if not self._fleetpy_thread.is_alive():
+                    print(f"FleetPy thread is dead")
                     done = True
                     break
-        self.translate_observation(observation)
-        return observation, reward, done, False, {}
+        translated_observation = self.translate_observation(observation)
+        return translated_observation, reward, done, False, {}
 
 
