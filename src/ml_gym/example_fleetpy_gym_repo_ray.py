@@ -11,7 +11,7 @@ from src.ml_gym.hooks_manager import Events
 from src.ml_gym.Observers.repositioning_observers import SimTimeObserver, DemandForecastObserver, ZoneBasedVehicleStatesObserver
 
 from src.ml_gym.Actors.repositioning import ZoneBasedRepositioningActor
-import src.misc.config as config
+from src.misc.config import ConstantConfig, ScenarioConfig
 from gymnasium import spaces
 from ray.rllib.algorithms.ppo import PPOConfig
 import random
@@ -48,7 +48,25 @@ class RLReposition(ZoneBasedRepositioningActor):
 class FleetPyRepoRL(FleetPyGym):
 
     def __init__(self, config):
-        fleetpy_config = config["fleetpy_config"]
+        constant_cfg = ConstantConfig(config["constant_cfg_path"])
+        scenario_cfgs = ScenarioConfig(config["var_cfg_path"])
+
+        study_name = os.path.basename(os.path.dirname(os.path.dirname(os.path.abspath(config["constant_cfg_path"]))))
+        constant_cfg[G_STUDY_NAME] = study_name
+        constant_cfg["n_cpu_per_sim"] = 1
+        constant_cfg["evaluate"] = 1
+        constant_cfg["log_level"] = "info"
+
+        # **** Note: it is possible to select different configuration for individual workers using the worker index. ****
+        # scenario_inx = (config.worker_index-1) % len(scenario_cfgs)
+        # print(f"Worker {config.worker_index} using scenario config {scenario_inx}")
+
+        scenario_inx = 0
+        fleetpy_config = constant_cfg + scenario_cfgs[scenario_inx]
+        # Change the scenario name according to worker index
+        if config.worker_index > 0:
+            fleetpy_config[G_SCENARIO_NAME] = fleetpy_config[G_SCENARIO_NAME] + f"_worker_{config.worker_index}"
+
         super().__init__(fleetpy_config)
         self.nr_zones = config["nr_zones"]
         fleet_size = sum(fleetpy_config["op_fleet_composition"].values())
@@ -100,19 +118,9 @@ if __name__ == "__main__":
         const_config = os.path.join(scs_path, "constant_config.csv")
         sc_config = os.path.join(scs_path, "sc_config_repo.csv")
 
-    constant_cfg = config.ConstantConfig(const_config)
-    scenario_cfgs = config.ScenarioConfig(sc_config)
-
-    study_name = os.path.basename(os.path.dirname(os.path.dirname(os.path.abspath(const_config))))
-    constant_cfg[G_STUDY_NAME] = study_name
-    constant_cfg["n_cpu_per_sim"] = 1
-    constant_cfg["evaluate"] = 1
-    constant_cfg["log_level"] = "info"
-
-    fleetpy_config = constant_cfg + scenario_cfgs[0]
-
     fleetpy_config = {"nr_zones": 6,
-                      "fleetpy_config": fleetpy_config,
+                      "constant_cfg_path": const_config,
+                      "var_cfg_path": sc_config
                       }
 
     config = (
