@@ -75,3 +75,26 @@ class ZoneBasedVehicleStatesObserver(AbstractObserver):
             "zone_to_overall_available_vehilces": number_current_own_vehicles,
             "zone_to_current_repositioning_vehicles": vehicles_repo_to_zone
         }
+        
+class ZoneBasedCurrentDemandObserver(AbstractObserver):
+    """Reads current zone-level trip departures and arrivals."""
+
+    def observe(self, fleetpy_module: RepositioningBase):
+        """Return current trip departures and arrivals per zone.
+
+        :param fleetpy_module: active RepositioningBase instance
+        :return: {
+            "zone_based_passenger_demand": dict of (origin_zone_id, destination_zone_id) -> number_of_requests
+        }
+        """
+        assert isinstance(fleetpy_module, RepositioningBase), "ZoneBasedCurrentDemandObserver only works with RepositioningBase"
+        sim_time = fleetpy_module.sim_time
+        list_zones = fleetpy_module.zone_system.get_all_zones()
+
+        zone_based_demand = {}
+        for rid, rq in fleetpy_module.fleetctrl.rq_dict.items():
+            o_zone = fleetpy_module.zone_system.get_zone_from_pos(rq.get_o_stop_info()[0])
+            d_zone = fleetpy_module.zone_system.get_zone_from_pos(rq.get_d_stop_info()[0])
+            zone_based_demand[(o_zone, d_zone)] = zone_based_demand.get((o_zone, d_zone), 0) + 1
+
+        return {"zone_based_passenger_demand": zone_based_demand}
