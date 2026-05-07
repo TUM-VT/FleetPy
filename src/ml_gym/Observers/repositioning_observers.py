@@ -3,15 +3,30 @@ from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 
 
 class SimTimeObserver(AbstractObserver):
+    """Reads the current simulation time from the repositioning module."""
 
     def observe(self, fleetpy_module):
+        """Return the current simulation time.
+
+        :param fleetpy_module: active RepositioningBase instance
+        :return: {"sim_time": int}
+        """
         assert isinstance(fleetpy_module, RepositioningBase), "SimTimeObserver only works with RepositioningBase"
         return {"sim_time": fleetpy_module.sim_time}
 
 
 class DemandForecastObserver(AbstractObserver):
+    """Reads zone-level trip departure and arrival forecasts over the repositioning horizon."""
 
     def observe(self, fleetpy_module):
+        """Return forecasted trip origins and destinations per zone for the next horizon window.
+
+        :param fleetpy_module: active RepositioningBase instance
+        :return: {
+            "zone_to_fc_rq_origins": dict[zone_id -> forecasted departures],
+            "zone_to_fc_rq_destinations": dict[zone_id -> forecasted arrivals]
+        }
+        """
         assert isinstance(fleetpy_module, RepositioningBase), "DemandForecastObserver only works with RepositioningBase"
         sim_time = fleetpy_module.sim_time
         list_zones = fleetpy_module.zone_system.get_all_zones()
@@ -25,11 +40,25 @@ class DemandForecastObserver(AbstractObserver):
                 "zone_to_fc_rq_destinations": arr_rate_s}
 
 class ZoneBasedVehicleStatesObserver(AbstractObserver):
+    """Reads per-zone vehicle counts (idle, repositioning, overall available) over the repositioning horizon."""
 
     def observe(self, fleetpy_module):
+        """Return per-zone vehicle counts for idle, repositioning, and overall available vehicles.
+
+        :param fleetpy_module: active RepositioningBase instance
+        :return: {
+            "zone_to_idle_vehilces": dict[zone_id -> number of idle vehicles],
+            "zone_to_overall_available_vehilces": dict[zone_id -> total vehicles expected in zone],
+            "zone_to_current_repositioning_vehicles": dict[zone_id -> vehicles currently repositioning to zone]
+        }
+        """
         assert isinstance(fleetpy_module, RepositioningBase), "DemandForecastObserver only works with RepositioningBase"
         sim_time = fleetpy_module.sim_time
         list_zones = fleetpy_module.zone_system.get_all_zones()
+        # t0/t1 define the look-ahead window [t0, t1] passed to _get_current_veh_plan_arrivals_and_repo_idle_vehicles.
+        # Vehicles whose plans place them inside a zone within this window are counted as "available";
+        # vehicles arriving after t1 are excluded. A wider window (larger horizon offset) therefore
+        # increases the available vehicle counts, potentially smoothing out short-term imbalances.
         t0 = sim_time + fleetpy_module.list_horizons[0]
         t1 = sim_time + fleetpy_module.list_horizons[1]
 

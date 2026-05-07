@@ -3,13 +3,14 @@ import sys
 from enum import Enum
 from collections import defaultdict
 from multiprocessing.connection import PipeConnection
+from queue import Queue, Empty
 import logging
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)) ))) # add fleetpy path
 
 from src.ml_gym.Observers import AbstractObserver
 from src.ml_gym.Actors import AbstractActor
 
-from typing import List
+from typing import List, Union
 
 LOG = logging.getLogger(__name__)
     
@@ -21,16 +22,26 @@ class Events(Enum):
 
 class HookManager:
     
-    def __init__(self, conn_dict_master=None, conn_dict_child=None):
+    def __init__(self, in_out_queue_dict: dict[int, tuple[Queue, Queue]] = None):
+        """ The HookManager manages the communication of multiple observations and actors at different locations within
+        the FleetPy simulation. It is done using specific observers and actors assigned to different events.
+
+        :param in_out_queue_dict: if multiple FleetPy processes are run in parallel or if the FleetPy simulation is run
+        in a separate thread, then this parameter is used to provide queues used for communicating between main and
+        slave processes. The terminology "in" and "out" queue is from the perspective of slave process, i.e., "out"
+        queue is used by slave to send data outside to master and "in" queue for recieving the data by slave.
+        """
+
         self._hooks: dict[Events, list[Hook]] = {} # event_name -> list of hooks
         self._hooks_by_id: dict[int, Hook] = {}
         self._hook_id_count = 0
         # Process id is only used in case of multiple process
         self._process_id = None
-        self._conn_dict_master: dict[int, PipeConnection] = conn_dict_master
-        self._conn_dict_child: dict[int, PipeConnection] = conn_dict_child
+        # process id -> (in_queue, out_queue)
+        self._in_out_queue_dict : dict[int, tuple[Queue, Queue]] = in_out_queue_dict
 
     def set_process_id(self, process_id):
+        """ Set the process id for the slave process to identify correct communication queue """
         self._process_id = process_id
 
     def __create_new_hook(self, event: Events):
@@ -99,19 +110,33 @@ class HookManager:
             new_hook.add_actor(actor)
 
     def trigger(self, event: Events, fleetpy_module, **kwargs):
-        conn = self._conn_dict_child[self._process_id] if self._process_id is not None else None
+        in_queue, out_queue = self._in_out_queue_dict[self._process_id] if self._process_id is not None else (None, None)
         if event in self._hooks:
             print(f"\ntrigger {event}")
             for h in self._hooks[event]:
-                h.on_event(event, fleetpy_module, self._process_id, conn)
+                h.on_event(event, fleetpy_module, self._process_id, in_queue, out_queue)
 
-    def listen_to_slave_processes(self):
-        for process_id, master_conn in self._conn_dict_master.items():
-            if master_conn.poll() is True:
-                recv_process_id, hook_id, actor_type, observations = master_conn.recv()
-                assert recv_process_id == process_id, "Message recieved from a different process id than expected."
+    def reply_to_slave_processes(self, block=False, timeout_per_process = None):
+        """ Uses the actor object of the master process to the reply to actors of all slave processes """
+
+        for process_id, (in_queue, out_queue) in self._in_out_queue_dict.items():
+            try:
+                recv_process_id, hook_id, actor_type, observations = out_queue.get(block, timeout_per_process)
+                assert recv_process_id == process_id, (f"Message recieved from a process id {recv_process_id} than "
+                                                       f"the expected process id {process_id}")
                 response = self._hooks_by_id[hook_id].get_actor_response(actor_type, observations, process_id)
-                master_conn.send(response)
+                in_queue.put(response)
+            except Empty:
+                pass
+
+    def get_observations(self, process_id, block=True, timeout=None):
+        out_queue = self._in_out_queue_dict[process_id][1]
+        process_id, hook_id, actor_type, observations = out_queue.get(block, timeout)
+        return observations, actor_type
+
+    def send_actor_response(self, process_id, action):
+        in_queue = self._in_out_queue_dict[process_id][0]
+        in_queue.put(action)
 
 
 class Hook:
@@ -135,7 +160,7 @@ class Hook:
         raise AssertionError(f"The actor {actor_type} for hook id {self._hook_id} was not found. Make sure you are "
                              f"using multiprocessing, otherwise this method should not have been called.")
     
-    def on_event(self, event, fleetpy_module, process_id = None, conn: PipeConnection = None):
+    def on_event(self, event, fleetpy_module, process_id = None, in_queue: Queue = None, out_queue: Queue=None):
         if event != self._event:
             return
 
@@ -145,7 +170,7 @@ class Hook:
             observation.update(observer.observe(fleetpy_module))
 
         for actor in self._actors:
-            actor._act(observation, fleetpy_module, self._hook_id, process_id, conn)
+            actor._act(observation, fleetpy_module, self._hook_id, process_id, in_queue, out_queue)
     
     def add_observer(self, observer: AbstractObserver):
         if observer not in self._observers:

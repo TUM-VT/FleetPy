@@ -2,27 +2,31 @@ from abc import abstractmethod
 from src.ml_gym.MLClasses.MLZoneBasedRepositioning import MLZoneBasedRepositioning
 from src.ml_gym.Actors import AbstractActor
 import random, logging
-from multiprocessing.connection import PipeConnection
+from queue import Queue
 from typing import List, Tuple
 
 LOG = logging.getLogger(__name__)
 
 class ZoneBasedRepositioningActor(AbstractActor):
 
-    @abstractmethod
     def compute_action(self, observation, process_id) -> List[Tuple[int, int]]:
-        pass
+        raise NotImplementedError("The compute_action method not implemented!. If you are using FleetPy as "
+                                  "gymnasium.Env then the code should not have reached here. Otherwise, if you want to"
+                                  "manually calculate the action, then override this method with you custom logic")
 
-    def _act(self, observation, fleetpy_module, hook_id, process_id: int = None, conn: PipeConnection = None):
+    def _act(self, observation, fleetpy_module, hook_id, process_id: int = None, in_queue: Queue = None,
+             out_queue: Queue = None,
+             ):
         assert isinstance(fleetpy_module, MLZoneBasedRepositioning), "the fleetpy_module ZoneBasedRepositioningActor can only be used MLZoneBasedRepositioning"
-        self._apply_od_assignment(observation, fleetpy_module, hook_id, process_id, conn)
+        self._apply_od_assignment(observation, fleetpy_module, hook_id, process_id, in_queue, out_queue)
 
     def _apply_od_assignment(self, observation, repo_module: MLZoneBasedRepositioning, hook_id: int, process_id: int,
-                             conn: PipeConnection):
+                             in_queue: Queue, out_queue: Queue):
         """ apply externally computed od assignment for repositioning
         :param repo_module: repositioning module
         """
-        od_reposition_trips = self._compute_action_via_master_process(observation, hook_id, process_id, conn)
+        od_reposition_trips = self._compute_action_via_master_process(observation, hook_id, process_id, in_queue,
+                                                                      out_queue)
         print("\napply_od_assignment - od_reposition_trips: ", od_reposition_trips)
         list_veh_with_changes = []
         sim_time = repo_module.sim_time

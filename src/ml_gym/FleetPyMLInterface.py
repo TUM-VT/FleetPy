@@ -20,12 +20,11 @@ def run_single_simulation(scenario_parameters, hooks_manager, process_id):
 
 class FleetPyMLInterface:
     def __init__(self, scenario_parameters, nr_parallel=1):
-        pipes_conn_dict_master = {}
-        pipes_conn_dict_child = {}
+        in_out_queue = {}
         if nr_parallel > 1:
             for process_id in range(nr_parallel):
-                pipes_conn_dict_master[process_id], pipes_conn_dict_child[process_id] = mp.Pipe()
-        self.hook_manager = HookManager(pipes_conn_dict_master, pipes_conn_dict_child)
+                in_out_queue[process_id] = mp.Queue(), mp.Queue()
+        self.hook_manager = HookManager(in_out_queue)
         self.scenario_parameters = scenario_parameters
         self.nr_parallel = nr_parallel
         self.fleetpy_process = []
@@ -39,8 +38,8 @@ class FleetPyMLInterface:
     def couple_actors_to_observers(self, event: Events, actors: List[AbstractActor], observers: List[AbstractObserver]):
         self.hook_manager.couple_actors_to_observers(event, actors, observers)
 
-    def listen_to_slave_processes(self):
-        self.hook_manager.listen_to_slave_processes()
+    def reply_to_slave_processes(self):
+        self.hook_manager.reply_to_slave_processes()
 
     def run(self):
         # start ML environment (in separate process if multiprocessing is enabled)
@@ -52,7 +51,7 @@ class FleetPyMLInterface:
                 ml_process.start()
             alive_processes = self.fleetpy_process
             while len(alive_processes) > 0:
-                self.listen_to_slave_processes()
+                self.reply_to_slave_processes()
                 for process in alive_processes:
                     if process.is_alive() is False:
                         alive_processes.remove(process)
