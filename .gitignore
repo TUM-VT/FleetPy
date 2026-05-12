@@ -27,6 +27,7 @@ data/vehicles/*
 !data/vehicles/low_range_vehtype.csv
 !data/vehicles/default_parcel_veh.csv
 !data/vehicles/veh_20.csv
+!data/vehicles/default_vehtype_hailing.csv
 data/zones/*
 !data/zones/example_zones
 !data/infra/example_infra
@@ -35,15 +36,22 @@ data/zones/*
 studies/*
 !studies/example_study
 studies/example_study/results/*
+studies/example_study/git_info.txt
 !studies/module_tests/*
 studies/module_tests/results/*
+studies/module_tests/git_info.txt
 !studies/module_tests/results/benchmark.csv
 !studies/manhattan_case_study
 studies/manhattan_case_study/results/*
+studies/manhattan_case_study/git_info.txt
 !studies/chicago_case_study
 studies/chicago_case_study/results/*
+studies/chicago_case_study/git_info.txt
 !studies/munich_case_study
 studies/munich_case_study/results/*
+studies/munich_case_study/git_info.txt
+
+*zip
 
 # system dependent C++ Router files
 src/routing/cpp_router/*.pyd
@@ -186,3 +194,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+

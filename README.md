@@ -36,7 +36,7 @@ conda env create -f environment.yml
 conda activate fleetpy
 
 # Run an example simulation
-python run_examples.py
+python studies/example_study/run_examples.py
 ```
 
 ✔ The results will be saved in `FleetPy/studies/example_study/results/`  
@@ -123,7 +123,7 @@ In general, you can **save your data and study definitions** in the mentioned di
 To test an example scenario:  
 
 ```bash
-python run_examples.py
+python studies/example_study/run_examples.py
 ```
 
 ✔ The output will be stored in:  
@@ -164,6 +164,20 @@ Input data and corresponding example scenario files are available for large-scal
 - Manhattan: https://doi.org/10.5281/zenodo.15187906
 - Chicago: https://doi.org/10.5281/zenodo.15189440
 - Munich: https://doi.org/10.5281/zenodo.15195726
+
+See the studies in `FleetPy/studies` for example scenario files that use this data. Especially the `FleetPy/studies/paper_2025_applications` contains a detailed example for a Manhattan case study.
+
+---
+
+## Reproducability
+
+We encourage users to share their simulation setups, data, and results to foster reproducibility and collaboration. If you use FleetPy for your research or projects, please consider sharing your scenario definitions, input data, and results with the community. You can do this by:
+
+1. Creating a public fork of the FleetPy repository if you have made significant modifications or extensions to the codebase.
+2. Setting up all your scenario definitions, preprocessing scripts and evaluation scripts in a structured way within the `studies` directory, following the existing examples.
+3. Creating a README file in your study directory that describes the key facts of your study.
+4. Using the script "zip_study.py" to create a zip file of your study, which includes specified input data, source code, and files in the `studies` directory.
+5. Sharing the zip file on a public repository or platform (e.g., GitHub, Zenodo) and sharing the link when publishing.
 
 ---
 
