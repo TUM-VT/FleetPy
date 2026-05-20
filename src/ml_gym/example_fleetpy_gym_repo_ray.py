@@ -1,6 +1,5 @@
 import sys
 import os
-
 import numpy as np
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)) ))) # add fleetpy path
@@ -15,34 +14,6 @@ from src.misc.config import ConstantConfig, ScenarioConfig
 from gymnasium import spaces
 from ray.rllib.algorithms.ppo import PPOConfig
 import random
-
-
-class RLReposition(ZoneBasedRepositioningActor):
-
-    def translate_action(self, observation, action):
-        zone_to_fc_rq_origins = observation["zone_to_fc_rq_origins"]
-        zone_to_idle_vehilces = observation["zone_to_idle_vehilces"]
-
-        list_repo_targets = []
-        for zone_id, value in zone_to_fc_rq_origins.items():
-            if zone_id >= 0:
-                for _ in range(int(value)):
-                    list_repo_targets.append(zone_id)
-        list_repo_origins = []
-        for zone_id, value in zone_to_idle_vehilces.items():
-            if zone_id > 0:
-                for _ in range(int(value)):
-                    list_repo_origins.append(zone_id)
-
-        list_repo_actions = []
-        while len(list_repo_targets) > 0 and len(list_repo_origins) > 0:
-            origin = random.choice(list_repo_origins)
-            target = random.choice(list_repo_targets)
-            list_repo_actions.append((origin, target))
-            list_repo_targets.remove(target)
-            list_repo_origins.remove(origin)
-
-        return list_repo_actions
 
 
 class FleetPyRepoRL(FleetPyGym):
@@ -82,9 +53,9 @@ class FleetPyRepoRL(FleetPyGym):
         self.register_observer(event, ZoneBasedVehicleStatesObserver())
 
         # register FleetPy actors
-        self.register_actor(event, RLReposition())
+        self.register_actor(event, ZoneBasedRepositioningActor())
 
-    def translate_observation(self, observation):
+    def translate_observation(self, observation, actor_type, event: Events):
         sim_time = observation["sim_time"]
         zone_to_fc_rq_origins = observation["zone_to_fc_rq_origins"]
         zone_to_fc_rq_destinations = observation["zone_to_fc_rq_destinations"]
@@ -102,7 +73,32 @@ class FleetPyRepoRL(FleetPyGym):
         processed_observation = np.concatenate([idle, req_origins, req_destinations], axis=0).astype(np.float32)
         return processed_observation
 
-    def reward(self, observation, action, actor_type):
+    def translate_action(self, observation, action, actor_type, event: Events):
+        zone_to_fc_rq_origins = observation["zone_to_fc_rq_origins"]
+        zone_to_idle_vehilces = observation["zone_to_idle_vehilces"]
+
+        list_repo_targets = []
+        for zone_id, value in zone_to_fc_rq_origins.items():
+            if zone_id >= 0:
+                for _ in range(int(value)):
+                    list_repo_targets.append(zone_id)
+        list_repo_origins = []
+        for zone_id, value in zone_to_idle_vehilces.items():
+            if zone_id > 0:
+                for _ in range(int(value)):
+                    list_repo_origins.append(zone_id)
+
+        list_repo_actions = []
+        while len(list_repo_targets) > 0 and len(list_repo_origins) > 0:
+            origin = random.choice(list_repo_origins)
+            target = random.choice(list_repo_targets)
+            list_repo_actions.append((origin, target))
+            list_repo_targets.remove(target)
+            list_repo_origins.remove(origin)
+
+        return list_repo_actions
+
+    def reward(self, observation, action, actor_type, event):
         return 0.001
 
 if __name__ == "__main__":
@@ -128,7 +124,7 @@ if __name__ == "__main__":
         .environment(FleetPyRepoRL, env_config=fleetpy_config,
         ).env_runners(num_env_runners=0).learners(num_learners=0)
     )
-    algo = config.build()
+    algo = config.build_algo()
     print(algo.train())
 
 

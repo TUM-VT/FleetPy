@@ -132,7 +132,7 @@ class HookManager:
     def get_observations(self, process_id, block=True, timeout=None):
         out_queue = self._in_out_queue_dict[process_id][1]
         process_id, hook_id, actor_type, observations = out_queue.get(block, timeout)
-        return observations, actor_type
+        return observations, actor_type, self._hooks_by_id[hook_id].get_hook_event()
 
     def send_actor_response(self, process_id, action):
         in_queue = self._in_out_queue_dict[process_id][0]
@@ -151,6 +151,9 @@ class Hook:
 
     def get_hook_id(self):
         return self._hook_id
+
+    def get_hook_event(self):
+        return self._event
 
     def get_actor_response(self, actor_type: str, observations: dict, process_id: int):
         """ This method is specific to get the actor responses from master process in case of multiprocessing """

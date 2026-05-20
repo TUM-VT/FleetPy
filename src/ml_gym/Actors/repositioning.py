@@ -15,8 +15,7 @@ class ZoneBasedRepositioningActor(AbstractActor):
                                   "manually calculate the action, then override this method with you custom logic")
 
     def _act(self, observation, fleetpy_module, hook_id, process_id: int = None, in_queue: Queue = None,
-             out_queue: Queue = None,
-             ):
+             out_queue: Queue = None):
         assert isinstance(fleetpy_module, MLZoneBasedRepositioning), "the fleetpy_module ZoneBasedRepositioningActor can only be used MLZoneBasedRepositioning"
         self._apply_od_assignment(observation, fleetpy_module, hook_id, process_id, in_queue, out_queue)
 

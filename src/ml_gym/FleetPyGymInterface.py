@@ -26,6 +26,8 @@ class FleetPyGym(gym.Env, ABC):
         self.last_observation = None
         self.last_reward = None
         self.last_action = None
+        self.last_actor_type = None
+        self.last_event: Events = None
         self._fleetpy_thread: Thread = None
 
     def register_observer(self, event: Events, observer: AbstractObserver):
@@ -38,38 +40,54 @@ class FleetPyGym(gym.Env, ABC):
         self._fleetpy_thread = Thread(target=run_single_simulation,
                                         args=(self.scenario_parameters, self._hook_manager, 0))
         self._fleetpy_thread.start()
-        observation, actor_type = self._hook_manager.get_observations(process_id=0)
-
-        self.last_observation = observation
-        translated_observation = self.translate_observation(observation)
+        self.last_observation, self.last_actor_type, self.last_event = self._hook_manager.get_observations(process_id=0)
+        translated_observation = self.translate_observation(self.last_observation, self.last_actor_type, self.last_event)
         return translated_observation, {}
 
     @abstractmethod
-    def translate_observation(self, observation):
+    def translate_observation(self, observation, actor_type, event: Events):
         """ Implement this method to translate FleetPy's raw observation into the desired format for the RL algorithm (e.g. a vector or dict of vectors) """
         pass
 
     @abstractmethod
-    def reward(self, observation, action, actor_type):
+    def translate_action(self, observation, action, actor_type, event: Events):
+        """ Implement this method to translate the RL algorithm's output into the desired format for FleetPy.
+        IMPORTANT:  The output of this method must be in the same format as expected by the FleetPy actor for which the
+        action is taken. Refer to the output typing of the compute_action method of the FleetPy actor expected output.
+
+        :param observation: the raw observation received from FleetPy
+        :param action: the action output by the RL algorithm for the current step
+        :param actor_type: the type of the actor for which the action is taken (e.g. repositioning, pricing, etc.)
+        :param event: the event for which the action is taken
+        """
+        pass
+
+    @abstractmethod
+    def reward(self, observation, action, actor_type, event: Events):
         """ Implement this method to calculate the reward based on the received observation and the action taken by the agent """
         pass
 
     def step(self, action):
-        self._hook_manager.send_actor_response(0, action)
-        observation, reward = self.last_observation, self.last_reward
+        translated_action = self.translate_action(self.last_observation, action, self.last_actor_type, self.last_event)
+        self._hook_manager.send_actor_response(0, translated_action)
         done = False
         while True:
             try:
-                observation, actor_type = self._hook_manager.get_observations(process_id=0, timeout=1)
+                observation, actor_type, event = self._hook_manager.get_observations(process_id=0, timeout=1)
+                reward = self.reward(observation, action, actor_type, event)
+                translated_observation = self.translate_observation(observation, actor_type, event)
                 self.last_observation = observation
-                reward = self.reward(observation, action, actor_type)
+                self.last_actor_type = actor_type
+                self.last_event = event
+                self.last_action = action
                 break
             except Empty:
                 if not self._fleetpy_thread.is_alive():
                     print(f"FleetPy thread is dead")
                     done = True
+                    translated_observation = self.translate_observation(self.last_observation, self.last_actor_type, self.last_event)
+                    reward = self.last_reward
                     break
-        translated_observation = self.translate_observation(observation)
         return translated_observation, reward, done, False, {}
 
 
