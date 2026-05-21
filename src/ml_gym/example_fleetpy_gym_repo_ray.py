@@ -33,12 +33,14 @@ class FleetPyRepoRL(FleetPyGym):
         # print(f"Worker {config.worker_index} using scenario config {scenario_inx}")
 
         scenario_inx = 0
+        process_id = 0
         fleetpy_config = constant_cfg + scenario_cfgs[scenario_inx]
         # Change the scenario name according to worker index
         if config.worker_index > 0:
-            fleetpy_config[G_SCENARIO_NAME] = fleetpy_config[G_SCENARIO_NAME] + f"_worker_{config.worker_index}"
+            process_id = config.worker_index - 1
+            fleetpy_config[G_SCENARIO_NAME] = fleetpy_config[G_SCENARIO_NAME] + f"_worker_{process_id}"
 
-        super().__init__(fleetpy_config)
+        super().__init__(fleetpy_config, process_id)
         self.nr_zones = config["nr_zones"]
         fleet_size = sum(fleetpy_config["op_fleet_composition"].values())
 
