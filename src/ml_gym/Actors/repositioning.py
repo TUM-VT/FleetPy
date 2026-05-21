@@ -3,13 +3,12 @@ from src.ml_gym.MLClasses.MLZoneBasedRepositioning import MLZoneBasedRepositioni
 from src.ml_gym.Actors import AbstractActor
 import random, logging
 from queue import Queue
-from typing import List, Tuple
 
 LOG = logging.getLogger(__name__)
 
 class ZoneBasedRepositioningActor(AbstractActor):
 
-    def compute_action(self, observation, process_id) -> List[Tuple[int, int]]:
+    def compute_action(self, observation, process_id) -> list[tuple[int, int]]:
         raise NotImplementedError("The compute_action method not implemented!. If you are using FleetPy as "
                                   "gymnasium.Env then the code should not have reached here. Otherwise, if you want to"
                                   "manually calculate the action, then override this method with you custom logic")
