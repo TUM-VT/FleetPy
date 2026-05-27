@@ -191,6 +191,8 @@ G_OP_PA_ADD_BT = "op_parcel_add_boarding_time"
 
 G_OP_REC_ADD_ASS = "op_record_additional_assignment"
 
+G_OP_MIN_RQ_DISTANCE = "op_min_rq_distance"   # min direct travel distance for a request to be accepted
+
 # operator specific attributes
 G_RA_SOLVER = "op_solver"   # currently "Gurobi" or "CPLEX"
 G_RA_RP_BATCH_OPT = "op_rp_batch_optimizer"
@@ -570,6 +572,7 @@ class REJECTION_REASON(Enum):
     NO_VEHICLE_AVAILABLE = (1, "no_vehicle_available")
     OUT_OF_SERVICE_TIME = (2, "out_of_service_time")
     INVALID_RQ = (3, "invalid_request")
+    TRAVEL_DISTANCE = (4, "invalid_travel_distance")
 
     @DynamicClassAttribute
     def value(self):

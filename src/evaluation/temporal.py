@@ -462,7 +462,7 @@ def temporal_operator_plots(output_dir, op_id, show=False, evaluation_start_time
     # scenario_parameters, op_attributes, dir_names, 
     scenario_parameters, list_operator_attributes, dir_names = load_scenario_inputs(output_dir)
     if not os.path.isdir(dir_names[G_DIR_MAIN]):
-        dir_names = get_directory_dict(scenario_parameters)
+        dir_names = get_directory_dict(scenario_parameters, list_operator_attributes)
     op_attributes = list_operator_attributes[op_id]
 
     # evaluation interval
@@ -996,16 +996,20 @@ def run_complete_temporal_evaluation(output_dir, evaluation_start_time=None, eva
     :param evaluation_end_time: end time of evaluation
     """
     scenario_parameters, list_operator_attributes, _ = load_scenario_inputs(output_dir)
-    dir_names = get_directory_dict(scenario_parameters)
+    dir_names = get_directory_dict(scenario_parameters, list_operator_attributes)
     eval_dict = {}
     for op_id, op_attributes in enumerate(list_operator_attributes):
         eval_dict[op_id] = temporal_operator_plots(output_dir, op_id, print_comments=True)
-        occupancy_over_time(output_dir, scenario_parameters, op_attributes, dir_names, op_id,
+        eval_dict[op_id]["occupancy_over_time"] = occupancy_over_time(output_dir, scenario_parameters, op_attributes, dir_names, op_id,
                             evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
-        occupancy_over_time_rel(output_dir, scenario_parameters, op_attributes, dir_names, op_id,
+        eval_dict[op_id]["occupancy_over_time_rel"] = occupancy_over_time_rel(output_dir, scenario_parameters, op_attributes, dir_names, op_id,
                                 evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
-        vehicle_stats_over_time(output_dir, scenario_parameters, op_attributes, dir_names, op_id,
+        eval_dict[op_id]["vehicle_stats_over_time"] = vehicle_stats_over_time(output_dir, scenario_parameters, op_attributes, dir_names, op_id,
                                 evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
+        
+    # save dictionary as json
+    with open(os.path.join(output_dir, "temporal_eval.json"), "w") as f:
+        json.dump(eval_dict, f)
 
 
 if __name__ == "__main__":

@@ -170,6 +170,8 @@ class FleetControlBase(metaclass=ABCMeta):
         if self.update_hard_time_windows or self.update_soft_time_windows:
             if not self.time_window_length:
                 raise IOError(f"Update of time windows requires {G_RA_TW_LENGTH} input!")
+            
+        self.rq_min_distance = operator_attributes.get(G_OP_MIN_RQ_DISTANCE, None)
 
         # ###################################
         # Additional fleet control strategies
@@ -431,6 +433,8 @@ class FleetControlBase(metaclass=ABCMeta):
                 LOG.debug(f"automatic decline for rid {plan_request.get_rid_struct()} due to out-of-operating-area request!")
                 self._create_rejection(plan_request, sim_time, reason=REJECTION_REASON.OUT_OF_OPERATING_AREA)
                 return False
+        if self.rq_min_distance and plan_request.init_direct_td < self.rq_min_distance:
+            self._create_rejection(plan_request, sim_time, reason=REJECTION_REASON.TRAVEL_DISTANCE)
         return True
 
     def get_current_offer(self, rid : Any) -> TravellerOffer:

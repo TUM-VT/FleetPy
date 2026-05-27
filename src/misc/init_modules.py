@@ -214,6 +214,7 @@ def get_src_forecast_models():
     fc_dict["aggregate_o_and_d"] = ("src.fleetctrl.forecast.AggForecastZoning", "AggForecastZoneSystem")
     fc_dict["perfect_trips"] = ("src.fleetctrl.forecast.AggForecastZoning", "AggForecastZoneSystem")
     fc_dict["aggregate_o_to_d"] = ("src.fleetctrl.forecast.ODForecastZoneSystem", "ODForecastZoneSystem")
+    fc_dict["MATSimIterationForecast"] = ("src.fleetctrl.forecast.MATSimIterationForecast", "MATSimIterationForecast")
     # add development content
     if dev_content is not None:
         dev_fc_dict = dev_content.add_forecast_models()

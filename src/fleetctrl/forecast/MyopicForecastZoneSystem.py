@@ -36,9 +36,8 @@ INPUT_PARAMETERS_MyopicForecastZoneSystem = {
     (it looks self.fc_temp_resolution into the past and uses this forecast to produce the forecast)
     """,
     "inherit" : "ForecastZoneSystemBase",
-    "input_parameters_mandatory": [G_RA_FC_FNAME],
+    "input_parameters_mandatory": [],
     "input_parameters_optional": [
-        G_RA_OP_CORR_M_F
         ],
     "mandatory_modules": [],
     "optional_modules": []
