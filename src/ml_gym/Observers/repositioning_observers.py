@@ -1,9 +1,11 @@
 from src.ml_gym.Observers import AbstractObserver
 from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 
+from src.misc.globals import *
+
 
 class SimTimeObserver(AbstractObserver):
-    """Reads the current simulation time from the repositioning module."""
+    """リポジションモジュールからシミュレーション時刻の読み込みReads the current simulation time from the repositioning module."""
 
     def observe(self, fleetpy_module):
         """Return the current simulation time.
@@ -11,15 +13,15 @@ class SimTimeObserver(AbstractObserver):
         :param fleetpy_module: active RepositioningBase instance
         :return: {"sim_time": int}
         """
-        assert isinstance(fleetpy_module, RepositioningBase), "SimTimeObserver only works with RepositioningBase"
+        assert isinstance(fleetpy_module, RepositioningBase), "引数のfleetpy_moduleがクラスRepositionBaseに一致しているかチェックSimTimeObserver only works with RepositioningBase"
         return {"sim_time": fleetpy_module.sim_time}
 
 
 class DemandForecastObserver(AbstractObserver):
-    """Reads zone-level trip departure and arrival forecasts over the repositioning horizon."""
+    """ゾーン毎の発着予測の読み込みReads zone-level trip departure and arrival forecasts over the repositioning horizon."""
 
     def observe(self, fleetpy_module):
-        """Return forecasted trip origins and destinations per zone for the next horizon window.
+        """次のタイムステップにおける予測トリップの出発地と目的地を返すReturn forecasted trip origins and destinations per zone for the next horizon window.
 
         :param fleetpy_module: active RepositioningBase instance
         :return: {
@@ -98,3 +100,77 @@ class ZoneBasedCurrentDemandObserver(AbstractObserver):
             zone_based_demand[(o_zone, d_zone)] = zone_based_demand.get((o_zone, d_zone), 0) + 1
 
         return {"zone_based_passenger_demand": zone_based_demand}
+    
+class ZoneBasedCurrentVehicleStatesObserver(AbstractObserver):
+    # TODO Takashi: update doc strings
+    """Reads current vehicle states per zone, including idle vehicles and inter-zone movements."""
+
+    def observe(self, fleetpy_module):
+        """Return current vehicle distribution and flows between zones.
+
+        :param fleetpy_module: active RepositioningBase instance
+        :return: {
+            "ozone_to_dzone_to_all_vehilces": dict[origin_zone_id -> dict[destination_zone_id -> number of vehicles driving from origin to destination],
+            "ozone_to_dzone_to_occupied_vehilces": dict[origin_zone_id -> dict[destination_zone_id -> number of vehicles driving from origin to destination],
+            "zone_to_number_idle_vehilces": dict[zone_id -> number of idle vehicles]
+            }
+        """
+        assert isinstance(fleetpy_module, RepositioningBase), "DemandForecastObserver only works with RepositioningBase"
+        sim_time = fleetpy_module.sim_time
+        list_zones = fleetpy_module.zone_system.get_all_zones()
+
+        ozone_to_dzone_to_all_vehicles={} # Number of vehicles driving from i to j (x_ij)
+        ozone_to_dzone_to_occupied_vehicles={} # Number of vehicles driving from i to j with passengers (y_ij)
+        zone_to_number_idle_vehicles={} #Number of idle vehicles in zone i (v_i)
+
+        for vid, current_veh_plan in fleetpy_module.fleetctrl.veh_plans.items():
+            veh_obj = fleetpy_module.fleetctrl.sim_vehicles[vid]
+            # 1) idle vehicles
+            if not current_veh_plan.list_plan_stops:
+                zone_id = fleetpy_module.zone_system.get_zone_from_pos(veh_obj.pos)
+                zone_to_number_idle_vehicles[zone_id] = zone_to_number_idle_vehicles.get(zone_id, 0) + 1
+            else:
+                last_ps = current_veh_plan.list_plan_stops[-1]
+                veh_zone = fleetpy_module.zone_system.get_zone_from_pos(veh_obj.pos)
+                veh_dest_zone = fleetpy_module.zone_system.get_zone_from_pos(last_ps.get_pos())
+                if ozone_to_dzone_to_all_vehicles.get(veh_zone) is None:
+                    ozone_to_dzone_to_all_vehicles[veh_zone] = {}
+                ozone_to_dzone_to_all_vehicles[veh_zone][veh_dest_zone] = ozone_to_dzone_to_all_vehicles[veh_zone].get(veh_dest_zone, 0) + 1
+
+                #if last_ps.get_state() != G_PLANSTOP_STATES.REPO_TARGET:
+                if len(veh_obj.pax) > 0 :
+                    if ozone_to_dzone_to_occupied_vehicles.get(veh_zone) is None:
+                        ozone_to_dzone_to_occupied_vehicles[veh_zone] = {}
+                    ozone_to_dzone_to_occupied_vehicles[veh_zone][veh_dest_zone] = ozone_to_dzone_to_occupied_vehicles[veh_zone].get(veh_dest_zone, 0) + 1
+
+        return {
+            "ozone_to_dzone_to_all_vehicles": ozone_to_dzone_to_all_vehicles,
+            "ozone_to_dzone_to_occupied_vehicles": ozone_to_dzone_to_occupied_vehicles,
+            "zone_to_number_idle_vehicles": zone_to_number_idle_vehicles
+        }
+    
+class ZoneBasedTravelTimeObserver(AbstractObserver):
+    # TODO Takashi: update doc strings
+    """Reads zone-to-zone travel time and distance information."""
+
+    def observe(self, fleetpy_module):
+        """Return travel time and distance for all origin-destination zone pairs.
+
+        :param fleetpy_module: active RepositioningBase instance
+        :return: {
+            "zone_to_zone_to_tt_dis": dict[
+            (origin_zone_id, destination_zone_id) -> (travel_time, distance)
+            ]
+        }
+        """
+        assert isinstance(fleetpy_module, RepositioningBase), "DemandForecastObserver only works with RepositioningBase"
+        sim_time = fleetpy_module.sim_time
+        list_zones = fleetpy_module.zone_system.get_all_zones()
+
+        zone_to_zone_to_tt_dis = {}
+        for o_zone in list_zones:
+            for d_zone in list_zones:
+                tt, dis = fleetpy_module._get_od_zone_travel_info(sim_time, o_zone, d_zone)
+                zone_to_zone_to_tt_dis[(o_zone, d_zone)] = (tt, dis)
+
+        return {"zone_to_zone_to_tt_dis" : zone_to_zone_to_tt_dis}

@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from src.ml_gym.FleetPyGymInterface import FleetPyGym # フォルダ"src"の中のサブフォルダ"ml.gym"の中のコードファイル"FleetPyMLInterface.py"からクラス"FleetPyGym"を読み込む
 from src.ml_gym.hooks_manager import Events # フォルダ"src"の中のサブフォルダ"ml_gym"の中のコードファイル"hooks_manager.py"にあるクラス"Event"を読み込む
-from src.ml_gym.Observers.repositioning_observers import SimTimeObserver, DemandForecastObserver, ZoneBasedVehicleStatesObserver, ZoneBasedCurrentDemandObserver # コードファイル"repositioning_observer.py"にある４つのクラスを読み込む（シミュレーション時刻取得、将来需要予測を取得、車両の分布状況を取得、現在の需要を集計）
+from src.ml_gym.Observers.repositioning_observers import SimTimeObserver, DemandForecastObserver, ZoneBasedVehicleStatesObserver, ZoneBasedCurrentDemandObserver, ZoneBasedCurrentVehicleStatesObserver, ZoneBasedTravelTimeObserver # コードファイル"repositioning_observer.py"にある４つのクラスを読み込む（シミュレーション時刻取得、将来需要予測を取得、車両の分布状況を取得、現在の需要を集計）
 from src.ml_gym.Actors.repositioning import ZoneBasedRepositioningActor # コードファイル"repositioning"のクラス"ZoneBasedRepositioningActor"を読み込み
 from src.misc.globals import * # フォルダ"src"の中のサブフォルダ"misc"の中のコードファイル"globals.py"にある変数や定数を全て読み込む（*は"全て"を示す）
 from src.misc.config import ConstantConfig, ScenarioConfig # ファイル"config.py"のクラス"ConstantConfig"と"ScenarioConfig"を読み込み(csvにまとめられたシナリオ設定値を読み取る関数)
@@ -16,14 +16,14 @@ from gymnasium import spaces # 強化学習の環境定義や状態と行動を�
 from stable_baselines3 import PPO
 
 
-# 強化学習の出力をFleetPyの出発／到着ゾーンのペアに変換するアクター（エージェントの一部で、行動を決める要素）
-class RLReposition(ZoneBasedRepositioningActor): # カッコ内は親クラスの名称。この子クラスは親クラスの機能を引き継ぐ
+# 強化学習の出力をFleetPyの出発-到着ゾーンのペアに変換するアクター（エージェントの一部で、行動を決める要素）
+class RLReposition(ZoneBasedRepositioningActor):
     """Actor that translates the RL agent's output into (origin, target) zone pairs for FleetPy.
     ZoneBasedRepositioningActor.translate_action() is the only method you need to override.
     It receives the raw observation dict and the raw action produced by the RL network, and
     must return a list of (origin_zone_id, target_zone_id) tuples. FleetPy then moves one
     idle vehicle per tuple from the origin zone to the target zone.
-    ZBR.t_a()が唯一上書きが必要なメソッドであり、これは生の観測辞書とRLで生成された生の行動を受け取る。
+    親クラスのZoneBasedRepositioningActor.translate_action()が唯一上書きが必要なメソッドであり、これは生の観測辞書とRLで生成された生の行動を受け取る。
     そして出発ゾーン/目的地ゾーンのタプルのリストを返す必要がある。
     すると、FleetPyは1つの空車を出発ゾーンから到着ゾーンに移動させる。
     The current implementation ignores the RL action and instead does a random demand-driven
@@ -69,7 +69,7 @@ class RLReposition(ZoneBasedRepositioningActor): # カッコ内は親クラス�
         return list_repo_actions
 
 
-# RLを用いたFleetPy再配置のギムナジウム環境
+# RLを用いたFleetPy内の車両再配置のためのギムナジウム環境
 class TakashiRLRepo(FleetPyGym):
     """Gymnasium environment for RL-based vehicle repositioning in FleetPy.
 
@@ -133,11 +133,13 @@ class TakashiRLRepo(FleetPyGym):
         # into one combined observation passed to translate_observation() and reward().
         event = Events.OBSERVE_BEFORE_REPOSITIONING # hooksmanager.pyのクラス"Event"を用いて、再配置前のタイミングを指定
         # TODO: what observations do you want to read from FleetPy? Implement them as AbstractObserver subclasses and register them here. The current ones are just examples.
-        sim_observer = SimTimeObserver() # シミュレーション時刻
+        sim_observer = SimTimeObserver()
         self.register_observer(event, sim_observer)
-        self.register_observer(event, DemandForecastObserver())
-        self.register_observer(event, ZoneBasedVehicleStatesObserver())
+        #self.register_observer(event, DemandForecastObserver())
+        #self.register_observer(event, ZoneBasedVehicleStatesObserver())
         self.register_observer(event, ZoneBasedCurrentDemandObserver())
+        self.register_observer(event, ZoneBasedTravelTimeObserver())
+        self.register_observer(event, ZoneBasedCurrentVehicleStatesObserver())
 
         # The actor pauses the simulation, hands the observation to the gym loop,
         # waits for the RL action, then writes it back into FleetPy.
@@ -158,6 +160,9 @@ class TakashiRLRepo(FleetPyGym):
         """
         print("translate observation", observation)
         # TODO: implement your actual observation translation logic here. The current implementation is just an example that combines some of the observed values into a flat vector, but you can customize it as needed based on what your observers return and what information you want to feed into the RL policy.
+        for k,v in observation.items():
+            print(k, v)
+        return
         zone_to_fc_rq_origins = observation["zone_to_fc_rq_origins"]
         zone_to_fc_rq_destinations = observation["zone_to_fc_rq_destinations"]
         zone_to_idle_vehilces = observation["zone_to_idle_vehilces"]

@@ -1,20 +1,20 @@
 import os
 import sys
-from enum import Enum
-from collections import defaultdict
-from multiprocessing.connection import PipeConnection
-from queue import Queue, Empty
-import logging
+from enum import Enum # 列挙型、選択肢を固定してタイプミスを防ぐ
+from collections import defaultdict # キーが存在しない時、自動で初期値を作る辞書
+from multiprocessing.connection import PipeConnection # プロセス間通信
+from queue import Queue, Empty # データやり取り用のキューとキューが空の時の例外
+import logging # printの上位互換
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)) ))) # add fleetpy path
 
 from src.ml_gym.Observers import AbstractObserver
 from src.ml_gym.Actors import AbstractActor
 
-from typing import List, Union
+from typing import List, Union # 型の指定
 
 LOG = logging.getLogger(__name__)
     
-class Events(Enum):
+class Events(Enum): # イベント名を４つ定義し、Event.ML_OBSERVEなどのコードで呼び出すことで、スペルミスを防ぐ
     ML_OBSERVE = "ml_observe",
     ML_ACTION = "ml_action",
     OBSERVE_FLEET_STATE_AFTER_RECEIVING_STATUS_UPDATE = "observe_fleet_state_after_receiving_status_update", # this event is triggered after the fleetcontrol received a new status update of its vehicle and is about to trigger its optimization
@@ -56,7 +56,7 @@ class HookManager:
         self._hooks[event].remove(hook)
 
     def _get_all_hooks_details(self, event: Events = None):
-        observers_dict = defaultdict(list)
+        observers_dict = defaultdict(list) # 存在しないキーが呼び出されたとき、そのキーの値を空辞書とする
         actors_dict = defaultdict(list)
         hook_list = self._hooks.values() if event is None else self._hooks[event]
         for hook in hook_list:

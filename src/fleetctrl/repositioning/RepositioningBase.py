@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import random
 from abc import abstractmethod, ABC
-import logging
+import logging # printの上位互換、プログラム実行状況やエラー記録のためのモジュール
 import numpy as np
 import pandas as pd
 
