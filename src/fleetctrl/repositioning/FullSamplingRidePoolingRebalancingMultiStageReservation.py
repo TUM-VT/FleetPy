@@ -25,7 +25,7 @@ LOG = logging.getLogger(__name__)
 from typing import TYPE_CHECKING, List, Dict, Tuple, Callable, Any
 if TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
 
 OPT_TIME_LIMIT = 120
 WRITE_SOL = True

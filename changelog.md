@@ -2,6 +2,91 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2025-12-18
+
+Key update:
+1. Refactored routing file structure: road-related routing modules are moved to the `road` subdirectory, and PT-related routing modules are moved to the `pt` subdirectory.
+2. Introduced a C++ routing module based on the RAPTOR algorithm for querying the fastest PT travel plans between two stations.
+3. Introduced the PTControl module to simulate PT operator behavior, such as recording offer information and dynamically updating GTFS files.
+4. Introduced three PTBroker strategy variants to simulate different levels of MaaS–DRT coordination for intermodal requests: Plan-As-You-Go (PTBrokerPAYG), Estimation-based Integration (PTBrokerEI), and Collaborative Coordination (PTBroker).
+5. Introduced subrequest ID coding rules for intermodal scenarios, using unique integers to classify legs and `{parent_rid}_{subtrip_id}` to define new subrequest IDs.
+
+### Added
+- cpp_raptor_router: C++ implementation of the PT router based on the RAPTOR algorithm
+
+- RaptorRouterCpp: Python entry point for the PT router, responsible for activating the cpp_raptor_router instance and regularizing PT requests
+
+- PTControlBase & PTControlBasic: Modules to simulate PT operator behavior, such as recording offer information and dynamically updating GTFS files
+
+- PTOffer: Class for recording PT offer information
+
+- IntermodalOffer: Class for recording offer information for intermodal requests
+
+- BasicIntermodalRequest: Class to simulate travel behavior of travelers with intermodal requests
+
+- example_100_intermodal.csv: Intermodal demand based on example_100.csv, containing 25 monomodal, 25 first-mile, 25 last-mile, and 25 first-last-mile requests
+
+- example_100_intermodal_lmwt30.csv: Variant of the intermodal demand file with a 30-second last-mile wait time constraint
+
+- example_gtfs: Public transport design based on example_network
+
+- PTBrokerBasic: Base class providing shared infrastructure for intermodal request handling across all PTBroker variants (FM, LM, FLM sub-request creation, offer assembly, booking confirmation)
+
+- PTBroker (Collaborative Coordination): Simulates a future scenario with tight MaaS–DRT integration. DRT provides a predicted FM dropoff time; PT feeds back the user's expected station waiting time, which MaaS uses to dynamically adjust the DRT dropoff deadline, giving DRT more pooling flexibility while guaranteeing PT connection. LM DRT wait time can also be constrained to minimize destination wait.
+
+- PTBrokerEI (Estimation-based Integration): Simulates current MaaS platforms with limited real-time DRT communication. FM dropoff time is estimated using `broker_maas_detour_time_factor` rather than obtained from an actual DRT offer. A conservative factor ensures PT is caught but increases travel time; an optimistic factor risks missing PT.
+
+- PTBrokerPAYG (Plan-As-You-Go): Simulates the absence of a MaaS platform. Each leg is planned only after the previous one completes (FM DRT → PT → LM DRT). Trips may be interrupted if a subsequent leg is unavailable.
+
+- intermodal_evaluation: Evaluation methods designed for intermodal scenarios
+
+- example_study & module_tests: Added intermodal scenario example experiments
+
+- globals: Added `RQ_MODAL_STATE`, `RQ_SUB_TRIP_ID`, and `PAYG_TRIP_STATE` enums for intermodal sub-request classification; added global variable names for PT (`G_PT_*`), intermodal offers (`G_IM_*`), and broker configuration (`G_BROKER_*`, including `G_BROKER_MAAS_DETOUR_TIME_FACTOR`, `G_BROKER_TRANSFER_SEARCH_METHOD`, `G_BROKER_ALWAYS_QUERY_PT`, `G_IM_LM_WAIT_TIME`)
+
+- init_modules: Added initialization code for PTControl and PTBroker modules
+
+- FleetSimulationBase: Added code to load PTControl and PTBroker modules
+
+- PlanRequest: Added `set_new_dropoff_time_constraint` method to update the passenger's latest drop-off time constraint
+
+- Demand: Added `create_sub_requests` method to establish sub-requests for corresponding legs of intermodal requests
+
+- RequestBase: Added `modal state` attribute (default: monomodal) and `get_modal_state` method
+
+- PTRouterGTFSPreperation: Jupyter notebook for cleaning and formatting raw GTFS data for RaptorRouterCpp
+
+### Changed
+- BrokerBase & BrokerBasic: `collect_offers` method now accepts an input variable `sim_time` (int, default: None)
+
+- ImmediateDecisionsSimulation: Added `sim_time` input variable when calling `self.broker.collect_offers`
+
+- RequestBase: Updated `create_SubTripRequest` method to create intermodal sub-requests
+
+- insertion: `insertion_with_heuristics` and `reservation_insertion_with_heuristics` methods added `excluded_vid` input (list of vehicle IDs that should not be considered for assignment)
+
+- RollingHorizon: `return_immediate_reservation_offer` method added `excluded_vid` input
+
+- PoolingIRSOnly: `user_request` method added optional `max_wait_time` parameter (used for LM leg of intermodal requests); tracks `flm_excluded_vid` to exclude the FM vehicle from LM assignment in FLM requests
+
+- Vehicles: `assign_vehicle_plan` method now uses `rid_struct` to obtain request information
+
+- FleetSimulationBase: Modified public transportation module loading code; modified `evaluate` method to use `G_EVAL_METHOD` to specify standard result evaluation (default: standard_evaluation)
+
+- gitignore: Ignored specific C++ Router files
+
+### Deprecated
+- globals: Traveler modal state global variables are no longer used (G_RQ_STATE_MONOMODAL, G_RQ_STATE_FIRSTMILE, G_RQ_STATE_LASTMILE, G_RQ_STATE_FIRSTLASTMILE)
+
+### Removed
+- globals: Traveler modal state global variable names
+
+### Fixed
+- RollingHorizon: Correctly retrieve `vid` and `veh_obj` in `user_cancels_request` method
+
+- FleetSimulationBase: In `update_sim_state_fleets`, ensured `rid_struct` is the actual key of the dictionary returned by `veh_obj.update_veh_state`
+
+
 
 ## [1.0.0] - 2025-04-DD
 

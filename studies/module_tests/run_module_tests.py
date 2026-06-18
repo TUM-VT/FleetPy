@@ -159,6 +159,13 @@ def run_module_test_simulations(N_PARALLEL_SIM=1):
     sc = os.path.join(scs_path, "sc_config_forecasting.csv")
     run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Forecasting Modules completed!")
+
+    # Test Intermodal Modules
+    # TODO: integrate result comparison after fixing issues with intermodal evaluation
+    print("Test Intermodal Modules ...")
+    sc = os.path.join(scs_path, "sc_config_im.csv")
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    print(" => Test Intermodal Modules completed!")
     
     # Test Rq Starting on edges
     print("Test Simulation RQ Edge start/end ...")

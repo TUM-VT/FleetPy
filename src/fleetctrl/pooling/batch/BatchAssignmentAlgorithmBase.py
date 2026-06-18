@@ -8,7 +8,7 @@ import numpy as np
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan
 from src.simulation.Legs import VehicleRouteLeg
 from src.simulation.Vehicles import SimulationVehicle
-from src.routing.NetworkBase import NetworkBase
+from src.routing.road.NetworkBase import NetworkBase
 from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 

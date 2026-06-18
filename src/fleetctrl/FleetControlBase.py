@@ -30,7 +30,7 @@ from src.misc.init_modules import load_repositioning_strategy, load_charging_str
     load_dynamic_fleet_sizing_strategy, load_dynamic_pricing_strategy, load_reservation_strategy
 from src.fleetctrl.pooling.GeneralPoolingFunctions import get_assigned_rids_from_vehplan
 if TYPE_CHECKING:
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.simulation.Vehicles import SimulationVehicle
     from src.infra.Zoning import ZoneSystem
     from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator

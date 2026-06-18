@@ -22,8 +22,9 @@ data/networks/example_network/ff/*
 data/networks/example_network/ch_graph/*
 data/networks/example_network/base/*.graph
 !data/networks/sumo_example
-data/pubtrans/*
-!data/pubtrans/route_193
+data/pt/*
+!data/pt/route_193
+!data/pt/example_network
 data/vehicles/*
 !data/vehicles/default_vehtype.csv
 !data/vehicles/low_range_vehtype.csv
@@ -58,15 +59,18 @@ studies/munich_case_study/git_info.txt
 *zip
 
 # system dependent C++ Router files
-src/routing/cpp_router/*.pyd
-src/routing/cpp_router/build/*
-src/routing/cpp_router/PyNetwork.cpp
-src/routing/extractors/cache/*
+src/routing/road/cpp_router/*.pyd
+src/routing/road/cpp_router/build/*
+src/routing/road/cpp_router/PyNetwork.cpp
+src/routing/road/extractors/cache/*
+
+src/routing/pt/cpp_raptor_router/PyPTRouter.cpp
+src/routing/pt/cpp_raptor_router/build/*
 
 # IDE-related files
 *.idea
 .vscode/*
-src/routing/cpp_router/.vs/*
+src/routing/road/cpp_router/.vs/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -201,3 +205,8 @@ dmypy.json
 
 # other
 CLAUDE.md
+# MacOS
+.DS_Store
+
+# GTFS preprocessing file
+!src/preprocessing/pt/PTRouterGTFSPreperation.ipynb

@@ -14,7 +14,7 @@ from src.fleetctrl.pooling.GeneralPoolingFunctions import get_assigned_rids_from
 from src.misc.globals import *
 
 if TYPE_CHECKING:
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
     from src.simulation.Vehicles import SimulationVehicle
     from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator

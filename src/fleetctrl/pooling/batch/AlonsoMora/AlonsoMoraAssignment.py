@@ -17,7 +17,7 @@ from src.fleetctrl.pooling.immediate.SelectRV import filter_directionality, filt
 from src.misc.globals import *
 from src.simulation.Legs import VehicleRouteLeg
 if TYPE_CHECKING:
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraParallelization import ParallelizationManager
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.fleetctrl.planning.PlanRequest import PlanRequest

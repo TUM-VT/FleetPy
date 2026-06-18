@@ -21,14 +21,15 @@ import numpy as np
 
 # src imports
 # -----------
-from src.misc.init_modules import load_fleet_control_module, load_routing_engine, load_broker_module
+from src.misc.init_modules import load_fleet_control_module, load_routing_engine, load_broker_module, load_pt_control_module
 from src.demand.demand import Demand, SlaveDemand
 from src.simulation.Vehicles import SimulationVehicle
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.broker.BrokerBase import BrokerBase
     from src.python_plots.plot_classes import PyPlot
+    from src.ptctrl.PTControlBase import PTControlBase  
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -250,21 +251,23 @@ class FleetSimulationBase:
                                               self.network_stat_f)
         # public transportation module
         LOG.info("Initialization of line-based public transportation...")
-        pt_type = self.scenario_parameters.get(G_PT_TYPE)
-        self.gtfs_data_dir = self.dir_names.get(G_DIR_PT)
-        if pt_type is None or self.gtfs_data_dir is None:
-            self.pt = None
-        elif pt_type == "PTMatrixCrowding":
-            pt_module = importlib.import_module("src.pubtrans.PtTTMatrixCrowding")
-            self.pt = pt_module.PublicTransportTravelTimeMatrixWithCrowding(self.gtfs_data_dir, self.pt_stat_f,
-                                                                            self.scenario_parameters,
-                                                                            self.routing_engine, self.zones)
-        elif pt_type == "PtCrowding":
-            pt_module = importlib.import_module("src.pubtrans.PtCrowding")
-            self.pt = pt_module.PublicTransportWithCrowding(self.gtfs_data_dir, self.pt_stat_f, self.scenario_parameters,
-                                                            self.routing_engine, self.zones)
-        else:
-            raise IOError(f"Public transport module {pt_type} not defined for current simulation environment.")
+        # pt_type = self.scenario_parameters.get(G_PT_TYPE)
+        # self.gtfs_data_dir = self.dir_names.get(G_DIR_PT)
+        # if pt_type is None or self.gtfs_data_dir is None:
+        #     self.pt = None
+        # elif pt_type == "PTMatrixCrowding":
+        #     pt_module = importlib.import_module("src.pt.PtTTMatrixCrowding")
+        #     self.pt = pt_module.PublicTransportTravelTimeMatrixWithCrowding(self.gtfs_data_dir, self.pt_stat_f,
+        #                                                                     self.scenario_parameters,
+        #                                                                     self.routing_engine, self.zones)
+        # elif pt_type == "PtCrowding":
+        #     pt_module = importlib.import_module("src.pt.PtCrowding")
+        #     self.pt = pt_module.PublicTransportWithCrowding(self.gtfs_data_dir, self.pt_stat_f, self.scenario_parameters,
+        #                                                     self.routing_engine, self.zones)
+        # else:
+        #     raise IOError(f"Public transport module {pt_type} not defined for current simulation environment.")
+        self.pt_operator: PTControlBase = None
+        self._load_pt_operator()
 
         # attribute for demand, charging and zone module
         self.demand = None
@@ -480,17 +483,37 @@ class FleetSimulationBase:
 
     def _load_broker_module(self):
         """ Loads the broker """
- 
-        if self.scenario_parameters.get(G_BROKER_TYPE) is None:
-            LOG.info("No broker type specified, using default broker: BrokerBasic.")
-            op_broker_class_string = "BrokerBasic"
-            BrokerClass = load_broker_module(op_broker_class_string)
+
+        broker_type: str = self.scenario_parameters.get(G_BROKER_TYPE, None)
+        implemented_brokers = ["PTBroker", "PTBrokerEI", "PTBrokerPAYG"]
+        if broker_type is None:
+            prt_msg: str = "No broker type specified, using default BrokerBasic"
+            LOG.info(prt_msg)
+            BrokerClass = load_broker_module("BrokerBasic")
             self.broker = BrokerClass(self.n_op, self.operators)
+        elif broker_type in implemented_brokers:
+            prt_msg: str = f"Broker specified, using {broker_type}"
+            LOG.info(prt_msg)
+            if self.pt_operator is None:
+                raise ValueError("PT operator should be loaded before loading PTBroker.")
+            BrokerClass = load_broker_module(broker_type)
+            self.broker = BrokerClass(self.n_op, self.operators, self.pt_operator, self.demand, self.routing_engine, self.scenario_parameters)
         else:
-            LOG.info(f"Broker type specified: {self.scenario_parameters.get(G_BROKER_TYPE)}")
-            op_broker_class_string = self.scenario_parameters.get(G_BROKER_TYPE)
-            BrokerClass = load_broker_module(op_broker_class_string)
-            self.broker = BrokerClass(self.n_op, self.operators)
+            raise ValueError(f"Unknown broker type: {broker_type}!")
+        print('Broker: ' + prt_msg + '\n')
+
+    def _load_pt_operator(self):
+        """ Loads the public transport operator """
+
+        pt_operator_type = self.scenario_parameters.get(G_PT_OPERATOR_TYPE, None)
+        gtfs_data_dir = self.dir_names.get(G_DIR_GTFS)
+        pt_operator_id = self.scenario_parameters.get(G_PT_OPERATOR_ID, -2)
+        if pt_operator_type is None or gtfs_data_dir is None:
+            return
+        else:
+            LOG.info(f"Public transport operator type specified: {pt_operator_type}")
+            PTControlClass = load_pt_control_module(pt_operator_type)
+            self.pt_operator = PTControlClass(gtfs_data_dir, pt_operator_id)
 
     @staticmethod
     def get_directory_dict(scenario_parameters, list_operator_dicts):
@@ -515,9 +538,16 @@ class FleetSimulationBase:
     def evaluate(self):
         """Runs standard and simulation environment specific evaluations over simulation results."""
         output_dir = self.dir_names[G_DIR_OUTPUT]
-        # standard evaluation
-        from src.evaluation.standard import standard_evaluation
-        standard_evaluation(output_dir)
+        evaluation_method = self.scenario_parameters.get(G_EVAL_METHOD, 'standard_evaluation')
+        if evaluation_method == 'standard_evaluation':
+            # standard evaluation
+            from src.evaluation.standard import standard_evaluation
+            standard_evaluation(output_dir)
+        elif evaluation_method == 'intermodal_evaluation':
+            from src.evaluation.intermodal import intermodal_evaluation
+            intermodal_evaluation(output_dir)
+        else:
+            raise ValueError(f"Unknown evaluation method {evaluation_method} specified!")
         self.add_evaluate()
 
 
@@ -679,20 +709,20 @@ class FleetSimulationBase:
                 self.vehicle_update_order[opid_vid_tuple] = 0
             else:
                 self.vehicle_update_order[opid_vid_tuple] = 1
-            for rid, boarding_time_and_pos in boarding_requests.items():
+            for rid_struct, boarding_time_and_pos in boarding_requests.items():  # rid_struct is the actual key
                 boarding_time, boarding_pos = boarding_time_and_pos
-                LOG.debug(f"rid {rid} boarding at {boarding_time} at pos {boarding_pos}")
-                self.demand.record_boarding(rid, vid, op_id, boarding_time, pu_pos=boarding_pos)
-                self.broker.acknowledge_user_boarding(op_id, rid, vid, boarding_time)
-            for rid, alighting_start_time_and_pos in dict_start_alighting.items():
+                LOG.debug(f"rid {rid_struct} boarding at {boarding_time} at pos {boarding_pos}")
+                self.demand.record_boarding(rid_struct, vid, op_id, boarding_time, pu_pos=boarding_pos)
+                self.broker.acknowledge_user_boarding(op_id, rid_struct, vid, boarding_time)
+            for rid_struct, alighting_start_time_and_pos in dict_start_alighting.items():
                 # record user stats at beginning of alighting process
                 alighting_start_time, alighting_pos = alighting_start_time_and_pos
-                LOG.debug(f"rid {rid} deboarding at {alighting_start_time} at pos {alighting_pos}")
-                self.demand.record_alighting_start(rid, vid, op_id, alighting_start_time, do_pos=alighting_pos)
-            for rid, alighting_end_time in alighting_requests.items():
+                LOG.debug(f"rid {rid_struct} deboarding at {alighting_start_time} at pos {alighting_pos}")
+                self.demand.record_alighting_start(rid_struct, vid, op_id, alighting_start_time, do_pos=alighting_pos)
+            for rid_struct, alighting_end_time in alighting_requests.items():
                 # # record user stats at end of alighting process
-                self.demand.user_ends_alighting(rid, vid, op_id, alighting_end_time)
-                self.broker.acknowledge_user_alighting(op_id, rid, vid, alighting_end_time)
+                self.demand.user_ends_alighting(rid_struct, vid, op_id, alighting_end_time)
+                self.broker.acknowledge_user_alighting(op_id, rid_struct, vid, alighting_end_time)
             # send update to operator
             if len(boarding_requests) > 0 or len(dict_start_alighting) > 0:
                 self.broker.receive_status_update(op_id, vid, next_time, passed_VRL, True)

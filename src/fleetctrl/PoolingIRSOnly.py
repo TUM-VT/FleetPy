@@ -62,6 +62,8 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         self.tmp_assignment = {}  # rid -> VehiclePlan
         self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_RQU)
 
+        self.flm_excluded_vid = {} # flm rid -> [vid]
+
     def receive_status_update(self, vid, simulation_time, list_finished_VRL, force_update=True):
         """This method can be used to update plans and trigger processes whenever a simulation vehicle finished some
          VehicleRouteLegs.
@@ -83,7 +85,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
             self.pos_veh_dict[veh_obj.pos] = [veh_obj]
         LOG.debug(f"veh {veh_obj} | after status update: {self.veh_plans[vid]}")
 
-    def user_request(self, rq, sim_time):
+    def user_request(self, rq, sim_time, max_wait_time=None):
         """This method is triggered for a new incoming request. It generally adds the rq to the database. It has to
         return an offer to the user. This operator class only works with immediate responses and therefore either
         sends an offer or a rejection.
@@ -92,14 +94,18 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         :type rq: RequestDesign
         :param sim_time: current simulation time
         :type sim_time: float
+        :param max_wait_time: maximum wait time (for LM leg of intermodal requests); None if not specified
+        :type max_wait_time: float or None
         :return: offer
         :rtype: TravellerOffer
         """
         t0 = time.perf_counter()
         LOG.debug(f"Incoming request {rq.__dict__} at time {sim_time}")
         self.sim_time = sim_time
+        if max_wait_time is None:  # if not specified, use operator default settings
+            max_wait_time = self.max_wait_time
         prq = PlanRequest(rq, self.routing_engine, min_wait_time=self.min_wait_time,
-                          max_wait_time=self.max_wait_time,
+                          max_wait_time=max_wait_time,
                           max_detour_time_factor=self.max_dtf, max_constant_detour_time=self.max_cdt,
                           add_constant_detour_time=self.add_cdt, min_detour_time_window=self.min_dtw,
                           boarding_time=self.const_bt)
@@ -109,18 +115,33 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
 
         if not self._is_valid_request(sim_time, prq): # automatic rejection inside
             return
+        parent_rid: int = rq.get_rid()
+        # get excluded vids for flm request
+        if rid_struct == f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}":
+            excluded_vid: list[int] = self.flm_excluded_vid.get(parent_rid, [])
+        else:
+            excluded_vid = []
 
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
         if t_pu_earliest - sim_time > self.opt_horizon:
             self.reservation_module.add_reservation_request(prq, sim_time)
-            offer = self.reservation_module.return_immediate_reservation_offer(prq.get_rid_struct(), sim_time)
+            offer = self.reservation_module.return_immediate_reservation_offer(prq.get_rid_struct(), sim_time, excluded_vid=excluded_vid)
             LOG.debug(f"reservation offer for rid {rid_struct} : {offer}")
         else:
-            list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
+            list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True, excluded_vid=excluded_vid)
             if len(list_tuples) > 0:
                 (vid, vehplan, delta_cfv) = min(list_tuples, key=lambda x:x[2])
                 self.tmp_assignment[rid_struct] = vehplan
                 offer = self._create_user_offer(prq, sim_time, vehplan)
+
+                if rid_struct == f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_0.value}":
+                    assigned_vid: int = vehplan.vid
+                    if parent_rid in self.flm_excluded_vid:
+                        self.flm_excluded_vid[parent_rid].append(assigned_vid)
+                    else:
+                        self.flm_excluded_vid[parent_rid] = [assigned_vid]
+                    LOG.debug(f"FLM: assigned vid {assigned_vid} to fisrt mile amod sub-request {rid_struct}, excluding it for the last mile sub-request {parent_rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}")
+
                 LOG.debug(f"new offer for rid {rid_struct} : {offer}")
             else:
                 LOG.debug(f"rejection for rid {rid_struct}")
