@@ -183,7 +183,7 @@ class MyopicForecastZoneSystem(ForecastZoneSystemBase):
         :type attribute_value: type(request_attribute)
         :param scale: (not for this class) scales forecast distribution by this values
         :type scale: float
-        :return: list of (time, origin_node, destination_node) of future requests
+        :return: list of (time, origin_pos, destination_pos) of future requests
         :rtype: list of 3-tuples
         """ 
         future_list = []
@@ -193,8 +193,8 @@ class MyopicForecastZoneSystem(ForecastZoneSystemBase):
                 n_rqs = np.random.poisson(lam=val)
                 ts = [np.random.randint(t0, high=t1) for _ in range(n_rqs)]
                 for t in ts:
-                    o_n = self.get_random_node(o_z, only_boarding_nodes=True)
-                    d_n = self.get_random_node(d_z, only_boarding_nodes=True)
+                    o_n = (self.get_random_node(o_z, only_boarding_nodes=True), None, None)
+                    d_n = (self.get_random_node(d_z, only_boarding_nodes=True), None, None)
                     if o_n >= 0 and d_n >= 0:
                         future_list.append( (t, o_n, d_n) )
                     else:

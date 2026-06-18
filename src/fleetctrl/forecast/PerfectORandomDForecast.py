@@ -183,7 +183,7 @@ class PerfectORandomDForecast(PerfectForecastDistributionZoneSystem):
         for t in range(t0, t1):
             future_rqs = self.demand.future_requests.get(t, {})
             for rq in future_rqs.values():
-                o_zone = self.get_zone_from_node(rq.o_node)
+                o_zone = self.get_zone_from_pos(rq.o_pos)
                 d_dict = d_distributions.get(o_zone, None)
                 if d_dict is None:
                     d_dict = {z : 1.0/len(self.zones) for z in range(len(self.zones))}
@@ -210,7 +210,7 @@ class PerfectORandomDForecast(PerfectForecastDistributionZoneSystem):
         :type attribute_value: type(request_attribute)
         :param scale: (not for this class) scales forecast distribution by this values
         :type scale: float
-        :return: list of (time, origin_node, destination_node) of future requests
+        :return: list of (time, origin_pos, destination_pos) of future requests
         :rtype: list of 3-tuples
         """ 
         
@@ -245,8 +245,8 @@ class PerfectORandomDForecast(PerfectForecastDistributionZoneSystem):
                     number_rqs = np.random.poisson(poisson_rate  )
                     ts = [np.random.randint(start_int, high=end_int) for _ in range(number_rqs)]
                     for t in ts:
-                        o_n = self.get_random_node(o_zone, only_boarding_nodes=True)
-                        d_n = self.get_random_node(d_zone, only_boarding_nodes=True)
+                        o_n = (self.get_random_node(o_zone, only_boarding_nodes=True), None, None)
+                        d_n = (self.get_random_node(d_zone, only_boarding_nodes=True), None, None)
                         if o_n >= 0 and d_n >= 0:
                             future_list.append( (t, o_n, d_n) )
                         else:

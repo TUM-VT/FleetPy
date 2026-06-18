@@ -83,7 +83,7 @@ def move_vehicle_according_to_plan(veh: SimulationVehicleStruct, veh_plan: Vehic
                             except:
                                 pass
                         #LOG.debug(f"new route {cur_pos} {route}")
-                        new_pos, _, _, passed_nodes, _ = routing_engine.move_along_route(route, cur_pos, next_t - last_t, veh.vid, t)
+                        new_pos, _, _, passed_nodes, _ = routing_engine.move_along_route(route, cur_pos, next_t - last_t, sim_vid_id=veh.vid, new_sim_time=t)
                         veh.pos = new_pos
                         for node in passed_nodes:
                             route.remove(node)

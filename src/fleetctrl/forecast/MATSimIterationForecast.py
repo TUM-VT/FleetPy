@@ -41,9 +41,9 @@ INPUT_PARAMETERS_MATSimIterationForecast = {
 }
 
 class AbsReq():
-    def __init__(self, o_node, d_node):
-        self.o_node = o_node
-        self.d_node = d_node
+    def __init__(self, o_pos, d_pos):
+        self.o_pos = o_pos
+        self.d_pos = d_pos
 
 class MATSimIterationForecast(PerfectForecastZoneSystem):
     """
@@ -73,11 +73,11 @@ class MATSimIterationForecast(PerfectForecastZoneSystem):
                 LOG.info(f"Loading past requests from last iteration {current_matsim_iteration-1} for forecast. Looking in {last_iteration_output_dir}")
                 past_request_df = pd.read_csv(os.path.join(last_iteration_output_dir, "1_user-stats.csv"))
                 for earliest_pickup_time, start, end in zip(past_request_df["earliest_pickup_time"], past_request_df["start"], past_request_df["end"]):
-                    o_node = return_position_from_str(start)[0]
-                    d_node = return_position_from_str(end)[0]
+                    o_pos = return_position_from_str(start)
+                    d_pos = return_position_from_str(end)
                     if float(earliest_pickup_time) not in self._last_iteration_requests:
                         self._last_iteration_requests[float(earliest_pickup_time)] = {}
-                    self._last_iteration_requests[float(earliest_pickup_time)][c] = AbsReq(o_node, d_node)
+                    self._last_iteration_requests[float(earliest_pickup_time)][c] = AbsReq(o_pos, d_pos)
                     c += 1
             else:
                 LOG.info(f"No past requests file found for iteration {current_matsim_iteration-1} in {last_iteration_output_dir}." )
