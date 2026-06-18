@@ -60,6 +60,7 @@ src/routing/cpp_router/PyNetwork.cpp
 src/routing/extractors/cache/*
 
 # IDE-related files
+.DS_Store
 *.idea
 .vscode/*
 src/routing/cpp_router/.vs/*
