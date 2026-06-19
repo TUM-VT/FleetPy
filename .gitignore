@@ -42,6 +42,7 @@ studies/*
 studies/fleetpy_sumo_coupling/results/*
 studies/example_study/results/*
 studies/example_study/git_info.txt
+!studies/module_tests
 !studies/module_tests/*
 studies/module_tests/results/*
 studies/module_tests/git_info.txt

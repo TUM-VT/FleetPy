@@ -378,7 +378,7 @@ class PTBrokerBasic(BrokerBasic):
             leg_start_time (int): the start time of the sub-request
             parent_modal_state (RQ_MODAL_STATE): the parent modal state
         """
-        amod_sub_rq_obj: RequestBase = self.demand.create_sub_requests(rq_obj, sub_trip_id, leg_o_node, leg_d_node, leg_start_time, parent_modal_state)
+        amod_sub_rq_obj: RequestBase = self.demand.create_sub_requests(rq_obj, sub_trip_id, (leg_o_node, None, None), (leg_d_node, None, None), leg_start_time, parent_modal_state)
         LOG.debug(f"AMoD sub-request {amod_sub_rq_obj.get_rid_struct()} with modal state {parent_modal_state}: To operator {op_id} ...")
 
         self.amod_operators[op_id].user_request(amod_sub_rq_obj, sim_time)
@@ -403,7 +403,7 @@ class PTBrokerBasic(BrokerBasic):
                 the pt arrival time of the sub-request at the destination street node 
                 or None if the pt travel costs are not available
         """
-        pt_sub_rq_obj: RequestBase = self.demand.create_sub_requests(rq_obj, sub_trip_id, leg_o_node, leg_d_node, leg_start_time, parent_modal_state)
+        pt_sub_rq_obj: RequestBase = self.demand.create_sub_requests(rq_obj, sub_trip_id, (leg_o_node, None, None), (leg_d_node, None, None), leg_start_time, parent_modal_state)
         LOG.debug(f"PT sub-request {pt_sub_rq_obj.get_rid_struct()} with modal state {parent_modal_state}: To PT operator {self.pt_operator_id} ...")
         
         costs_info = self._query_street_node_pt_travel_costs_1to1(

@@ -112,10 +112,10 @@ class RequestBase(metaclass=ABCMeta):
         return self.d_pos
 
     def get_origin_node(self):
-        return self.o_node
+        return self.get_origin_pos()[0]
 
     def get_destination_node(self):
-        return self.d_node
+        return self.get_destination_pos()[0]
     
     def get_modal_state(self) -> RQ_MODAL_STATE:
         return self.modal_state
@@ -220,8 +220,8 @@ class RequestBase(metaclass=ABCMeta):
     def create_SubTripRequest(
             self, 
             subtrip_id: int, 
-            leg_o_pos: tp.Optional[int] = None, 
-            leg_d_pos: tp.Optional[int] = None, 
+            leg_o_pos: tp.Optional[tuple] = None, 
+            leg_d_pos: tp.Optional[tuple] = None, 
             leg_start_time: tp.Optional[int] = None, 
             modal_state: tp.Optional[RQ_MODAL_STATE] = None,
             routing_engine : tp.Optional['NetworkBasic'] = None,
@@ -836,8 +836,8 @@ class BasicIntermodalRequest(RequestBase):
         record_dict[G_RQ_TIME] = self.rq_time
         record_dict[G_RQ_EPT] = self.earliest_start_time
         # node output
-        record_dict[G_RQ_ORIGIN] = self.o_node
-        record_dict[G_RQ_DESTINATION] = self.d_node
+        record_dict[G_RQ_ORIGIN] = return_position_str(self.o_pos)
+        record_dict[G_RQ_DESTINATION] = return_position_str(self.d_pos)
         # position output
         if self.pu_pos is None or self.pu_pos == self.o_pos:
             record_dict[G_RQ_PUL] = ""

@@ -89,75 +89,75 @@ def run_module_test_simulations(N_PARALLEL_SIM=1):
     # Test Simulation Environment Modules
     print("Test Simulation Environment Modules ...")
     sc = os.path.join(scs_path, "sc_config_sim_envs.csv")
-    #run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Simulation Environment Modules completed!")
     
     # Test Multi-Operator Modules
     print("Test Multi-Operator Modules ...")
     sc = os.path.join(scs_path, "sc_config_multi_op.csv")
-    #run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Multi-Operator Modules completed!")
     
     # Test Routing Modules
     print("Test Routing Modules ...")
     sc = os.path.join(scs_path, "sc_config_routing.csv")
-    #run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Routing Modules completed!")
     
     # Test Fleetcontrol Parameters
     print("Test Fleetcontrol Parameters ...")
     sc = os.path.join(scs_path, "sc_config_fc_params.csv")
-    #run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Fleetcontrol Parameters completed!")
     
     # Test Fleetcontrol Modules
     print("Test RPP Fleetcontrol Modules ...")
     sc = os.path.join(scs_path, "sc_config_rpp.csv")
-    #run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test RPP Fleetcontrol Modules completed!")
     
     # Test Repositioning Modules
     print("Test Repositioning Modules ...")
     sc = os.path.join(scs_path, "sc_config_repo.csv")
-    #run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     # TODO frontiers ist not working anymore
     print(" => Test Repositioning Modules completed!")
     
     # Test Charging Modules
     print("Test Charging Modules ...")
     sc = os.path.join(scs_path, "sc_config_charging.csv")
-    #run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Charging Modules completed!")
     
     # Test dynamic pricing Modules
     print("Test Dynamic Pricing Modules ...")
     sc = os.path.join(scs_path, "sc_config_dyn_price.csv")
-    #run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     # TODO time based not implemented
     print(" => Test Dynamic Pricing Modules completed!")
     
     # Test Dynamic Fleet Sizng Modules
     print("Test Dynamic Fleet Sizing Modules ...")
     sc = os.path.join(scs_path, "sc_config_dyn_fleet_size.csv")
-    #run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Dynamic Fleet Sizing Modules completed!")
 
     # Test Reservation Modules
     print("Test Reservation Modules ...")
     sc = os.path.join(scs_path, "sc_config_reservation.csv")
-    #run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Reservation Modules completed!")
     
     # Test Ridepooling Batch Optimization Modules
     print("Test Ridepooling Batch Optimization Modules ...")
     sc = os.path.join(scs_path, "sc_config_rp_batch_opt.csv")
-    #run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Ridepooling Batch Optimization Modules completed!")
     
     # Test Forecasting Modules
     print("Test Forecasting Modules ...")
     sc = os.path.join(scs_path, "sc_config_forecasting.csv")
-    #run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
+    run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Forecasting Modules completed!")
 
     # Test Intermodal Modules
@@ -170,7 +170,7 @@ def run_module_test_simulations(N_PARALLEL_SIM=1):
     # Test Rq Starting on edges
     print("Test Simulation RQ Edge start/end ...")
     sc = os.path.join(scs_path, "sc_config_rq_pos.csv")
-    log_level="debug"
+    log_level="info"
     run_scenarios(cc, sc, log_level=log_level, n_cpu_per_sim=1, n_parallel_sim=N_PARALLEL_SIM)
     print(" => Test Simulation RQ Edge start/end completed!")
     

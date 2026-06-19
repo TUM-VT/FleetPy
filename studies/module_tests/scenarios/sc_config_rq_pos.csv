@@ -1,0 +1,4 @@
+scenario_name,network_type,rq_file
+pos_nw_withstore,NetworkBasicWithStore,example_200_pos.csv
+pos_nw_partproc,NetworkPartialPreprocessed,example_200_pos.csv
+pos_nw_basic_cpp,NetworkBasicCpp,example_200_pos.csv

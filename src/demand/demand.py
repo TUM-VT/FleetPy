@@ -229,8 +229,8 @@ class Demand:
         self, 
         rq_obj: 'RequestBase', 
         subtrip_id: int, 
-        leg_o_node: int,
-        leg_d_node: int,
+        leg_o_pos: tuple,
+        leg_d_pos: tuple,
         leg_start_time: int,
         parent_modal_state: RQ_MODAL_STATE,
     ) -> 'RequestBase':
@@ -240,17 +240,17 @@ class Demand:
         Args:
             rq_obj (RequestBase): the parent request object
             subtrip_id (int): the subtrip id
-            mod_o_node (int): the origin node of the sub-request
-            mod_d_node (int): the destination node of the sub-request
-            mod_start_time (int): the start time of the sub-request
+            leg_o_pos (tuple): the origin position of the sub-request
+            leg_d_pos (tuple): the destination position of the sub-request
+            leg_start_time (int): the start time of the sub-request
             parent_modal_state (RQ_MODAL_STATE): the parent modal state
         """
         # TODO: Check if the new sub-request ids should be added to the self.undecided_rq or somewhere else
         
         sub_rq_obj: 'RequestBase' = rq_obj.create_SubTripRequest(
                                                                 subtrip_id,
-                                                                leg_o_node,
-                                                                leg_d_node,
+                                                                leg_o_pos,
+                                                                leg_d_pos,
                                                                 leg_start_time,
                                                                 parent_modal_state,
                                                                 self.routing_engine

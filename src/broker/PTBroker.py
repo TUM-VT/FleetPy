@@ -91,7 +91,7 @@ class PTBroker(PTBrokerBasic):
         parent_modal_state: RQ_MODAL_STATE, op_id: int, sim_time: int
     ):
         """Overrides PTBrokerBasic to support customizable max_wait_time for last-mile AMoD pickups."""
-        amod_sub_rq_obj: 'RequestBase' = self.demand.create_sub_requests(rq_obj, sub_trip_id, leg_o_node, leg_d_node, leg_start_time, parent_modal_state)
+        amod_sub_rq_obj: 'RequestBase' = self.demand.create_sub_requests(rq_obj, sub_trip_id, (leg_o_node, None, None), (leg_d_node, None, None), leg_start_time, parent_modal_state)
         LOG.debug(f"AMoD sub-request {amod_sub_rq_obj.get_rid_struct()} with modal state {parent_modal_state}: To operator {op_id} ...")
 
         # get customizable wait time for last mile AMoD pickups
