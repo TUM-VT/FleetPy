@@ -2,7 +2,6 @@ import os
 import sys
 from enum import Enum
 from collections import defaultdict
-from multiprocessing.connection import PipeConnection
 from queue import Queue, Empty
 import logging
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)) ))) # add fleetpy path
