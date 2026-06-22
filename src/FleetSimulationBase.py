@@ -369,10 +369,9 @@ class FleetSimulationBase:
                     G_VTYPE_MAX_PAX: int(veh_data[G_VTYPE_MAX_PAX]),
                     G_VTYPE_MAX_PARCELS: int(veh_data.get(G_VTYPE_MAX_PARCELS, 0)),
                     G_VTYPE_FIX_COST: float(veh_data[G_VTYPE_FIX_COST]),
-                    G_VTYPE_DIST_COST: float(veh_data[G_VTYPE_DIST_COST])/1000.0,
+                    G_VTYPE_DIST_COST: float(veh_data[G_VTYPE_DIST_COST]),
                     G_VTYPE_BATTERY_SIZE: float(veh_data[G_VTYPE_BATTERY_SIZE]),
-                    G_VTYPE_RANGE: float(veh_data[G_VTYPE_RANGE]),
-                    "soc_per_m": 1/(float(veh_data[G_VTYPE_RANGE])*1000)
+                    G_VTYPE_RANGE: float(veh_data[G_VTYPE_RANGE])
                 }
             return veh_type_attributes[vehicle_type]
 
