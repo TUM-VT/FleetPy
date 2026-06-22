@@ -10,6 +10,9 @@ Key update:
 3. Introduced the PTControl module to simulate PT operator behavior, such as recording offer information and dynamically updating GTFS files.
 4. Introduced three PTBroker strategy variants to simulate different levels of MaaS–DRT coordination for intermodal requests: Plan-As-You-Go (PTBrokerPAYG), Estimation-based Integration (PTBrokerEI), and Collaborative Coordination (PTBroker).
 5. Introduced subrequest ID coding rules for intermodal scenarios, using unique integers to classify legs and `{parent_rid}_{subtrip_id}` to define new subrequest IDs.
+6. Socket-based coupling to MATSim/Eqasim where FleetPy models the DRT operator
+7. Coupling to SUMO: Vehicles move in a microscopic SUMO simulation
+8. Travellers can start and end anywhere on an edge
 
 ### Added
 - cpp_raptor_router: C++ implementation of the PT router based on the RAPTOR algorithm
@@ -56,6 +59,48 @@ Key update:
 
 - PTRouterGTFSPreperation: Jupyter notebook for cleaning and formatting raw GTFS data for RaptorRouterCpp
 
+- globals.py: REJECTION_REASON enum (OUT_OF_OPERATING_AREA, NO_VEHICLE_AVAILABLE, OUT_OF_SERVICE_TIME, INVALID_RQ) and G_OFFER_REJECTION_REASON for structured rejection output
+
+- globals.py: G_OP_MIN_RQ_DISTANCE parameter — operator can set a minimum direct travel distance for a request to be accepted; adds TRAVEL_DISTANCE to REJECTION_REASON
+
+- MATSimIterationForecast: New forecast module that uses requests from the last MATSim/Eqasim iteration to forecast future demand
+
+- create_historical_network_scaling.py: New preprocessing script to calculate dynamic scaling of network edges using historical trip durations
+
+- match_nodes_to_zones.py: New preprocessing script to match network nodes to zone systems
+
+- max_coverage.py: New preprocessing script to solve a max coverage problem (e.g. for zone or stop creation)
+
+- AlonsoMoraRepositioning: Now also loads a zone system when given (to check operating area)
+
+- PTBroker: Automatic cancellation mechanism when FM AMoD arrives too late for the PT connection
+
+- SUMOFleetPyServer: FleetPy server for SUMO traci-based coupling; manages vehicle insertion, demand handling, and travel time updates during a microscopic SUMO simulation
+
+- SUMOcontrolledSim: Simulation class for SUMO-controlled runs
+
+- NetworkBasicWithStoreOnlineMatrixCpp: New routing module that computes travel time matrices online during simulation (required for SUMO coupling with dynamic travel times)
+
+- network_from_sumo.py: Preprocessing script to convert a SUMO network to FleetPy format
+
+- demand_from_sumo.py: Preprocessing script to convert SUMO demand to FleetPy format
+
+- studies/fleetpy_sumo_coupling: Full example study for SUMO coupling including run script, scenario configs, and sumo_example network/demand
+
+- data/networks/sumo_example: Example road network for the SUMO coupling example study
+
+- MATSimSocket: Socket-based communication module for MATSim/Eqasim coupling; can be started with console arguments; performs network conversion (checking available modes per link) and network hash comparison across iterations
+
+- MATSimSimulationClass: Simulation class for MATSim/Eqasim-coupled runs; supports starting from a later iteration and cleans up travel time files/logs from the previous iteration at the start of each new run
+
+- misc.py (MATSimEqasim): Utility functions for the MATSim/Eqasim coupling
+
+- data/vehicles/single_user_vehtype.csv: Vehicle type file for single-user (non-pooled) scenarios
+
+- example_200_pos.csv: Demand file for testing position-based (arbitrary edge position) requests
+
+- module_tests: Added sc_config_rq_pos.csv scenario for position-based request module tests; updated benchmark_comparison.csv and results/benchmark.csv
+
 ### Changed
 - BrokerBase & BrokerBasic: `collect_offers` method now accepts an input variable `sim_time` (int, default: None)
 
@@ -74,6 +119,12 @@ Key update:
 - FleetSimulationBase: Modified public transportation module loading code; modified `evaluate` method to use `G_EVAL_METHOD` to specify standard result evaluation (default: standard_evaluation)
 
 - gitignore: Ignored specific C++ Router files
+
+- data/pubtrans/ renamed to data/pt/ and src/preprocessing/pubtrans/ renamed to src/preprocessing/pt/: standardized fixed-line transport service naming throughout the repository
+
+- MATSimSimulationClass: automatic evaluation of simulation results is now run at the end of each iteration
+
+- evaluation/temporal.py: `run_complete_temporal_evaluation` now saves per-operator evaluation results to a `temporal_eval.json` file in the output directory and returns the evaluation dictionary
 
 ### Deprecated
 - globals: Traveler modal state global variables are no longer used (G_RQ_STATE_MONOMODAL, G_RQ_STATE_FIRSTMILE, G_RQ_STATE_LASTMILE, G_RQ_STATE_FIRSTLASTMILE)
