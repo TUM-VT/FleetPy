@@ -206,14 +206,15 @@ class FutureDropoffObserver(AbstractObserver):
     """
     def __init__(self):
         self.tau = None
+        
     def observe(self, fleetpy_module):
         if self.tau is None:
             horizon = fleetpy_module.list_horizons[1]
-            resolution = fleetpy_module.op_temporal_resolution
+            resolution = fleetpy_module.fleetctrl.repo_time_step
             self.tau = int(horizon / resolution)
         sim_time = fleetpy_module.sim_time
         zone_system = fleetpy_module.zone_system
-        delta_t = fleetpy_module.op_temporal_resolution
+        delta_t = fleetpy_module.fleetctrl.repo_time_step
         
         # initialize dict when k is changed
         zone_to_future_dropoffs = {
@@ -291,12 +292,12 @@ class FutureRepositioningCompletionObserver(AbstractObserver):
     def observe(self, fleetpy_module):
         if self.tau is None:
             horizon = fleetpy_module.list_horizons[1]
-            resolution = fleetpy_module.op_temporal_resolution
+            resolution = fleetpy_module.fleetctrl.repo_time_step
             self.tau = int(horizon / resolution)
         
         sim_time = fleetpy_module.sim_time
         zone_system = fleetpy_module.zone_system
-        delta_t = fleetpy_module.op_temporal_resolution
+        delta_t = fleetpy_module.fleetctrl.repo_time_step
 
         # create dict for each k
         zone_to_future_repo_completions = {
@@ -357,7 +358,9 @@ class IdleVehiclesObserver(AbstractObserver):
         zone_system = fleetpy_module.zone_system
         zone_to_idle_vehicles = {}
 
-        for vid, veh_obj in fleetpy_module.fleetctrl.sim_vehicles.items():
+        for veh_obj in fleetpy_module.fleetctrl.sim_vehicles:
+            vid = veh_obj.vid
+            
             # condition 1: no passenger
             if len(veh_obj.pax) != 0:
                 continue
@@ -392,7 +395,7 @@ class UnservedRequestsObserver(AbstractObserver):
     def observe(self, fleetpy_module):
         if self.tau is None:
             horizon = fleetpy_module.list_horizons[1]
-            resolution = fleetpy_module.op_temporal_resolution
+            resolution = fleetpy_module.fleetctrl.repo_time_step
             self.tau = int(horizon / resolution)
         
         zone_system = fleetpy_module.zone_system
@@ -430,12 +433,12 @@ class FutureRequestsObserver(AbstractObserver):
     def observe(self, fleetpy_module):
         if self.tau is None:
             horizon = fleetpy_module.list_horizons[1]
-            resolution = fleetpy_module.op_temporal_resolution
+            resolution = fleetpy_module.fleetctrl.repo_time_step
             self.tau = int(horizon / resolution)
 
         zone_system = fleetpy_module.zone_system
         sim_time = fleetpy_module.sim_time
-        delta_t = fleetpy_module.op_temporal_resolution
+        delta_t = fleetpy_module.fleetctrl.repo_time_step
 
         # dict for each k
         zone_to_forecasted_requests = {
