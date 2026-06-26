@@ -4,6 +4,10 @@ import numpy as np
 from src.ml_gym.Observers import AbstractObserver
 from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 
+import typing as tp
+if tp.TYPE_CHECKING:
+    from src.fleetctrl.forecast.ForecastZoneSystemBase import ForecastZoneSystemBase
+
 from src.misc.globals import *
 
 
@@ -206,8 +210,8 @@ class FutureDropoffObserver(AbstractObserver):
             t is the time step index of RL, and simulation time is expressed by t * delta_t (delta_t is time interval of RL, e.g., 900 sec)
             tau is derived from op_repo_horizons[1] in const_cfg_manhattan_case_study.yaml
     """
-    def __init__(self):
-        self.tau = None
+    def __init__(self, tau):
+        self.tau = tau
         
     def observe(self, fleetpy_module):
         if self.tau is None:
@@ -215,7 +219,7 @@ class FutureDropoffObserver(AbstractObserver):
             resolution = fleetpy_module.fleetctrl.repo_time_step
             self.tau = int(horizon / resolution)
         sim_time = fleetpy_module.sim_time
-        zone_system = fleetpy_module.zone_system
+        zone_system: ForecastZoneSystemBase = fleetpy_module.zone_system
         delta_t = fleetpy_module.fleetctrl.repo_time_step
         
         # initialize dict when k is changed
@@ -242,8 +246,10 @@ class FutureDropoffObserver(AbstractObserver):
                 dt = arr_time - sim_time
 
                 # skip if beyond the range
-                if dt <= 0 or dt > self.tau * delta_t:
+                if dt > self.tau * delta_t:
                     continue
+                if dt <= 0:
+                    dt = 0
 
                 # calculate k
                 k = int(dt / delta_t) + 1
@@ -298,7 +304,7 @@ class FutureRepositioningCompletionObserver(AbstractObserver):
             self.tau = int(horizon / resolution)
         
         sim_time = fleetpy_module.sim_time
-        zone_system = fleetpy_module.zone_system
+        zone_system: ForecastZoneSystemBase = fleetpy_module.zone_system
         delta_t = fleetpy_module.fleetctrl.repo_time_step
 
         # create dict for each k
@@ -312,31 +318,33 @@ class FutureRepositioningCompletionObserver(AbstractObserver):
             if not veh_plan.list_plan_stops:
                 continue
 
-            # each plan stop
-            for stop in veh_plan.list_plan_stops:
+            # only last stop -> repo ist always at end
+            stop = veh_plan.list_plan_stops[-1]
 
-                arr_time = stop.get_planned_arrival_and_departure_time()[0]
-                dt = arr_time - sim_time
+            arr_time = stop.get_planned_arrival_and_departure_time()[0]
+            dt = arr_time - sim_time
 
-                if dt <= 0 or dt > self.tau * delta_t:
+            if dt > self.tau * delta_t:
+                continue
+            if dt <= 0: # should no happen
+                dt = 0
+
+            k = int(dt / delta_t) + 1
+
+            if k < 1 or k > self.tau:
+                continue
+
+            if (not stop.get_list_boarding_rids() and
+                not stop.get_list_alighting_rids()):
+
+                zone_id = zone_system.get_zone_from_pos(stop.get_pos())
+
+                if zone_id is None or zone_id < 0:
                     continue
 
-                k = int(dt / delta_t) + 1
-
-                if k < 1 or k > self.tau:
-                    continue
-
-                if (not stop.get_list_boarding_rids() and
-                    not stop.get_list_alighting_rids()):
-
-                    zone_id = zone_system.get_zone_from_pos(stop.get_pos())
-
-                    if zone_id is None or zone_id < 0:
-                        continue
-
-                    zone_to_future_repo_completions[k][zone_id] = (
-                        zone_to_future_repo_completions[k].get(zone_id, 0) + 1
-                    )
+                zone_to_future_repo_completions[k][zone_id] = (
+                    zone_to_future_repo_completions[k].get(zone_id, 0) + 1
+                )
                     
         return {"zone_to_future_repo_completions": zone_to_future_repo_completions}        
 
@@ -391,24 +399,17 @@ class UnservedRequestsObserver(AbstractObserver):
         T is the time step index of FleetPy simulation (e.g., 30 sec)
     """
     def __init__(self):
-        self.tau = None
-        self.cumulative_unserved = 0
+        pass
 
     def observe(self, fleetpy_module):
-        if self.tau is None:
-            horizon = fleetpy_module.list_horizons[1]
-            resolution = fleetpy_module.fleetctrl.repo_time_step
-            self.tau = int(horizon / resolution)
         
         zone_system = fleetpy_module.zone_system
         sim_time = fleetpy_module.sim_time
 
         zone_to_unserved_requests = {}
 
-        undecided_rq_list = fleetpy_module.demand.get_undecided_travelers(sim_time)
-
-        for rid, rq in undecided_rq_list:
-            zone_id = zone_system.get_zone_from_pos(rq.o_pos)
+        for o_pos in fleetpy_module._rejected_customer_origins_since_last_step:
+            zone_id = zone_system.get_zone_from_pos(o_pos)
 
             if zone_id is None or zone_id < 0:
                 continue
@@ -416,11 +417,11 @@ class UnservedRequestsObserver(AbstractObserver):
                 zone_to_unserved_requests.get(zone_id, 0) + 1                
             )
         
-        self.cumulative_unserved += sum(zone_to_unserved_requests.values()) 
+        cumulative_unserved = len(fleetpy_module._rejected_customer_origins_since_last_step) 
 
         return {
             "zone_to_unserved_requests": zone_to_unserved_requests,
-            "cumulative_unserved": self.cumulative_unserved
+            "cumulative_unserved": cumulative_unserved
             }
     
 class FutureRequestsObserver(AbstractObserver):
@@ -429,16 +430,12 @@ class FutureRequestsObserver(AbstractObserver):
         t0 -> t, t+1,...t+tau-1
         t1 -> t+1, t+2,...t+tau
     """
-    def __init__(self):
-        self.tau = None
+    def __init__(self, tau):
+        self.tau = tau
 
     def observe(self, fleetpy_module):
-        if self.tau is None:
-            horizon = fleetpy_module.list_horizons[1]
-            resolution = fleetpy_module.fleetctrl.repo_time_step
-            self.tau = int(horizon / resolution)
 
-        zone_system = fleetpy_module.zone_system
+        zone_system: ForecastZoneSystemBase = fleetpy_module.zone_system
         sim_time = fleetpy_module.sim_time
         delta_t = fleetpy_module.fleetctrl.repo_time_step
 
@@ -447,29 +444,11 @@ class FutureRequestsObserver(AbstractObserver):
             k: {} for k in range(1, self.tau + 1)            
         }
 
-        future_requests = fleetpy_module.demand.future_requests
-
-        # future requests: {time: {rid, rq}}
-        for t, rq_dict in future_requests.items():
-            dt = t - sim_time
-
-            if dt <= 0 or dt > self.tau * delta_t:
-                continue
-
-            k = int(dt / delta_t) + 1
-
-            if k < 1 or k > self.tau:
-                continue
-
-            for rid, rq in rq_dict.items():
-                zone_id = zone_system.get_zone_from_pos(rq.o_pos)
-
-                if zone_id is None or zone_id < 0:
-                    continue
-
-                zone_to_forecasted_requests[k][zone_id] = (
-                    zone_to_forecasted_requests[k].get(zone_id, 0) + 1
-                )
+        for T in range(1, self.tau +1):
+            t0 = (T-1) * delta_t
+            t1 = T * delta_t 
+            trip_origin_forecasts = zone_system.get_trip_arrival_forecasts(t0, t1)
+            zone_to_forecasted_requests[T] = trip_origin_forecasts
 
         return {"zone_to_forecasted_requests": zone_to_forecasted_requests}
     

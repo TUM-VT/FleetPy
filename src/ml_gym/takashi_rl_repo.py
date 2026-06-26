@@ -208,11 +208,11 @@ class TakashiRLRepo(FleetPyGym):
         # TODO: what observations do you want to read from FleetPy? Implement them as AbstractObserver subclasses and register them here. The current ones are just examples.
         sim_observer = SimTimeObserver()
         self.register_observer(event, sim_observer) # t
-        self.register_observer(event, FutureDropoffObserver()) # x_i^(t+k)
+        self.register_observer(event, FutureDropoffObserver(self.tau)) # x_i^(t+k)
         self.register_observer(event, FutureRepositioningCompletionObserver()) # y_i^(t+k)
         self.register_observer(event, IdleVehiclesObserver()) # z_i^t
         self.register_observer(event, UnservedRequestsObserver()) # ru_i^t
-        self.register_observer(event, FutureRequestsObserver()) # rf_i^(t+k)
+        self.register_observer(event, FutureRequestsObserver(self.tau)) # rf_i^(t+k)
         self.register_observer(event, TravelTimeMatrixObserver()) # tt_i,j
 
         # The actor pauses the simulation, hands the observation to the gym loop,
