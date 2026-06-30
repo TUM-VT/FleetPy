@@ -1,6 +1,8 @@
 import xml.etree.ElementTree as ET
 import os
 import pandas as pd
+import geopandas as gpd
+from shapely.geometry import Point, LineString
 import gzip
 
 import hashlib
@@ -27,6 +29,16 @@ def check_file_hash(matsim_network_path, fleetpy_data_path, network_name):
     else:
         print(" -> Hashes do not match. FleetPy network needs to be recreated.")
     return res
+
+def create_geojson_files(nodes_df, edges_df, output_path):
+    nodes_to_point = {index : Point(x, y) for index, x, y in zip(nodes_df['node_index'], nodes_df['pos_x'], nodes_df['pos_y'])}
+    edges_df['geometry'] = edges_df.apply(lambda row: LineString([nodes_to_point[row['from_node']], nodes_to_point[row['to_node']]]), axis=1)
+    edges_gdf = gpd.GeoDataFrame(edges_df, geometry='geometry')
+    nodes_gdf = gpd.GeoDataFrame(nodes_df, geometry=[nodes_to_point[idx] for idx in nodes_df['node_index']])
+
+    nodes_gdf.to_file(os.path.join(output_path, "nodes_all_infos.geojson"), driver="GeoJSON")
+    edges_gdf.to_file(os.path.join(output_path, "edges_all_infos.geojson"), driver="GeoJSON")
+
 
 def create_fleetpy_network_from_matsim(matsim_network_path, fleetpy_data_path, network_name, enforce_hash_similarity=True):
     """
@@ -97,10 +109,10 @@ def create_fleetpy_network_from_matsim(matsim_network_path, fleetpy_data_path, n
             fp_edge_to_matsim_edge[int(links[-1]["from_node"])] = {}
             fp_edge_to_matsim_edge[int(links[-1]["from_node"])][int(links[-1]["to_node"])] = int(links[-1]["source_edge_id"])
 
-    # Convert links to a DataFrame
-    links_df = pd.DataFrame(links)
     
     if not same_hash or not enforce_hash_similarity:
+        # Convert links to a DataFrame
+        links_df = pd.DataFrame(links)
         # Save the current hash
         current_hash = file_hash(matsim_network_path)
         os.makedirs(os.path.join(fleetpy_data_path, "networks", network_name), exist_ok=True)
@@ -114,6 +126,7 @@ def create_fleetpy_network_from_matsim(matsim_network_path, fleetpy_data_path, n
         crs_str = "MATSIM CRS"
         with open(os.path.join(output_path, "crs.info"), "w") as f:
             f.write(crs_str)
+        create_geojson_files(nodes_df, links_df, output_path)
         print("FleetPy network created from MATSim network: {}".format(output_path))
         print("Nodes:", len(nodes_df), "Edges:", len(links_df))
         print("Hash value saved: ", current_hash)

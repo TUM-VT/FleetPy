@@ -93,9 +93,9 @@ def detect_node_id_column(gdf: gpd.GeoDataFrame) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="Match network nodes to zones and write node_zone_info.csv")
-    parser.add_argument("zone_system", help="Folder name under data/zones containing polygon_definition.geojson")
-    parser.add_argument("network_name", help="Folder name under data/networks containing node files")
-    parser.add_argument("--nodes-file", help="Optional explicit path to nodes file (overrides auto-discovery)")
+    parser.add_argument("--zone_system", required=True, help="Folder name under data/zones containing polygon_definition.geojson")
+    parser.add_argument("--network_name", required=True, help="Folder name under data/networks containing node files")
+    parser.add_argument("--nodes-file", default=None, help="Optional explicit path to nodes file (overrides auto-discovery)")
     args = parser.parse_args()
 
     zone_dir = DATA_DIR / "zones" / args.zone_system

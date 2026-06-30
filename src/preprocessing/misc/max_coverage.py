@@ -2,7 +2,7 @@ import os
 import sys
 import numpy as np
 
-from src.routing.NetworkBasicWithStoreCpp import NetworkBasicWithStoreCpp as Network
+from src.routing.road.NetworkBasicWithStoreCpp import NetworkBasicWithStoreCpp as Network
 
 import gurobipy as grp
 
