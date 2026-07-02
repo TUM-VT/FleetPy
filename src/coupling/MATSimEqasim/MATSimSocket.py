@@ -5,6 +5,7 @@ import json
 import traceback
 import datetime
 import pandas as pd
+import numpy as np
 from typing import TYPE_CHECKING, Dict, List, Tuple, Any
 import logging
 
@@ -32,6 +33,70 @@ LOG_COMMUNICATION = False
 LARGE_INT = 100000
 
 # TODO : incorporate matsim inactive vehicle status -> new assignment (even if same as before) will trigger error
+
+TARGET_SERVICE_RATE = 0.95
+EARLIEST_FLEETADOPTION_ITERATION = 10
+DAMPING_INCREASE = 0.5
+DAMPING_DECREASE = 1.5
+MIN_IMPROVEMENT = 0.002
+def update_fleet_size(
+    current_size: int,
+    current_rate: float,
+    previous_rate: float | None = None,
+    target_rate: float = TARGET_SERVICE_RATE,
+    damping_increase: float = DAMPING_INCREASE,
+    damping_decrease: float = DAMPING_DECREASE,
+    min_improvement: float = MIN_IMPROVEMENT,
+    min_size: int = 1,
+    max_size: int | None = None,
+) -> int:
+    """
+    Update the fleet size based on the current service rate and target service rate."""
+    if current_rate <= 0:
+        raise ValueError("current_rate muss > 0 sein")
+
+    if current_rate >= target_rate:
+        # Zu groß: aggressiv reduzieren – min_improvement wird hier NICHT geprüft
+        delta    = (current_size * target_rate / current_rate - current_size) * damping_decrease
+        new_size = max(min_size, round(current_size + delta))
+        if max_size is not None:
+            new_size = min(new_size, max_size)
+        return new_size
+
+    # Sättigungserkennung nur beim Erhöhen
+    if previous_rate is not None and (current_rate - previous_rate) < min_improvement:
+        return current_size
+
+    # Zu klein: gedämpft erhöhen
+    delta    = (current_size * target_rate / current_rate - current_size) * damping_increase
+    new_size = max(min_size, round(current_size + delta))
+    if max_size is not None:
+        new_size = min(new_size, max_size)
+    return new_size
+
+def read_service_rate(stats_path: str, operator_id: str = "MoD_0") -> float:
+    """
+    Liest die Servicerate (modal split) aus dem FleetPy-Output-CSV.
+ 
+    Parameters
+    ----------
+    stats_path  : Pfad zur CSV-Datei
+    operator_id : Spaltenname des Operators (default: "MoD_0")
+ 
+    Returns
+    -------
+    Servicerate als float zwischen 0 und 1.
+    """
+    df = pd.read_csv(stats_path, index_col=0, header=0)
+ 
+    if operator_id not in df.columns:
+        raise KeyError(
+            f"Operator '{operator_id}' nicht gefunden. "
+            f"Verfügbare Spalten: {list(df.columns)}"
+        )
+ 
+    value = df.loc["modal split", operator_id]
+    return float(value)
 
 class MATSimSocket:
     """
@@ -98,6 +163,12 @@ class MATSimSocket:
             fh_touch.write(f"{self.last_stat_report_time}: Opening socket communication ...\n")
             
         self._simulation_terminated = False
+
+        #fleetsize adoption
+        self._dynamic_fleet_adoption = True # TODO: make this configurable
+        self._previous_service_rate = None
+        self._previous_fleet_size = None
+        self._not_initialzied_matsim_vehicle_id = {} # if matsim vehicle is not initialized in fleetpy due to fleetsize constraint
                 
     def log_com(self, msg):
         with open(self.log_f, "a") as fhout:
@@ -216,12 +287,36 @@ class MATSimSocket:
         self.fs_obj.terminate()
         self._simulation_terminated = True
         
-    def _initialize_vehicles(self, list_vehicle_attributes):
+    def _initialize_vehicles(self, list_vehicle_attributes, current_service_rate=None):
         self.matsim_to_fleetpy_vid = {}
         self.fleetpy_to_matsim_vid = {}
+
+        new_fleet_size = len(list_vehicle_attributes)
+        if current_service_rate is not None and self._previous_service_rate is not None:
+            new_fleet_size = update_fleet_size(
+                current_size=self._previous_fleet_size,
+                current_rate=current_service_rate,
+                previous_rate=self._previous_service_rate,
+                target_rate=TARGET_SERVICE_RATE,
+                damping_increase=DAMPING_INCREASE,
+                damping_decrease=DAMPING_DECREASE,
+                min_improvement=MIN_IMPROVEMENT,
+                min_size=1,
+                max_size=len(list_vehicle_attributes)
+            )
+            if new_fleet_size < self._previous_fleet_size:
+                LOG.info(f"Reducing fleet size from {self._previous_fleet_size} to {new_fleet_size} due to service rate {current_service_rate:.4f}")
+            elif new_fleet_size > self._previous_fleet_size:
+                LOG.info(f"Increasing fleet size from {self._previous_fleet_size} to {new_fleet_size} due to service rate {current_service_rate:.4f}")
+            else:
+                LOG.info(f"Fleet size remains at {self._previous_fleet_size} with service rate {current_service_rate:.4f}")
         
-        for vehicle_attributes in list_vehicle_attributes:
+        for i, vehicle_attributes in enumerate(list_vehicle_attributes):
             matsim_vehicle_id = vehicle_attributes["id"]
+            if i >= new_fleet_size:
+                LOG.info(f"Skipping initialization of MATSim vehicle {matsim_vehicle_id} due to fleet size constraint ({new_fleet_size})")
+                self._not_initialzied_matsim_vehicle_id[matsim_vehicle_id] = True
+                continue
             vehicle_start_pos = self.from_matsim_to_fleetpy_position(int(vehicle_attributes["startLink"]))
             vehicle_capacity = int(vehicle_attributes["capacity"])
 
@@ -231,6 +326,9 @@ class MATSimSocket:
             self.fleetpy_to_matsim_vid[vehicle_id] = matsim_vehicle_id
             
             self._last_veh_state[vehicle_id] = [VRL_STATES.IDLE, [], []]
+
+        self._previous_fleet_size = new_fleet_size
+        self._previous_service_rate = current_service_rate
         
     def _new_iteration(self, response_obj):
         """
@@ -238,6 +336,7 @@ class MATSimSocket:
         """
         # end FP simulation
         iteration = int(response_obj["iteration"])
+        current_service_rate = None
         if iteration > 0:
             last_output_dir = self.fs_obj.dir_names[G_DIR_OUTPUT]
             self.fs_obj.terminate()
@@ -255,6 +354,10 @@ class MATSimSocket:
                     os.remove(os.path.join(last_output_dir, f))
                 if f.endswith(".log"):
                     os.remove(os.path.join(last_output_dir, f))
+
+            if self._dynamic_fleet_adoption and iteration >= EARLIEST_FLEETADOPTION_ITERATION:
+                # read service rate from last iteration
+                current_service_rate = read_service_rate(os.path.join(last_output_dir, "standard_eval.csv"), operator_id="MoD_0")
         
             scenario_parameters = self.scenario_parameters.copy()
 
@@ -296,7 +399,7 @@ class MATSimSocket:
         
         list_vehicle_attributes = response_obj["vehicles"]
         
-        self._initialize_vehicles(list_vehicle_attributes)
+        self._initialize_vehicles(list_vehicle_attributes, current_service_rate=current_service_rate)
         
         self.fs_obj.step(self.scenario_parameters[G_SIM_START_TIME])
 
@@ -360,6 +463,8 @@ class MATSimSocket:
         list_vehicle_states = response_obj["vehicles"] # list of dicts
         
         for veh_state in list_vehicle_states:
+            if veh_state["id"] in self._not_initialzied_matsim_vehicle_id:
+                continue # skip vehicles that were not initialized in fleetpy due to fleetsize constraint
             vid = self.matsim_to_fleetpy_vid[veh_state["id"]]
             
             picked_up = veh_pick_up_requests.get(vid, [])
