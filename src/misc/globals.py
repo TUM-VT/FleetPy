@@ -132,12 +132,15 @@ G_AR_MAX_CDT = "user_max_constant_detour_time"
 G_AR_MAX_DTF = "user_max_detour_time_factor"
 G_AR_MAX_DEC_T = "user_max_decision_time"
 G_AR_PRICE_F = "user_price_sensitivity_func_dict"
+G_AR_BOARDING_TIME = "user_boarding_time"
 
 # traveler mode choice attributes
 G_MC_VOT = "value_of_time"
 G_MC_U0_PV = "private_vehicle_mode_choice_intercept"
 G_MC_TRANSFER_P = "pt_transfer_penalty"
 G_MC_C_D_PV = "private_vehicle_full_costs_per_m"
+G_VOW_FACTOR = "value_of_walking_factor"
+G_V_WAIT_FACTOR = "value_of_waiting_factor"
 
 # traveler specific attributes
 G_WALKING_SPEED = "walking_speed"

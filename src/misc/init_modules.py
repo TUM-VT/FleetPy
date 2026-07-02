@@ -87,6 +87,7 @@ def get_src_request_modules():
     rm_dict["BrokerDecisionRequest"] = ("src.demand.TravelerModels", "BrokerDecisionRequest")
     rm_dict["UserDecisionRequest"] = ("src.demand.TravelerModels", "UserDecisionRequest")
     rm_dict["PreferredOperatorRequest"] = ("src.demand.TravelerModels", "PreferredOperatorRequest")
+    rm_dict["UserGroupRequest"] = ("src.demand.UserGroupTravelerModel", "UserGroupRequest")
     # add development content
     if dev_content is not None:
         dev_rm_dict = dev_content.add_request_models()
@@ -106,6 +107,7 @@ def get_src_fleet_control_modules():
     op_dict["RPPFleetControlSingleStopInsertion"] = ("src.fleetctrl.RPPFleetControl", "RPPFleetControlSingleStopInsertion")
     op_dict["RPPFleetControlSingleStopInsertionGuided"] = ("src.fleetctrl.RPPFleetControl", "RPPFleetControlSingleStopInsertionGuided")
     op_dict["SemiOnDemandBatchAssignmentFleetcontrol"] = ("src.fleetctrl.SemiOnDemandBatchAssignmentFleetcontrol", "SemiOnDemandBatchAssignmentFleetcontrol")
+    op_dict["StopBasedBatchAssignmentFleetcontrol"] = ("src.fleetctrl.StopBasedBatchAssignmentFleetcontrol", "StopBasedBatchAssignmentFleetcontrol")
     # add development content
     if dev_content is not None:
         dev_op_dict = dev_content.add_fleet_control_modules()

@@ -13,7 +13,7 @@ replay_flag: True
 nr_mod_operators: 1
 
 # Traveler model
-rq_type: AgimoUserGroupRequest
+rq_type: UserGroupRequest
 # "hard": reject offers violating per-request constraints
 # "soft": accept all, log disutility for welfare analysis
 user_acceptance_mode: hard
@@ -25,10 +25,11 @@ op_rp_batch_optimizer: InsertionHeuristic # TODO check
 op_vr_control_func_dict: OVERWRITE_IN_SCENARIO_CONFIG
 op_init_veh_distribution: OVERWRITE_IN_SCENARIO_CONFIG
 op_min_wait_time: 0
-op_max_wait_time: 900
+op_max_wait_time: 600
 op_max_detour_time_factor: 40
 # op_add_constant_detour_time: 300 TODO check
 op_const_boarding_time: 30
+op_add_boarding_time: 2
 op_reoptimisation_timestep: 60
 # fare structure
 op_base_fare: 0

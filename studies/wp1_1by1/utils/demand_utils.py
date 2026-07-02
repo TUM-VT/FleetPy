@@ -2,8 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 
-from src.demand.UserGroupTravelerModel import RQ_BOARDING_TIME
-from src.misc.globals import G_AR_BOARDING_TIME, G_AR_MAX_WT
+from src.misc.globals import *
 from utils.distributions import get_location_distribution, get_time_distribution
 
 REPO_ROOT = os.path.abspath(os.path.join(
@@ -77,7 +76,6 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
         group = rng.choice(groups, p=probs)
         gp = user_group_params[group]
 
-
         rq = {
             "rq_time": rq_time,
             "start": start_loc,
@@ -85,8 +83,12 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
             "direction": direction,
             "user_group": group,
             G_AR_MAX_WT: gp[G_AR_MAX_WT],
-            RQ_BOARDING_TIME: gp.get(G_AR_BOARDING_TIME, DEFAULT_BOARDING_TIME),
-            
+            G_RQ_MRD: gp[G_RQ_MRD],
+            G_WALKING_SPEED: gp[G_WALKING_SPEED],
+            G_MAX_WALKING_DIST: gp[G_MAX_WALKING_DIST],
+            G_MC_VOT: gp[G_MC_VOT],
+            G_VOW_FACTOR: gp[G_VOW_FACTOR],
+            G_V_WAIT_FACTOR: gp[G_V_WAIT_FACTOR]
         }
         requests.append(rq)
 

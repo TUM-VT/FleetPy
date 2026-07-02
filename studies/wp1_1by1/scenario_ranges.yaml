@@ -13,24 +13,53 @@ demand:
   temporal_distributions:
     ["uniform"] # TODO poisson
 
-  # Behavioral parameters consumed by AgimoUserGroupRequest (per-request columns).
+  # Behavioral parameters consumed by UserGroupRequest (per-request columns).
   # TODO check if used correctly
-  # TODO complete
   user_group_params:
-    normal:             # mid-range baseline used by all_normal profile
-      user_max_wait_time: 600
-      max_rel_detour: 40
-      # max_walk_dist_m: 400
-      boarding_time: 30
-      # walk_speed_mps: 1.2
-      # vot_per_h: 10.0
-      # vow_factor: 1.5
-    
+    normal:           
+      user_max_wait_time: 600            # seconds
+      max_rel_detour: 40                 # percent of direct route travel time
+      max_walking_dist: 500              # meters
+      walking_speed: 5                   # kilometers/hour
+      value_of_time: 10                  # euro/hour
+      value_of_walking_factor: 2         # value of walking time relative to in-vehicle time
+      value_of_waiting_factor: 1.5       # value of waiting time relative to in-vehicle time
 
-    # mobility_constrained:
-    # weather_safety_sensitive:
-    # time_sensitive:
-    # relaxed:
+    mobility_constrained:
+      user_max_wait_time: 300            # seconds
+      max_rel_detour: 40                 # percent of direct route travel time
+      max_walking_dist: 200              # meters
+      walking_speed: 3                   # kilometers/hour
+      value_of_time: 10                  # euro/hour
+      value_of_walking_factor: 3         # value of walking time relative to in-vehicle time
+      value_of_waiting_factor: 2         # value of waiting time relative to in-vehicle time
+
+    weather_safety_sensitive:
+      user_max_wait_time: 300            # seconds
+      max_rel_detour: 50                 # percent of direct route travel time
+      max_walking_dist: 400              # meters
+      walking_speed: 4                   # kilometers/hour
+      value_of_time: 10                  # euro/hour
+      value_of_walking_factor: 3         # value of walking time relative to in-vehicle time
+      value_of_waiting_factor: 2         # value of waiting time relative to in-vehicle time
+    
+    time_sensitive:
+      user_max_wait_time: 300            # seconds
+      max_rel_detour: 30                 # percent of direct route travel time
+      max_walking_dist: 300              # meters
+      walking_speed: 6                   # kilometers/hour
+      value_of_time: 15                  # euro/hour
+      value_of_walking_factor: 2         # value of walking time relative to in-vehicle time
+      value_of_waiting_factor: 1.5       # value of waiting time relative to in-vehicle time
+
+    relaxed:
+      user_max_wait_time: 900            # seconds
+      max_rel_detour: 60                 # percent of direct route travel time
+      max_walking_dist: 800              # meters
+      walking_speed: 4                   # kilometers/hour
+      value_of_time: 5                   # euro/hour
+      value_of_walking_factor: 1.5       # value of walking time relative to in-vehicle time
+      value_of_waiting_factor: 1.0       # value of waiting time relative to in-vehicle time
 
   # Population mix profiles (shares must sum to 1.0 per profile).
   # TODO complete
@@ -50,7 +79,6 @@ service_types:
   # TODO add fixed lines
   # fixed_line:
   #   op_module: FixedLineFleetcontrol
-  #   rq_type: AgimoUserGroupRequest
   #   op_vr_control_func_dict:
   #     func_key: distance_and_user_times
   #    vot: 0.458
@@ -72,7 +100,6 @@ service_types:
 
   stop_based:
     op_module: StopBasedBatchAssignmentFleetcontrol
-    rq_type: AgimoUserGroupRequest
     use_all_nodes_boarding: true
     op_vr_control_func_dict:
       func_key: distance_and_user_times_man
@@ -83,7 +110,6 @@ service_types:
 
   dtd:
     op_module: RidePoolingBatchAssignmentFleetcontrol
-    rq_type: AgimoUserGroupRequest
     op_vr_control_func_dict: # TODO (sod) func_key:distance_and_user_times_man_SoD;vot:0.458;dc:0.05;fr:1000000
       func_key: distance_and_user_times_man
       vot: 0.458
