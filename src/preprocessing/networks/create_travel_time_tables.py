@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from numba import njit, prange
 
-LARGE = np.Inf
+LARGE = np.inf
 
 
 def addEdgeToAdjacencyMatrix(column, A, B):
