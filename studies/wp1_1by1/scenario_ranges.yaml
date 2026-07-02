@@ -1,0 +1,98 @@
+network:
+  lengths: [1]  # 1, 5, 10, 15         # corridor lengths (km). TODO add others
+  widths: [1]  # 1, 1.4, 1.8, 2          # corridor widths (km). TODO add others
+  num_hubs: [1] # 2      # number of hubs
+  cell_size: 100        # grid node spacing (m)
+  default_speed: 25     # default speed (km/h)
+
+demand:
+  areal_densities: [10]  # 100, 500, 1000 # demand density in pax/km²/h; total Λ = density × corridor_length_km × corridor_width_km
+  seeds: [0]  # 0, 1, 2  # random seeds for demand generation
+  spatial_distributions:
+    ["uniform"] # TODO triangular, gaussian
+  temporal_distributions:
+    ["uniform"] # TODO poisson
+
+  # Behavioral parameters consumed by AgimoUserGroupRequest (per-request columns).
+  # TODO check if used correctly
+  # TODO complete
+  user_group_params:
+    normal:             # mid-range baseline used by all_normal profile
+      user_max_wait_time: 600
+      max_rel_detour: 40
+      # max_walk_dist_m: 400
+      boarding_time: 30
+      # walk_speed_mps: 1.2
+      # vot_per_h: 10.0
+      # vow_factor: 1.5
+    
+
+    # mobility_constrained:
+    # weather_safety_sensitive:
+    # time_sensitive:
+    # relaxed:
+
+  # Population mix profiles (shares must sum to 1.0 per profile).
+  # TODO complete
+  user_profiles:
+    all_normal:
+      normal: 1.0
+      directionality: [0.5]
+
+    # balanced:
+    #   mobility_constrained: 0.25
+    #   weather_safety_sensitive: 0.25
+    #   time_sensitive: 0.25
+    #   relaxed: 0.25
+    #   directionality: [0.3, 0.5, 0.7]
+
+service_types:
+  # TODO add fixed lines
+  # fixed_line:
+  #   op_module: FixedLineFleetcontrol
+  #   rq_type: AgimoUserGroupRequest
+  #   op_vr_control_func_dict:
+  #     func_key: distance_and_user_times
+  #    vot: 0.458
+
+  # TODO complete
+  # sod:
+  #   op_module: SemiOnDemandBatchAssignmentFleetcontrol
+  #   op_vr_control_func_dict:  # TODO
+  #     func_key: distance_and_user_times_man_SoD
+  #     vot: 0.458
+  #     dc: 0.05
+  #     fr: 1000000
+  #   veh_type: veh_20
+  #   fleet_ratios: [0.25]  # 0.5, 1.0
+  #   headways_min: [5, 10, 20]         # headways in minutes
+  #   station_spacings_m: [200, 500]    # stop spacings along the middle line (m)
+  #   boarding_time_s: 60               # dwell time at each stop (s)
+  #   line_id: 1
+
+  stop_based:
+    op_module: StopBasedBatchAssignmentFleetcontrol
+    rq_type: AgimoUserGroupRequest
+    use_all_nodes_boarding: true
+    op_vr_control_func_dict:
+      func_key: distance_and_user_times_man
+      vot: 0.458
+      dc: 0.05
+    veh_type: default_vehtype  # TODO bigger vehicle types for stop-based service?
+    fleet_ratios: [0.25]  # 0.5, 1.0
+
+  dtd:
+    op_module: RidePoolingBatchAssignmentFleetcontrol
+    rq_type: AgimoUserGroupRequest
+    op_vr_control_func_dict: # TODO (sod) func_key:distance_and_user_times_man_SoD;vot:0.458;dc:0.05;fr:1000000
+      func_key: distance_and_user_times_man
+      vot: 0.458
+      dc: 0.05
+    veh_type: default_vehtype
+    # fleet_ratios: [0.1, 0.25, 0.5, 1.0]   # vehicles per total Λ (pax/h); e.g. 0.25 * 200pax/h = 50 vehs
+    fleet_ratios: [0.25]  # 0.5, 1.0
+
+simulation:
+  end_time: 3600        # demand generation window (s)
+  cool_time: 1800       # extra sim time after demand stops, to let in-progress trips finish (s)
+
