@@ -304,10 +304,10 @@ class MATSimSocket:
         if iteration is not None and self._dynamic_fleet_adoption and iteration >= EARLIEST_FLEETADOPTION_ITERATION:
             # read service rate from last iteration
             last_output_dir = Path(self._output_dir).parent / str(iteration - 1)
+            current_service_rate = None
             if os.path.exists(last_output_dir):
                 if not os.path.exists(os.path.join(last_output_dir, "standard_eval.csv")):
                     LOG.warning(f"standard_eval.csv not found in {last_output_dir}, cannot read service rate!")
-                    current_service_rate = None
                 else:
                     current_service_rate = read_service_rate(os.path.join(last_output_dir, "standard_eval.csv"), operator_id=0)
                 if self._previous_fleet_size is None:
