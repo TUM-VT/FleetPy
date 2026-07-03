@@ -300,11 +300,11 @@ class MATSimSocket:
         self.fleetpy_to_matsim_vid = {}
 
         new_fleet_size = len(list_vehicle_attributes)
+        current_service_rate = None
 
         if iteration is not None and self._dynamic_fleet_adoption and iteration >= EARLIEST_FLEETADOPTION_ITERATION:
             # read service rate from last iteration
             last_output_dir = Path(self._output_dir).parent / str(iteration - 1)
-            current_service_rate = None
             if os.path.exists(last_output_dir):
                 if not os.path.exists(os.path.join(last_output_dir, "standard_eval.csv")):
                     LOG.warning(f"standard_eval.csv not found in {last_output_dir}, cannot read service rate!")
