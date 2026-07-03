@@ -74,7 +74,7 @@ def update_fleet_size(
         new_size = min(new_size, max_size)
     return new_size
 
-def read_service_rate(stats_path: str, operator_id: str = "MoD_0") -> float:
+def read_service_rate(stats_path: str, operator_id: int = 0) -> float:
     """
     Liest die Servicerate (modal split) aus dem FleetPy-Output-CSV.
  
@@ -88,15 +88,22 @@ def read_service_rate(stats_path: str, operator_id: str = "MoD_0") -> float:
     Servicerate als float zwischen 0 und 1.
     """
     df = pd.read_csv(stats_path, index_col=0, header=0)
- 
-    if operator_id not in df.columns:
+    op_id_str = f"MoD_{operator_id}"
+
+    if op_id_str not in df.columns:
         raise KeyError(
-            f"Operator '{operator_id}' nicht gefunden. "
+            f"Operator '{op_id_str}' nicht gefunden. "
             f"Verfügbare Spalten: {list(df.columns)}"
         )
  
-    value = df.loc["modal split", operator_id]
+    value = df.loc["modal split", op_id_str]
     return float(value)
+
+def read_last_fleetsize(stats_path: str, operator_id: int = 0) -> int:
+    #final_state.csv
+    f_state = pd.read_csv(stats_path)
+    n_vehicles = len(f_state[f_state["operator_id"] == operator_id]["vehicle_id"].unique())
+    return n_vehicles
 
 class MATSimSocket:
     """
@@ -287,29 +294,45 @@ class MATSimSocket:
         self.fs_obj.terminate()
         self._simulation_terminated = True
         
-    def _initialize_vehicles(self, list_vehicle_attributes, current_service_rate=None):
+    def _initialize_vehicles(self, list_vehicle_attributes, iteration=None):
         self.matsim_to_fleetpy_vid = {}
         self.fleetpy_to_matsim_vid = {}
 
         new_fleet_size = len(list_vehicle_attributes)
-        if current_service_rate is not None and self._previous_service_rate is not None:
-            new_fleet_size = update_fleet_size(
-                current_size=self._previous_fleet_size,
-                current_rate=current_service_rate,
-                previous_rate=self._previous_service_rate,
-                target_rate=TARGET_SERVICE_RATE,
-                damping_increase=DAMPING_INCREASE,
-                damping_decrease=DAMPING_DECREASE,
-                min_improvement=MIN_IMPROVEMENT,
-                min_size=1,
-                max_size=len(list_vehicle_attributes)
-            )
-            if new_fleet_size < self._previous_fleet_size:
-                LOG.info(f"Reducing fleet size from {self._previous_fleet_size} to {new_fleet_size} due to service rate {current_service_rate:.4f}")
-            elif new_fleet_size > self._previous_fleet_size:
-                LOG.info(f"Increasing fleet size from {self._previous_fleet_size} to {new_fleet_size} due to service rate {current_service_rate:.4f}")
-            else:
-                LOG.info(f"Fleet size remains at {self._previous_fleet_size} with service rate {current_service_rate:.4f}")
+
+        if iteration is not None and self._dynamic_fleet_adoption and iteration >= EARLIEST_FLEETADOPTION_ITERATION:
+            # read service rate from last iteration
+            last_output_dir = self._output_dir.parent / str(iteration - 1)
+            if os.path.exists(last_output_dir):
+                if not os.path.exists(os.path.join(last_output_dir, "standard_eval.csv")):
+                    LOG.warning(f"standard_eval.csv not found in {last_output_dir}, cannot read service rate!")
+                    current_service_rate = None
+                else:
+                    current_service_rate = read_service_rate(os.path.join(last_output_dir, "standard_eval.csv"), operator_id=0)
+                if self._previous_fleet_size is None:
+                    if not os.path.exists(os.path.join(last_output_dir, "final_state.csv")):
+                        LOG.warning(f"final_state.csv not found in {last_output_dir}, cannot read previous fleet size!")
+                        self._previous_fleet_size = new_fleet_size
+                    else:
+                        self._previous_fleet_size = read_last_fleetsize(os.path.join(last_output_dir, "final_state.csv"), operator_id=0)
+            if current_service_rate is not None and self._previous_service_rate is not None:
+                new_fleet_size = update_fleet_size(
+                    current_size=self._previous_fleet_size,
+                    current_rate=current_service_rate,
+                    previous_rate=self._previous_service_rate,
+                    target_rate=TARGET_SERVICE_RATE,
+                    damping_increase=DAMPING_INCREASE,
+                    damping_decrease=DAMPING_DECREASE,
+                    min_improvement=MIN_IMPROVEMENT,
+                    min_size=1,
+                    max_size=len(list_vehicle_attributes)
+                )
+                if new_fleet_size < self._previous_fleet_size:
+                    LOG.info(f"Reducing fleet size from {self._previous_fleet_size} to {new_fleet_size} due to service rate {current_service_rate:.4f}")
+                elif new_fleet_size > self._previous_fleet_size:
+                    LOG.info(f"Increasing fleet size from {self._previous_fleet_size} to {new_fleet_size} due to service rate {current_service_rate:.4f}")
+                else:
+                    LOG.info(f"Fleet size remains at {self._previous_fleet_size} with service rate {current_service_rate:.4f}")
         
         for i, vehicle_attributes in enumerate(list_vehicle_attributes):
             matsim_vehicle_id = vehicle_attributes["id"]
@@ -354,10 +377,6 @@ class MATSimSocket:
                     os.remove(os.path.join(last_output_dir, f))
                 if f.endswith(".log"):
                     os.remove(os.path.join(last_output_dir, f))
-
-            if self._dynamic_fleet_adoption and iteration >= EARLIEST_FLEETADOPTION_ITERATION:
-                # read service rate from last iteration
-                current_service_rate = read_service_rate(os.path.join(last_output_dir, "standard_eval.csv"), operator_id="MoD_0")
         
             scenario_parameters = self.scenario_parameters.copy()
 
@@ -399,7 +418,7 @@ class MATSimSocket:
         
         list_vehicle_attributes = response_obj["vehicles"]
         
-        self._initialize_vehicles(list_vehicle_attributes, current_service_rate=current_service_rate)
+        self._initialize_vehicles(list_vehicle_attributes, iteration=iteration)
         
         self.fs_obj.step(self.scenario_parameters[G_SIM_START_TIME])
 
