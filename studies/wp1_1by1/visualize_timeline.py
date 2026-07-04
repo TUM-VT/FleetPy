@@ -29,9 +29,8 @@ STUDY_DIR = Path(__file__).parent
 REPO_ROOT  = STUDY_DIR.parent.parent
 
 # ── run configuration ─────────────────────────────────────────────────────────
-RESULT_DIR    = 'studies/wp1_1by1/results/grid_l1_w1_hubs1_cell100_10pkm2h_0.5dir_all_normal_seed0_dtd_r0.25/'   # Path to a result dir containing 00_config.json + op/user stats CSVs.
-                     # Example: 'studies/wp1_1by1/results/grid_l1_w1_hubs1_cell100_10rph_0.5dir_all_normal_seed0_dtd_n5'
-                     # Leave '' to auto-pick the first subdirectory of studies/wp1_1by1/results/.
+BASE_RESULT_DIR = Path("studies/wp1_1by1/results")
+RESULT_DIR    = f'{BASE_RESULT_DIR}/grid_l1_w1_hubs1_cell100_10pkm2h_0.5dir_all_normal_seed0_stops_r0.25/'   # Path to a result dir containing 00_config.json + op/user stats CSVs.
 FRAME_STEP    = 30     # seconds per animation frame
 INTERVAL_MS   = 300    # milliseconds between frames during playback
 SAVE_GIF      = False  # True = write timeline.gif instead of interactive window
@@ -119,6 +118,12 @@ def load_data(result_dir: Path):
         lambda r: _node(r["dropoff_location"])
         if pd.notna(r.get("dropoff_location")) and str(r.get("dropoff_location")).strip() not in ("", "nan")
         else r["end_node"], axis=1)
+    # true request location: for StopBasedUserGroupRequest, start/end already hold the matched
+    # boarding point (not the traveler's true location), and true_o_node/true_d_node hold the
+    # true location instead. Plain UserGroupRequest (door-to-door) has no such columns, so
+    # start_node/end_node already are the true location.
+    req["origin_node"] = req["true_o_node"] if "true_o_node" in req.columns else req["start_node"]
+    req["dest_node"]   = req["true_d_node"] if "true_d_node" in req.columns else req["end_node"]
 
     return ops, req, nw_name, end_time
 
@@ -201,11 +206,13 @@ def build_events(req: pd.DataFrame) -> list:
         rid  = int(rq["request_id"])
         grp  = rq.get("user_group", "?")
         vid  = int(rq["vehicle_id"]) if pd.notna(rq.get("vehicle_id")) else "?"
-        wait = float(rq.get("t_outside_wait_s") or 0) + float(rq.get("t_home_wait_s") or 0)
-        dis  = float(rq.get("disutility_eur") or 0)
+        wait = (float(rq["pickup_time"]) - float(rq["rq_time"])
+                if pd.notna(rq.get("pickup_time")) else 0.0)
+        # utility_chosen_mode is a disutility (<=0); flip sign to report it as a positive cost
+        dis  = -float(rq.get("utility_chosen_mode") or 0)
 
         walk_tag = ""
-        if rq["pu_node"] != rq["start_node"]:
+        if rq["pu_node"] != rq["origin_node"]:
             walk_tag = f" [walk→n{rq['pu_node']}]"
         events.append((float(rq["rq_time"]),
                        f"rq_{rid:02d} ({grp}) submitted{walk_tag}"))
@@ -213,9 +220,9 @@ def build_events(req: pd.DataFrame) -> list:
             events.append((float(rq["pickup_time"]),
                            f"V{vid} picks up rq_{rid:02d}  waited {wait:.0f}s"))
         if pd.notna(rq["dropoff_time"]):
-            do_tag = f" [walk←n{rq['do_node']}]" if rq["do_node"] != rq["end_node"] else ""
+            do_tag = f" [walk←n{rq['do_node']}]" if rq["do_node"] != rq["dest_node"] else ""
             events.append((float(rq["dropoff_time"]),
-                           f"V{vid} drops  rq_{rid:02d}  {dis:.2f}€{do_tag}"))
+                           f"V{vid} drops  rq_{rid:02d}  disutility={dis:.0f}{do_tag}"))
 
     events.sort(key=lambda e: e[0])
     return events
@@ -233,10 +240,11 @@ def make_animation(ops, req, coords, hubs, end_time,
     for t, msg in events:
         LOG.info("t=%6.0fs | %s", t, msg)
     n_served = int(req["dropoff_time"].notna().sum())
-    avg_wait = (req.get("t_outside_wait_s", pd.Series(dtype=float)).fillna(0)
-                + req.get("t_home_wait_s",    pd.Series(dtype=float)).fillna(0)).mean()
-    avg_dis  = req["disutility_eur"].fillna(0).mean()
-    LOG.info("=== %d served | avg wait %.1fs | avg disutility %.2f€ ===",
+    avg_wait = (pd.to_numeric(req["pickup_time"], errors="coerce")
+                - pd.to_numeric(req["rq_time"], errors="coerce")).mean()
+    # utility_chosen_mode is a disutility (<=0); flip sign to report it as a positive cost
+    avg_dis  = -req.get("utility_chosen_mode", pd.Series(dtype=float)).fillna(0).mean()
+    LOG.info("=== %d served | avg wait %.1fs | avg disutility %.1f ===",
              n_served, avg_wait, avg_dis)
 
     # Static node arrays
@@ -398,7 +406,7 @@ def make_animation(ops, req, coords, hubs, end_time,
             dt = rq["dropoff_time"]
             if pd.isna(pt) or t < float(pt):
                 pu_n  = int(rq["pu_node"])
-                ori_n = int(rq["start_node"])
+                ori_n = int(rq["origin_node"])
                 if pu_n in coords:
                     wait_xy.append(coords[pu_n])
                     if pu_n != ori_n and ori_n in coords:
@@ -410,10 +418,10 @@ def make_animation(ops, req, coords, hubs, end_time,
                     board_xy.append(vpos[vid])
             elif t < float(dt) + 300:   # show walk-from-dropoff for 5 min
                 do_n  = int(rq["do_node"])
-                end_n = int(rq["end_node"])
-                if do_n != end_n and do_n in coords and end_n in coords:
-                    dest_xy.append(coords[end_n])
-                    walk_do_segs.append([coords[do_n], coords[end_n]])
+                dest_n = int(rq["dest_node"])
+                if do_n != dest_n and do_n in coords and dest_n in coords:
+                    dest_xy.append(coords[dest_n])
+                    walk_do_segs.append([coords[do_n], coords[dest_n]])
 
         rq_wait_sc.set_offsets(  np.array(wait_xy)   if wait_xy   else np.empty((0, 2)))
         rq_origin_sc.set_offsets(np.array(origin_xy) if origin_xy else np.empty((0, 2)))

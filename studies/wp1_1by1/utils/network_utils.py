@@ -17,6 +17,8 @@ CRS_FILE = "crs.info"
 
 NW_DIR = os.path.join(REPO_ROOT, "data", "networks")
 INFRA_DIR = os.path.join(REPO_ROOT, "data", "infra")
+BOARDING_INFRA_NAME = "stop_based"
+BOARDING_POINTS_FILE = "boarding_points.csv"
 
 
 def get_row_cols(length, width, cell_size):
@@ -121,6 +123,37 @@ def generate_hubs(rows, cols, n_hubs):
     return hub_nodes
 
 
+def generate_boarding_points(rows, cols, spacing_m, cell_size):
+    """
+    Generate a constant-spacing grid of boarding-point node assignments.
+
+    Parameters:
+    - rows: Number of rows in the grid
+    - cols: Number of columns in the grid
+    - spacing_m: Target spacing between boarding points (in meters)
+    - cell_size: Size of each grid cell (in meters)
+    """
+    step = max(1, round(spacing_m / cell_size))
+    boarding_points = []
+    for r in range(0, rows, step):
+        for c in range(0, cols, step):
+            boarding_points.append({"node_index": r * cols + c})
+    return boarding_points
+
+
+def write_boarding_points_to_file(boarding_points, infra_dir):
+    """
+    Write the generated boarding points to file.
+
+    Parameters:
+    - boarding_points: List of boarding points in the network
+    - infra_dir: Directory to save the generated boarding points file
+    """
+    os.makedirs(infra_dir, exist_ok=True)
+    pd.DataFrame(boarding_points).to_csv(
+        os.path.join(infra_dir, BOARDING_POINTS_FILE), index=False)
+
+
 def write_network_to_file(nodes, edges, hubs, output_dir):
     """
     Write the generated network to a file.
@@ -143,7 +176,7 @@ def write_network_to_file(nodes, edges, hubs, output_dir):
         f.write("EPSG:32632")
 
 
-def generate_grid_network(length, width, n_hubs, cell_size, speed, name):
+def generate_grid_network(length, width, n_hubs, cell_size, speed, name, boarding_point_spacing_m=None):
     """Generate one grid network and optional boarding-point infrastructures."""
     rows, cols = get_row_cols(length, width, cell_size)
     nodes = generate_nodes(rows, cols, cell_size)
@@ -153,6 +186,11 @@ def generate_grid_network(length, width, n_hubs, cell_size, speed, name):
     output_dir = os.path.join(NW_DIR, name)
     write_network_to_file(nodes, edges, hubs, output_dir)
     create_travel_time_table(output_dir)
+
+    if boarding_point_spacing_m is not None:
+        boarding_points = generate_boarding_points(rows, cols, boarding_point_spacing_m, cell_size)
+        infra_dir = os.path.join(INFRA_DIR, BOARDING_INFRA_NAME, name)
+        write_boarding_points_to_file(boarding_points, infra_dir)
 
 
 def generate_networks(nw_ranges):
@@ -165,13 +203,15 @@ def generate_networks(nw_ranges):
     num_hubs = nw_ranges["num_hubs"]
     cell_size = nw_ranges["cell_size"]
     speed = nw_ranges["default_speed"]
+    boarding_point_spacing_m = nw_ranges.get("boarding_point_spacing_m")
 
     networks = []
     for length in lengths:
         for width in widths:
             for n_hubs in num_hubs:
                 nw_name = f"grid_l{length}_w{width}_hubs{n_hubs}_cell{cell_size}"
-                generate_grid_network(length, width, n_hubs, cell_size, speed, nw_name)
+                generate_grid_network(length, width, n_hubs, cell_size, speed, nw_name,
+                                       boarding_point_spacing_m)
                 networks.append({"name": nw_name, "length_km": length, "width_km": width})
 
     return networks

@@ -141,7 +141,7 @@ G_MC_TRANSFER_P = "pt_transfer_penalty"
 G_MC_C_D_PV = "private_vehicle_full_costs_per_m"
 G_VOW_FACTOR = "value_of_walking_factor"
 G_V_WAIT_FACTOR = "value_of_waiting_factor"
-G_V_REL_FACTOR = "value_of_reliability_factor"
+G_MC_NO_OFFER_PENALTY = "no_offer_penalty"  # reliability: time-equivalent disutility when no acceptable offer is received
 
 # traveler specific attributes
 G_WALKING_SPEED = "walking_speed"
@@ -458,6 +458,10 @@ G_RQ_ORIGIN = "start"
 G_RQ_DESTINATION = "end"
 G_RQ_TIME = "rq_time"
 G_RQ_ID = "request_id"
+G_RQ_DIRECTION = "direction"
+G_RQ_BOARDING_NODE = "boarding_node"
+G_DIR_FROM_HUB = "from_hub"
+G_DIR_TO_HUB = "to_hub"
 
 # optional input data (and output)
 # --------------------------------

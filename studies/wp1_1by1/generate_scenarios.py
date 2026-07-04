@@ -1,4 +1,4 @@
-from utils.demand_utils import generate_demand_scenario, get_hubs_for_network
+from utils.demand_utils import generate_demand_scenario, get_hubs_for_network, get_boarding_points_for_network
 from utils.network_utils import generate_networks
 # from utils.pubtrans_utils import generate_pubtrans, get_stations_for_network
 import yaml
@@ -16,6 +16,12 @@ SCENARIO_RANGES_FILE = os.path.join(STUDY_DIR, "scenario_ranges.yaml")
 DEMAND_DIR = os.path.join(REPO_ROOT, "data", "demand", "agimo_wp1", "matched")
 INIT_VEH_DIST_DIR = os.path.join(REPO_ROOT, "data", "fleetctrl", "initial_vehicle_distribution")
 INIT_DIST_FILE_NAME = "hub_all.csv"
+# must match const_cfg.yaml's default rq_type. Written explicitly to every scenario_cfg.csv row
+# (never left blank) so that mixing service types with/without an rq_type override doesn't make
+# pandas introduce a blank rq_type cell for the others - src/misc/config.py's constant/scenario
+# config merge treats any present (even blank/NaN) column value as an explicit override, which
+# would silently clobber the constant config default with None.
+DEFAULT_RQ_TYPE = "UserGroupRequest"
 
 
 def read_ranges():
@@ -25,12 +31,14 @@ def read_ranges():
 
 # --- demand generation helpers ---
 
-def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, temporal_dist, profile_name, shares, direction_pct, seed, group_params, end_time):
+def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, temporal_dist, profile_name, shares, direction_pct, seed, group_params, end_time, boarding_match_radius):
     rq_name = f"{areal_density}pkm2h_dir{direction_pct}_seed{seed}_spatial_{spatial_dist}_temporal_{temporal_dist}_user_{profile_name}"
     total_lambda = areal_density * length_km * width_km
+    boarding_points = get_boarding_points_for_network(nw_name)
     generate_demand_scenario(
         nw_name, rq_name, areal_density, length_km, width_km, direction_pct, seed,
-        spatial_dist, temporal_dist, shares, group_params, end_time)
+        spatial_dist, temporal_dist, shares, group_params, end_time,
+        boarding_points=boarding_points, boarding_match_radius=boarding_match_radius)
     return {
         "network_name": nw_name,
         "rq_file": rq_name + ".csv",
@@ -44,12 +52,14 @@ def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, tem
     }
 
 
-def generate_demand_scenarios(demand_ranges, networks, end_time):
+def generate_demand_scenarios(demand_ranges, networks, end_time, boarding_match_radius):
     """Generate demand CSVs for all network/density combinations.
 
     Parameters:
     - networks: list of dicts {"name": str, "length_km": float, "width_km": float}
                 as returned by generate_networks()
+    - boarding_match_radius: uniform boarding-point match radius (m), see
+      demand_utils.match_boarding_point
     """
     areal_densities = demand_ranges["areal_densities"]
     seeds = demand_ranges["seeds"]
@@ -71,7 +81,7 @@ def generate_demand_scenarios(demand_ranges, networks, end_time):
                                     nw["name"], nw["length_km"], nw["width_km"],
                                     areal_density, spatial_dist, temporal_dist,
                                     profile_name, shares, direction_pct, seed,
-                                    group_params, end_time))
+                                    group_params, end_time, boarding_match_radius))
     return demand_scenarios
 
 
@@ -94,8 +104,7 @@ def _scenario_row(base_name, dv, st_name, st_cfg, sim_end_time, n, size_tag):
         "op_fleet_composition": f"{st_cfg['veh_type']}:{n}",
         "op_init_veh_distribution": INIT_DIST_FILE_NAME,
     }
-    if "rq_type" in st_cfg:
-        row["rq_type"] = st_cfg["rq_type"]
+    row["rq_type"] = st_cfg.get("rq_type", DEFAULT_RQ_TYPE)
     if st_cfg.get("use_all_nodes_boarding"):
         row["op_use_all_nodes_boarding"] = True
     if "op_repo_method" in st_cfg:
@@ -149,7 +158,8 @@ def main():
     sim_end_time = ranges["simulation"]["end_time"] + ranges["simulation"]["cool_time"]
     networks = generate_networks(ranges["network"])
     generate_initial_vehicle_distributions([nw["name"] for nw in networks])
-    demand_scenarios = generate_demand_scenarios(ranges["demand"], networks, sim_end_time)
+    boarding_match_radius = ranges["network"].get("boarding_point_spacing_m")
+    demand_scenarios = generate_demand_scenarios(ranges["demand"], networks, sim_end_time, boarding_match_radius)
     service_types = generate_service_types(ranges)
     generate_scenario_cfg(demand_scenarios, service_types, sim_end_time)
 
