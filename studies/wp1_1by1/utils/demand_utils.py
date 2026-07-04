@@ -112,10 +112,21 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
     write_demand_to_csv(requests, output_dir, rq_name, overwrite)
 
 
+def _manhattan_dist(node_coords, a, b):
+    """Manhattan (L1) distance between two node IDs' projected coordinates."""
+    ax, ay = node_coords[int(a)]
+    bx, by = node_coords[int(b)]
+    return abs(ax - bx) + abs(ay - by)
+
+
 def _nearest_node(location, candidates, node_coords, tie_break_ref=None):
     """
-    Find the nearest candidate node to a location by cartesian distance (node_coords are assumed
-    already projected into a common metric CRS, see get_node_coordinates_for_network).
+    Find the nearest candidate node to a location by Manhattan distance (node_coords are assumed
+    already projected into a common metric CRS, see get_node_coordinates_for_network). Manhattan
+    distance is used because the grid network only has axis-aligned edges (see
+    network_utils.generate_edges), so it matches actual network/walking distance, unlike
+    straight-line Euclidean distance which underestimates it whenever two nodes aren't aligned on
+    the same row or column.
 
     Parameters:
     - location: The location for which to find the nearest candidate
@@ -131,12 +142,7 @@ def _nearest_node(location, candidates, node_coords, tie_break_ref=None):
     if not candidates:
         return None
 
-    loc_x, loc_y = node_coords[int(location)]
-    dists = []
-    for candidate in candidates:
-        cand_x, cand_y = node_coords[int(candidate)]
-        dist = (cand_x - loc_x) * (cand_x - loc_x) + (cand_y - loc_y) * (cand_y - loc_y)
-        dists.append((candidate, dist))
+    dists = [(candidate, _manhattan_dist(node_coords, location, candidate)) for candidate in candidates]
 
     min_dist = min(dist for _, dist in dists)
     tied = [candidate for candidate, dist in dists if math.isclose(dist, min_dist, rel_tol=1e-9, abs_tol=1e-6)]
@@ -144,9 +150,7 @@ def _nearest_node(location, candidates, node_coords, tie_break_ref=None):
     if len(tied) == 1 or tie_break_ref is None:
         return tied[0]
 
-    ref_x, ref_y = node_coords[int(tie_break_ref)]
-    return min(tied, key=lambda candidate: (node_coords[int(candidate)][0] - ref_x) ** 2 +
-                                            (node_coords[int(candidate)][1] - ref_y) ** 2)
+    return min(tied, key=lambda candidate: _manhattan_dist(node_coords, candidate, tie_break_ref))
 
 
 def nearest_hub(location, hubs, node_coords):
@@ -188,11 +192,8 @@ def match_boarding_point(location, boarding_points, node_coords, hub_loc, match_
     if not boarding_points:
         return None
 
-    loc_x, loc_y = node_coords[int(location)]
-    max_dist_sq = match_radius * match_radius
     in_range = [candidate for candidate in boarding_points
-                if (node_coords[int(candidate)][0] - loc_x) ** 2 +
-                   (node_coords[int(candidate)][1] - loc_y) ** 2 <= max_dist_sq]
+                if _manhattan_dist(node_coords, location, candidate) <= match_radius]
 
     if not in_range:
         # nothing within range: fall back to the closest boarding point available. The
