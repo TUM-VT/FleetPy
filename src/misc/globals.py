@@ -141,6 +141,7 @@ G_MC_TRANSFER_P = "pt_transfer_penalty"
 G_MC_C_D_PV = "private_vehicle_full_costs_per_m"
 G_VOW_FACTOR = "value_of_walking_factor"
 G_V_WAIT_FACTOR = "value_of_waiting_factor"
+G_V_REL_FACTOR = "value_of_reliability_factor"
 
 # traveler specific attributes
 G_WALKING_SPEED = "walking_speed"

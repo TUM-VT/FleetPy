@@ -88,7 +88,8 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
             G_MAX_WALKING_DIST: gp[G_MAX_WALKING_DIST],
             G_MC_VOT: gp[G_MC_VOT],
             G_VOW_FACTOR: gp[G_VOW_FACTOR],
-            G_V_WAIT_FACTOR: gp[G_V_WAIT_FACTOR]
+            G_V_WAIT_FACTOR: gp[G_V_WAIT_FACTOR],
+            G_V_REL_FACTOR: gp.get(G_V_REL_FACTOR, 0.0)
         }
         requests.append(rq)
 

@@ -16,7 +16,7 @@ demand:
   # Behavioral parameters consumed by UserGroupRequest (per-request columns).
   # TODO check if used correctly
   user_group_params:
-    normal:           
+    normal:
       user_max_wait_time: 600            # seconds
       max_rel_detour: 40                 # percent of direct route travel time
       max_walking_dist: 500              # meters
@@ -24,6 +24,7 @@ demand:
       value_of_time: 10                  # euro/hour
       value_of_walking_factor: 2         # value of walking time relative to in-vehicle time
       value_of_waiting_factor: 1.5       # value of waiting time relative to in-vehicle time
+      value_of_reliability_factor: 0     # value of pick-up time uncertainty relative to in-vehicle time
 
     mobility_constrained:
       user_max_wait_time: 300            # seconds
@@ -33,6 +34,7 @@ demand:
       value_of_time: 10                  # euro/hour
       value_of_walking_factor: 3         # value of walking time relative to in-vehicle time
       value_of_waiting_factor: 2         # value of waiting time relative to in-vehicle time
+      value_of_reliability_factor: 0     # value of pick-up time uncertainty relative to in-vehicle time
 
     weather_safety_sensitive:
       user_max_wait_time: 300            # seconds
@@ -42,7 +44,8 @@ demand:
       value_of_time: 10                  # euro/hour
       value_of_walking_factor: 3         # value of walking time relative to in-vehicle time
       value_of_waiting_factor: 2         # value of waiting time relative to in-vehicle time
-    
+      value_of_reliability_factor: 0     # value of pick-up time uncertainty relative to in-vehicle time
+
     time_sensitive:
       user_max_wait_time: 300            # seconds
       max_rel_detour: 30                 # percent of direct route travel time
@@ -51,6 +54,7 @@ demand:
       value_of_time: 15                  # euro/hour
       value_of_walking_factor: 2         # value of walking time relative to in-vehicle time
       value_of_waiting_factor: 1.5       # value of waiting time relative to in-vehicle time
+      value_of_reliability_factor: 2     # value of pick-up time uncertainty relative to in-vehicle time; this group is reliability-sensitive
 
     relaxed:
       user_max_wait_time: 900            # seconds
@@ -60,6 +64,7 @@ demand:
       value_of_time: 5                   # euro/hour
       value_of_walking_factor: 1.5       # value of walking time relative to in-vehicle time
       value_of_waiting_factor: 1.0       # value of waiting time relative to in-vehicle time
+      value_of_reliability_factor: 0     # value of pick-up time uncertainty relative to in-vehicle time
 
   # Population mix profiles (shares must sum to 1.0 per profile).
   # TODO complete
@@ -98,15 +103,15 @@ service_types:
   #   boarding_time_s: 60               # dwell time at each stop (s)
   #   line_id: 1
 
-  stop_based:
-    op_module: StopBasedBatchAssignmentFleetcontrol
-    use_all_nodes_boarding: true
-    op_vr_control_func_dict:
-      func_key: distance_and_user_times_man
-      vot: 0.458
-      dc: 0.05
-    veh_type: default_vehtype  # TODO bigger vehicle types for stop-based service?
-    fleet_ratios: [0.25]  # 0.5, 1.0
+  # stop_based:
+  #   op_module: StopBasedBatchAssignmentFleetcontrol
+  #   use_all_nodes_boarding: true
+  #   op_vr_control_func_dict:
+  #     func_key: distance_and_user_times_man
+  #     vot: 0.458
+  #     dc: 0.05
+  #   veh_type: default_vehtype  # TODO bigger vehicle types for stop-based service?
+  #   fleet_ratios: [0.25]  # 0.5, 1.0
 
   dtd:
     op_module: RidePoolingBatchAssignmentFleetcontrol

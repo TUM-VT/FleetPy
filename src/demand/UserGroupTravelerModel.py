@@ -10,10 +10,12 @@ from src.misc.globals import *
 LOG = logging.getLogger(__name__)
 
 INPUT_PARAMETERS_UserGroupRequest = {
-    "doc": "",
+    "doc": """User group request that accepts the first offer meeting its wait time, detour and walking
+    distance thresholds, and records the disutility of the chosen offer (utility_chosen_mode output column)
+    based on the group's value of time and its waiting/walking/reliability weighting factors.""",
     "inherit": "RequestBase",
-    "input_parameters_mandatory": [],
-    "input_parameters_optional": [],
+    "input_parameters_mandatory": [G_AR_MAX_WT, G_WALKING_SPEED, G_MAX_WALKING_DIST],
+    "input_parameters_optional": [G_RQ_MRD, G_MC_VOT, G_VOW_FACTOR, G_V_WAIT_FACTOR, G_V_REL_FACTOR],
     "mandatory_modules": [],
     "optional_modules": []
 }
@@ -39,6 +41,30 @@ class UserGroupRequest(BasicRequest):
         self.value_of_time = rq_row.get(G_MC_VOT, 0.0)
         self.value_of_walking_factor = rq_row.get(G_VOW_FACTOR, 1.0)
         self.value_of_waiting_factor = rq_row.get(G_V_WAIT_FACTOR, 1.0)
+        self.value_of_reliability_factor = rq_row.get(G_V_REL_FACTOR, 0.0)
+        self.utility_chosen_mode = None
+
+    def _compute_utility(self, offer):
+        """ computes the disutility (in time-equivalent units) of an offer based on this user group's
+        value of time and its waiting/walking/reliability weighting factors:
+        utility = - vot * (v_wait_factor * t_wait + t_drive + v_walk_factor * t_walk + v_rel_factor * t_pu_uncertainty)
+        the reliability term penalizes offers with a wide pick-up time interval (i.e. an uncertain pick-up time).
+        :param offer: TravelerOffer of the operator
+        :return: utility value (float)
+        """
+        t_wait = offer[G_OFFER_WAIT]
+        t_drive = offer[G_OFFER_DRIVE]
+        walking_dist = offer.get(G_OFFER_WALKING_DISTANCE_ORIGIN, 0) + \
+            offer.get(G_OFFER_WALKING_DISTANCE_DESTINATION, 0)
+        t_walk = walking_dist / self.walking_speed if self.walking_speed else 0
+        t_pu_uncertainty = offer.get(G_OFFER_PU_INT_END, 0) - offer.get(G_OFFER_PU_INT_START, 0)
+        return - self.value_of_time * (self.value_of_waiting_factor * t_wait + t_drive +
+                                        self.value_of_walking_factor * t_walk +
+                                        self.value_of_reliability_factor * t_pu_uncertainty)
+
+    def _add_record(self, record_dict):
+        record_dict[G_RQ_C_UTIL] = self.utility_chosen_mode
+        return super()._add_record(record_dict)
 
     def choose_offer(self, sc_parameters, simulation_time):
         """Accept the first operator offer that satisfies this user group's
@@ -68,6 +94,7 @@ class UserGroupRequest(BasicRequest):
                 continue
             LOG.debug(f" -> accept offer {op}")
             self.fare = offer.get(G_OFFER_FARE, 0)
+            self.utility_chosen_mode = self._compute_utility(offer)
             return op
         LOG.debug(f"all offers over threshold, decline: {offer_str(self.offer)}")
         return -1
