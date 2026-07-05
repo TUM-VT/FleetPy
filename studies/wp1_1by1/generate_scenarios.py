@@ -32,7 +32,7 @@ def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, tem
     rq_name = f"{areal_density}pkm2h_dir{direction_pct}_seed{seed}_spatial_{spatial_dist}_temporal_{temporal_dist}_user_{profile_name}"
     total_lambda = areal_density * length_km * width_km
     boarding_points = get_boarding_points_for_network(nw_name)
-    generate_demand_scenario(
+    hub_counts = generate_demand_scenario(
         nw_name, rq_name, areal_density, length_km, width_km, direction_pct, seed,
         spatial_dist, temporal_dist, shares, group_params, end_time,
         boarding_points=boarding_points, boarding_match_radius=boarding_match_radius)
@@ -46,6 +46,8 @@ def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, tem
         "user_profile": profile_name,
         "directionality": direction_pct,
         "seed": seed,
+        # per-hub request counts, used for the multi-hub proportional fleet split
+        "hub_counts": hub_counts or {},
     }
 
 
@@ -114,6 +116,41 @@ def _scenario_row(scenario_name, dv, st_cfg, sim_end_time, n, size_tag, extra_co
 
 def _is_pt_line_service(st_cfg):
     return st_cfg.get("op_module") == "SemiOnDemandBatchAssignmentFleetcontrol"
+
+
+def _split_fleet_across_lines(n, pt_variant, hub_counts):
+    """Split a fleet of n vehicles across a PT variant's lines.
+
+    Single-line variants return the scalar n unchanged. Multi-line (two-hub) variants split n in
+    proportion to the demand snapped to each line's hub (largest-remainder apportionment, at least
+    one vehicle per line) and return a "line:n,line:n" mapping string consumed by
+    SemiOnDemandBatchAssignmentFleetcontrol._parse_n_veh_per_line.
+    """
+    lines = pt_variant.get("lines")
+    if not lines or len(lines) <= 1:
+        return n
+
+    weights = [hub_counts.get(int(ld["hub_node"]), 0) for ld in lines]
+    total_w = sum(weights)
+    if total_w == 0:
+        weights = [1] * len(lines)
+        total_w = len(lines)
+
+    k = len(lines)
+    if n <= k:
+        counts = [1] * k  # over-provision a bit rather than leave a line with no vehicle
+    else:
+        rem = n - k
+        shares = [w / total_w * rem for w in weights]
+        base = [int(s) for s in shares]
+        counts = [1 + b for b in base]
+        leftover = rem - sum(base)
+        order = sorted(range(k), key=lambda i: shares[i] - base[i], reverse=True)
+        for i in range(leftover):
+            counts[order[i]] += 1
+
+    # ";"-delimited so FleetPy's config loader (decode_config_str) parses it into a {line_id: n} dict
+    return ";".join(f"{ld['line_id']}:{c}" for ld, c in zip(lines, counts))
 
 
 def _pt_variant_lookup(pt_variants):
@@ -185,12 +222,15 @@ def _pt_scenario_rows(base_name, dv, st_name, st_cfg, sim_end_time, pt_variant_l
                         )
 
             for n, size_tag in _fleet_entries(st_cfg, dv["total_lambda"]):
+                # pt_n_veh is the total n for a single line, or a per-line "line:n,..." split for
+                # two hubs; op_fleet_composition (via _scenario_row's n) always gets the total.
+                pt_n_veh = _split_fleet_across_lines(n, pt_variant, dv.get("hub_counts", {}))
                 for fixed_length_km, fl_tag in fixed_length_variants:
                     scenario_name = (
                         f"{base_name}_{st_name}_sp{station_spacing_m}_hw{headway_min}_"
                         f"{fl_tag}_{size_tag}"
                     )
-                    extra_cols = _pt_extra_cols(st_cfg, pt_variant, headway_min, fixed_length_km, n)
+                    extra_cols = _pt_extra_cols(st_cfg, pt_variant, headway_min, fixed_length_km, pt_n_veh)
                     rows.append(_scenario_row(
                         scenario_name, dv, st_cfg, sim_end_time, n, size_tag, extra_cols=extra_cols))
     return rows
@@ -207,6 +247,7 @@ def generate_scenario_cfg(demand_scenarios, service_types, sim_end_time, pt_vari
     for dv in demand_scenarios:
         base_name = (
             f"{dv['network_name']}_{dv['areal_density']}pkm2h_{dv['directionality']}dir"
+            f"_{dv['spatial_distribution']}_{dv['temporal_distribution']}"
             f"_{dv['user_profile']}_seed{dv['seed']}"
         )
         for st_name, st_cfg in service_types.items():
@@ -222,7 +263,11 @@ def generate_scenario_cfg(demand_scenarios, service_types, sim_end_time, pt_vari
     df = pd.DataFrame(rows)
     for col in ("terminus_id", "line_id", "pt_route_id", "pt_n_veh"):
         if col in df.columns:
-            df[col] = df[col].astype("Int64")
+            try:
+                # pt_n_veh is a "line:n,..." string for two-hub scenarios; leave those as-is
+                df[col] = df[col].astype("Int64")
+            except (ValueError, TypeError):
+                pass
     df.to_csv(out_path, index=False)
     print(f"Wrote {len(rows)} scenarios to {out_path}")
 

@@ -1,16 +1,20 @@
 network:
   lengths: [1]  # 1, 5, 10, 15         # corridor lengths (km)
   widths: [1]  # 1, 1.4, 1.8, 2          # corridor widths (km)
-  num_hubs: [1] # 2      # number of hubs
+  num_hubs: [1, 2]       # number of hubs; 2 hubs -> two SoD half-lines (each hub -> corridor midpoint and back)
   cell_size: 100        # grid node spacing (m)
-  default_speed: 25     # default speed (km/h)
+  default_speed: 30     # default speed (km/h)
   boarding_point_spacing_m: 300  # constant spacing between stop-based boarding points (m)
 
 demand:
-  areal_densities: [30]  # 100, 500, 1000 # demand density in pax/km²/h; total Λ = density × corridor_length_km × corridor_width_km
+  areal_densities: [15, 30, 45]  # 100, 500, 1000 # demand density in pax/km²/h; total Λ = density × corridor_length_km × corridor_width_km
   seeds: [0]  # 0, 1, 2  # random seeds for demand generation
   spatial_distributions:
-    ["uniform"] # TODO triangular, gaussian
+    # multicentric: demand density concentrated around the hub(s). Cutoffs are derived in code.
+    #   hub_triangular    : triangular along the corridor length (1 hub -> whole corridor, 2 hubs ->
+    #                       peaks meet at the midpoint), uniform across the width.
+    #   hub_triangular_2d : also triangular across the width (peaks at the hub row, zero at the edges).
+    ["uniform", "hub_triangular_2d"]
   temporal_distributions:
     ["poisson"]
 
@@ -90,11 +94,11 @@ demand:
     #   # directionality: [0.25, 0.5, 0.75]
     #   directionality: [0.5]
     
-    # mobility_constrained_10:
-    #   mobility_constrained: 0.1
-    #   normal: 0.9
-    #   # directionality: [0.25, 0.5, 0.75]
-    #   directionality: [0.5]
+    mobility_constrained_10:
+      mobility_constrained: 0.1
+      normal: 0.9
+      # directionality: [0.25, 0.5, 0.75]
+      directionality: [0.5]
 
     # mobility_constrained_15:
     #   mobility_constrained: 0.15
@@ -110,7 +114,7 @@ demand:
 
 
 pubtrans:
-  headways_min: [5, 10, 20]                    # headways in minutes
+  headways_min: [1, 5, 10, 20]                    # headways in minutes
   station_spacings_m: [200, 300, 400, 500]     # stop spacings along the corridor line (m)
   boarding_time_s: 30                          # dwell time at each stop (s)
   vehicle_type: veh_20
@@ -125,10 +129,10 @@ service_types:
       dc: 0.05
       fr: 1000000
     veh_type: veh_20
-    fleet_ratios: [0.75] 
-    headways_min: [10]              # must be a subset of pubtrans.headways_min above
+    fleet_ratios: [0.25] 
+    headways_min: [5]              # must be a subset of pubtrans.headways_min above
     station_spacings_m: [200]       # must be a subset of pubtrans.station_spacings_m above
-    fixed_length_fractions: [0.25, 0.5, 0.75]
+    fixed_length_fractions: [0.5, 0.75]
     line_id: 1
     pt_flex_detour: 2
     pt_zone_min_detour_time: 0
@@ -142,42 +146,41 @@ service_types:
   fixed_line:
     op_module: SemiOnDemandBatchAssignmentFleetcontrol
     op_vr_control_func_dict:
-      func_key: distance_and_user_times_man_SoD   # same func; flexible zone is disabled via pt_fixed_length
+      func_key: distance_and_user_times_man_SoD
       vot: 0.458
       dc: 0.05
       fr: 1000000
     veh_type: veh_20
-    fleet_ratios: [0.75]
-    headways_min: [10]
+    fleet_ratios: [0.25]
+    headways_min: [5]
     station_spacings_m: [200]
-    fixed_line: true                # marker: generate_scenarios.py substitutes a large pt_fixed_length sentinel
+    fixed_line: true
     line_id: 1
     pt_flex_detour: 2
     pt_zone_min_detour_time: 0       # disable flex dwell entirely (no flexible zone exists)
     pt_zone_max_detour_time: 0
     pt_dispatch_delay: 300           # see sod note above; buffers the terminus departure for from-hub boardings
 
-  # stops:
-  #   op_module: RidePoolingBatchAssignmentFleetcontrol
-  #   op_vr_control_func_dict:
-  #     func_key: distance_and_user_times_man
-  #     vot: 0.458
-  #     dc: 0.05
-  #   veh_type: default_vehtype  # TODO bigger vehicle types for stop-based service?
-  #   fleet_ratios: [0.25]  # 0.5, 1.0
-  #   rq_type: StopBasedUserGroupRequest
+  stops:
+    op_module: RidePoolingBatchAssignmentFleetcontrol
+    op_vr_control_func_dict:
+      func_key: distance_and_user_times_with_walk
+      vot: 0.458
+      dc: 0.05
+    veh_type: default_vehtype  # TODO bigger vehicle types for stop-based service?
+    fleet_ratios: [0.25]  # 0.5, 1.0
+    rq_type: StopBasedUserGroupRequest
 
-  # dtd:
-  #   op_module: RidePoolingBatchAssignmentFleetcontrol
-  #   op_vr_control_func_dict:
-  #     func_key: distance_and_user_times_man
-  #     vot: 0.458
-  #     dc: 0.05
-  #   veh_type: default_vehtype
-  #   # fleet_ratios: [0.1, 0.25, 0.5, 1.0]   # vehicles per total Λ (pax/h); e.g. 0.25 * 200pax/h = 50 vehs
-  #   fleet_ratios: [0.25]  # 0.5, 1.0
+  dtd:
+    op_module: RidePoolingBatchAssignmentFleetcontrol
+    op_vr_control_func_dict:
+      func_key: distance_and_user_times_man
+      vot: 0.458
+      dc: 0.05
+    veh_type: default_vehtype
+    fleet_ratios: [0.25]  # 0.5, 1.0
 
 simulation:
   end_time: 3600        # demand generation window (s)
-  cool_time: 1800       # extra sim time after demand stops, to let in-progress trips finish (s)
+  cool_time: 3600       # extra sim time after demand stops, to let in-progress trips finish (s)
 

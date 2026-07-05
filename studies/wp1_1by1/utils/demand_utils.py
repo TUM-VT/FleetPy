@@ -22,7 +22,8 @@ DEFAULT_BOARDING_TIME = 30  # seconds
 sys.path.insert(0, REPO_ROOT)
 
 from src.misc.globals import *
-from utils.distributions import get_location_distribution, get_time_distribution
+from utils.distributions import (HUB_TRIANGULAR, HUB_TRIANGULAR_2D, get_location_distribution,
+                                 get_time_distribution)
 from utils.network_utils import BOARDING_INFRA_NAME
 
 
@@ -59,21 +60,59 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
 
     output_path = os.path.join(output_dir, rq_name + ".csv")
     if not overwrite and os.path.exists(output_path):
-        return
+        # still report the per-hub demand split (needed for the multi-hub proportional fleet split)
+        # from the already-written file rather than regenerating it
+        return _hub_counts_from_csv(output_path, get_hubs_for_network(nw_name))
 
     rng = np.random.default_rng(seed)
     total_lambda_pax_h = areal_density_pax_km2h * corridor_length_km * corridor_width_km
-    num_requests = int(round(total_lambda_pax_h * end_time / SECONDS_PER_HOUR))
+    expected_requests = total_lambda_pax_h * end_time / SECONDS_PER_HOUR
 
     node_ids = get_node_ids_for_network(nw_name)
     node_coords = get_node_coordinates_for_network(nw_name)
     hubs = get_hubs_for_network(nw_name)
-    location_distribution = get_location_distribution(spatial_dist, node_ids)
+
+    if spatial_dist in (HUB_TRIANGULAR, HUB_TRIANGULAR_2D):
+        if not hubs:
+            raise ValueError(f"spatial_dist '{spatial_dist}' requires at least one hub in the network.")
+        # Along-corridor triangular cutoff as a fraction of corridor length, derived from the hub
+        # count: a single hub ramps down over the whole corridor (1.0, zero at the far end); two hubs
+        # use 0.5 so the two ramps meet at zero at the corridor midpoint.
+        hub_scale_frac = 1.0 if len(hubs) == 1 else 0.5
+        # Exclude hub nodes as candidates so the non-hub end is never sampled exactly on a hub
+        # (which would degenerate to a zero-length trip once the other end snaps to nearest_hub).
+        hub_set = set(hubs)
+        candidate_nodes = [n for n in node_ids if n not in hub_set]
+        # Along-corridor (x) distance to the nearest hub.
+        nearest_hub_dist = [min(_corridor_axis_dist(node_coords, n, hub) for hub in hubs)
+                            for n in candidate_nodes]
+        scale_m = hub_scale_frac * corridor_length_km * 1000
+        if spatial_dist == HUB_TRIANGULAR:
+            # Triangular along the length only; uniform across the width (y).
+            location_distribution = get_location_distribution(
+                spatial_dist, candidate_nodes, nearest_hub_dist=nearest_hub_dist, scale_m=scale_m)
+        else:
+            # Also triangular across the width: cross-corridor (y) distance to the hub row, decaying
+            # to zero at the width edges (scale = half-width; the hubs sit on the centre row).
+            hub_row_y = node_coords[int(hubs[0])][1]
+            row_dist = [abs(node_coords[int(n)][1] - hub_row_y) for n in candidate_nodes]
+            scale_y = corridor_width_km * 1000 / 2
+            location_distribution = get_location_distribution(
+                spatial_dist, candidate_nodes, nearest_hub_dist=nearest_hub_dist, scale_m=scale_m,
+                row_dist=row_dist, scale_y=scale_y)
+    else:
+        location_distribution = get_location_distribution(spatial_dist, node_ids)
+
     time_distribution = get_time_distribution(temporal_dist, end_time)
+
+    # The temporal model owns the count: "poisson" draws a Poisson(expected_requests) total
+    # (true unconditioned Poisson process), "uniform" fixes it to the expected value.
+    num_requests = time_distribution.sample_count(expected_requests, rng)
 
     groups = list(user_group_shares.keys())
     probs = [user_group_shares[g] for g in groups]
 
+    hub_counts = {int(h): 0 for h in hubs}
     requests = []
     for _ in range(num_requests):
         rq_time = time_distribution.sample(rng)
@@ -107,9 +146,28 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
         if boarding_points:
             rq[G_RQ_BOARDING_NODE] = match_boarding_point(
                 non_hub_loc, boarding_points, node_coords, hub_loc, boarding_match_radius)
+        if int(hub_loc) in hub_counts:
+            hub_counts[int(hub_loc)] += 1
         requests.append(rq)
 
     write_demand_to_csv(requests, output_dir, rq_name, overwrite)
+    return hub_counts
+
+
+def _hub_counts_from_csv(output_path, hubs):
+    """Count how many requests are snapped to each hub in an already-written demand CSV. Used to
+    recover the per-hub demand split (for the multi-hub proportional fleet split) without
+    regenerating the demand."""
+    hub_set = {int(h) for h in hubs}
+    hub_counts = {int(h): 0 for h in hubs}
+    df = pd.read_csv(output_path)
+    for start, end in zip(df["start"], df["end"]):
+        # the trip's hub endpoint is whichever of start/end is a hub node
+        for node in (int(start), int(end)):
+            if node in hub_set:
+                hub_counts[node] += 1
+                break
+    return hub_counts
 
 
 def _manhattan_dist(node_coords, a, b):
@@ -117,6 +175,16 @@ def _manhattan_dist(node_coords, a, b):
     ax, ay = node_coords[int(a)]
     bx, by = node_coords[int(b)]
     return abs(ax - bx) + abs(ay - by)
+
+
+def _corridor_axis_dist(node_coords, a, b):
+    """Distance along the corridor axis (x) between two node IDs' projected coordinates. The grid is
+    laid out with the corridor length along x and the width along y (see network_utils.generate_nodes,
+    with hubs placed at the mid-row corridor ends), so the x-difference alone measures displacement
+    along the corridor, ignoring the cross-corridor (width) offset."""
+    ax, _ = node_coords[int(a)]
+    bx, _ = node_coords[int(b)]
+    return abs(ax - bx)
 
 
 def _nearest_node(location, candidates, node_coords, tie_break_ref=None):

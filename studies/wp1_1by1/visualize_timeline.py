@@ -30,7 +30,7 @@ REPO_ROOT  = STUDY_DIR.parent.parent
 
 # ── run configuration ─────────────────────────────────────────────────────────
 BASE_RESULT_DIR = Path("studies/wp1_1by1/results")
-RESULT_DIR    = f'{BASE_RESULT_DIR}/grid_l1_w1_hubs1_cell100_30pkm2h_0.5dir_all_normal_seed0_sod_sp200_hw10_fl0.75_r0.75'
+RESULT_DIR    = f'{BASE_RESULT_DIR}/grid_l1_w1_hubs1_cell100_30pkm2h_0.5dir_all_normal_seed0_sod_sp200_hw1_fl0.5_r0.75'
 FRAME_STEP    = 30     # seconds per animation frame
 INTERVAL_MS   = 300    # milliseconds between frames during playback
 SAVE_GIF      = False  # True = write timeline.gif instead of interactive window

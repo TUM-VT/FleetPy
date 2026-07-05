@@ -20,6 +20,7 @@ import geopandas as gpd
 from src.simulation.Offers import TravellerOffer
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan, PlanStop
 from src.fleetctrl.planning.PlanRequest import PlanRequest
+from src.infra.BoardingPointInfrastructure import routing_min_distance_cost_function
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -66,7 +67,7 @@ class PTStation:
 
 class PtLine:
     def __init__(self, line_id, pt_fleetcontrol_module, schedule_vehicles, vid_to_schedule_dict, sim_start_time,
-                 sim_end_time):
+                 sim_end_time, terminus_id=None, run_schedule=None):
         """
         :param line_id: Line ID
         :type line_id: int
@@ -80,13 +81,19 @@ class PtLine:
         :type sim_start_time: int
         :param sim_end_time: simulation end time
         :type sim_end_time: int
+        :param terminus_id: this line's terminus station id (hub). Falls back to the module-level
+            terminus_id for the single-line case if not given.
+        :type terminus_id: int
+        :param run_schedule: this line's round-trip schedule (trip_id == 0). Falls back to the
+            module-level run_schedule for the single-line case if not given.
+        :type run_schedule: pd.DataFrame
         """
         self.line_id = line_id
         self.pt_fleetcontrol_module: SemiOnDemandBatchAssignmentFleetcontrol = pt_fleetcontrol_module
         self.routing_engine = self.pt_fleetcontrol_module.routing_engine
         self.vid_to_schedule = vid_to_schedule_dict
 
-        self.run_schedule = self.pt_fleetcontrol_module.run_schedule
+        self.run_schedule = run_schedule if run_schedule is not None else self.pt_fleetcontrol_module.run_schedule
         self.sim_end_time = self.pt_fleetcontrol_module.sim_end_time
 
         self.sim_vehicles: Dict[int, SimulationVehicle] = schedule_vehicles  # line_vehicle_id -> SimulationVehicle
@@ -126,18 +133,23 @@ class PtLine:
         for vid in self.sim_vehicles.keys():
             self.veh_flex_time[vid] = []
 
-        self.terminus_id = self.pt_fleetcontrol_module.terminus_id
+        self.terminus_id = terminus_id if terminus_id is not None else self.pt_fleetcontrol_module.terminus_id
         self.regular_headway = self.pt_fleetcontrol_module.scenario_parameters.get(G_PT_REG_HEADWAY, 0)
-        self.n_veh = int(self.pt_fleetcontrol_module.scenario_parameters.get(G_PT_N_VEH, 0))
+        self.n_veh = len(self.sim_vehicles)
         self.dispatch_delay = self.pt_fleetcontrol_module.scenario_parameters.get(G_PT_DISPATCH_DELAY, 0)
         self.min_flex_time = self.pt_fleetcontrol_module.scenario_parameters.get(G_PT_ZONE_MIN_DETOUR_TIME, 0)
         self.max_flex_time = self.pt_fleetcontrol_module.scenario_parameters.get(G_PT_ZONE_MAX_DETOUR_TIME, 0)
 
-        # calcaulate the km run of each station
-        for station_id in self.pt_fleetcontrol_module.station_dict.keys():
+        # calculate the km run of each station on THIS line only. With multiple lines the
+        # module-level station_dict holds every line's stations; projecting another line's
+        # stations onto this alignment would produce spurious km-runs, so restrict to the
+        # stations that appear in this line's schedule.
+        line_station_ids = list(dict.fromkeys(self.run_schedule["station_id"].tolist()))
+        for station_id in line_station_ids:
             node_index = self.pt_fleetcontrol_module.station_dict[station_id].street_network_node_id
             pos = self.routing_engine.return_node_position(node_index)
             self.station_id_km_run[station_id] = self.return_pos_km_run(pos)
+            self.node_index_to_station_id[node_index] = station_id
 
         LOG.info(f"terminus id {self.terminus_id} with length {self.station_id_km_run[self.terminus_id]} | "
                  f"fixed length {self.fixed_length} | route length {self.route_length}")
@@ -162,7 +174,7 @@ class PtLine:
         ]
         LOG.debug(f"Scheduled plan stops: {[str(x) for x in list_plan_stops]}")
 
-        for vid in range(self.n_veh):
+        for vid in self.sim_vehicles.keys():
             # init vehicle position at first stop
             init_state = {
                 G_V_INIT_NODE: list_plan_stops[0].get_pos()[0],  # set the initial node to be the first stop
@@ -267,26 +279,6 @@ class PtLine:
 
         return line.project(crs_point) / 1000  # convert to km
 
-    def project_point_to_point(self, point1: shapely.Point, point2: shapely.Point) -> float:
-        """
-        Use GIS to project the request point to the CRS and return the distance between the two points in km
-        :param point1: point 1
-        :param point2: point 2
-        :return: distance between the two points in km
-        """
-        # TODO: this is straight-line Euclidean distance (shapely Point.distance), which
-        # underestimates true walking/network distance on grid networks with only axis-aligned
-        # edges (e.g. this study's synthetic corridor networks, see
-        # studies/wp1_1by1/utils/network_utils.generate_edges) whenever the two points aren't
-        # aligned on the same row/column. If this class is used with such a network, switch to
-        # Manhattan distance (or better, actual routing_engine-based network distance, as
-        # StopBasedUserGroupRequest in src/demand/UserGroupTravelerModel.py does) instead.
-        # convert crs of line and point
-        crs_point1 = shapely.ops.transform(self.point_project, point1)
-        crs_point2 = shapely.ops.transform(self.point_project, point2)
-
-        return crs_point1.distance(crs_point2) / 1000  # convert to km
-
     def return_pos_km_run(self, pos) -> float:
         """ this method returns the km run of the position
         :param pos: position
@@ -310,26 +302,25 @@ class PtLine:
         """
         return self.project_point_to_line(self.line_alignment_meter, point)
 
-    def return_distance_to_station(self, point, station_id) -> float:
-        """ this method returns the distance of a Point to the station of station_id
-        :param point: request point or position
-        :type point: shapely.Point or tuple
-        :param station_id: station id
-        :type station_id: int
-        :return: distance to station
-        """
-        # if point is not a shapely.Point, convert it to one (assumed a tuple)
-        if not isinstance(point, shapely.Point):
-            coord_to_check = self.routing_engine.return_position_coordinates(point)
-            point_to_check = shapely.Point(coord_to_check)
-            return self.return_distance_to_station(point_to_check, station_id)
+    def return_distance_to_station(self, pos, station_id) -> float:
+        """ network walking distance (km) between a request position and the station of station_id.
 
+        Uses distance-minimizing shortest-path routing on the actual network (the same routing
+        StopBasedUserGroupRequest and BoardingPointInfrastructure use), so it reflects true
+        walking distance on grid networks with axis-aligned edges instead of straight-line
+        distance, which would underestimate whenever the request and station are not on the same
+        row/column of the grid.
+
+        :param pos: request network position (node_index, edge_dest_node, relative_position)
+        :param station_id: station id
+        :return: distance to station in km
+        """
         station_pos = self.routing_engine.return_node_position(
             self.pt_fleetcontrol_module.station_dict[station_id].street_network_node_id
         )
-        station_coord = self.routing_engine.return_position_coordinates(station_pos)
-        station_point = shapely.Point(station_coord)
-        return self.project_point_to_point(point, station_point)
+        _, _, distance = self.routing_engine.return_travel_costs_1to1(
+            pos, station_pos, customized_section_cost_function=routing_min_distance_cost_function)
+        return distance / 1000  # convert m to km
 
     def find_closest_station(self, pos):
         """ this method returns the closest station to the given position
@@ -747,9 +738,10 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
 
         self.skip_output = True if scenario_parameters.get(G_SKIP_OUTPUT, 0) > 0 else False
 
-        # int(): scenario_cfg.csv columns shared with non-PT service types end up as float64 once
-        # blank for those rows (e.g. 5 -> 5.0), and range()/dict-key lookups below need real ints
-        self.n_veh = int(scenario_parameters.get(G_PT_N_VEH, 0))
+        # total PT vehicle count; the per-line split is parsed from G_PT_N_VEH below (it may be a
+        # scalar for a single line or a "line:n,line:n" mapping for the multi-hub proportional split)
+        self.n_veh = 0
+        self.n_veh_per_line = {}  # line -> number of vehicles
 
         # fixed route parameters
         self.fixed_length = scenario_parameters.get(G_PT_FIXED_LENGTH, None)
@@ -797,17 +789,27 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         self.vehicles_to_initialize = {}  # pt_vehicle_id -> veh_type
         self.schedule_to_initialize = {}  # line -> pt_vehicle_id -> schedule_df
 
-        # generate vehicles according to self.n_veh
-        for key, vehicle_line_schedule in schedules.groupby(["LINE", "line_vehicle_id", "vehicle_type"]):
-            line, line_vehicle_id, vehicle_type = key
-            for pt_vehicle_id in range(self.n_veh):
+        # one line per LINE value in the schedule (one for a single hub, two half-lines for two
+        # hubs). Split the fleet across the lines and hand out globally distinct vehicle ids so
+        # ids never collide between lines.
+        lines_in_schedule = sorted(int(l) for l in schedules["LINE"].unique())
+        self.n_veh_per_line = self._parse_n_veh_per_line(
+            scenario_parameters.get(G_PT_N_VEH, 0), lines_in_schedule)
+        self.n_veh = sum(self.n_veh_per_line.values())
+
+        next_vid = 0
+        for line in lines_in_schedule:
+            line_schedule = schedules.loc[schedules["LINE"] == line]
+            vehicle_type = line_schedule["vehicle_type"].iloc[0]
+            for _ in range(self.n_veh_per_line[line]):
+                pt_vehicle_id = next_vid
+                next_vid += 1
                 pt_line_specifications_list.append(
-                    {"line": line, "line_vehicle_id": line_vehicle_id, "vehicle_type": vehicle_type,
+                    {"line": line, "line_vehicle_id": 0, "vehicle_type": vehicle_type,
                      "sim_vehicle_id": pt_vehicle_id})
                 self.vehicles_to_initialize[pt_vehicle_id] = vehicle_type
-                if self.schedule_to_initialize.get(line) is None:
-                    self.schedule_to_initialize[line] = {}
-                self.schedule_to_initialize[line][pt_vehicle_id] = vehicle_line_schedule
+                self.pt_vehicle_to_line[pt_vehicle_id] = line
+                self.schedule_to_initialize.setdefault(line, {})[pt_vehicle_id] = line_schedule
 
         # line specification output
         if not self.skip_output:
@@ -834,6 +836,37 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         """
         return self.vehicles_to_initialize
 
+    @staticmethod
+    def _parse_n_veh_per_line(cfg_value, lines_in_schedule):
+        """Parse the G_PT_N_VEH scenario value into {line_id: n_veh}.
+
+        Accepts either a scalar total (int/float/str) or a {line: n} mapping (used by the multi-hub
+        proportional fleet split). The config loader decodes the ";"-delimited "line:n;line:n" cell
+        into a dict, so both a dict and the raw string form are accepted here. A scalar is applied
+        directly for a single line, or split as evenly as possible across multiple lines (remainder
+        to the first lines).
+        """
+        if isinstance(cfg_value, dict):
+            mapping = {int(k): int(v) for k, v in cfg_value.items()}
+            for line in lines_in_schedule:
+                mapping.setdefault(line, 0)
+            return mapping
+        if isinstance(cfg_value, str) and ":" in cfg_value:
+            mapping = {}
+            for part in cfg_value.replace(";", ",").split(","):
+                k, v = part.split(":")
+                mapping[int(k)] = int(v)
+            for line in lines_in_schedule:
+                mapping.setdefault(line, 0)
+            return mapping
+
+        total = int(float(cfg_value))
+        if len(lines_in_schedule) == 1:
+            return {lines_in_schedule[0]: total}
+        base = total // len(lines_in_schedule)
+        rem = total - base * len(lines_in_schedule)
+        return {line: base + (1 if i < rem else 0) for i, line in enumerate(lines_in_schedule)}
+
     def continue_init(self, sim_vehicle_objs, sim_start_time, sim_end_time):
         """
         this method continues initialization after simulation vehicles have been created in the fleetsimulation class
@@ -846,19 +879,26 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
 
         self.regular_headway = self.scenario_parameters.get(G_PT_REG_HEADWAY, 0)
         self.n_reg_veh = self.scenario_parameters.get(G_PT_ZONE_N_REG_VEH, 0)
-        self.n_veh = int(self.scenario_parameters.get(G_PT_N_VEH, 0))
-        line = int(self.scenario_parameters.get(G_PT_ROUTE_ID, 0))
-
-        self.last_zonal_dept = np.array([sim_start_time] * 1)
 
         veh_obj_dict = {veh.vid: veh for veh in sim_vehicle_objs}
-        vid_to_schedule_dict = self.run_schedule
-        for vid in range(self.n_veh):
-            self.pt_vehicle_to_line[vid] = line
-        schedule_vehicles = {vid: veh_obj_dict[vid] for vid in range(self.n_veh)}
-        LOG.debug(f"schedule_vehicles: {schedule_vehicles}")
-        self.PT_lines[line] = PtLine(line, self, schedule_vehicles, vid_to_schedule_dict, sim_start_time,
-                                     sim_end_time)
+
+        # one PtLine per line, each with its own vehicle subset, round-trip schedule, and terminus.
+        lines = sorted(self.schedule_to_initialize.keys())
+        self.line_index = {line: idx for idx, line in enumerate(lines)}
+        self.last_zonal_dept = np.array([sim_start_time] * len(lines))
+        self.hub_node_to_line = {}  # hub (terminus) network node -> line, for request-to-line routing
+
+        for line in lines:
+            line_vids = list(self.schedule_to_initialize[line].keys())
+            schedule_vehicles = {vid: veh_obj_dict[vid] for vid in line_vids}
+            line_schedule = self.schedule_to_initialize[line][line_vids[0]]
+            run_schedule = line_schedule.loc[line_schedule["trip_id"] == 0].reset_index(drop=True)
+            # the terminus is the station the line departs from at the start of its trip (departure == 0)
+            terminus_id = int(run_schedule.sort_values("departure")["station_id"].iloc[0])
+            self.PT_lines[line] = PtLine(line, self, schedule_vehicles, run_schedule, sim_start_time,
+                                         sim_end_time, terminus_id=terminus_id, run_schedule=run_schedule)
+            terminus_node = self.station_dict[terminus_id].street_network_node_id
+            self.hub_node_to_line[terminus_node] = line
         LOG.info(f"SoD finish continue_init {len(self.PT_lines)}")
 
     def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, assigned_charging_task=None,
@@ -907,8 +947,8 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         upd_utility_val = self.compute_VehiclePlan_utility(simulation_time, veh_obj, self.veh_plans[vid])
         self.veh_plans[vid].set_utility(upd_utility_val)
 
-        # check which vehicles are in terminus
-        terminus_id = self.return_ptline_of_user().terminus_id
+        # check which vehicles are in terminus (each vehicle belongs to one line -> its own terminus)
+        terminus_id = self.PT_lines[self.pt_vehicle_to_line[vid]].terminus_id
         terminus_node = self.station_dict[terminus_id].street_network_node_id
 
         # check if the vehicle is at the terminus and has no passengers
@@ -926,16 +966,40 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
 
     def return_ptline_of_user(self, rq=None):
         """ this method returns the PT line that the user belongs to
+
+        Every generated trip has exactly one hub endpoint (the demand generator snaps the non-hub
+        end to its nearest hub), and each line is anchored at one hub, so the request is routed to
+        the line whose terminus is that hub. Falls back to the line with the nearest terminus.
+
         :param rq: request object containing all request information
         :type rq: RequestDesign
         :return: PT line
         :rtype: PtLine
         """
+        if rq is None or len(self.PT_lines) <= 1:
+            return self.PT_lines[next(iter(self.PT_lines))]
 
-        # TODO: return the PT line that the user belongs based on some logics
-        # currently, just assign to the first line
-        first_index = next(iter(self.PT_lines))
-        return self.PT_lines[first_index]
+        try:
+            o_node = rq.get_origin_pos()[0]
+            d_node = rq.get_destination_pos()[0]
+        except AttributeError:
+            o_node = rq.get_o_stop_info()[0][0]
+            d_node = rq.get_d_stop_info()[0][0]
+
+        for node in (o_node, d_node):
+            line = self.hub_node_to_line.get(node)
+            if line is not None:
+                return self.PT_lines[line]
+
+        # fallback: nearest terminus by network travel time from the origin
+        best_line, best_cost = None, float("inf")
+        for line, pt_line in self.PT_lines.items():
+            term_node = self.station_dict[pt_line.terminus_id].street_network_node_id
+            term_pos = self.routing_engine.return_node_position(term_node)
+            cost = self.routing_engine.return_travel_costs_1to1((o_node, None, None), term_pos)[1]
+            if cost < best_cost:
+                best_cost, best_line = cost, line
+        return self.PT_lines[best_line]
 
     def user_request(self, rq, sim_time):
         """
@@ -1141,29 +1205,31 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
             LOG.debug("unassigned_requests_2 {}".format(self.unassigned_requests_2))
             LOG.debug("offers: {}".format(rid_to_offers))
 
-        # Assign vehicle schedule to send a vehicle out
-        pt_line = self.return_ptline_of_user()
+        # Assign vehicle schedules to send vehicles out, per line at each line's own headway
         # sort self.list_veh_in_terminus by keys
         self.list_veh_in_terminus = dict(sorted(self.list_veh_in_terminus.items()))
         LOG.debug(f"Time {simulation_time} Vehicles in terminus: {self.list_veh_in_terminus}")
 
-        if self.last_zonal_dept[0] + pt_line.regular_headway <= simulation_time:
-            veh_assigned = False
-            for vid in self.list_veh_in_terminus.keys():
-                if self.list_veh_in_terminus[vid] == 1:  # in terminus and not processed
-                    LOG.info(f"Set schedule for vehicle {vid} at time {simulation_time}")
-                    pt_line.set_veh_plan_schedule(vid,
-                                                  sim_time=simulation_time,
-                                                  start_time=simulation_time + pt_line.dispatch_delay,
-                                                  x_min=pt_line.fixed_length, x_max=pt_line.route_length,
-                                                  min_flex_time=pt_line.min_flex_time,
-                                                  max_flex_time=pt_line.max_flex_time)
-                    self.list_veh_in_terminus[vid] = -1  # processed
-                    self.last_zonal_dept[0] = simulation_time
-                    veh_assigned = True
-                    break
-            if not veh_assigned:
-                LOG.error(f"No vehicle available at the terminus to assign at time {simulation_time}")
+        for line, pt_line in self.PT_lines.items():
+            idx = self.line_index[line]
+            if self.last_zonal_dept[idx] + pt_line.regular_headway <= simulation_time:
+                veh_assigned = False
+                for vid in self.list_veh_in_terminus.keys():
+                    # in terminus, not yet processed, and belongs to this line
+                    if self.list_veh_in_terminus[vid] == 1 and self.pt_vehicle_to_line.get(vid) == line:
+                        LOG.info(f"Set schedule for vehicle {vid} (line {line}) at time {simulation_time}")
+                        pt_line.set_veh_plan_schedule(vid,
+                                                      sim_time=simulation_time,
+                                                      start_time=simulation_time + pt_line.dispatch_delay,
+                                                      x_min=pt_line.fixed_length, x_max=pt_line.route_length,
+                                                      min_flex_time=pt_line.min_flex_time,
+                                                      max_flex_time=pt_line.max_flex_time)
+                        self.list_veh_in_terminus[vid] = -1  # processed
+                        self.last_zonal_dept[idx] = simulation_time
+                        veh_assigned = True
+                        break
+                if not veh_assigned:
+                    LOG.warning(f"No vehicle available at terminus for line {line} at time {simulation_time}")
 
     def _create_user_offer(self, rq, simulation_time, assigned_vehicle_plan=None, offer_dict_without_plan={}):
         """ creating the offer for a requests
