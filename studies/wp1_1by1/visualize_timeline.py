@@ -30,7 +30,7 @@ REPO_ROOT  = STUDY_DIR.parent.parent
 
 # ── run configuration ─────────────────────────────────────────────────────────
 BASE_RESULT_DIR = Path("studies/wp1_1by1/results")
-RESULT_DIR    = f'{BASE_RESULT_DIR}/grid_l1_w1_hubs1_cell100_10pkm2h_0.5dir_all_normal_seed0_stops_r0.25/'   # Path to a result dir containing 00_config.json + op/user stats CSVs.
+RESULT_DIR    = f'{BASE_RESULT_DIR}/grid_l1_w1_hubs1_cell100_30pkm2h_0.5dir_all_normal_seed0_sod_sp200_hw10_fl0.75_r0.75'
 FRAME_STEP    = 30     # seconds per animation frame
 INTERVAL_MS   = 300    # milliseconds between frames during playback
 SAVE_GIF      = False  # True = write timeline.gif instead of interactive window
@@ -45,7 +45,10 @@ VEH_COLORS = {
     "route_empty":   "#aec7e8",
     "route_loaded":  "#1f77b4",
     "boarding":      "#2ca02c",
+    "waiting":       "#c9a63c",   # PT-line schedule dwell (sod/fixed_line "waiting"/"planned_stop")
+    "reposition":    "#9467bd",   # deadheading to a repositioning target
 }
+PT_LINE_COLOR = "#00cccc"
 RQ_WAIT  = "#d62728"
 RQ_BOARD = "#ffd700"
 
@@ -87,12 +90,26 @@ def load_nodes(nw_name: str):
     return coords, hubs
 
 
+def load_pt_stations(sp: dict) -> list:
+    """Node indices (in route order) of the fixed-line/sod PT-line stations, or [] if this
+    scenario has no PT line (e.g. stop-based or door-to-door)."""
+    gtfs_name    = sp.get("gtfs_name")
+    station_file = sp.get("station_file")
+    if not gtfs_name or not station_file:
+        return []
+    f = REPO_ROOT / "data" / "pubtrans" / gtfs_name / station_file
+    if not f.exists():
+        return []
+    return pd.read_csv(f)["network_node_index"].astype(int).tolist()
+
+
 def load_data(result_dir: Path):
     with open(result_dir / "00_config.json") as f:
         cfg = json.load(f)
     sp       = cfg.get("scenario_parameters", cfg)
     nw_name  = sp.get("network_name") or sp.get("nw_name", "")
     end_time = float(sp.get("end_time", 3600))
+    pt_stations = load_pt_stations(sp)
 
     ops = pd.read_csv(result_dir / "2-0_op-stats.csv")
     ops["start_time"] = pd.to_numeric(ops["start_time"])
@@ -125,7 +142,7 @@ def load_data(result_dir: Path):
     req["origin_node"] = req["true_o_node"] if "true_o_node" in req.columns else req["start_node"]
     req["dest_node"]   = req["true_d_node"] if "true_d_node" in req.columns else req["end_node"]
 
-    return ops, req, nw_name, end_time
+    return ops, req, nw_name, end_time, pt_stations
 
 
 # ── vehicle state reconstruction ─────────────────────────────────────────────
@@ -179,20 +196,26 @@ def veh_state_at(segs: list, t: float,
         if t < seg["start"]:
             return _idle_node(last_node), "idle"
         if seg["start"] <= t < seg["end"]:
-            if seg["status"] == "boarding":
+            status = seg["status"]
+            if status == "boarding":
                 return seg["snode"], "boarding"
+            if status in ("waiting", "planned_stop"):
+                return seg["snode"], "waiting"
+            if status in ("reposition", "repositioning_target", "to_charge", "to_depot",
+                          "to_reservation", "charging", "out_of_service"):
+                ck = "reposition"
+            else:
+                ck = None
             traj = seg["traj"]
             if not traj:
-                ck = "route_loaded" if seg["occ"] > 0 else "route_empty"
-                return seg["snode"], ck
+                return seg["snode"], (ck or ("route_loaded" if seg["occ"] > 0 else "route_empty"))
             cur = traj[0][0]
             for node, node_t in traj:
                 if node_t <= t:
                     cur = node
                 else:
                     break
-            ck = "route_loaded" if seg["occ"] > 0 else "route_empty"
-            return cur, ck
+            return cur, (ck or ("route_loaded" if seg["occ"] > 0 else "route_empty"))
         last_node = seg["enode"]
     return _idle_node(last_node), "idle"
 
@@ -230,7 +253,7 @@ def build_events(req: pd.DataFrame) -> list:
 
 # ── animation ────────────────────────────────────────────────────────────────
 
-def make_animation(ops, req, coords, hubs, end_time,
+def make_animation(ops, req, coords, hubs, end_time, pt_stations=(),
                    frame_step=30, interval_ms=150, return_to_hub: bool = False):
     segs    = build_segments(ops)
     vids    = sorted(segs.keys())
@@ -278,6 +301,14 @@ def make_animation(ops, req, coords, hubs, end_time,
         ax_map.scatter(hub_xy[:, 0], hub_xy[:, 1],
                        c="#ff9500", s=220, marker="*", zorder=3,
                        edgecolors="white", linewidths=0.5)
+
+    pt_station_xy = np.array([coords[n] for n in pt_stations if n in coords])
+    if pt_station_xy.shape[0]:
+        ax_map.plot(pt_station_xy[:, 0], pt_station_xy[:, 1],
+                    color=PT_LINE_COLOR, linewidth=1.5, alpha=0.5, zorder=2)
+        ax_map.scatter(pt_station_xy[:, 0], pt_station_xy[:, 1],
+                       c=PT_LINE_COLOR, s=45, marker="s", zorder=3,
+                       edgecolors="white", linewidths=0.4)
     ax_map.set_aspect("equal")
     ax_map.set_xticks([]); ax_map.set_yticks([])
     ax_map.set_xlim(xs.min() - margin, xs.max() + margin)
@@ -321,8 +352,12 @@ def make_animation(ops, req, coords, hubs, end_time,
         _m(VEH_COLORS["route_empty"],   "o", "Veh routing (empty)"),
         _m(VEH_COLORS["route_loaded"],  "o", "Veh routing (pax)"),
         _m(VEH_COLORS["boarding"],      "o", "Veh boarding"),
+        _m(VEH_COLORS["waiting"],       "o", "Veh waiting (PT schedule)"),
+        _m(VEH_COLORS["reposition"],    "o", "Veh repositioning"),
         Line2D([0], [0], marker="*", color="none",
                markerfacecolor="#ff9500", markersize=12, label="Hub"),
+        Line2D([0], [0], marker="s", color=PT_LINE_COLOR, alpha=0.6,
+               markerfacecolor=PT_LINE_COLOR, markersize=7, label="PT-line station"),
         _m(RQ_WAIT,  "o", "Pickup stop (waiting)"),
         Line2D([0], [0], marker="o", color="none", markerfacecolor="none",
                markeredgecolor=RQ_WAIT, markersize=7, label="Request origin"),
@@ -558,12 +593,13 @@ def main():
                   else find_result_dir(STUDY_DIR / "results"))
     LOG.info("Loading from: %s", result_dir)
 
-    ops, req, nw_name, end_time = load_data(result_dir)
+    ops, req, nw_name, end_time, pt_stations = load_data(result_dir)
     coords, hubs = load_nodes(nw_name)
-    LOG.info("Network: %s  (%d nodes, %d hubs)", nw_name, len(coords), len(hubs))
+    LOG.info("Network: %s  (%d nodes, %d hubs, %d PT stations)",
+             nw_name, len(coords), len(hubs), len(pt_stations))
 
     fig, frame_times, update, timer = make_animation(
-        ops, req, coords, hubs, end_time,
+        ops, req, coords, hubs, end_time, pt_stations=pt_stations,
         frame_step=FRAME_STEP, interval_ms=INTERVAL_MS,
     )
 

@@ -110,11 +110,6 @@ def generate_hubs(rows, cols, n_hubs):
     mid_row = rows // 2
     mid_row_first_cell = mid_row * cols
 
-    print(
-        f"Generating {n_hubs} hubs for a grid with {rows} rows and {cols} columns.")
-    print(
-        f"Middle row index: {mid_row}, first cell index in middle row: {mid_row_first_cell}")
-
     # Place a single hub at the rightmost midrow node; for 2 hubs, add the leftmost midrow node.
     hub_nodes = [{"node_index": mid_row_first_cell + (cols - 1), "hub_id": 0}]
     if n_hubs == 2:

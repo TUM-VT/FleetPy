@@ -467,6 +467,9 @@ class PlanStop(PlanStopBase):
     def is_empty(self) -> bool:
         """ tests if nothing has to be done here and its just a routing target marker (i.e. reloc target)
         :return: (bool)"""
+        # a fixed_stop is a mandatory scheduled waypoint (semi-on-demand line)
+        if self.fixed_stop:
+            return False
         if self.change_nr_pax == 0 and len(self.boarding_dict.get(1, [])) == 0 and len(self.boarding_dict.get(-1, [])) == 0 and self.charging_power == 0: #and len(self.planned_departure) == 0
             return True
         else:

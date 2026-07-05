@@ -1,6 +1,6 @@
 from utils.demand_utils import generate_demand_scenario, get_hubs_for_network, get_boarding_points_for_network
 from utils.network_utils import generate_networks
-# from utils.pubtrans_utils import generate_pubtrans, get_stations_for_network
+from utils.pubtrans_utils import generate_pubtrans
 import yaml
 import os
 import sys
@@ -16,12 +16,9 @@ SCENARIO_RANGES_FILE = os.path.join(STUDY_DIR, "scenario_ranges.yaml")
 DEMAND_DIR = os.path.join(REPO_ROOT, "data", "demand", "agimo_wp1", "matched")
 INIT_VEH_DIST_DIR = os.path.join(REPO_ROOT, "data", "fleetctrl", "initial_vehicle_distribution")
 INIT_DIST_FILE_NAME = "hub_all.csv"
-# must match const_cfg.yaml's default rq_type. Written explicitly to every scenario_cfg.csv row
-# (never left blank) so that mixing service types with/without an rq_type override doesn't make
-# pandas introduce a blank rq_type cell for the others - src/misc/config.py's constant/scenario
-# config merge treats any present (even blank/NaN) column value as an explicit override, which
-# would silently clobber the constant config default with None.
+
 DEFAULT_RQ_TYPE = "UserGroupRequest"
+PT_FIXED_LENGTH_SENTINEL_KM = 999999
 
 
 def read_ranges():
@@ -93,9 +90,9 @@ def _fleet_entries(st_cfg, total_lambda):
     return entries
 
 
-def _scenario_row(base_name, dv, st_name, st_cfg, sim_end_time, n, size_tag):
+def _scenario_row(scenario_name, dv, st_cfg, sim_end_time, n, size_tag, extra_cols=None):
     row = {
-        "scenario_name": f"{base_name}_{st_name}_{size_tag}",
+        "scenario_name": scenario_name,
         "network_name": dv["network_name"],
         "rq_file": dv["rq_file"],
         "end_time": sim_end_time,
@@ -110,13 +107,101 @@ def _scenario_row(base_name, dv, st_name, st_cfg, sim_end_time, n, size_tag):
     if "op_repo_method" in st_cfg:
         row["op_repo_method"] = st_cfg["op_repo_method"]
         row["op_repo_timestep"] = st_cfg.get("op_repo_timestep", 60)
+    if extra_cols:
+        row.update(extra_cols)
     return row
 
 
-def generate_scenario_cfg(demand_scenarios, service_types, sim_end_time):
+def _is_pt_line_service(st_cfg):
+    return st_cfg.get("op_module") == "SemiOnDemandBatchAssignmentFleetcontrol"
+
+
+def _pt_variant_lookup(pt_variants):
+    return {(v["network_name"], v["station_spacing_m"], v["headway_min"]): v for v in pt_variants}
+
+
+def _pt_extra_cols(st_cfg, pt_variant, headway_min, fixed_length_km, n_veh):
+    return {
+        "gtfs_name": pt_variant["pt_name"],
+        "station_file": "stations.csv",
+        "schedule_file": "schedules.csv",
+        "alignment_file": "{line_id}_line_alignment.geojson",
+        "terminus_id": pt_variant["terminus_station_id"],
+        "line_id": st_cfg["line_id"],
+        "pt_route_id": st_cfg["line_id"],
+        "pt_regular_headway": headway_min * 60,
+        "pt_fixed_length": fixed_length_km,
+        "pt_flex_detour": st_cfg["pt_flex_detour"],
+        "pt_zone_min_detour_time": st_cfg["pt_zone_min_detour_time"],
+        "pt_zone_max_detour_time": st_cfg["pt_zone_max_detour_time"],
+        "pt_dispatch_delay": st_cfg["pt_dispatch_delay"],
+        "pt_n_veh": n_veh,
+        
+        "walking_speed": 4,
+        
+        "op_max_wait_time": 900,
+        "op_max_wait_time_2": 1800,
+        "op_max_detour_time_factor": 150,
+        "op_add_constant_detour_time": 300,  # TODO double check
+        # must be >= op_max_wait_time_2, or the traveler model auto-cancels (leaves_system) before
+        # the retry mechanism gets a chance to match the request against the next dispatch
+        "user_max_decision_time": 1800,
+    }
+
+
+def _pt_scenario_rows(base_name, dv, st_name, st_cfg, sim_end_time, pt_variant_lookup):
+    """Build scenario rows for a PT-line service type (sod/fixed_line), sweeping station spacing,
+    headway, fleet size, and (for sod only) the fixed-route/flexible split of the corridor."""
+    rows = []
+    is_fixed_line = st_cfg.get("fixed_line", False)
+
+    for station_spacing_m in st_cfg["station_spacings_m"]:
+        for headway_min in st_cfg["headways_min"]:
+            key = (dv["network_name"], station_spacing_m, headway_min)
+            pt_variant = pt_variant_lookup.get(key)
+            if pt_variant is None:
+                raise KeyError("No PT variant generated.")
+
+            if is_fixed_line:
+                fixed_length_variants = [(PT_FIXED_LENGTH_SENTINEL_KM, "full")]
+            else:
+                fixed_length_variants = [
+                    (frac * pt_variant["route_length_km"], f"fl{frac}")
+                    for frac in st_cfg.get("fixed_length_fractions", [0])
+                ]
+                # Stations are spaced out from the hub in exact station_spacing_m increments, so
+                # the first non-hub station sits at station_spacing_m from the hub. If the fixed
+                # zone doesn't reach that far, find_closest_station_to_x resolves the fixed/flex
+                # boundary to the hub itself -- the "fixed route" segment silently degenerates to
+                # zero length instead of covering the intended near-hub stations.
+                for fixed_length_km, fl_tag in fixed_length_variants:
+                    if fixed_length_km * 1000 < station_spacing_m:
+                        raise ValueError(
+                            f"{st_name}/{fl_tag} at sp{station_spacing_m}: fixed_length="
+                            f"{fixed_length_km * 1000:.0f}m is shorter than the first non-hub "
+                            f"station ({station_spacing_m}m from hub) -- the fixed-route segment "
+                            f"would degenerate to just the hub. Raise this fixed_length_fraction "
+                            f"or reduce station_spacing_m."
+                        )
+
+            for n, size_tag in _fleet_entries(st_cfg, dv["total_lambda"]):
+                for fixed_length_km, fl_tag in fixed_length_variants:
+                    scenario_name = (
+                        f"{base_name}_{st_name}_sp{station_spacing_m}_hw{headway_min}_"
+                        f"{fl_tag}_{size_tag}"
+                    )
+                    extra_cols = _pt_extra_cols(st_cfg, pt_variant, headway_min, fixed_length_km, n)
+                    rows.append(_scenario_row(
+                        scenario_name, dv, st_cfg, sim_end_time, n, size_tag, extra_cols=extra_cols))
+    return rows
+
+
+def generate_scenario_cfg(demand_scenarios, service_types, sim_end_time, pt_variants):
     """Generate scenario configuration CSV for all demand scenarios and service types."""
     scenarios_dir = os.path.join(STUDY_DIR, "scenarios")
     os.makedirs(scenarios_dir, exist_ok=True)
+
+    pt_variant_lookup = _pt_variant_lookup(pt_variants)
 
     rows = []
     for dv in demand_scenarios:
@@ -125,13 +210,20 @@ def generate_scenario_cfg(demand_scenarios, service_types, sim_end_time):
             f"_{dv['user_profile']}_seed{dv['seed']}"
         )
         for st_name, st_cfg in service_types.items():
-            for n, size_tag in _fleet_entries(st_cfg, dv["total_lambda"]):
-                rows.append(_scenario_row(
-                    base_name, dv, st_name, st_cfg, sim_end_time,
-                    n, size_tag))
+            if _is_pt_line_service(st_cfg):
+                rows.extend(_pt_scenario_rows(
+                    base_name, dv, st_name, st_cfg, sim_end_time, pt_variant_lookup))
+            else:
+                for n, size_tag in _fleet_entries(st_cfg, dv["total_lambda"]):
+                    rows.append(_scenario_row(
+                        f"{base_name}_{st_name}_{size_tag}", dv, st_cfg, sim_end_time, n, size_tag))
 
     out_path = os.path.join(scenarios_dir, "scenario_cfg.csv")
-    pd.DataFrame(rows).to_csv(out_path, index=False)
+    df = pd.DataFrame(rows)
+    for col in ("terminus_id", "line_id", "pt_route_id", "pt_n_veh"):
+        if col in df.columns:
+            df[col] = df[col].astype("Int64")
+    df.to_csv(out_path, index=False)
     print(f"Wrote {len(rows)} scenarios to {out_path}")
 
 
@@ -149,7 +241,6 @@ def generate_initial_vehicle_distributions(nw_names):
 
 
 def generate_service_types(ranges):
-    # TODO public transport services
     return ranges.get("service_types", {})
 
 
@@ -158,10 +249,11 @@ def main():
     sim_end_time = ranges["simulation"]["end_time"] + ranges["simulation"]["cool_time"]
     networks = generate_networks(ranges["network"])
     generate_initial_vehicle_distributions([nw["name"] for nw in networks])
+    pt_variants = generate_pubtrans(ranges)
     boarding_match_radius = ranges["network"].get("boarding_point_spacing_m")
     demand_scenarios = generate_demand_scenarios(ranges["demand"], networks, sim_end_time, boarding_match_radius)
     service_types = generate_service_types(ranges)
-    generate_scenario_cfg(demand_scenarios, service_types, sim_end_time)
+    generate_scenario_cfg(demand_scenarios, service_types, sim_end_time, pt_variants)
 
 
 if __name__ == "__main__":

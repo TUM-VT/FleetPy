@@ -128,7 +128,7 @@ class PtLine:
 
         self.terminus_id = self.pt_fleetcontrol_module.terminus_id
         self.regular_headway = self.pt_fleetcontrol_module.scenario_parameters.get(G_PT_REG_HEADWAY, 0)
-        self.n_veh = self.pt_fleetcontrol_module.scenario_parameters.get(G_PT_N_VEH, 0)
+        self.n_veh = int(self.pt_fleetcontrol_module.scenario_parameters.get(G_PT_N_VEH, 0))
         self.dispatch_delay = self.pt_fleetcontrol_module.scenario_parameters.get(G_PT_DISPATCH_DELAY, 0)
         self.min_flex_time = self.pt_fleetcontrol_module.scenario_parameters.get(G_PT_ZONE_MIN_DETOUR_TIME, 0)
         self.max_flex_time = self.pt_fleetcontrol_module.scenario_parameters.get(G_PT_ZONE_MAX_DETOUR_TIME, 0)
@@ -274,6 +274,13 @@ class PtLine:
         :param point2: point 2
         :return: distance between the two points in km
         """
+        # TODO: this is straight-line Euclidean distance (shapely Point.distance), which
+        # underestimates true walking/network distance on grid networks with only axis-aligned
+        # edges (e.g. this study's synthetic corridor networks, see
+        # studies/wp1_1by1/utils/network_utils.generate_edges) whenever the two points aren't
+        # aligned on the same row/column. If this class is used with such a network, switch to
+        # Manhattan distance (or better, actual routing_engine-based network distance, as
+        # StopBasedUserGroupRequest in src/demand/UserGroupTravelerModel.py does) instead.
         # convert crs of line and point
         crs_point1 = shapely.ops.transform(self.point_project, point1)
         crs_point2 = shapely.ops.transform(self.point_project, point2)
@@ -740,13 +747,15 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
 
         self.skip_output = True if scenario_parameters.get(G_SKIP_OUTPUT, 0) > 0 else False
 
-        self.n_veh = scenario_parameters.get(G_PT_N_VEH, 0)
+        # int(): scenario_cfg.csv columns shared with non-PT service types end up as float64 once
+        # blank for those rows (e.g. 5 -> 5.0), and range()/dict-key lookups below need real ints
+        self.n_veh = int(scenario_parameters.get(G_PT_N_VEH, 0))
 
         # fixed route parameters
         self.fixed_length = scenario_parameters.get(G_PT_FIXED_LENGTH, None)
         self.flex_detour = scenario_parameters.get(G_PT_FLEX_DETOUR, None)
         self.alignment_file = scenario_parameters.get(G_PT_ALIGNMENT_F, 0)
-        self.terminus_id = scenario_parameters.get(G_PT_TERMINUS_ID, 0)
+        self.terminus_id = int(scenario_parameters.get(G_PT_TERMINUS_ID, 0))
         self.sim_end_time = None
         self.regular_headway = None
         self.n_reg_veh = None
@@ -837,8 +846,8 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
 
         self.regular_headway = self.scenario_parameters.get(G_PT_REG_HEADWAY, 0)
         self.n_reg_veh = self.scenario_parameters.get(G_PT_ZONE_N_REG_VEH, 0)
-        self.n_veh = self.scenario_parameters.get(G_PT_N_VEH, 0)
-        line = self.scenario_parameters.get(G_PT_ROUTE_ID, 0)
+        self.n_veh = int(self.scenario_parameters.get(G_PT_N_VEH, 0))
+        line = int(self.scenario_parameters.get(G_PT_ROUTE_ID, 0))
 
         self.last_zonal_dept = np.array([sim_start_time] * 1)
 

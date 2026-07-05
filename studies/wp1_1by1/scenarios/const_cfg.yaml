@@ -29,7 +29,7 @@ op_max_wait_time: 600
 op_max_detour_time_factor: 40
 # op_add_constant_detour_time: 300 TODO check
 op_const_boarding_time: 30
-op_add_boarding_time: 2
+# op_add_boarding_time: 2  # TODO use in fixed lines and sod
 op_reoptimisation_timestep: 60
 # fare structure
 op_base_fare: 0
@@ -37,22 +37,9 @@ op_distance_fare: 0.1
 op_time_fare: 0
 op_min_standard_fare: 100
 
-# Public transport / line infrastructure
-# TODO check. also need to move to changing configs because it depends on the service type 
-# gtfs_name: grid_sod
-# station_file: stations.csv
-# schedule_file: schedules.csv
-# alignment_file: "{line_id}_line_alignment.geojson"
-# pt_route_id: 1
-# terminus_id: 0
-# pt_fixed_length: 0
-# pt_flex_detour: 2
-# pt_zone_min_detour_time: 0
-# pt_zone_max_detour_time: 600
-# pt_n_veh: 3
-# pt_n_zones: 1
-# pt_regular_headway: 600
-# pt_dispatch_delay: 0
+# Public transport / line infrastructure (sod/fixed_line only) -- op_max_wait_time_2/
+# op_add_constant_detour_time/op_max_detour_time_factor for these service types are set
+# per-scenario in scenario_cfg.csv instead, so they don't clobber the stops/dtd values above.
 
 # # Traveler walking (0 for door-to-door; vehicles pick up at the door)
 # walking_speed: 1.4
