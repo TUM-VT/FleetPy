@@ -19,7 +19,7 @@ def _middle_row_stations(rows, cols, cell_size, station_spacing_m, hub_node_inde
     x_lo/x_hi bound the along-corridor (x) span the stations may cover (in m). They default to
     the whole grid; for the two-hub case each half-line is bounded to [hub, corridor midpoint] so
     the two lines meet (but do not overlap) at the middle."""
-    mid_row = rows // 2
+    mid_row = rows // 2      # should use the same mid_row as the hub node
     pos_y = mid_row * cell_size
     grid_length_m = (cols - 1) * cell_size
     if x_lo is None:
@@ -178,18 +178,16 @@ def _build_line_defs(rows, cols, cell_size, station_spacing_m, hubs, speed_kmh, 
 
 def generate_pubtrans(ranges):
     """Generate hub-anchored corridor-line PT infrastructure (stations.csv, schedules.csv,
-    alignment geojson) for each network x station_spacing x headway combination. `sod` and
-    `fixed_line` service types share these same files (they only differ in the pt_fixed_length
-    scenario value, not in the PT infrastructure itself), so this is generated once regardless of
-    which/how many service types consume it.
+    alignment geojson) for each network x station_spacing x headway combination. 
+    Generated once regardless of which service types consume it e.g. fixed lines and sod.
 
     For a single-hub network one line spans the whole corridor; for a two-hub network two
     half-lines are generated, each running hub -> corridor midpoint and back to the same hub.
 
-    Returns a list of dicts: pt_name, network_name, terminus_station_id, route_length_km,
-    station_spacing_m, headway_min, lines. `lines` carries per-line info (line_id,
-    terminus_station_id, hub_node, route_length_km); terminus_station_id/route_length_km at the top
-    level refer to the first line (kept for single-line back-compat).
+    Returns a list of dicts: pt_name, network_name, station_spacing_m, headway_min, lines. `lines`
+    carries per-line info (line_id, terminus_station_id, hub_node, route_length_km) -- one entry for
+    a single-hub network, two half-lines for a two-hub network. Consumers must read per-line values
+    from `lines`.
     """
     nw_ranges = ranges["network"]
     pt_ranges = ranges.get("pubtrans", {})
@@ -226,7 +224,6 @@ def generate_pubtrans(ranges):
                     all_schedule_rows = [r for ld in line_defs for r in ld["schedule_rows"]]
 
                     for hw_min in headways_min:
-                        headway_s = hw_min * 60
                         pt_name = f"{nw_name}_mid_sp{station_spacing_m}_hw{hw_min}"
                         pt_out_dir = os.path.join(PT_DIR, pt_name)
                         os.makedirs(pt_out_dir, exist_ok=True)
@@ -241,19 +238,10 @@ def generate_pubtrans(ranges):
 
                         for ld in line_defs:
                             _write_alignment_geojson(ld["ordered"], pt_out_dir, ld["line_id"], pt_name)
-                            # if ld["round_trip_time"] > headway_s:
-                                # print(
-                                #     f"  WARNING: {pt_name} line {ld['line_id']}: round trip "
-                                #     f"{ld['round_trip_time']:.0f}s exceeds headway {headway_s}s -- "
-                                #     f"more than 1 vehicle will be needed to sustain this headway at "
-                                #     f"runtime (set pt_n_veh accordingly)."
-                                # )
 
                         pt_variants.append({
                             "pt_name": pt_name,
                             "network_name": nw_name,
-                            "terminus_station_id": line_defs[0]["terminus_station_id"],
-                            "route_length_km": line_defs[0]["route_length_km"],
                             "station_spacing_m": station_spacing_m,
                             "headway_min": hw_min,
                             "lines": [
