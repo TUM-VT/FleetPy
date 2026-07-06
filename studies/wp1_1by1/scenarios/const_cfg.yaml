@@ -14,33 +14,20 @@ nr_mod_operators: 1
 
 # Traveler model
 rq_type: UserGroupRequest
-# "hard": reject offers violating per-request constraints
-# "soft": accept all, log disutility for welfare analysis
-user_acceptance_mode: hard
 
 # Fleet control
 op_module: OVERWRITE_IN_SCENARIO_CONFIG
 op_fleet_composition: OVERWRITE_IN_SCENARIO_CONFIG
-op_rp_batch_optimizer: InsertionHeuristic # TODO check
+op_rp_batch_optimizer: InsertionHeuristic
 op_vr_control_func_dict: OVERWRITE_IN_SCENARIO_CONFIG
 op_init_veh_distribution: OVERWRITE_IN_SCENARIO_CONFIG
 op_min_wait_time: 0
 op_max_wait_time: 600
 op_max_detour_time_factor: 40
-# op_add_constant_detour_time: 300 TODO check
 op_const_boarding_time: 30
-# op_add_boarding_time: 2  # TODO use in fixed lines and sod
 op_reoptimisation_timestep: 60
 # fare structure
 op_base_fare: 0
 op_distance_fare: 0.1
 op_time_fare: 0
 op_min_standard_fare: 100
-
-# Public transport / line infrastructure (sod/fixed_line only) -- op_max_wait_time_2/
-# op_add_constant_detour_time/op_max_detour_time_factor for these service types are set
-# per-scenario in scenario_cfg.csv instead, so they don't clobber the stops/dtd values above.
-
-# # Traveler walking (0 for door-to-door; vehicles pick up at the door)
-# walking_speed: 1.4
-# max_walking_dist: 0
