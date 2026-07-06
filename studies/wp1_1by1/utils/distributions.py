@@ -3,7 +3,6 @@ import numpy as np
 
 
 UNIFORM = "uniform"
-TRIANGULAR = "triangular"
 HUB_TRIANGULAR = "hub_triangular"
 HUB_TRIANGULAR_2D = "hub_triangular_2d"
 POISSON = "poisson"
@@ -28,24 +27,6 @@ class UniformDistribution(RandomDistribution):
         return rng.uniform(self.low, self.high)
 
 
-class TriangularDistribution(RandomDistribution):
-    def __init__(self, low, mode, high):
-        self.low = low
-        self.mode = mode
-        self.high = high
-
-    def sample(self, rng):
-        return rng.triangular(self.low, self.mode, self.high)
-
-
-class PoissonDistribution(RandomDistribution):
-    def __init__(self, lam):
-        self.lam = lam
-
-    def sample(self, rng):
-        return rng.poisson(self.lam)
-
-
 class UniformLocationDistribution(RandomDistribution):
     def __init__(self, node_ids):
         self.node_ids = np.asarray(node_ids, dtype=int)
@@ -57,43 +38,7 @@ class UniformLocationDistribution(RandomDistribution):
         return int(self.node_ids[idx])
 
 
-class TriangularLocationDistribution(RandomDistribution):
-    def __init__(self, node_ids, mode_fraction=0.5):
-        self.node_ids = np.asarray(node_ids, dtype=int)
-        if len(self.node_ids) == 0:
-            raise ValueError("Location distribution requires at least one node.")
-        if not (0.0 <= mode_fraction <= 1.0):
-            raise ValueError("mode_fraction must be between 0 and 1.")
-        self.max_idx = len(self.node_ids) - 1
-        self.distribution = TriangularDistribution(0, self.max_idx * mode_fraction, self.max_idx)
-
-    def sample(self, rng):
-        if self.max_idx == 0:
-            return int(self.node_ids[0])
-        idx = int(round(self.distribution.sample(rng)))
-        return int(self.node_ids[idx])
-
-# TODO check
-# class InverseTriangularLocationDistribution(RandomDistribution):
-#     def __init__(self, node_ids):
-#         self.node_ids = np.asarray(node_ids, dtype=int)
-#         if len(self.node_ids) == 0:
-#             raise ValueError("Location distribution requires at least one node.")
-#         self.max_idx = len(self.node_ids) - 1
-#         self.left_distribution = TriangularDistribution(0, 0, self.max_idx)
-#         self.right_distribution = TriangularDistribution(0, self.max_idx, self.max_idx)
-#         # TODO handle from and to hub
-
-
-    def sample(self, rng):
-        if self.max_idx == 0:
-            return int(self.node_ids[0])
-        distribution = self.left_distribution if rng.random() < 0.5 else self.right_distribution
-        idx = int(round(distribution.sample(rng)))
-        return int(self.node_ids[idx])
-
-
-class HubTriangularLocationDistribution(RandomDistribution):
+class HubTriangularLocationDistribution(RandomDistribution): 
     """Multicentric spatial distribution: sampling probability of a node decays linearly in the
     node's distance to its NEAREST hub, weight = max(0, 1 - d/scale_m), reaching zero at scale_m (a
     hard finite catchment). With two hubs this yields two density peaks (bimodal) automatically; with
@@ -153,20 +98,6 @@ class HubTriangular2DLocationDistribution(RandomDistribution):
         return int(self.node_ids[idx])
 
 
-class UniformTimeDistribution(RandomDistribution):
-    def __init__(self, end_time):
-        if end_time <= 0:
-            raise ValueError("Time distribution requires end_time > 0.")
-        self.distribution = UniformDistribution(0, end_time)
-
-    def sample_count(self, expected_requests, rng):
-        # Deterministic: total demand is fixed to its expected value.
-        return int(round(expected_requests))
-
-    def sample(self, rng):
-        return int(self.distribution.sample(rng))
-
-
 class PoissonTimeDistribution(RandomDistribution):
     """Homogeneous Poisson arrival process on [0, end_time): the number of arrivals is
     Poisson(expected_requests), and, conditional on that count, the arrival times are i.i.d.
@@ -188,14 +119,11 @@ class PoissonTimeDistribution(RandomDistribution):
 
 LOCATION_DISTRIBUTIONS = {
     UNIFORM: UniformLocationDistribution,
-    TRIANGULAR: TriangularLocationDistribution,
     HUB_TRIANGULAR: HubTriangularLocationDistribution,
     HUB_TRIANGULAR_2D: HubTriangular2DLocationDistribution,
-    # "inverse_triangular": InverseTriangularLocationDistribution,
 }
 
 TIME_DISTRIBUTIONS = {
-    UNIFORM: UniformTimeDistribution,
     POISSON: PoissonTimeDistribution,
 }
 
