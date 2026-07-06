@@ -35,11 +35,6 @@ def scenario_row(scenario_name, dv, st_cfg, sim_end_time, n, size_tag, extra_col
         "op_init_veh_distribution": INIT_DIST_FILE_NAME,
     }
     row["rq_type"] = st_cfg.get("rq_type", DEFAULT_RQ_TYPE)
-    if st_cfg.get("use_all_nodes_boarding"):
-        row["op_use_all_nodes_boarding"] = True
-    if "op_repo_method" in st_cfg:
-        row["op_repo_method"] = st_cfg["op_repo_method"]
-        row["op_repo_timestep"] = st_cfg.get("op_repo_timestep", 60)
     if extra_cols:
         row.update(extra_cols)
     return row
