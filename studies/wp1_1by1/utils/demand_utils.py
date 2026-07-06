@@ -381,3 +381,61 @@ def get_boarding_points_for_network(nw_name, infra_name=BOARDING_INFRA_NAME):
         return []
     bp_df = pd.read_csv(bp_f)
     return bp_df["node_index"].tolist()
+
+
+# --- demand scenario sweep (across the range grid) ---
+
+def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, temporal_dist, profile_name, shares, direction_pct, seed, group_params, end_time, boarding_match_radius):
+    rq_name = f"{areal_density}pkm2h_dir{direction_pct}_seed{seed}_spatial_{spatial_dist}_temporal_{temporal_dist}_user_{profile_name}"
+    total_lambda = areal_density * length_km * width_km
+    boarding_points = get_boarding_points_for_network(nw_name)
+    hub_counts = generate_demand_scenario(
+        nw_name, rq_name, areal_density, length_km, width_km, direction_pct, seed,
+        spatial_dist, temporal_dist, shares, group_params, end_time,
+        boarding_points=boarding_points, boarding_match_radius=boarding_match_radius)
+    return {
+        "network_name": nw_name,
+        "rq_file": rq_name + ".csv",
+        "areal_density": areal_density,
+        "total_lambda": total_lambda,
+        "spatial_distribution": spatial_dist,
+        "temporal_distribution": temporal_dist,
+        "user_profile": profile_name,
+        "directionality": direction_pct,
+        "seed": seed,
+        # per-hub request counts, used for the multi-hub proportional fleet split
+        "hub_counts": hub_counts or {},
+    }
+
+
+def generate_demand_scenarios(demand_ranges, networks, end_time, boarding_match_radius):
+    """Generate demand CSVs for all network/density combinations.
+
+    Parameters:
+    - networks: list of dicts {"name": str, "length_km": float, "width_km": float}
+                as returned by generate_networks()
+    - boarding_match_radius: uniform boarding-point match radius (m), see
+      demand_utils.match_boarding_point
+    """
+    areal_densities = demand_ranges["areal_densities"]
+    seeds = demand_ranges["seeds"]
+    spatial_distributions = demand_ranges["spatial_distributions"]
+    temporal_distributions = demand_ranges["temporal_distributions"]
+    user_profiles = demand_ranges["user_profiles"]
+    group_params = demand_ranges["user_group_params"]
+
+    demand_scenarios = []
+    for nw in networks:
+        for areal_density in areal_densities:
+            for spatial_dist in spatial_distributions:
+                for temporal_dist in temporal_distributions:
+                    for profile_name, profile_cfg in user_profiles.items():
+                        shares = {k: v for k, v in profile_cfg.items() if k != "directionality"}
+                        for direction_pct in profile_cfg["directionality"]:
+                            for seed in seeds:
+                                demand_scenarios.append(_demand_entry(
+                                    nw["name"], nw["length_km"], nw["width_km"],
+                                    areal_density, spatial_dist, temporal_dist,
+                                    profile_name, shares, direction_pct, seed,
+                                    group_params, end_time, boarding_match_radius))
+    return demand_scenarios

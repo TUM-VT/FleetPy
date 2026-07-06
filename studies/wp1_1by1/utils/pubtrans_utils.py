@@ -5,9 +5,13 @@ import pandas as pd
 
 from utils.demand_utils import get_hubs_for_network
 from utils.network_utils import get_row_cols
+from utils.supply_utils import fleet_entries, scenario_row
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 PT_DIR = os.path.join(REPO_ROOT, "data", "pubtrans")
+
+# sentinel fixed-route length (km) meaning "the whole line is fixed" (fixed_line service)
+PT_FIXED_LENGTH_SENTINEL_KM = 999999
 
 
 def _middle_row_stations(rows, cols, cell_size, station_spacing_m, hub_node_index, x_lo=None, x_hi=None):
@@ -254,3 +258,125 @@ def generate_pubtrans(ranges):
                         })
 
     return pt_variants
+
+
+# --- PT-line scenario config (sod / fixed_line service types) ---
+
+def is_pt_line_service(st_cfg):
+    """True for the PT-line service types (sod, fixed_line) that ride on a generated PT variant."""
+    return st_cfg.get("op_module") == "SemiOnDemandBatchAssignmentFleetcontrol"
+
+
+def pt_variant_lookup(pt_variants):
+    return {(v["network_name"], v["station_spacing_m"], v["headway_min"]): v for v in pt_variants}
+
+
+def _split_fleet_across_lines(n, pt_variant, hub_counts):
+    """Split a fleet of n vehicles evenly across a PT variant's lines.
+
+    Single-line variants return the scalar n unchanged. Multi-line (two-hub) variants split n
+    equally across the lines (largest-remainder apportionment, at least one vehicle per line) and
+    return a "line:n,line:n" mapping string consumed by
+    SemiOnDemandBatchAssignmentFleetcontrol._parse_n_veh_per_line. This mirrors the even 50/50 hub
+    split used for the dtd/stops services. hub_counts (per-hub demand) is accepted but unused for
+    now; restore demand-proportional weights here to split by demand instead.
+    """
+    lines = pt_variant.get("lines")
+    if not lines or len(lines) <= 1:
+        return n
+
+    # Even split across lines (weights all equal); odd remainders go to the first line(s).
+    k = len(lines)
+    weights = [1] * k
+    total_w = k
+
+    if n <= k:
+        counts = [1] * k  # over-provision a bit rather than leave a line with no vehicle
+    else:
+        rem = n - k
+        shares = [w / total_w * rem for w in weights]
+        base = [int(s) for s in shares]
+        counts = [1 + b for b in base]
+        leftover = rem - sum(base)
+        order = sorted(range(k), key=lambda i: shares[i] - base[i], reverse=True)
+        for i in range(leftover):
+            counts[order[i]] += 1
+
+    # ";"-delimited so FleetPy's config loader (decode_config_str) parses it into a {line_id: n} dict
+    return ";".join(f"{ld['line_id']}:{c}" for ld, c in zip(lines, counts))
+
+
+def _pt_extra_cols(st_cfg, pt_variant, headway_min, fixed_length_km, n_veh):
+    return {
+        "gtfs_name": pt_variant["pt_name"],
+        "station_file": "stations.csv",
+        "schedule_file": "schedules.csv",
+        "alignment_file": "{line_id}_line_alignment.geojson",
+        "line_id": st_cfg["line_id"],
+        "pt_route_id": st_cfg["line_id"],
+        "pt_regular_headway": headway_min * 60,
+        "pt_fixed_length": fixed_length_km,
+        "pt_flex_detour": st_cfg["pt_flex_detour"],
+        "pt_zone_min_detour_time": st_cfg["pt_zone_min_detour_time"],
+        "pt_zone_max_detour_time": st_cfg["pt_zone_max_detour_time"],
+        "pt_dispatch_delay": st_cfg["pt_dispatch_delay"],
+        "pt_n_veh": n_veh,
+
+        "walking_speed": 4,
+
+        "op_max_wait_time": 900,
+        "op_max_wait_time_2": 1800,
+        "op_max_detour_time_factor": 150,
+        "op_add_constant_detour_time": 300,  # TODO double check
+        # must be >= op_max_wait_time_2, or the traveler model auto-cancels (leaves_system) before
+        # the retry mechanism gets a chance to match the request against the next dispatch
+        "user_max_decision_time": 1800,  # TODO double check
+    }
+
+
+def pt_scenario_rows(base_name, dv, st_name, st_cfg, sim_end_time, variant_lookup):
+    """Build scenario rows for a PT-line service type (sod/fixed_line), sweeping station spacing,
+    headway, fleet size, and (for sod only) the fixed-route/flexible split of the corridor."""
+    rows = []
+    is_fixed_line = st_cfg.get("fixed_line", False)
+
+    for station_spacing_m in st_cfg["station_spacings_m"]:
+        for headway_min in st_cfg["headways_min"]:
+            key = (dv["network_name"], station_spacing_m, headway_min)
+            pt_variant = variant_lookup.get(key)
+            if pt_variant is None:
+                raise KeyError("No PT variant generated.")
+
+            if is_fixed_line:
+                fixed_length_variants = [(PT_FIXED_LENGTH_SENTINEL_KM, "full")]
+            else:
+                # TODO (later if needed) same fixed length applies to both lines in a two-hub scenario
+                fixed_length_variants = [
+                    (frac * pt_variant["lines"][0]["route_length_km"], f"fl{frac}")
+                    for frac in st_cfg.get("fixed_length_fractions", [0])
+                ]
+                # TODO (later if needed) find_closest_station_to_x resolves the fixed/flex boundary to the hub itself 
+                # if the fixed_length is shorter than the first non-hub station
+                for fixed_length_km, fl_tag in fixed_length_variants:
+                    if fixed_length_km * 1000 < station_spacing_m:
+                        raise ValueError(
+                            f"{st_name}/{fl_tag} at sp{station_spacing_m}: fixed_length="
+                            f"{fixed_length_km * 1000:.0f}m is shorter than the first non-hub "
+                            f"station ({station_spacing_m}m from hub) -- the fixed-route segment "
+                            f"would degenerate to just the hub. Raise this fixed_length_fraction "
+                            f"or reduce station_spacing_m."
+                        )
+
+            for n, size_tag in fleet_entries(st_cfg, dv["total_lambda"]):
+                # pt_n_veh is the total n for a single line, or a per-line "line:n,..." split for
+                # two hubs; op_fleet_composition (via scenario_row's n) always gets the total.
+                pt_n_veh = _split_fleet_across_lines(n, pt_variant, dv.get("hub_counts", {}))
+                for fixed_length_km, fl_tag in fixed_length_variants:
+                    scenario_name = (
+                        f"{base_name}_{st_name}_sp{station_spacing_m}_hw{headway_min}_"
+                        f"{fl_tag}_{size_tag}"
+                    )
+                    extra_cols = _pt_extra_cols(st_cfg, pt_variant, headway_min, fixed_length_km, pt_n_veh)
+                    rows.append(scenario_row(
+                        scenario_name, dv, st_cfg, sim_end_time, n, size_tag, extra_cols=extra_cols))
+    return rows
