@@ -37,6 +37,7 @@ studies/*
 !studies/example_study
 studies/example_study/results/*
 studies/example_study/git_info.txt
+studies/example_study/study_bundle.json
 !studies/module_tests/*
 studies/module_tests/results/*
 studies/module_tests/git_info.txt
