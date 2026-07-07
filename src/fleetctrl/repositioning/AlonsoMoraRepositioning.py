@@ -8,6 +8,7 @@ from collections import Counter
 from typing import TYPE_CHECKING
 from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 from src.fleetctrl.planning.VehiclePlan import RoutingTargetPlanStop
+from src.misc.init_modules import load_forecast_model
 from src.misc.globals import *
 
 if TYPE_CHECKING:
@@ -42,9 +43,13 @@ class AlonsoMoraRepositioning(RepositioningBase):
         self._rejected_customer_origins_since_last_step = []
         self.min_reservation_buffer = operator_attributes.get(G_OP_REPO_RES_PUF, 3600)  # TODO  # minimum time for service before a vehicle has a reserved trip
         
-    def _load_zone_system(self, operator_attributes : dict, dir_names : dict) -> None:
+    def _load_zone_system(self, operator_attributes : dict, dir_names : dict):
         """ this method loads the forecast zone system needed for the corresponding repositioning strategy
         this class does not need a zone system (always feasible to do that? maybe other modules need it)"""
+        """ this method loads the forecast zone system needed for the corresponding repositioning strategy"""
+        if dir_names.get(G_DIR_ZONES, None) is not None:
+            FC_Class = load_forecast_model("myopic")
+            return FC_Class(dir_names[G_DIR_ZONES], {}, dir_names, operator_attributes)
         return None
         
     def register_rejected_customer(self, planrequest : PlanRequest, sim_time):
@@ -105,8 +110,11 @@ class AlonsoMoraRepositioning(RepositioningBase):
         
         vid_changed_plans = []
         for vid, target_node in vid_to_repo_target.items():
-            vid_changed_plans.append(vid)
             LOG.debug(f"repo {vid} -> {target_node} with tt {vid_to_origin_to_tt[vid][target_node]}")
+            if vid_to_origin_to_tt[vid][target_node] == 0:
+                LOG.debug(f" -> skip repositioning because tt=0")
+                continue
+            vid_changed_plans.append(vid)
             ps = RoutingTargetPlanStop((target_node, None, None), locked=lock, planstop_state=G_PLANSTOP_STATES.REPO_TARGET)
             veh_plan = self.fleetctrl.veh_plans[vid]
             veh_obj = self.fleetctrl.sim_vehicles[vid]

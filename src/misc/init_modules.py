@@ -5,9 +5,10 @@ import importlib
 import typing as tp
 if tp.TYPE_CHECKING:
     from src.FleetSimulationBase import FleetSimulationBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.broker.BrokerBase import BrokerBase
+    from src.ptctrl.PTControlBase import PTControlBase
     from src.demand.TravelerModels import RequestBase
     from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
     from src.fleetctrl.charging.ChargingBase import ChargingBase
@@ -48,6 +49,8 @@ def get_src_simulation_environments():
     sim_env_dict["BrokerDecision"] = ("src.BrokerSimulation", "BrokerDecisionSimulation")
     sim_env_dict["UserDecisionSimulation"] = ("src.BrokerSimulation", "UserDecisionSimulation")
     sim_env_dict["PreferredOperatorSimulation"] = ("src.BrokerSimulation", "PreferredOperatorSimulation")
+    sim_env_dict["MATSim"] = ("src.coupling.MATSimEqasim.MATSimSimulationClass", "MATSimSimulationClass")
+    sim_env_dict["SUMOcontrolledSim"] = ("src.coupling.SUMO.SUMOcontrolledSim", "SUMOcontrolledSim")
     # add development content
     if dev_content is not None:
         dev_sim_env_dict = dev_content.add_dev_simulation_environments()
@@ -57,14 +60,17 @@ def get_src_simulation_environments():
 def get_src_routing_engines():
     # FleetPy routing engine options
     re_dict = {}  # str -> (module path, class name)
-    re_dict["NetworkBasic"] = ("src.routing.NetworkBasic", "NetworkBasic")
-    re_dict["NetworkImmediatePreproc"] = ("src.routing.NetworkImmediatePreproc", "NetworkImmediatePreproc")
-    re_dict["NetworkBasicWithStore"] = ("src.routing.NetworkBasicWithStore", "NetworkBasicWithStore")
-    re_dict["NetworkPartialPreprocessed"] = ("src.routing.NetworkPartialPreprocessed", "NetworkPartialPreprocessed")
-    re_dict["NetworkBasicWithStoreCpp"] = ("src.routing.NetworkBasicWithStoreCpp", "NetworkBasicWithStoreCpp")
-    re_dict["NetworkBasicCpp"] = ("src.routing.NetworkBasicCpp", "NetworkBasicCpp")
-    re_dict["NetworkPartialPreprocessedCpp"] = ("src.routing.NetworkPartialPreprocessedCpp", "NetworkPartialPreprocessedCpp")
-    re_dict["NetworkTTMatrix"] = ("src.routing.NetworkTTMatrix", "NetworkTTMatrix")
+    re_dict["NetworkBasic"] = ("src.routing.road.NetworkBasic", "NetworkBasic")
+    re_dict["NetworkImmediatePreproc"] = ("src.routing.road.NetworkImmediatePreproc", "NetworkImmediatePreproc")
+    re_dict["NetworkBasicWithStore"] = ("src.routing.road.NetworkBasicWithStore", "NetworkBasicWithStore")
+    re_dict["NetworkPartialPreprocessed"] = ("src.routing.road.NetworkPartialPreprocessed", "NetworkPartialPreprocessed")
+    re_dict["NetworkBasicWithStoreCpp"] = ("src.routing.road.NetworkBasicWithStoreCpp", "NetworkBasicWithStoreCpp")
+    re_dict["NetworkBasicCpp"] = ("src.routing.road.NetworkBasicCpp", "NetworkBasicCpp")
+    re_dict["NetworkPartialPreprocessedCpp"] = ("src.routing.road.NetworkPartialPreprocessedCpp", "NetworkPartialPreprocessedCpp")
+    re_dict["NetworkTTMatrix"] = ("src.routing.road.NetworkTTMatrix", "NetworkTTMatrix")
+    re_dict["NetworkBasicWithStoreOnlineMatrixCpp"] = ("src.routing.road.NetworkBasicWithStoreOnlineMatrixCpp", "NetworkBasicWithStoreOnlineMatrixCpp")
+    re_dict["NetworkBasicSumoCoupling"] = ("src.routing.road.NetworkBasicSumoCoupling", "NetworkBasicSumoCoupling")
+    re_dict["NetworkBasicWithStoreCppSumoCoupling"] = ("src.routing.road.NetworkBasicWithStoreCppSumoCoupling", "NetworkBasicWithStoreCppSumoCoupling")
     # add development content
     if dev_content is not None:
         dev_re_dict = dev_content.add_dev_routing_engines()
@@ -87,6 +93,7 @@ def get_src_request_modules():
     rm_dict["BrokerDecisionRequest"] = ("src.demand.TravelerModels", "BrokerDecisionRequest")
     rm_dict["UserDecisionRequest"] = ("src.demand.TravelerModels", "UserDecisionRequest")
     rm_dict["PreferredOperatorRequest"] = ("src.demand.TravelerModels", "PreferredOperatorRequest")
+    rm_dict["BasicIntermodalRequest"] = ("src.demand.TravelerModels", "BasicIntermodalRequest")
     # add development content
     if dev_content is not None:
         dev_rm_dict = dev_content.add_request_models()
@@ -116,11 +123,24 @@ def get_src_broker_modules():
     # FleetPy broker options
     broker_dict = {}  # str -> (module path, class name)
     broker_dict["BrokerBasic"] = ("src.broker.BrokerBasic", "BrokerBasic")
+    broker_dict["PTBroker"] = ("src.broker.PTBroker", "PTBroker")
+    broker_dict["PTBrokerEI"] = ("src.broker.PTBrokerEI", "PTBrokerEI")
+    broker_dict["PTBrokerPAYG"] = ("src.broker.PTBrokerPAYG", "PTBrokerPAYG")
     # add development content
     if dev_content is not None:
         dev_broker_dict = dev_content.add_broker_modules()
         broker_dict.update(dev_broker_dict)
     return broker_dict
+
+def get_src_pt_control_modules():
+    # FleetPy pt control options
+    ptc_dict = {}  # str -> (module path, class name)
+    ptc_dict["PTControlBasic"] = ("src.ptctrl.PTControlBasic", "PTControlBasic")
+    # add development content
+    if dev_content is not None:
+        dev_ptc_dict = dev_content.add_pt_control_modules()
+        ptc_dict.update(dev_ptc_dict)
+    return ptc_dict
 
 def get_src_repositioning_strategies():
     repo_dict = {}  # str -> (module path, class name)
@@ -209,6 +229,7 @@ def get_src_forecast_models():
     fc_dict["aggregate_o_and_d"] = ("src.fleetctrl.forecast.AggForecastZoning", "AggForecastZoneSystem")
     fc_dict["perfect_trips"] = ("src.fleetctrl.forecast.AggForecastZoning", "AggForecastZoneSystem")
     fc_dict["aggregate_o_to_d"] = ("src.fleetctrl.forecast.ODForecastZoneSystem", "ODForecastZoneSystem")
+    fc_dict["MATSimIterationForecast"] = ("src.fleetctrl.forecast.MATSimIterationForecast", "MATSimIterationForecast")
     # add development content
     if dev_content is not None:
         dev_fc_dict = dev_content.add_forecast_models()
@@ -283,6 +304,18 @@ def load_broker_module(broker_type) -> BrokerBase:
     broker_dict = get_src_broker_modules()
     # get broker class
     return load_module(broker_dict, broker_type, "Broker module")
+
+def load_pt_control_module(pt_control_type) -> PTControlBase:
+    """This function initiates the required pt control module and returns the PTControl class, which can be used
+    to generate a pt operator instance.
+
+    :param pt_control_type: string that determines which pt control should be used
+    :return: PTControl class
+    """
+    # FleetPy pt control options
+    ptc_dict = get_src_pt_control_modules()
+    # get pt control class
+    return load_module(ptc_dict, pt_control_type, "PT control module")
 
 def load_repositioning_strategy(op_repo_class_string) -> RepositioningBase:
     """This function chooses the repositioning module that should be loaded.
