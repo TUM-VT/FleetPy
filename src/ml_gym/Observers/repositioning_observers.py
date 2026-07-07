@@ -1,5 +1,3 @@
-# Hallo im roman
-
 import numpy as np
 from src.ml_gym.Observers import AbstractObserver
 from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
@@ -264,7 +262,7 @@ class FutureDropoffObserver(AbstractObserver):
                     pax += stop.get_change_nr_pax()
                     
                     if pax == 0:
-                        zone_id = zone_system.get_zone_from_pos(stop.get_pos())
+                        zone_id = int(zone_system.get_zone_from_pos(stop.get_pos()))
 
                         if zone_id is None or zone_id < 0:
                             continue
@@ -337,7 +335,7 @@ class FutureRepositioningCompletionObserver(AbstractObserver):
             if (not stop.get_list_boarding_rids() and
                 not stop.get_list_alighting_rids()):
 
-                zone_id = zone_system.get_zone_from_pos(stop.get_pos())
+                zone_id = int(zone_system.get_zone_from_pos(stop.get_pos()))
 
                 if zone_id is None or zone_id < 0:
                     continue
@@ -389,6 +387,8 @@ class IdleVehiclesObserver(AbstractObserver):
             zone_to_idle_vehicles[zone_id] = (
                 zone_to_idle_vehicles.get(zone_id, 0) + 1
             )
+        
+        zone_to_idle_vehicles = dict(sorted(zone_to_idle_vehicles.items()))
 
         return {"zone_to_idle_vehicles": zone_to_idle_vehicles}
     
@@ -444,7 +444,7 @@ class FutureRequestsObserver(AbstractObserver):
             k: {} for k in range(1, self.tau + 1)            
         }
 
-        for T in range(1, self.tau +1):
+        for T in range(1, self.tau + 1):
             t0 = (T-1) * delta_t
             t1 = T * delta_t 
             trip_origin_forecasts = zone_system.get_trip_arrival_forecasts(t0, t1)

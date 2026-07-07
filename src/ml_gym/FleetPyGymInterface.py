@@ -63,6 +63,7 @@ class FleetPyGym(gym.Env, ABC):
                 observation, actor_type = self._hook_manager.get_observations(process_id=0, timeout=1)
                 self.last_observation = observation
                 reward = self.reward(observation, action, actor_type)
+                self.last_reward = reward
                 break
             except Empty:
                 if not self._fleetpy_thread.is_alive():

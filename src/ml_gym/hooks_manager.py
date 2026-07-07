@@ -112,7 +112,7 @@ class HookManager:
     def trigger(self, event: Events, fleetpy_module, **kwargs):
         in_queue, out_queue = self._in_out_queue_dict[self._process_id] if self._process_id is not None else (None, None)
         if event in self._hooks:
-            print(f"\ntrigger {event}")
+            # print(f"\ntrigger {event}")
             for h in self._hooks[event]:
                 h.on_event(event, fleetpy_module, self._process_id, in_queue, out_queue)
 
@@ -166,7 +166,7 @@ class Hook:
 
         observation = {}
         for observer in self._observers:
-            print(f"\nHook: trigger observer - {observer}")
+            # print(f"\nHook: trigger observer - {observer}")
             observation.update(observer.observe(fleetpy_module))
 
         for actor in self._actors:

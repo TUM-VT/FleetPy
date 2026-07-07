@@ -1,6 +1,8 @@
 import sys
 import os
+import time
 import numpy as np
+import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)) )))
 
@@ -16,6 +18,8 @@ from stable_baselines3 import PPO
 
 from scipy.optimize import linprog
 
+np.set_printoptions(precision=2, suppress=True)
+
 class RLReposition(ZoneBasedRepositioningActor):
     """Actor that translates the RL agent's output into (origin, target) zone pairs for FleetPy.
     ZoneBasedRepositioningActor.translate_action() is the only method you need to override.
@@ -25,6 +29,9 @@ class RLReposition(ZoneBasedRepositioningActor):
     The current implementation ignores the RL action and instead does a random demand-driven
     matching — replace this logic with your actual action decoding once you have a trained policy.
     """
+    def __init__(self):
+        self.nr_zones = fleetpy_config["nr_zones"]
+        self.zone_ids = list(range(self.nr_zones))
 
     def translate_action(self, observation, action):
         """Convert the RL agent's action into a list of zone-to-zone repositioning moves.
@@ -32,106 +39,13 @@ class RLReposition(ZoneBasedRepositioningActor):
         :param action: raw output of the RL network (MultiDiscrete array in this example);
         :return: list of (origin_zone_id, target_zone_id) tuples; one vehicle moves per tuple.
         """
-        print("incoming action: ", action)
+        # print("incoming action: ", action)
 
         # TODO: translate that into your action here.
         # the output format should be a list of (origin_zone_id, target_zone_id) tuples, e.g.:
         # return [(0, 2), (0, 2), (1, 3)]  # move 2 vehicles from zone 0 to 2, and 1 vehicle from zone 1 to 3
-
-        dp = action / (np.sum(action) + 1e-8) # normalize the action (avoid 0 division)
-        zone_to_idle = observation["zone_to_idle_vehicles"]
-        tt_matrix = observation["tt_matrix"]
-
-        # Zone -1 is a FleetPy placeholder for vehicles not yet assigned to any zone; exclude it.
-        all_zone_ids = get_zone_ids(observation)
         
-        Z = len(all_zone_ids)
-        z = np.array([zone_to_idle[i] for i in all_zone_ids])
-
-        total_idle = np.sum(z)
-        target = dp * total_idle
-
-        n_d = Z * Z
-        n_u = Z
-
-        c = []
-
-        for i in range(Z):
-            for j in range(Z):
-                c.append(tt_matrix[i, j])
-        
-        lam = 10.0
-        c += [lam] * Z
-        c = np.array(c)
-        
-        # Constraints
-        A = []
-        b = []
-
-        # Constraint 1: siguma_j(dn_i,j) < z_i
-        for i in range(Z):
-            row = np.zeros(n_d + n_u)
-            for j in range(Z):
-                row[i * Z + j] = 1
-            A.append(row)
-            b.append(z[i])
-        
-        # Constraint 2: u_j >= imbalance
-        for j in range(Z):
-            row = np.zeros(n_d + n_u)
-
-            # inflow
-            for i in range(Z):
-                row[i * Z + j] += 1
-            # outflow
-            for k in range(Z):
-                row[j * Z + k] -= 1
-            #u_j
-            row[n_d + j] = -1
-
-            A.append(row)
-            b.append(target[j] - z[j])
-
-        # Constraint 3: u_j >= -imbalance
-        for j in range(Z):
-            row = np.zeros(n_d + n_u)
-
-            # inflow
-            for i in range(Z):
-                row[i * Z + j] -= 1
-            # outflow
-            for k in range(Z):
-                row[j * Z + k] += 1
-            #u_j
-            row[n_d + j] = -1
-
-            A.append(row)
-            b.append(z[j] - target[j])
-            
-        A = np.array(A)
-        b = np.array(b)
-
-        # boundary
-        bounds = [(0, None)] * (n_d + n_u)
-
-        # solve
-        res = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method='highs')
-
-        if not res.success:
-            return []
-        x = res.x[:n_d]
-
-        # reconstruct d_ij
-        d_matrix = x.reshape((Z, Z))
-
-        # convert into FleetPy format
-        actions = []
-
-        for i in range(Z):
-            for j in range(Z):
-                move = max(0, int(np.floor(d_matrix[i, j])))
-                for _ in range(move):
-                    actions.append((all_zone_ids[i], all_zone_ids[j]))
+        actions, _, _, _, _ = repo_optimization(action, observation, self.zone_ids, self.nr_zones)
 
         return actions
 
@@ -171,12 +85,14 @@ class TakashiRLRepo(FleetPyGym):
 
         super().__init__(fleetpy_config)
 
-        horizon = fleetpy_config["op_repo_horizons"][1]
-        resolution = fleetpy_config["op_temporal_resolution"]
-        self.tau = int(horizon / resolution)
+        self.tau = int(
+            fleetpy_config["op_repo_horizons"][1]
+            / fleetpy_config["op_repo_timestep"]
+            )
 
         # --- Define Gymnasium spaces ----------------------------------------
         self.nr_zones = config["nr_zones"]
+        self.zone_ids = list(range(self.nr_zones))
         fleet_size = sum(fleetpy_config["op_fleet_composition"].values())
 
         # Action: for each of the nr_zones x nr_zones zone-pairs, how many vehicles to move.
@@ -184,8 +100,8 @@ class TakashiRLRepo(FleetPyGym):
         # Adapt this to match the action representation your policy network produces.
         # TODO: replace with your actual action space. The current shape is just a placeholder and doesn't reflect any real constraints (e.g. available idle vehicles in origin zones).
         self.action_space = spaces.Box(
-            low=0.0,
-            high=1.0,
+            low=-5,
+            high=5,
             shape=(self.nr_zones,),
             dtype=np.float32
         )
@@ -231,7 +147,7 @@ class TakashiRLRepo(FleetPyGym):
         :param observation: merged dict from all registered observers.
         :return: np.ndarray of shape (3 * nr_zones,), dtype float32.
         """
-        print("translate observation", observation)
+        # print("translate observation", observation)
         # TODO: implement your actual observation translation logic here. The current implementation is just an example that combines some of the observed values into a flat vector, but you can customize it as needed based on what your observers return and what information you want to feed into the RL policy.
         
         zone_to_future_dropoffs = observation["zone_to_future_dropoffs"]
@@ -240,29 +156,26 @@ class TakashiRLRepo(FleetPyGym):
         zone_to_unserved_requests = observation["zone_to_unserved_requests"]
         zone_to_forecasted_requests = observation["zone_to_forecasted_requests"]
 
-        # Zone -1 is a FleetPy placeholder for vehicles not yet assigned to any zone; exclude it.
-        all_zone_ids = get_zone_ids(observation)
-
         dropoffs = np.array([
             zone_to_future_dropoffs[k].get(zone_id, 0)
             for k in range(1, self.tau + 1)
-            for zone_id in all_zone_ids
+            for zone_id in self.zone_ids
         ], dtype=np.float32)
 
         repo_completions = np.array([
             zone_to_future_repo_completions[k].get(zone_id, 0)
             for k in range(1, self.tau + 1)
-            for zone_id in all_zone_ids
+            for zone_id in self.zone_ids
         ], dtype=np.float32)
 
-        idles = np.array([zone_to_idle_vehicles.get(zone_id, 0) for zone_id in all_zone_ids], dtype=np.float32)
+        idles = np.array([zone_to_idle_vehicles.get(zone_id, 0) for zone_id in self.zone_ids], dtype=np.float32)
 
-        unserved_rq = np.array([zone_to_unserved_requests.get(zone_id, 0) for zone_id in all_zone_ids], dtype=np.float32)
+        unserved_rq = np.array([zone_to_unserved_requests.get(zone_id, 0) for zone_id in self.zone_ids], dtype=np.float32)
 
         forecasted_rq = np.array([
             zone_to_forecasted_requests[k].get(zone_id, 0)
             for k in range(1, self.tau + 1)
-            for zone_id in all_zone_ids
+            for zone_id in self.zone_ids
         ], dtype=np.float32)
 
         processed_observation = np.concatenate([dropoffs, repo_completions, idles, unserved_rq, forecasted_rq], axis=0).astype(np.float32)
@@ -287,106 +200,150 @@ class TakashiRLRepo(FleetPyGym):
         :return: scalar float reward.
         """
         # check
-        print("reward called, cumulative_unserved:", observation["cumulative_unserved"])
+        # print("reward called, cumulative_unserved:", observation["cumulative_unserved"])
 
-        # observation
-        zone_to_idle = observation["zone_to_idle_vehicles"]
-        tt_matrix = observation["tt_matrix"]
-        cost_unserved = observation["cumulative_unserved"]
+        actions, dn, dn_int, u, tt_matrix = repo_optimization(action, observation, self.zone_ids, self.nr_zones)
         
-        all_zones_ids = get_zone_ids(observation)
-        Z = len(all_zones_ids)
-        z = np.array([zone_to_idle[i] for i in all_zones_ids])
-
-        # action
-        dp = action / (np.sum(action) + 1e-8)
-        total_idle = np.sum(z)
-        target = dp * total_idle
-
-        # optimization
-        n_d = Z * Z
-        n_u = Z
-        
-        c = []
-        for i in range(Z):
-            for j in range(Z):
-                c.append(tt_matrix[i, j])
-        
-        lam = 10.0
-        c += [lam] * Z
-        c = np.array(c)
-
-        A = []
-        b = []
-
-        # outflow contraints
-        for i in range(Z):
-            row = np.zeros(n_d + n_u)
-            for j in range(Z):
-                row[i * Z + j] = 1
-            A.append(row)
-            b.append(z[i])
-        
-        # deviation constraints
-        for j in range(Z):
-            row = np.zeros(n_d + n_u)
-            for i in range(Z):
-                row[i * Z + j] += 1
-            for k in range(Z):
-                row[j * Z + k] -= 1
-            row[n_d + j] = -1
-            A.append(row)
-            b.append(target[j] - z[j])
-        
-            row = np.zeros(n_d + n_u)
-            for i in range(Z):
-                row[i * Z + j] -= 1
-            for k in range(Z):
-                row[j * Z + k] += 1
-            row[n_d + j] = -1
-            A.append(row)
-            b.append(z[j] - target[j])
-
-        bounds = [(0, None)] * (n_d + n_u)
-
-
-        res = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method='highs')
-
-        if not res.success:
+        if dn_int is None:
             return -1e6
-        
-        x = res.x
-        dn = x[:n_d].reshape((Z, Z))
-        u = x[n_d:]
 
-        # weights
-        w1 = 1.0
-        w2 = 1.0
-        w3 = 1.0
+        # Weights
+        w1 = 1
+        w2 = 0.001
+        w3 = 0.1
 
-
-        # cost terms 2, 3
-        cost_travel = np.sum(dn * tt_matrix)
+        # Cost terms
+        cost_unserved = observation["cumulative_unserved"]
+        cost_travel = np.sum(dn_int * tt_matrix)
         cost_deviation = np.sum(u)
 
         reward = - (w1 * cost_unserved + w2 * cost_travel + w3 * cost_deviation)
 
-        for hook_list in self._hook_manager._hooks.values():
-            for hook in hook_list:
-                observers, _ = hook.get_observers_actors()
-                for obs in self._observers:
-                    if isinstance(obs, UnservedRequestsObserver):
-                        obs.cumulative_unserved = 0
-        
+        print(f"cost_unserved  = {cost_unserved:.3f}")
+        print(f"cost_travel    = {cost_travel:.3f}")
+        print(f"cost_deviation = {cost_deviation:.3f}")
+        print(f"reward         = {reward:.3f}")
+
         return float(reward)
 
-def get_zone_ids(observation):
-    # Exclude zone no. -1
-    zone_dict = observation.get("zone_to_idle_vehicles", {})
-    ids = sorted(zone_dict.keys())
-    if -1 in ids:
-        ids.remove(-1)
-    return ids
+# Optimize repositioning based on action (desired proportion)
+def repo_optimization(action, observation, zone_ids, nr_zones):
+    # Softmax
+    exp_action = np.exp(action - np.max(action))
+    dp = exp_action / np.sum(exp_action)
+    zone_to_idle = observation["zone_to_idle_vehicles"] # no. of idle vehicles by zones
+    tt_matrix = observation["tt_matrix"] # matrix of travel times among zones
+    
+    Z = nr_zones
+    z = np.array([zone_to_idle.get(i, 0) for i in zone_ids])
+
+    total_idle = np.sum(z) # total number of idle vehicles
+    target = dp * total_idle # desired no. of idle vehicles by zones
+
+    n_d = Z * Z
+    n_u = Z
+    c = []
+
+    # Vectorize tt_matrix
+    for i in range(Z):
+        for j in range(Z):
+            c.append(tt_matrix[i, j])
+    
+    # Add the deviation penalty term in the objective function
+    lam = 100 # Lagrangerian multiplier
+    c += [lam] * Z
+    c = np.array(c)
+    
+    # Constraints: Ax <= b
+    A = []
+    b = []
+
+    # Constraint 1: siguma_j(dn_i,j) < z_i (outflow from zone i must be equal or smaller than idle vehcles)
+    for i in range(Z):
+        row = np.zeros(n_d + n_u)
+        for j in range(Z):
+            row[i * Z + j] = 1
+        A.append(row)
+        b.append(z[i])
+    
+    # Constraint 2: - u_j + sigma_i(dn_ij) - sigma_k(dn_jk) <= dp_j * sigma_k(z_k) - z_j 
+    for j in range(Z):
+        row = np.zeros(n_d + n_u)
+
+        # inflow
+        for i in range(Z):
+            row[i * Z + j] += 1
+        # outflow
+        for k in range(Z):
+            row[j * Z + k] -= 1
+        #u_j
+        row[n_d + j] = -1
+
+        A.append(row)
+        b.append(target[j] - z[j])
+
+    # Constraint 3: - u_j - sigma_i(dn_ij) + sigma_k(dn_jk) <= - dp_j * sigma_k(z_k) + z_j
+    for j in range(Z):
+        row = np.zeros(n_d + n_u)
+
+        # inflow
+        for i in range(Z):
+            row[i * Z + j] -= 1
+        # outflow
+        for k in range(Z):
+            row[j * Z + k] += 1
+        #u_j
+        row[n_d + j] = -1
+
+        A.append(row)
+        b.append(z[j] - target[j])
+    
+    A = np.array(A)
+    b = np.array(b)
+
+    # Boundary
+    bounds = [(0, None)] * (n_d + n_u)
+
+    # Solve the optimization problem by linprog
+    res = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method='highs')
+
+    # Extract only repositioning components from the solution vector and reconstruct dn_ij
+    if not res.success:
+        return [], None, None, tt_matrix
+    x = res.x[:n_d]
+    u = res.x[n_d:]
+    dn = x.reshape((Z, Z))
+    
+    # Largest remainder method
+    dn_int = np.floor(dn).astype(int)
+    remainder = dn - dn_int
+
+    for i in range(Z):
+        desired = np.sum(dn[i])
+        current = np.sum(dn_int[i])
+        extra = int(np.round(desired - current))
+
+        if extra <= 0:
+            continue
+        order = np.argsort(-remainder[i])
+
+        for j in order:
+            if extra == 0:
+                break
+            if current < z[i]:
+                dn_int[i, j] += 1
+                current += 1
+                extra -= 1
+
+    # Convert into FleetPy format
+    actions = []
+
+    for i in range(Z):
+        for j in range(Z):
+            for _ in range(dn_int[i, j]):
+                actions.append((zone_ids[i], zone_ids[j]))
+
+    return actions, dn, dn_int, u, tt_matrix
 
 # run RL
 if __name__ == "__main__":
@@ -418,10 +375,16 @@ if __name__ == "__main__":
     
     model = PPO('MlpPolicy',
                 env,
-                verbose=1, # how detailed log is output→　0:none, 1:standard, 2:detail debug
                 learning_rate=3e-4, # how much parameters are changed in 1 update
-                n_steps=1024, # how many information steps are collected from environment before update
-                batch_size=64 # number of data used in 1 gradient update
+                n_steps=24, # how many information steps are collected from environment before update
+                batch_size=24, # number of data used in 1 gradient update
+                n_epochs=10,
+                gamma=0.99,
+                clip_range=0.2,
+                ent_coef=0,
+                vf_coef=0.5,
+                verbose=1, # how detailed log is output→　0:none, 1:standard, 2:detail debug
+                tensorboard_log="./tensorboard/"
                 )
     
-    model.learn(total_timesteps=100000)
+    model.learn(total_timesteps=10000, tb_log_name="PPO_FleetPy")
