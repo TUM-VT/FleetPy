@@ -2,6 +2,7 @@ import os
 import sys
 import pandas as pd
 import numpy as np
+import argparse
 import matplotlib
 import matplotlib.pyplot as plt
 
@@ -201,6 +202,9 @@ def avg_fleet_km_binned(binned_operator_stats, output_dir, op_id, show = True):
     driven_distances = []
     last = 0
     bins = list(binned_operator_stats.keys())
+    if len(bins) < 2:
+        print(f"Not enough bins to calculate fleet km for operator {op_id}.")
+        return ts, driven_distances
     bin_size = bins[1] - bins[0]
     driving_states = [x.display_name for x in G_DRIVING_STATUS]
     for t, binned_stats_df in binned_operator_stats.items():
@@ -240,7 +244,10 @@ def avg_fleet_driving_speeds_binned(binned_operator_stats, output_dir, op_id, sh
     last_dr = 0
     last_rev = 0
     bins = list(binned_operator_stats.keys())
-    bin_size = bins[1] - bins[0]
+    if len(bins) < 2:
+        print(f"Not enough bins to calculate speeds for operator {op_id}.")
+        return ts, driven_speed, revenue_speed
+    # bin_size = bins[1] - bins[0]
     driving_states = [x.display_name for x in G_DRIVING_STATUS]
     util_states = [x.display_name for x in G_REVENUE_STATUS]
     for t, binned_stats_df in binned_operator_stats.items():
@@ -300,6 +307,9 @@ def avg_revenue_hours_binned(binned_operator_stats, output_dir, op_id, n_vehicle
     vrhs = []
     last = 0
     bins = list(binned_operator_stats.keys())
+    if len(bins) < 2:
+        print(f"Not enough bins to calculate vehicle revenue hours for operator {op_id}.")
+        return ts, vrhs
     bin_size = bins[1] - bins[0]
     util_states = [x.display_name for x in G_REVENUE_STATUS]
     for t, binned_stats_df in binned_operator_stats.items():
@@ -338,6 +348,9 @@ def avg_active_customers_binned(binned_served_customer_stats, output_dir, op_id,
     last_cust = 0
     last_rq = 0
     bins = list(binned_served_customer_stats.keys())
+    if len(bins) < 2:
+        print(f"Not enough bins to calculate active customers for operator {op_id}.")
+        return ts, act_cust, act_req
     bin_size = bins[1] - bins[0]
     differs = False
     for t, binned_customer_df in binned_served_customer_stats.items():
@@ -494,6 +507,10 @@ def temporal_operator_plots(output_dir, op_id, show=False, evaluation_start_time
     #  bin users stats
     binned_users_stats = _bin_served_user_stats(op_user_df, bin_intervals)
 
+    if len(binned_operator_stats) < 2:
+        print(f"WARNING: Not enough bins to evaluate temporal stats for operator {op_id}.")
+        return {}
+
     # create all plots
     n_vehicles = len(op_df[G_V_VID].unique())
     temporal_plots_dict = {}
@@ -514,6 +531,11 @@ def temporal_operator_plots(output_dir, op_id, show=False, evaluation_start_time
     temporal_plots_dict["avg_revenue_hours_binned"] = avg_revenue_hours_binned(binned_operator_stats, output_dir, op_id, n_vehicles, show = show)
     if print_comments:
         print(f" ... evaluate active customers for op {op_id}")
+    if len(binned_users_stats) < 2:
+        print(f"WARNING: Not enough bins to evaluate active customers for operator {op_id}.")
+        temporal_plots_dict["avg_active_customers_binned"] = ([], [], [])
+        temporal_plots_dict["avg_customers_per_vehicle_revenue_hous_binned"] = ([], [], [])
+        return temporal_plots_dict
     temporal_plots_dict["avg_active_customers_binned"] = avg_active_customers_binned(binned_users_stats, output_dir, op_id, show = show)
     if print_comments:
         print(f" ... evaluate customers per vehicle revenue hours for op {op_id}")
@@ -755,6 +777,7 @@ def vehicle_stats_over_time(output_dir, scenario_parameters, operator_attributes
     else:
         plt.savefig(os.path.join(output_dir, "fleet_states_time_op_{}.png".format(op_id)), bbox_inches="tight")
         plt.close()
+    return times, values, states
 
 
 def _create_occ_plot_lists(op_df, max_occupancy):
@@ -995,6 +1018,9 @@ def run_complete_temporal_evaluation(output_dir, evaluation_start_time=None, eva
     :param evaluation_start_time: start time of evaluation
     :param evaluation_end_time: end time of evaluation
     """
+    if not os.path.isfile(os.path.join(output_dir, "standard_eval.csv")):
+        print(f"WARNING: No standard evaluation file found in {output_dir}. Simulation didnt seem to finish. Skipping temporal evaluation.")
+        return
     scenario_parameters, list_operator_attributes, _ = load_scenario_inputs(output_dir)
     dir_names = get_directory_dict(scenario_parameters, list_operator_attributes)
     eval_dict = {}
@@ -1013,12 +1039,26 @@ def run_complete_temporal_evaluation(output_dir, evaluation_start_time=None, eva
 
 
 if __name__ == "__main__":
-    # bugfix
-    # -> set up a bugfix configuration with output dir!
+    parser = argparse.ArgumentParser(description="Run all temporal evaluation plots for a given scenario output directory or the full study folder.")
+    parser.add_argument("--scenario_results", help="Folder name under data/scenarios containing scenario results (either this or --study_folder must be provided)")
+    parser.add_argument("--study_folder", help="Folder name under data/studies containing the study folder with scenario results (path to folder or folder name) (either this or --scenario_results must be provided)")
+    args = parser.parse_args()
 
-    # normal script call
-    # ------------------
-    if len(sys.argv) == 2:
-        run_complete_temporal_evaluation(sys.argv[1])
+    if args.scenario_results:
+        run_complete_temporal_evaluation(args.scenario_results)
+    elif args.study_folder:
+        study_folder = args.study_folder
+        if not os.path.isabs(study_folder):
+            study_folder = os.path.join(MAIN_DIR, "studies", study_folder, "results")
+            if not os.path.exists(study_folder):
+                print(f"Study folder '{args.study_folder}' does not exist.")
+                sys.exit(1)
+
+        # Iterate through all scenario result directories in the study folder
+        for scenario_dir in os.listdir(study_folder):
+            scenario_path = os.path.join(study_folder, scenario_dir)
+            if os.path.isdir(scenario_path):
+                print(f"Running temporal evaluation for scenario: {scenario_dir}")
+                run_complete_temporal_evaluation(scenario_path)
     else:
-        print("Please provide the scenario output directory as additional input parameter.")
+        print("Wrong usage: Either --scenario_results or --study_folder must be provided.")
