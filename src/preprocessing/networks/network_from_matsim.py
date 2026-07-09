@@ -46,10 +46,10 @@ def main():
         help="Name of the network to create (used as subfolder name under data/networks/).",
     )
     parser.add_argument(
-        "--no_hash_check",
+        "--hash_check",
         action="store_true",
-        default=True,
-        help="Disable hash-similarity check (always recreate the network).",
+        default=False,
+        help="Enable hash-similarity check (default behavior).",
     )
     args = parser.parse_args()
 
@@ -57,7 +57,7 @@ def main():
         matsim_network_path=args.matsim_network_path,
         fleetpy_data_path=str(FLEETPY_DATA_PATH),
         network_name=args.fleetpy_network_name,
-        enforce_hash_similarity=not args.no_hash_check,
+        enforce_hash_similarity=args.hash_check,
     )
 
 
