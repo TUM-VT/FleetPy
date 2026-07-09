@@ -30,7 +30,8 @@ from utils.network_utils import BOARDING_INFRA_NAME
 def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_length_km, corridor_width_km,
                              dir_pct, seed, spatial_dist, temporal_dist,
                              user_group_shares, user_group_params, end_time,
-                             overwrite=True, boarding_points=None, boarding_match_radius=None):
+                             overwrite=True, boarding_points=None, boarding_match_radius=None,
+                             headway_s=None, ramp_s=None):
     """
     Generate a demand scenario CSV with per-request user-group constraint columns.
 
@@ -41,7 +42,8 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
       areal_density_pax_km2h × corridor_length_km × corridor_width_km
     - corridor_length_km: Corridor length in km
     - corridor_width_km: Corridor width in km
-    - dir_pct: Fraction of trips directed toward a hub
+    - dir_pct: Fraction of trips directed away from a hub (from-hub trips: hub -> non-hub);
+      the remaining 1 - dir_pct are to-hub trips (non-hub -> hub)
     - seed: Random seed for reproducibility
     - spatial_dist: Spatial distribution of the demand
     - temporal_dist: Temporal distribution of the demand
@@ -54,14 +56,16 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
       the stop-based on-demand service. start/end are unaffected.
     - boarding_match_radius: Match radius (m) used for boarding-point matching, applied uniformly
       to all requests regardless of user group. Required if boarding_points is given.
+    - headway_s, ramp_s: Hub-timetable parameters used only when temporal_dist is "hub_schedule"
+      (scheduled-event spacing and one-sided ramp width, s). Fall back to the code defaults when
+      None; ignored for other temporal distributions.
     """
     output_dir = os.path.join(DEMAND_DIR, nw_name)
     os.makedirs(output_dir, exist_ok=True)
 
     output_path = os.path.join(output_dir, rq_name + ".csv")
     if not overwrite and os.path.exists(output_path):
-        # still report the per-hub demand split (needed for the multi-hub proportional fleet split)
-        # from the already-written file rather than regenerating it
+        # report the per-hub demand split (needed for the multi-hub proportional fleet split if needed later)
         return _hub_counts_from_csv(output_path, get_hubs_for_network(nw_name))
 
     rng = np.random.default_rng(seed)
@@ -103,7 +107,7 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
     else:
         location_distribution = get_location_distribution(spatial_dist, node_ids)
 
-    time_distribution = get_time_distribution(temporal_dist, end_time)
+    time_distribution = get_time_distribution(temporal_dist, end_time, headway_s=headway_s, ramp_s=ramp_s)
 
     # The temporal model owns the count: "poisson" draws a Poisson(expected_requests) total
     # (true unconditioned Poisson process), "uniform" fixes it to the expected value.
@@ -115,8 +119,11 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
     hub_counts = {int(h): 0 for h in hubs}
     requests = []
     for _ in range(num_requests):
-        rq_time = time_distribution.sample(rng)
+        # Direction is drawn first because schedule-anchored timing (HUB_SCHEDULE) depends on it:
+        # to-hub requests cluster before a scheduled departure, from-hub after a scheduled arrival.
+        # Direction-agnostic distributions (poisson) ignore the argument.
         direction = G_DIR_FROM_HUB if rng.random() < dir_pct else G_DIR_TO_HUB
+        rq_time = time_distribution.sample(rng, direction)
 
         if direction == G_DIR_FROM_HUB:
             non_hub_loc = end_loc = location_distribution.sample(rng)
@@ -385,14 +392,15 @@ def get_boarding_points_for_network(nw_name, infra_name=BOARDING_INFRA_NAME):
 
 # --- demand scenario sweep (across the range grid) ---
 
-def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, temporal_dist, profile_name, shares, direction_pct, seed, group_params, end_time, boarding_match_radius):
+def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, temporal_dist, profile_name, shares, direction_pct, seed, group_params, end_time, boarding_match_radius, headway_s=None, ramp_s=None):
     rq_name = f"{areal_density}pkm2h_dir{direction_pct}_seed{seed}_spatial_{spatial_dist}_temporal_{temporal_dist}_user_{profile_name}"
     total_lambda = areal_density * length_km * width_km
     boarding_points = get_boarding_points_for_network(nw_name)
     hub_counts = generate_demand_scenario(
         nw_name, rq_name, areal_density, length_km, width_km, direction_pct, seed,
         spatial_dist, temporal_dist, shares, group_params, end_time,
-        boarding_points=boarding_points, boarding_match_radius=boarding_match_radius)
+        boarding_points=boarding_points, boarding_match_radius=boarding_match_radius,
+        headway_s=headway_s, ramp_s=ramp_s)
     return {
         "network_name": nw_name,
         "rq_file": rq_name + ".csv",
@@ -423,6 +431,11 @@ def generate_demand_scenarios(demand_ranges, networks, end_time, boarding_match_
     temporal_distributions = demand_ranges["temporal_distributions"]
     user_profiles = demand_ranges["user_profiles"]
     group_params = demand_ranges["user_group_params"]
+    # Hub-timetable parameters for the "hub_schedule" temporal distribution (ignored by others);
+    # fall back to the code defaults in get_time_distribution when absent.
+    hub_schedule_cfg = demand_ranges.get("hub_schedule", {})
+    headway_s = hub_schedule_cfg.get("headway_s")
+    ramp_s = hub_schedule_cfg.get("ramp_s")
 
     demand_scenarios = []
     for nw in networks:
@@ -437,5 +450,6 @@ def generate_demand_scenarios(demand_ranges, networks, end_time, boarding_match_
                                     nw["name"], nw["length_km"], nw["width_km"],
                                     areal_density, spatial_dist, temporal_dist,
                                     profile_name, shares, direction_pct, seed,
-                                    group_params, end_time, boarding_match_radius))
+                                    group_params, end_time, boarding_match_radius,
+                                    headway_s=headway_s, ramp_s=ramp_s))
     return demand_scenarios

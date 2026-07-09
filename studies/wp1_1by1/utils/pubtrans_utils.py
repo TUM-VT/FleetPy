@@ -306,7 +306,14 @@ def _split_fleet_across_lines(n, pt_variant, hub_counts):
     return ";".join(f"{ld['line_id']}:{c}" for ld, c in zip(lines, counts))
 
 
-def _pt_extra_cols(st_cfg, pt_variant, headway_min, fixed_length_km, n_veh):
+def _as_list(v):
+    """Coerce a scalar-or-list scenario field to a list, so a design axis can be either pinned
+    (scalar) or swept (list) in the ranges yaml without changing the config schema."""
+    return v if isinstance(v, list) else [v]
+
+
+def _pt_extra_cols(st_cfg, pt_variant, headway_min, fixed_length_km, n_veh,
+                   flex_detour, zone_min_detour_time, zone_max_detour_time):
     return {
         "gtfs_name": pt_variant["pt_name"],
         "station_file": "stations.csv",
@@ -316,21 +323,24 @@ def _pt_extra_cols(st_cfg, pt_variant, headway_min, fixed_length_km, n_veh):
         "pt_route_id": st_cfg["line_id"],
         "pt_regular_headway": headway_min * 60,
         "pt_fixed_length": fixed_length_km,
-        "pt_flex_detour": st_cfg["pt_flex_detour"],
-        "pt_zone_min_detour_time": st_cfg["pt_zone_min_detour_time"],
-        "pt_zone_max_detour_time": st_cfg["pt_zone_max_detour_time"],
+        "pt_flex_detour": flex_detour,
+        "pt_zone_min_detour_time": zone_min_detour_time,
+        "pt_zone_max_detour_time": zone_max_detour_time,
         "pt_dispatch_delay": st_cfg["pt_dispatch_delay"],
         "pt_n_veh": n_veh,
 
         "walking_speed": 4,
 
-        "op_max_wait_time": 900,
-        "op_max_wait_time_2": 1800,
-        "op_max_detour_time_factor": 150,
-        "op_add_constant_detour_time": 300,  # TODO double check
-        # must be >= op_max_wait_time_2, or the traveler model auto-cancels (leaves_system) before
-        # the retry mechanism gets a chance to match the request against the next dispatch
-        "user_max_decision_time": 1800,  # TODO double check
+        # Operator-side matching feasibility gates (distinct from the demand-side UserGroupRequest
+        # acceptance thresholds). Configurable per service_type/scenario_ranges file so a corridor
+        # length with a bigger pt_zone_max_detour_time can also carry a consistent wait-time budget
+        # (must be >= op_max_wait_time_2, or the traveler model auto-cancels (leaves_system) before
+        # the retry mechanism gets a chance to match the request against the next dispatch).
+        "op_max_wait_time": st_cfg.get("op_max_wait_time", 900),
+        "op_max_wait_time_2": st_cfg.get("op_max_wait_time_2", 1800),
+        "op_max_detour_time_factor": st_cfg.get("op_max_detour_time_factor", 150),
+        "op_add_constant_detour_time": st_cfg.get("op_add_constant_detour_time", 300),
+        "user_max_decision_time": st_cfg.get("user_max_decision_time", 1800),
     }
 
 
@@ -339,6 +349,13 @@ def pt_scenario_rows(base_name, dv, st_name, st_cfg, sim_end_time, variant_looku
     headway, fleet size, and (for sod only) the fixed-route/flexible split of the corridor."""
     rows = []
     is_fixed_line = st_cfg.get("fixed_line", False)
+
+    # Detour/flex-zone design axes may be pinned (scalar) or swept (list). A tag is only appended
+    # to the scenario name when an axis is actually swept, so existing single-value runs keep their
+    # current names.
+    flex_detours = _as_list(st_cfg["pt_flex_detour"])
+    zone_min_times = _as_list(st_cfg["pt_zone_min_detour_time"])
+    zone_max_times = _as_list(st_cfg["pt_zone_max_detour_time"])
 
     for station_spacing_m in st_cfg["station_spacings_m"]:
         for headway_min in st_cfg["headways_min"]:
@@ -372,11 +389,24 @@ def pt_scenario_rows(base_name, dv, st_name, st_cfg, sim_end_time, variant_looku
                 # two hubs; op_fleet_composition (via scenario_row's n) always gets the total.
                 pt_n_veh = _split_fleet_across_lines(n, pt_variant, dv.get("hub_counts", {}))
                 for fixed_length_km, fl_tag in fixed_length_variants:
-                    scenario_name = (
-                        f"{base_name}_{st_name}_sp{station_spacing_m}_hw{headway_min}_"
-                        f"{fl_tag}_{size_tag}"
-                    )
-                    extra_cols = _pt_extra_cols(st_cfg, pt_variant, headway_min, fixed_length_km, pt_n_veh)
-                    rows.append(scenario_row(
-                        scenario_name, dv, st_cfg, sim_end_time, n, size_tag, extra_cols=extra_cols))
+                    for flex_detour in flex_detours:
+                        for zone_min_t in zone_min_times:
+                            for zone_max_t in zone_max_times:
+                                detour_tag = ""
+                                if len(flex_detours) > 1:
+                                    detour_tag += f"_fd{flex_detour}"
+                                if len(zone_min_times) > 1:
+                                    detour_tag += f"_zmin{zone_min_t}"
+                                if len(zone_max_times) > 1:
+                                    detour_tag += f"_zmax{zone_max_t}"
+                                scenario_name = (
+                                    f"{base_name}_{st_name}_sp{station_spacing_m}_hw{headway_min}_"
+                                    f"{fl_tag}{detour_tag}_{size_tag}"
+                                )
+                                extra_cols = _pt_extra_cols(
+                                    st_cfg, pt_variant, headway_min, fixed_length_km, pt_n_veh,
+                                    flex_detour, zone_min_t, zone_max_t)
+                                rows.append(scenario_row(
+                                    scenario_name, dv, st_cfg, sim_end_time, n, size_tag,
+                                    extra_cols=extra_cols))
     return rows
