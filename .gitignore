@@ -194,3 +194,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# tensorflow in ml_gym
+src/ml_gym/tensorboard/*

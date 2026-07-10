@@ -1,5 +1,6 @@
 import sys
 import os
+import traceback
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))  # add fleetpy path
 
 from src.misc.init_modules import load_simulation_environment
@@ -12,9 +13,16 @@ import gymnasium as gym
 from abc import ABC, abstractmethod
 
 
-def run_single_simulation(scenario_parameters, hooks_manager: HookManager, process_id: int):
-    SF = load_simulation_environment(scenario_parameters, hooks_manager, process_id)
-    SF.run(process_id)
+def run_single_simulation(scenario_parameters, hooks_manager: HookManager, process_id: int, error_slot: list):
+    try:
+        SF = load_simulation_environment(scenario_parameters, hooks_manager, process_id)
+        SF.run(process_id)
+    except BaseException as e:
+        # Threads swallow exceptions silently (they only get printed by the default
+        # excepthook); stash it so the main thread can notice the crash and re-raise
+        # instead of hanging forever on a queue that will never receive data.
+        error_slot.append(e)
+        traceback.print_exc()
 
 
 class FleetPyGym(gym.Env, ABC):
@@ -27,6 +35,7 @@ class FleetPyGym(gym.Env, ABC):
         self.last_reward = None
         self.last_action = None
         self._fleetpy_thread: Thread = None
+        self._fleetpy_thread_error: list = []
 
     def register_observer(self, event: Events, observer: AbstractObserver):
         self._hook_manager.add_observer(event, observer)
@@ -35,10 +44,20 @@ class FleetPyGym(gym.Env, ABC):
         self._hook_manager.add_actor(event, actor)
 
     def reset(self, *, seed=None, options=None):
+        self._fleetpy_thread_error = []
+        # daemon=True: only the main thread receives Ctrl+C/SIGINT in CPython, so on
+        # interrupt this simulation thread would otherwise keep running (typically stuck
+        # forever waiting on in_queue.get() for an action the dead main thread will never
+        # send) and, being non-daemon, block interpreter shutdown so the process never exits.
         self._fleetpy_thread = Thread(target=run_single_simulation,
-                                        args=(self.scenario_parameters, self._hook_manager, 0))
+                                        args=(self.scenario_parameters, self._hook_manager, 0, self._fleetpy_thread_error),
+                                        daemon=True)
         self._fleetpy_thread.start()
-        observation, actor_type = self._hook_manager.get_observations(process_id=0)
+        observation, actor_type, done = self._poll_for_observation(process_id=0)
+        if done:
+            raise RuntimeError(
+                "FleetPy simulation thread ended before producing an observation for reset()"
+            )
 
         self.last_observation = observation
         translated_observation = self.translate_observation(observation)
@@ -54,22 +73,36 @@ class FleetPyGym(gym.Env, ABC):
         """ Implement this method to calculate the reward based on the received observation and the action taken by the agent """
         pass
 
+    def _poll_for_observation(self, process_id, poll_timeout=1):
+        """ Poll for the next observation, checking after every timeout whether the FleetPy
+        simulation thread is still alive. Returns (observation, actor_type, thread_ended)
+        instead of blocking forever on a queue that a dead thread will never fill again. If
+        the thread died because of an unhandled exception, that exception is re-raised here
+        so a crash actually surfaces instead of hanging or being silently treated as a
+        normal episode end. """
+        while True:
+            try:
+                observation, actor_type = self._hook_manager.get_observations(process_id=process_id, timeout=poll_timeout)
+                return observation, actor_type, False
+            except Empty:
+                if not self._fleetpy_thread.is_alive():
+                    if self._fleetpy_thread_error:
+                        raise RuntimeError(
+                            "FleetPy simulation thread crashed"
+                        ) from self._fleetpy_thread_error[0]
+                    return None, None, True
+
     def step(self, action):
         self._hook_manager.send_actor_response(0, action)
         observation, reward = self.last_observation, self.last_reward
-        done = False
-        while True:
-            try:
-                observation, actor_type = self._hook_manager.get_observations(process_id=0, timeout=1)
-                self.last_observation = observation
-                reward = self.reward(observation, action, actor_type)
-                self.last_reward = reward
-                break
-            except Empty:
-                if not self._fleetpy_thread.is_alive():
-                    print(f"FleetPy thread is dead")
-                    done = True
-                    break
+        new_observation, actor_type, done = self._poll_for_observation(process_id=0)
+        if done:
+            print("FleetPy thread is dead")
+        else:
+            observation = new_observation
+            self.last_observation = observation
+            reward = self.reward(observation, action, actor_type)
+            self.last_reward = reward
         translated_observation = self.translate_observation(observation)
         return translated_observation, reward, done, False, {}
 
