@@ -335,7 +335,7 @@ class FutureRepositioningCompletionObserver(AbstractObserver):
             if (not stop.get_list_boarding_rids() and
                 not stop.get_list_alighting_rids()):
 
-                zone_id = int(zone_system.get_zone_from_pos(stop.get_pos()))
+                zone_id = zone_system.get_zone_from_pos(stop.get_pos())
 
                 if zone_id is None or zone_id < 0:
                     continue
@@ -408,8 +408,8 @@ class UnservedRequestsObserver(AbstractObserver):
 
         zone_to_unserved_requests = {}
 
-        for o_pos in fleetpy_module._rejected_customer_origins_since_last_step:
-            zone_id = zone_system.get_zone_from_pos(o_pos)
+        for node_id in fleetpy_module._rejected_customer_origins_since_last_step:
+            zone_id = zone_system.get_zone_from_node(node_id)
 
             if zone_id is None or zone_id < 0:
                 continue
