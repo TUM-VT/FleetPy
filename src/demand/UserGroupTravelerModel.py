@@ -14,8 +14,9 @@ INPUT_PARAMETERS_UserGroupRequest = {
     "doc": """User group request that accepts the first offer meeting its wait time, detour and walking
     distance thresholds, and records the disutility of the chosen offer (utility_chosen_mode output column)
     based on the group's value of time and its waiting/walking weighting factors. If no offer is acceptable,
-    a per-group no-offer/reliability penalty is recorded instead, reflecting the group's sensitivity to
-    unreliable service.""",
+    the disutility of walking the whole direct trip is recorded instead (the realistic fallback for a
+    declined traveler), plus the group's no-offer/reliability penalty on top, reflecting the group's
+    sensitivity to unreliable service.""",
     "inherit": "RequestBase",
     "input_parameters_mandatory": [G_AR_MAX_WT, G_WALKING_SPEED, G_MAX_WALKING_DIST],
     "input_parameters_optional": [G_RQ_MRD, G_MC_VOT, G_VOW_FACTOR, G_V_WAIT_FACTOR, G_MC_NO_OFFER_PENALTY],
@@ -73,6 +74,28 @@ class UserGroupRequest(BasicRequest):
         return - self.value_of_time * (self.value_of_waiting_factor * t_wait + t_drive +
                                         self.value_of_walking_factor * t_walk)
 
+    def _walking_fallback_utility(self):
+        """ disutility of walking the whole direct trip instead of being served -- the realistic
+        fallback for a declined request, using the same value-of-time/walking-factor weighting as
+        _compute_utility's walking term, just applied to the full direct_route_travel_distance
+        instead of an offer's (partial) walking_dist:
+        utility = - vot * v_walk_factor * (direct_route_travel_distance / walking_speed)
+        :return: utility value (float)
+        """
+        if not self.direct_route_travel_distance:
+            return 0.0
+        t_walk = self.direct_route_travel_distance / self.walking_speed if self.walking_speed else 0
+        return - self.value_of_time * self.value_of_walking_factor * t_walk
+
+    def _decline_utility(self):
+        """ utility recorded for a declined/no-offer outcome: the walking-fallback disutility
+        (what the traveler actually experiences -- walking the trip) plus the group's no-offer
+        penalty (an additional, group-specific reliability penalty on top of that realistic
+        fallback; 0 for groups that aren't reliability-sensitive, see G_MC_NO_OFFER_PENALTY).
+        :return: utility value (float)
+        """
+        return self._walking_fallback_utility() - self.no_offer_penalty
+
     def _add_record(self, record_dict):
         record_dict[G_RQ_C_UTIL] = self.utility_chosen_mode
         record_dict["user_group"] = getattr(self, "user_group", None)
@@ -81,12 +104,12 @@ class UserGroupRequest(BasicRequest):
     def choose_offer(self, sc_parameters, simulation_time):
         """Accept the first operator offer that satisfies this user group's
         wait time, detour and walking distance thresholds; decline (-1) if none do.
-        A declined outcome records a per-group no-offer/reliability penalty as its
-        utility, instead of the usual wait/drive/walk disutility. Utility-based
-        comparison across accepted offers is done in post-processing."""
+        A declined outcome records the disutility of walking the trip instead (plus the group's
+        no-offer/reliability penalty on top), instead of the usual wait/drive/walk disutility.
+        Utility-based comparison across accepted offers is done in post-processing."""
         test_all_decline = super().choose_offer(sc_parameters, simulation_time)
         if test_all_decline is not None and test_all_decline < 0:
-            self.utility_chosen_mode = -self.no_offer_penalty
+            self.utility_chosen_mode = self._decline_utility()
             return -1
         sorted_amod_offer_ops = sorted([op_id for op_id in self.offer.keys() if op_id >= 0])
         if len(sorted_amod_offer_ops) == 0:
@@ -111,7 +134,7 @@ class UserGroupRequest(BasicRequest):
             self.utility_chosen_mode = self._compute_utility(offer)
             return op
         LOG.debug(f"all offers over threshold, decline: {offer_str(self.offer)}")
-        self.utility_chosen_mode = -self.no_offer_penalty
+        self.utility_chosen_mode = self._decline_utility()
         return -1
 
 
@@ -171,6 +194,18 @@ class StopBasedUserGroupRequest(UserGroupRequest):
 
     def _get_walking_distance(self, offer):
         return self.total_walking_distance
+
+    def _walking_fallback_utility(self):
+        """ direct_route_travel_distance here only covers the boarding-node<->hub leg (see
+        __init__, which swaps one end of the trip for the matched boarding_node); the
+        true-location<->boarding_node leg is tracked separately as total_walking_distance. Sum
+        both for the full door-to-door distance a declined traveler would actually have to walk.
+        """
+        if not self.walking_speed:
+            return 0.0
+        full_distance = (self.direct_route_travel_distance or 0.0) + self.total_walking_distance
+        t_walk = full_distance / self.walking_speed
+        return - self.value_of_time * self.value_of_walking_factor * t_walk
 
     def _add_record(self, record_dict):
         record_dict["true_o_node"] = self.true_o_node

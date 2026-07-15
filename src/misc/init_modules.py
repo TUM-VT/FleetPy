@@ -108,6 +108,7 @@ def get_src_fleet_control_modules():
     op_dict["RPPFleetControlSingleStopInsertion"] = ("src.fleetctrl.RPPFleetControl", "RPPFleetControlSingleStopInsertion")
     op_dict["RPPFleetControlSingleStopInsertionGuided"] = ("src.fleetctrl.RPPFleetControl", "RPPFleetControlSingleStopInsertionGuided")
     op_dict["SemiOnDemandBatchAssignmentFleetcontrol"] = ("src.fleetctrl.SemiOnDemandBatchAssignmentFleetcontrol", "SemiOnDemandBatchAssignmentFleetcontrol")
+    op_dict["StopBasedRidePoolingBatchAssignmentFleetcontrol"] = ("src.fleetctrl.StopBasedRidePoolingBatchAssignmentFleetcontrol", "StopBasedRidePoolingBatchAssignmentFleetcontrol")
     # add development content
     if dev_content is not None:
         dev_op_dict = dev_content.add_fleet_control_modules()

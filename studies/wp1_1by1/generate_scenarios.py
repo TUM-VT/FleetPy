@@ -65,6 +65,22 @@ def generate_scenario_cfg(demand_scenarios, service_types, sim_end_time, pt_vari
 
     out_path = os.path.join(scenarios_dir, "scenario_cfg.csv")
     df = pd.DataFrame(rows)
+
+    # Columns only PT-line rows (sod/fixed_line) set -- e.g. user_max_decision_time,
+    # op_max_wait_time -- come out NaN for other rows (dtd/stops) once combined into one CSV.
+    # FleetPy's config loader (src/misc/config.py: decode_config_str) converts that NaN to
+    # None, which then OVERRIDES the matching const_cfg.yaml default instead of falling back to
+    # it -- silently corrupting (or, for fields used in unguarded arithmetic, crashing) those
+    # rows. Backfill any such column from const_cfg.yaml's own value so an absent override is
+    # truly a no-op, not a None override.
+    const_cfg_path = os.path.join(scenarios_dir, "const_cfg.yaml")
+    if os.path.isfile(const_cfg_path):
+        with open(const_cfg_path) as f:
+            const_cfg = yaml.safe_load(f)
+        for col in df.columns:
+            if col in const_cfg and df[col].isna().any():
+                df[col] = df[col].fillna(const_cfg[col])
+
     for col in ("line_id", "pt_route_id", "pt_n_veh"):
         if col in df.columns:
             try:

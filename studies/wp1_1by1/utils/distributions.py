@@ -139,7 +139,11 @@ class HubScheduleTimeDistribution(RandomDistribution):
     The offset's sign is directional:
       - to-hub trips request BEFORE a scheduled departure (build-up to catch it): t_k - offset
       - from-hub trips request AFTER a scheduled arrival (burst on alighting):   t_k + offset
-    With ramp_s <= headway_s the pulses don't overlap. Results are clamped to [0, end_time)."""
+    With ramp_s <= headway_s the pulses don't overlap. (event, offset) pairs landing outside
+    [0, end_time) are rejected and redrawn rather than clamped to the boundary -- clamping would
+    pile every out-of-range draw onto a single instant (e.g. every to-hub request within ramp_s of
+    the very first event collapsing onto rq_time=0), which is a lot more artificial spiking than a
+    genuinely truncated first/last pulse."""
 
     def __init__(self, end_time, headway_s, ramp_s, phase_s=0.0):
         if end_time <= 0:
@@ -161,16 +165,17 @@ class HubScheduleTimeDistribution(RandomDistribution):
         return int(rng.poisson(expected_requests))
 
     def sample(self, rng, direction=None):
-        event = self.event_times[rng.integers(0, len(self.event_times))]
-        # Right-triangular offset: peak at the event (0), linearly decaying to zero at ramp_s.
-        offset = rng.triangular(0.0, 0.0, self.ramp_s)
-        if direction == G_DIR_TO_HUB:
-            rq_time = event - offset
-        else:
-            # from-hub (and any unspecified direction): burst just after the scheduled arrival.
-            rq_time = event + offset
-        rq_time = min(max(rq_time, 0.0), self.end_time - 1)
-        return int(rq_time)
+        while True:
+            event = self.event_times[rng.integers(0, len(self.event_times))]
+            # Right-triangular offset: peak at the event (0), linearly decaying to zero at ramp_s.
+            offset = rng.triangular(0.0, 0.0, self.ramp_s)
+            if direction == G_DIR_TO_HUB:
+                rq_time = event - offset
+            else:
+                # from-hub (and any unspecified direction): burst just after the scheduled arrival.
+                rq_time = event + offset
+            if 0.0 <= rq_time < self.end_time:
+                return int(rq_time)
 
 
 LOCATION_DISTRIBUTIONS = {

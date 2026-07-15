@@ -16,9 +16,15 @@ DEFAULT_RQ_TYPE = "UserGroupRequest"
 
 def fleet_entries(st_cfg, total_lambda):
     """Fleet-size sweep for a service type: absolute sizes plus demand-proportional ratios.
+    min_fleet_size (default 1) floors the ratio-derived fleet -- at low demand,
+    round(fleet_ratio * total_lambda) can floor-round to 1 vehicle across a wide density range
+    and then jump to 2 all at once, which reads as a quality cliff rather than a real density
+    effect; raising the floor smooths that out at the cost of a relatively larger fleet at the
+    lowest densities swept.
     Returns a list of (n_vehicles, size_tag) tuples."""
+    min_fleet_size = st_cfg.get("min_fleet_size", 1)
     entries = [(n, f"n{n}") for n in st_cfg.get("fleet_sizes", [])]
-    entries += [(max(1, round(r * total_lambda)), f"r{r}") for r in st_cfg.get("fleet_ratios", [])]
+    entries += [(max(min_fleet_size, round(r * total_lambda)), f"r{r}") for r in st_cfg.get("fleet_ratios", [])]
     return entries
 
 

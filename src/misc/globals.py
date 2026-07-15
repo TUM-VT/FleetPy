@@ -520,6 +520,9 @@ G_RQ_STATE_MONOMODAL = 0
 G_RQ_STATE_FIRSTMILE = 1
 G_RQ_STATE_LASTMILE = 2
 G_RQ_STATE_FIRSTLASTMILE = 3
+# WP1 (studies/wp1_1by1): auto-declined because origin/destination snapped to the same PT
+# station (trivial trip, no in-vehicle segment) -- see SemiOnDemandBatchAssignmentFleetcontrol
+G_RQ_STATE_TRIVIAL_OD_DECLINE = 99
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Mode Choice Model

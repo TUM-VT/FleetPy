@@ -886,7 +886,10 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         lines = sorted(self.schedule_to_initialize.keys())
         self.line_index = {line: idx for idx, line in enumerate(lines)}
         self.last_zonal_dept = np.array([sim_start_time] * len(lines))
-        self.hub_node_to_line = {}  # hub (terminus) network node -> line, for request-to-line routing
+        # hub (terminus) network node -> list of lines, for request-to-line routing. A list
+        # (rather than a single line) because multiple parallel lines can share the same hub --
+        # see return_ptline_of_user for how one is picked among them at request time.
+        self.hub_node_to_lines = {}
 
         for line in lines:
             line_vids = list(self.schedule_to_initialize[line].keys())
@@ -898,7 +901,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
             self.PT_lines[line] = PtLine(line, self, schedule_vehicles, run_schedule, sim_start_time,
                                          sim_end_time, terminus_id=terminus_id, run_schedule=run_schedule)
             terminus_node = self.station_dict[terminus_id].street_network_node_id
-            self.hub_node_to_line[terminus_node] = line
+            self.hub_node_to_lines.setdefault(terminus_node, []).append(line)
         LOG.info(f"SoD finish continue_init {len(self.PT_lines)}")
 
     def assign_vehicle_plan(self, veh_obj, vehicle_plan, sim_time, force_assign=False, assigned_charging_task=None,
@@ -964,6 +967,25 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
 
         # TODO: check whether this matches the schedule; if not, raise an error
 
+    def _pick_least_loaded_line(self, candidate_lines):
+        """Among several parallel lines sharing one hub, pick the one with the most currently
+        idle vehicles at its terminus (i.e. immediately available capacity right now); falls
+        back to the first candidate if none of them has an idle vehicle (e.g. all are mid-trip),
+        since at that point there's no real-time signal to load-balance on anyway.
+        :param candidate_lines: list of line ids sharing a hub node
+        :return: chosen line id
+        """
+        if len(candidate_lines) == 1:
+            return candidate_lines[0]
+        idle_counts = {line: 0 for line in candidate_lines}
+        for vid, status in self.list_veh_in_terminus.items():
+            if status != 1:
+                continue
+            line = self.pt_vehicle_to_line.get(vid)
+            if line in idle_counts:
+                idle_counts[line] += 1
+        return max(candidate_lines, key=lambda l: idle_counts[l])
+
     def return_ptline_of_user(self, rq=None):
         """ this method returns the PT line that the user belongs to
 
@@ -987,9 +1009,9 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
             d_node = rq.get_d_stop_info()[0][0]
 
         for node in (o_node, d_node):
-            line = self.hub_node_to_line.get(node)
-            if line is not None:
-                return self.PT_lines[line]
+            lines_here = self.hub_node_to_lines.get(node)
+            if lines_here:
+                return self.PT_lines[self._pick_least_loaded_line(lines_here)]
 
         # fallback: nearest terminus by network travel time from the origin
         best_line, best_cost = None, float("inf")
@@ -1065,6 +1087,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
 
         if prq.o_pos == prq.d_pos:
             LOG.debug(f"automatic decline for rid {rid_struct}!")
+            rq.modal_state = G_RQ_STATE_TRIVIAL_OD_DECLINE
             self._create_rejection(prq, sim_time)
             return
 
