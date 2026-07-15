@@ -219,10 +219,10 @@ class TakashiRLRepo(FleetPyGym):
 
         reward = - (w1 * cost_unserved + w2 * cost_travel + w3 * cost_deviation)
 
-        print(f"cost_unserved  = {cost_unserved:.3f}")
-        print(f"cost_travel    = {cost_travel:.3f}")
-        print(f"cost_deviation = {cost_deviation:.3f}")
-        print(f"reward         = {reward:.3f}")
+        #print(f"cost_unserved  = {cost_unserved:.3f}")
+        #print(f"cost_travel    = {cost_travel:.3f}")
+        #print(f"cost_deviation = {cost_deviation:.3f}")
+        #print(f"reward         = {reward:.3f}")
 
         return float(reward)
 
@@ -388,3 +388,5 @@ if __name__ == "__main__":
                 )
     
     model.learn(total_timesteps=10000, tb_log_name="PPO_FleetPy")
+
+    model.save("ppo_repo_model")
