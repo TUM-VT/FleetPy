@@ -351,13 +351,16 @@ def _pt_extra_cols(st_cfg, pt_variant, headway_min, fixed_length_km, n_veh,
         "walking_speed": 4,
 
         # Operator-side matching feasibility gates (distinct from the demand-side UserGroupRequest
-        # acceptance thresholds). Configurable per service_type/scenario_ranges file so a corridor
-        # length with a bigger pt_zone_max_detour_time can also carry a consistent wait-time budget
-        # (must be >= op_max_wait_time_2, or the traveler model auto-cancels (leaves_system) before
-        # the retry mechanism gets a chance to match the request against the next dispatch).
+        # acceptance thresholds). op_max_wait_time=900 gives the insertion heuristic real search
+        # slack beyond the demand-side 600s (found to matter a lot -- see the l3 vs l1 saturation
+        # comparison this session). op_max_wait_time_2 disabled (0): the retry mechanism's extended
+        # window was never something the demand side would actually accept anyway. detour factor
+        # capped at 60% -- deliberately NOT the much looser 150% tried mid-session; 60 matches the
+        # loosest demand-side max_rel_detour across user groups, so the operator gets a little
+        # headroom without searching a detour range no traveler would ever accept.
         "op_max_wait_time": st_cfg.get("op_max_wait_time", 900),
-        "op_max_wait_time_2": st_cfg.get("op_max_wait_time_2", 1800),
-        "op_max_detour_time_factor": st_cfg.get("op_max_detour_time_factor", 150),
+        "op_max_wait_time_2": st_cfg.get("op_max_wait_time_2", 0),
+        "op_max_detour_time_factor": st_cfg.get("op_max_detour_time_factor", 60),
         "op_add_constant_detour_time": st_cfg.get("op_add_constant_detour_time", 300),
         "user_max_decision_time": st_cfg.get("user_max_decision_time", 1800),
     }

@@ -19,6 +19,13 @@ _NODE_COORDS_BY_NETWORK = {}
 SECONDS_PER_HOUR = 3600
 DEFAULT_BOARDING_TIME = 30  # seconds
 
+# Minimum hub<->non-hub trip distance (m) for generated demand -- a generic "anyone would just
+# walk this" cutoff, independent of any user group's own max_walking_dist tolerance. Trips shorter
+# than this are resampled (see generate_demand_scenario) rather than left in the demand pool,
+# where they'd otherwise inflate "declined" counts once a service can't produce a
+# sub-walking-distance offer for a trip nobody would have actually requested a ride for.
+MIN_TRIP_DISTANCE_M = 500
+
 sys.path.insert(0, REPO_ROOT)
 
 from src.misc.globals import *
@@ -31,7 +38,7 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
                              dir_pct, seed, spatial_dist, temporal_dist,
                              user_group_shares, user_group_params, end_time,
                              overwrite=True, boarding_points=None, boarding_match_radius=None,
-                             headway_s=None, ramp_s=None):
+                             headway_s=None, ramp_s=None, network_speed_kmh=None):
     """
     Generate a demand scenario CSV with per-request user-group constraint columns.
 
@@ -59,6 +66,11 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
     - headway_s, ramp_s: Hub-timetable parameters used only when temporal_dist is "hub_schedule"
       (scheduled-event spacing and one-sided ramp width, s). Fall back to the code defaults when
       None; ignored for other temporal distributions.
+    - network_speed_kmh: Network free-flow speed (km/h), used only when temporal_dist is
+      "hub_schedule" to floor a to-hub request's offset at the minimum physically possible travel
+      time to the hub (see generate_demand_scenario's request loop) -- an event closer than that is
+      impossible to reach regardless of service quality, not just unlikely. Required (>0) for
+      "hub_schedule"; ignored for other temporal distributions.
     """
     output_dir = os.path.join(DEMAND_DIR, nw_name)
     os.makedirs(output_dir, exist_ok=True)
@@ -109,28 +121,57 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
 
     time_distribution = get_time_distribution(temporal_dist, end_time, headway_s=headway_s, ramp_s=ramp_s)
 
-    # The temporal model owns the count: "poisson" draws a Poisson(expected_requests) total
-    # (true unconditioned Poisson process), "uniform" fixes it to the expected value.
+    # The temporal model owns the count: both "uniform" and "hub_schedule" fix it to exactly
+    # round(expected_requests) -- no run-to-run count variation, only arrival timing is randomized.
     num_requests = time_distribution.sample_count(expected_requests, rng)
 
     groups = list(user_group_shares.keys())
     probs = [user_group_shares[g] for g in groups]
 
+    speed_ms = network_speed_kmh * 1000 / 3600 if network_speed_kmh else None
+
     hub_counts = {int(h): 0 for h in hubs}
     requests = []
+    skipped_too_short = 0
     for _ in range(num_requests):
         # Direction is drawn first because schedule-anchored timing (HUB_SCHEDULE) depends on it:
         # to-hub requests cluster before a scheduled departure, from-hub after a scheduled arrival.
         # Direction-agnostic distributions (poisson) ignore the argument.
         direction = G_DIR_FROM_HUB if rng.random() < dir_pct else G_DIR_TO_HUB
-        rq_time = time_distribution.sample(rng, direction)
 
-        if direction == G_DIR_FROM_HUB:
-            non_hub_loc = end_loc = location_distribution.sample(rng)
-            start_loc = hub_loc = nearest_hub(end_loc, hubs, node_coords)
+        # Location is sampled before rq_time (HUB_SCHEDULE's offset floor below needs the
+        # resulting distance-to-hub). Reject-and-resample the non-hub end if the trip is short
+        # enough that the traveler would just walk the whole thing directly rather than ever
+        # requesting a ride -- otherwise these trivially-short trips sit in the demand pool,
+        # inflate the "declined" count once any service can't produce a sub-walking-distance
+        # offer, and distort served_pct downward for a failure mode that was never a real one.
+        # Threshold is a fixed constant (MIN_TRIP_DISTANCE_M), deliberately NOT the per-group
+        # max_walking_dist -- this is a generic "anyone would just walk this" cutoff, not a
+        # behavioral group-specific tolerance. Distance is measured to the HUB (not a specific
+        # service's boarding point/station), since the demand file is shared across all service
+        # types and the hub is the one endpoint common to all of them.
+        for _attempt in range(200):
+            if direction == G_DIR_FROM_HUB:
+                non_hub_loc = end_loc = location_distribution.sample(rng)
+                start_loc = hub_loc = nearest_hub(end_loc, hubs, node_coords)
+            else:
+                non_hub_loc = start_loc = location_distribution.sample(rng)
+                end_loc = hub_loc = nearest_hub(start_loc, hubs, node_coords)
+            hub_dist_m = _manhattan_dist(node_coords, non_hub_loc, hub_loc)
+            if hub_dist_m >= MIN_TRIP_DISTANCE_M:
+                break
         else:
-            non_hub_loc = start_loc = location_distribution.sample(rng)
-            end_loc = hub_loc = nearest_hub(start_loc, hubs, node_coords)
+            # couldn't find a far-enough candidate in 200 tries (e.g. a tiny network) -- keep the
+            # last (too-short) draw rather than silently under-counting total demand, but track it
+            skipped_too_short += 1
+
+        # Floor a to-hub request's offset at the minimum physically possible travel time to the
+        # hub (pure network distance / free-flow speed, no wait/detour/dwell) -- an event closer
+        # than that isn't just unlikely to be reached, it's impossible regardless of service
+        # quality, so HUB_SCHEDULE should never generate a request implying otherwise. from-hub
+        # requests get no floor: that traveler is already at the hub when the event fires.
+        min_offset = hub_dist_m / speed_ms if (direction == G_DIR_TO_HUB and speed_ms) else 0.0
+        rq_time = time_distribution.sample(rng, direction, min_offset=min_offset)
 
         group = rng.choice(groups, p=probs)
         gp = user_group_params[group]
@@ -156,6 +197,11 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
         if int(hub_loc) in hub_counts:
             hub_counts[int(hub_loc)] += 1
         requests.append(rq)
+
+    if skipped_too_short:
+        print(f"WARNING: {rq_name}: {skipped_too_short}/{num_requests} requests kept a "
+              f"shorter-than-max_walking_dist trip after 200 resample attempts each -- "
+              f"network may be too small/dense to guarantee walk-worthy trips at this density.")
 
     write_demand_to_csv(requests, output_dir, rq_name, overwrite)
     return hub_counts
@@ -392,7 +438,7 @@ def get_boarding_points_for_network(nw_name, infra_name=BOARDING_INFRA_NAME):
 
 # --- demand scenario sweep (across the range grid) ---
 
-def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, temporal_dist, profile_name, shares, direction_pct, seed, group_params, end_time, boarding_match_radius, headway_s=None, ramp_s=None):
+def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, temporal_dist, profile_name, shares, direction_pct, seed, group_params, end_time, boarding_match_radius, headway_s=None, ramp_s=None, network_speed_kmh=None):
     rq_name = f"{areal_density}pkm2h_dir{direction_pct}_seed{seed}_spatial_{spatial_dist}_temporal_{temporal_dist}_user_{profile_name}"
     total_lambda = areal_density * length_km * width_km
     boarding_points = get_boarding_points_for_network(nw_name)
@@ -400,7 +446,7 @@ def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, tem
         nw_name, rq_name, areal_density, length_km, width_km, direction_pct, seed,
         spatial_dist, temporal_dist, shares, group_params, end_time,
         boarding_points=boarding_points, boarding_match_radius=boarding_match_radius,
-        headway_s=headway_s, ramp_s=ramp_s)
+        headway_s=headway_s, ramp_s=ramp_s, network_speed_kmh=network_speed_kmh)
     return {
         "network_name": nw_name,
         "rq_file": rq_name + ".csv",
@@ -416,7 +462,7 @@ def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, tem
     }
 
 
-def generate_demand_scenarios(demand_ranges, networks, end_time, boarding_match_radius):
+def generate_demand_scenarios(demand_ranges, networks, end_time, boarding_match_radius, network_speed_kmh=None):
     """Generate demand CSVs for all network/density combinations.
 
     Parameters:
@@ -424,6 +470,10 @@ def generate_demand_scenarios(demand_ranges, networks, end_time, boarding_match_
                 as returned by generate_networks()
     - boarding_match_radius: uniform boarding-point match radius (m), see
       demand_utils.match_boarding_point
+    - network_speed_kmh: network free-flow speed (km/h), passed through to
+      generate_demand_scenario for the "hub_schedule" to-hub offset floor. A single global value
+      (matching generate_networks/generate_pubtrans's own "not swept per-network" assumption), not
+      per-network.
     """
     areal_densities = demand_ranges["areal_densities"]
     seeds = demand_ranges["seeds"]
@@ -451,5 +501,6 @@ def generate_demand_scenarios(demand_ranges, networks, end_time, boarding_match_
                                     areal_density, spatial_dist, temporal_dist,
                                     profile_name, shares, direction_pct, seed,
                                     group_params, end_time, boarding_match_radius,
-                                    headway_s=headway_s, ramp_s=ramp_s))
+                                    headway_s=headway_s, ramp_s=ramp_s,
+                                    network_speed_kmh=network_speed_kmh))
     return demand_scenarios

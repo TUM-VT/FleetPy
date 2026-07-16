@@ -23,28 +23,31 @@ def read_ranges(path=None):
         return yaml.safe_load(f)
 
 
-def get_ranges():
-    """
-    If a path is provided as the first command-line argument, it is used to read scenario ranges.
-    Otherwise, the default SCENARIO_RANGES_FILE is used.
-    """
-    ranges_path = None
+def _resolve_ranges_path(ranges_path):
+    """Resolve a ranges file argument against the scenario_ranges/ directory, falling back to cwd
+    (or an absolute path unchanged)."""
+    if os.path.isabs(ranges_path):
+        return ranges_path
+    in_dir = os.path.join(SCENARIO_RANGES_DIR, ranges_path)
+    return in_dir if os.path.exists(in_dir) else ranges_path
+
+
+def get_ranges_list():
+    """Read one ranges dict per command-line argument (each resolved against scenario_ranges/,
+    falling back to cwd). Multiple files let one generate_scenarios.py call combine several
+    ranges files' scenarios into a single scenario_cfg.csv -- e.g. for a cluster job that wants
+    everything in one run rather than one file at a time. Falls back to SCENARIO_RANGES_FILE if
+    no arguments are given."""
     if len(sys.argv) > 1:
-        ranges_path = sys.argv[1]
-        if not os.path.isabs(ranges_path):
-            # resolve against the scenario_ranges/ directory, falling back to cwd
-            in_dir = os.path.join(SCENARIO_RANGES_DIR, ranges_path)
-            ranges_path = in_dir if os.path.exists(in_dir) else ranges_path
-    return read_ranges(ranges_path)
+        return [read_ranges(_resolve_ranges_path(p)) for p in sys.argv[1:]]
+    return [read_ranges()]
 
 
-def generate_scenario_cfg(demand_scenarios, service_types, sim_end_time, pt_variants):
-    """Tie demand scenarios and service types together into the scenario_cfg.csv, dispatching
+def build_scenario_rows(demand_scenarios, service_types, sim_end_time, pt_variants):
+    """Tie demand scenarios and service types together into scenario_cfg.csv rows, dispatching
     PT-line service types (sod/fixed_line) to the pubtrans row builder and the on-demand ones
-    (dtd/stops) to a plain per-fleet-size row."""
-    scenarios_dir = os.path.join(STUDY_DIR, "scenarios")
-    os.makedirs(scenarios_dir, exist_ok=True)
-
+    (dtd/stops) to a plain per-fleet-size row. Returns the row list (no I/O) so callers can
+    combine rows from multiple ranges files before writing."""
     variant_lookup = pt_variant_lookup(pt_variants)
 
     rows = []
@@ -62,9 +65,22 @@ def generate_scenario_cfg(demand_scenarios, service_types, sim_end_time, pt_vari
                 for n, size_tag in fleet_entries(st_cfg, dv["total_lambda"]):
                     rows.append(scenario_row(
                         f"{base_name}_{st_name}_{size_tag}", dv, st_cfg, sim_end_time, n, size_tag))
+    return rows
 
+
+def write_scenario_cfg(rows):
+    """Write accumulated scenario_cfg.csv rows (from one or more ranges files) to disk."""
+    scenarios_dir = os.path.join(STUDY_DIR, "scenarios")
+    os.makedirs(scenarios_dir, exist_ok=True)
     out_path = os.path.join(scenarios_dir, "scenario_cfg.csv")
     df = pd.DataFrame(rows)
+
+    if df["scenario_name"].duplicated().any():
+        dupes = df.loc[df["scenario_name"].duplicated(), "scenario_name"].tolist()
+        raise ValueError(
+            f"Duplicate scenario_name(s) across the combined ranges files: {dupes[:5]}"
+            f"{'...' if len(dupes) > 5 else ''}. Each ranges file's scenarios must be unique "
+            f"when combined -- check for overlapping network/density/service_type combos.")
 
     # Columns only PT-line rows (sod/fixed_line) set -- e.g. user_max_decision_time,
     # op_max_wait_time -- come out NaN for other rows (dtd/stops) once combined into one CSV.
@@ -92,23 +108,32 @@ def generate_scenario_cfg(demand_scenarios, service_types, sim_end_time, pt_vari
     print(f"Wrote {len(rows)} scenarios to {out_path}")
 
 
-def main():
-    #  1. Read scenario ranges
-    ranges = get_ranges()
-
-    # 2. Generate networks, initial vehicle distributions, and PT variants
+def generate_from_ranges(ranges):
+    """Run the network/demand/PT/scenario-row generation pipeline for one ranges dict. Returns
+    the scenario_cfg rows (not yet written) so multiple ranges files can be combined before the
+    final write."""
+    # Generate networks, initial vehicle distributions, and PT variants
     networks = generate_networks(ranges["network"])
     generate_initial_vehicle_distributions([nw["name"] for nw in networks])
     pt_variants = generate_pubtrans(ranges)
 
-    # 3. Generate demand scenarios
+    # Generate demand scenarios
     demand_window = ranges["simulation"]["end_time"]
     boarding_match_radius = ranges["network"].get("boarding_point_spacing_m")
-    demand_scenarios = generate_demand_scenarios(ranges["demand"], networks, demand_window, boarding_match_radius)
+    demand_scenarios = generate_demand_scenarios(ranges["demand"], networks, demand_window, boarding_match_radius,
+                                                  network_speed_kmh=ranges["network"].get("default_speed"))
 
-    # 4. Generate scenario configuration file
+    # Build scenario configuration rows
     sim_end_time = demand_window + ranges["simulation"]["cool_time"]
-    generate_scenario_cfg(demand_scenarios, ranges["service_types"], sim_end_time, pt_variants)
+    return build_scenario_rows(demand_scenarios, ranges["service_types"], sim_end_time, pt_variants)
+
+
+def main():
+    ranges_list = get_ranges_list()
+    all_rows = []
+    for ranges in ranges_list:
+        all_rows.extend(generate_from_ranges(ranges))
+    write_scenario_cfg(all_rows)
 
 
 if __name__ == "__main__":

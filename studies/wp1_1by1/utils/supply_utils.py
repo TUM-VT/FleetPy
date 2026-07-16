@@ -39,6 +39,20 @@ def scenario_row(scenario_name, dv, st_cfg, sim_end_time, n, size_tag, extra_col
         "op_vr_control_func_dict": yaml.dump(st_cfg["op_vr_control_func_dict"], default_flow_style=True).strip(),
         "op_fleet_composition": f"{st_cfg['veh_type']}:{n}",
         "op_init_veh_distribution": INIT_DIST_FILE_NAME,
+        # Same operator-side matching-feasibility defaults used by PT-line services (see
+        # pubtrans_utils._pt_extra_cols) -- unified here so dtd/stops/stops_8 get the same
+        # search slack instead of silently falling back to const_cfg.yaml's much tighter
+        # baseline (op_max_wait_time=600, op_max_detour_time_factor=40, no retry), which was
+        # never deliberately tuned and matches the demand-side gate exactly (zero slack).
+        # FleetControlBase.__init__ reads G_OP_MAX_WT/G_OP_MAX_DTF for every fleet control module
+        # generically, and RidePoolingBatchAssignmentFleetcontrol (dtd) also reads G_OP_MAX_WT_2
+        # for the same retry mechanism SoD uses -- these are real, not a no-op. Wait_time_2
+        # disabled (0) and detour factor capped at 60% (the loosest demand-side max_rel_detour
+        # across user groups) rather than the much looser 1800s/150% tried mid-session -- see
+        # pubtrans_utils._pt_extra_cols's comment for why.
+        "op_max_wait_time": st_cfg.get("op_max_wait_time", 900),
+        "op_max_wait_time_2": st_cfg.get("op_max_wait_time_2", 0),
+        "op_max_detour_time_factor": st_cfg.get("op_max_detour_time_factor", 60),
     }
     row["rq_type"] = st_cfg.get("rq_type", DEFAULT_RQ_TYPE)
     if extra_cols:
