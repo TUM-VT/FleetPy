@@ -148,6 +148,9 @@ G_IM_MIN_MOD_DISTANCE = "min_IM_MOD_distance"
 G_IM_PER_KM_SUBSIDY = "subsidy_IM_MOD_per_km"
 G_IM_TRANSFER_TIME = "im_transfer_time"
 
+# broker related attributes
+G_BR_STAT_P_MAT = "broker_static_pricing_matrix"
+
 
 # operator general attributes
 G_OP_MODULE = "op_module"

@@ -670,7 +670,96 @@ class UserUtilityRequest(RequestBase):
             self.fare = chosen_offer.get(G_OFFER_FARE, 0)
         return selected_op
 
-#----------------------------------------------------------------------------#
+# ---------------------------------------------------------------------------
+# New Request: PTUtilityRequest
+# ---------------------------------------------------------------------------
+
+INPUT_PARAMETERS_PTUtilityRequest = {
+    "doc": "Compute a simple PT utility from GTFS total duration: U0 - alpha * gtfs_total_duration_min",
+    "inherit": "RequestBase",
+    "input_parameters_mandatory": ["U_0_T", "alpha_t_P"],  # scenario parameters for PT utility calculation
+    "input_parameters_optional": [],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
+class PTUtilityRequest(RequestBase):
+    """Request that pre-computes a public transport (PT) utility for the request and uses max utility model to choose
+    between PT and MOD.
+
+    The demand files have to have a column ''
+    """
+    type = "PTUtilityRequest"
+
+    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
+        # Read GTFS total duration (in minutes) from the request row; support missing value
+        gtfs_dur = rq_row.get('gtfs_total_duration_min', None)
+        if gtfs_dur is None:
+            raise KeyError(f"Missing data column 'gtfs_total_duration_min' in request file!")
+
+        # Scenario parameter keys: try a few reasonable names, but require them to be present (no defaults)
+        # U0: base PT utility
+        U0 = None
+        U0_keys = ('pt_u0', 'U_0_T', 'pt_u_0', 'pt_base_utility')
+        for key in U0_keys:
+            if key in scenario_parameters:
+                U0 = scenario_parameters.get(key)
+                break
+        if U0 is None:
+            raise KeyError(
+                f"Missing required scenario parameter for PT base utility. One of {U0_keys} must be set in your scenario configuration (e.g. 'pt_u0' or 'U_0_T').")
+
+        # alpha: per-minute penalty for PT travel time
+        alpha_t_p = None
+        alpha_keys = ('pt_alpha_t', 'alpha_t_P', 'pt_alpha', 'pt_time_coeff')
+        for key in alpha_keys:
+            if key in scenario_parameters:
+                alpha_t_p = scenario_parameters.get(key)
+                break
+        if alpha_t_p is None:
+            raise KeyError(
+                f"Missing required scenario parameter for PT time penalty. One of {alpha_keys} must be set in your scenario configuration (e.g. 'pt_alpha_t' or 'alpha_t_P').")
+
+        self.highest_mod_utility = float("-inf")
+        # compute PT utility
+        self.pt_utility: float = float(U0) - float(alpha_t_p) * float(gtfs_dur)
+
+
+        # set MOD sensitivity coefficients (considering units: in config per min, from FleetPy in seconds)
+        self.alpha_t_d: float = scenario_parameters["alpha_t_D"] / 60
+        self.alpha_t_w: float = scenario_parameters["alpha_t_W"] / 60
+        self.fare_conversion: float = 1/100 # convert fare from cents to euros for utility calculation
+
+    def choose_offer(self, scenario_parameters, simulation_time):
+        """Use a max utility model to choose between MOD providers and PT"""
+        selected_op = -1
+        highest_utility = self.pt_utility
+        for op_id, offer in self.offer.items():
+            if not offer.service_declined():
+                t_wait = offer[G_OFFER_WAIT]
+                t_drive = offer[G_OFFER_DRIVE]
+                fare = offer.get(G_OFFER_FARE, 0)
+                utility = - self.alpha_t_w * t_wait - self.alpha_t_d * t_drive - self.fare_conversion * fare
+                if utility > highest_utility:
+                    highest_utility = utility
+                    selected_op = op_id
+                if utility > self.highest_mod_utility:
+                    self.highest_mod_utility = utility
+        if selected_op == -1:
+            self.fare = 0
+        else:
+            chosen_offer = self.offer[selected_op]
+            self.fare = chosen_offer.get(G_OFFER_FARE, 0)
+        return selected_op
+
+    # Optionally override record_data to include the PT utility in output
+    def _add_record(self, record_dict):
+        record_dict['pt_utility'] = self.pt_utility
+        record_dict['highest_mod_utility'] = self.highest_mod_utility
+        return record_dict
+
+# -------------------------------------------------------------------------------------------------------------------- #
 
 INPUT_PARAMETERS_MasterRandomChoiceRequest = {
     "doc" :     """This request class randomly chooses between options.

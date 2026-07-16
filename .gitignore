@@ -195,3 +195,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+src/preprocessing/networks/extractors/cache/

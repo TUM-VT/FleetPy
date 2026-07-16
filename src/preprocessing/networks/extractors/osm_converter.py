@@ -126,7 +126,7 @@ class NetworkOSMCreator():
         elif by_name is not None:
             G = ox.graph_from_place(by_name, network_type=network_type)
         else:
-            G = ox.graph_from_bbox(bounding_box[0], bounding_box[1], bounding_box[2], bounding_box[3], network_type = network_type)
+            G = ox.graph_from_bbox((bounding_box[0], bounding_box[1], bounding_box[2], bounding_box[3]), network_type = network_type)
         self.networkXGraph = G
 
     def createNetworkFromNetwokXGraph(self, speed_unit="kmh"):
@@ -234,6 +234,24 @@ class NetworkOSMCreator():
             plt.plot(x, y, "g-")
 
         plt.show()
+
+    def convert_crs(self, from_epsg, to_epsg):
+        for node in self.nodes:
+            x, y = node.coordinates
+            point = Point(x, y)
+            point_gdf = gpd.GeoDataFrame(geometry=[point], crs=from_epsg)
+            point_gdf = point_gdf.to_crs(to_epsg)
+            node.coordinates = (point_gdf.geometry.x[0], point_gdf.geometry.y[0])
+        for edge in self.edge_id_to_edge.values():
+            line = LineString(edge.polyline)
+            line_gdf = gpd.GeoDataFrame(geometry=[line], crs=from_epsg)
+            line_gdf = line_gdf.to_crs(to_epsg)
+            edge.polyline = list(line_gdf.geometry[0].coords)
+        for supernode in self.super_nodes.values():
+            polygon = Polygon(supernode.polygon)
+            polygon_gdf = gpd.GeoDataFrame(geometry=[polygon], crs=from_epsg)
+            polygon_gdf = polygon_gdf.to_crs(to_epsg)
+            supernode.polygon = list(polygon_gdf.geometry[0].exterior.coords)
 
     def convertFullInformationToGeoJSON(self, path):
         node_gpd_list = []
@@ -391,10 +409,12 @@ def createNetwork(network_name, bbox=None, polygon=None, by_name=None, network_t
     base_folder = os.path.join(new_network_folder, "base")
     createDir(base_folder)
     if from_crs_to_crs:
+        print("convert CRS from {} to {}".format(from_crs_to_crs[0], from_crs_to_crs[1]))
         nw.convert_crs(from_crs_to_crs[0], from_crs_to_crs[1])
+    print("Saving output files ...")
     nw.convertBaseInformationToCSV(base_folder)
     nw.convertFullInformationToGeoJSON(base_folder)
-
+    return nw
 
 
 
@@ -403,4 +423,4 @@ if __name__ == "__main__":
     # example bounding box for maxvorstadt munich
     bbox = (48.169132, 48.134374, 11.589895, 11.551004)
     name = "osm_maxvorstadt"
-    createNetwork(name, bbox=bbox, network_type="all")
+    createNetwork(name, bbox=bbox, network_type="drive")
