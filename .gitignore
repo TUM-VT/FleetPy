@@ -27,6 +27,8 @@ data/vehicles/*
 !data/vehicles/low_range_vehtype.csv
 !data/vehicles/default_parcel_veh.csv
 !data/vehicles/veh_20.csv
+!data/vehicles/veh_8.csv
+!data/vehicles/veh_44.csv
 !data/vehicles/default_vehtype_hailing.csv
 data/zones/*
 !data/zones/example_zones
