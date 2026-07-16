@@ -212,3 +212,6 @@ CLAUDE.md
 
 # GTFS preprocessing file
 !src/preprocessing/pt/PTRouterGTFSPreperation.ipynb
+
+# tensorflow in ml_gym
+src/ml_gym/tensorboard/*
