@@ -241,7 +241,13 @@ def generate_pubtrans(ranges):
 
                     for hw_min in headways_min:
                         pl_tag = f"_pl{num_parallel_lines}" if num_parallel_lines != 1 else ""
-                        pt_name = f"{nw_name}_mid_sp{station_spacing_m}_hw{hw_min}{pl_tag}"
+                        # vehicle_type is baked into schedules.csv (read back into
+                        # vehicles_to_initialize by SemiOnDemandBatchAssignmentFleetcontrol), so it
+                        # must be part of the on-disk directory key -- otherwise two ranges files
+                        # sharing a (network, station_spacing, headway) combo but different
+                        # vehicle_type (e.g. sod's 20-seat vs sod_8's 8-seat variant) would
+                        # silently overwrite each other's schedule on disk.
+                        pt_name = f"{nw_name}_mid_sp{station_spacing_m}_hw{hw_min}_{vehicle_type}{pl_tag}"
                         pt_out_dir = os.path.join(PT_DIR, pt_name)
                         os.makedirs(pt_out_dir, exist_ok=True)
 
