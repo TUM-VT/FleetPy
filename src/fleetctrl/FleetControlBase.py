@@ -30,7 +30,7 @@ from src.misc.init_modules import load_repositioning_strategy, load_charging_str
     load_dynamic_fleet_sizing_strategy, load_dynamic_pricing_strategy, load_reservation_strategy
 from src.fleetctrl.pooling.GeneralPoolingFunctions import get_assigned_rids_from_vehplan
 if TYPE_CHECKING:
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.simulation.Vehicles import SimulationVehicle
     from src.infra.Zoning import ZoneSystem
     from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
@@ -170,6 +170,8 @@ class FleetControlBase(metaclass=ABCMeta):
         if self.update_hard_time_windows or self.update_soft_time_windows:
             if not self.time_window_length:
                 raise IOError(f"Update of time windows requires {G_RA_TW_LENGTH} input!")
+            
+        self.rq_min_distance = operator_attributes.get(G_OP_MIN_RQ_DISTANCE, None)
 
         # ###################################
         # Additional fleet control strategies
@@ -312,8 +314,9 @@ class FleetControlBase(metaclass=ABCMeta):
         veh_obj = self.sim_vehicles[vid]
         # the vehicle plans should be up to date from assignments of previous time steps
         if list_finished_VRL or force_update:
-            LOG.debug(f"vid {vid} at time {simulation_time} recieves status update: {[str(x) for x in list_finished_VRL]}")
-            LOG.debug(f"   with current vehicle plan {self.veh_plans[vid]}")
+            if logging.DEBUG >= LOG.getEffectiveLevel():
+                LOG.debug(f"vid {vid} at time {simulation_time} recieves status update: {[str(x) for x in list_finished_VRL]}")
+                LOG.debug(f"   with current vehicle plan {self.veh_plans[vid]}")
             self.veh_plans[vid].update_plan(veh_obj, simulation_time, self.routing_engine, list_finished_VRL)
             if self._vid_to_assigned_charging_process.get(vid) is not None:
                 finished_charging_task_id = None
@@ -396,19 +399,43 @@ class FleetControlBase(metaclass=ABCMeta):
         raise EnvironmentError("_create_user_offer() can't be called with super()")
         return offer
 
-    def _create_rejection(self, prq : PlanRequest, simulation_time : int) -> Rejection:
+    def _create_rejection(self, prq : PlanRequest, simulation_time : int, reason: REJECTION_REASON = None) -> Rejection:
         """This method creates a TravellerOffer representing a rejection.
 
         :param prq: PlanRequest
         :param simulation_time: current simulation time
         :return: Rejection (child class of TravellerOffer)
         """
-        offer = Rejection(prq.get_rid(), self.op_id)
+        offer = Rejection(prq.get_rid(), self.op_id, reason=reason)
         LOG.debug(f"reject customer {prq} at time {simulation_time}")
         prq.set_service_offered(offer)
         if self.repo and not prq.get_reservation_flag():
-            self.repo.register_rejected_customer(prq, simulation_time)
+            if reason is not None and reason == REJECTION_REASON.NO_VEHICLE_AVAILABLE:
+                self.repo.register_rejected_customer(prq, simulation_time)
         return offer
+    
+    def _is_valid_request(self, sim_time, plan_request: PlanRequest) -> bool:
+        """Check if a request is valid (e.g. feasible o-d-relation).
+        and create rejection if not.
+
+        :param sim_time: current simulation time
+        :param plan_request: plan request that contains all relevant information
+        :return: True if request is valid, False otherwise
+        """
+        if plan_request.o_pos == plan_request.d_pos:
+            LOG.debug(f"automatic decline for rid {plan_request.get_rid_struct()}!")
+            self._create_rejection(plan_request, sim_time, reason=REJECTION_REASON.INVALID_RQ)
+            return False
+        if self.repo and self.repo.zone_system:
+            o_zone = self.repo.zone_system.get_zone_from_pos(plan_request.get_o_stop_info()[0])
+            d_zone = self.repo.zone_system.get_zone_from_pos(plan_request.get_d_stop_info()[0])
+            if o_zone < 0 or d_zone < 0:
+                LOG.debug(f"automatic decline for rid {plan_request.get_rid_struct()} due to out-of-operating-area request!")
+                self._create_rejection(plan_request, sim_time, reason=REJECTION_REASON.OUT_OF_OPERATING_AREA)
+                return False
+        if self.rq_min_distance and plan_request.init_direct_td < self.rq_min_distance:
+            self._create_rejection(plan_request, sim_time, reason=REJECTION_REASON.TRAVEL_DISTANCE)
+        return True
 
     def get_current_offer(self, rid : Any) -> TravellerOffer:
         """ this method returns the currently active offer for the request rid

@@ -7,7 +7,7 @@ import src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraAssignment as AlonsoMora
 
 if TYPE_CHECKING:
     from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import SimulationVehicleStruct
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.fleetctrl.planning.PlanRequest import PlanRequest
     from src.simulation.Legs import VehicleRouteLeg
 

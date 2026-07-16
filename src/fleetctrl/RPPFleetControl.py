@@ -21,7 +21,7 @@ from src.fleetctrl.rideparcelpooling.immediate.insertion import insert_parcel_pr
 from src.simulation.Offers import TravellerOffer
 if TYPE_CHECKING:
     from src.demand.TravelerModels import RequestBase, ParcelRequestBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.simulation.Vehicles import SimulationVehicle
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -259,8 +259,7 @@ class RPPFleetControlFullInsertion(FleetControlBase):
         self.rq_dict[rid_struct] = parcel_prq
         self.unassigned_parcel_dict[rid_struct] = parcel_prq
         
-        if parcel_prq.o_pos == parcel_prq.d_pos:
-            LOG.debug(f"automatic decline for rid {rid_struct}!")
+        if not self._is_valid_request(sim_time, parcel_prq):
             self._create_rejection(parcel_prq, sim_time)
             return
         
@@ -288,8 +287,7 @@ class RPPFleetControlFullInsertion(FleetControlBase):
         rid_struct = person_request.get_rid_struct()
         self.rq_dict[rid_struct] = prq
 
-        if prq.o_pos == prq.d_pos:
-            LOG.debug(f"automatic decline for rid {rid_struct}!")
+        if not self._is_valid_request(sim_time, prq):
             self._create_rejection(prq, sim_time)
             return
 
@@ -938,8 +936,7 @@ class RPPFleetControlSingleStopInsertionGuided(RPPFleetControlSingleStopInsertio
         rid_struct = person_request.get_rid_struct()
         self.rq_dict[rid_struct] = prq
 
-        if prq.o_pos == prq.d_pos:
-            LOG.debug(f"automatic decline for rid {rid_struct}!")
+        if not self._is_valid_request(sim_time, prq):
             self._create_rejection(prq, sim_time)
             return
 

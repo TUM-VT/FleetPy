@@ -73,6 +73,9 @@ G_TOLL_COST_SCALE = "toll_cost_scale"
 
 # broker specific attributes
 G_BROKER_TYPE = "broker_type"
+G_BROKER_TRANSFER_SEARCH_METHOD = "broker_transfer_search_method"  # method for finding transfer stations: "closest" or "best_overall"
+G_BROKER_MAAS_DETOUR_TIME_FACTOR = "broker_maas_detour_time_factor"  # factor to estimate detour time for MaaS intermodal trips (default: 1.0)
+G_BROKER_ALWAYS_QUERY_PT = "broker_always_query_pt"  # if true, pure PT offers are always queried as a backup option
 
 # public transport specific attributes
 G_PT_TYPE = "pt_type"
@@ -105,6 +108,9 @@ G_PT_DISPATCH_DELAY = "pt_dispatch_delay"
 G_PT_ROUTE_ID = "pt_route_id"
 G_PT_WALK_LOGIT_BETA = "pt_walk_logit_beta"
 G_PT_X_TOL = 0.01
+G_PT_SIM_START_DATE = "pt_simulation_start_date"  # data string in format YYYYMMDD; this is a mandatory parameter for the Raptor Router
+G_PT_OPERATOR_ID = "pt_operator_id"  # id of the public transport operator
+G_PT_OPERATOR_TYPE = "pt_operator_type"  # type of the public transport operator
 
 # zonal control reward attributes
 G_PT_ZC_RID_SIM_TIME = 0
@@ -147,6 +153,7 @@ G_MAX_WALKING_DIST = "max_walking_dist"
 G_IM_MIN_MOD_DISTANCE = "min_IM_MOD_distance"
 G_IM_PER_KM_SUBSIDY = "subsidy_IM_MOD_per_km"
 G_IM_TRANSFER_TIME = "im_transfer_time"
+G_IM_LM_WAIT_TIME = "im_lastmile_wait_time"  # customizable wait time for last mile AMoD pickup
 
 
 # operator general attributes
@@ -190,6 +197,8 @@ G_OP_PA_CONST_BT = "op_parcel_const_boarding_time"
 G_OP_PA_ADD_BT = "op_parcel_add_boarding_time"
 
 G_OP_REC_ADD_ASS = "op_record_additional_assignment"
+
+G_OP_MIN_RQ_DISTANCE = "op_min_rq_distance"   # min direct travel distance for a request to be accepted
 
 # operator specific attributes
 G_RA_SOLVER = "op_solver"   # currently "Gurobi" or "CPLEX"
@@ -313,8 +322,21 @@ G_AIMSUN_STAT_INT = "aimsun_statistics_interval"
 G_AIMSUN_VEH_TYPE_NAME = "aimsun_vehicle_type_name"
 
 # sumo api
-G_SUMO_STAT_INT = "sumo_statistics_interval"    # interval in which new network statistics are gathered and sent to FleetPy to updated network (if not given, no statistics are gathered)
+G_SUMO_STAT_INT = "sumo_t_update"    # equals statistics interval, interval in which new network statistics are gathered and sent to FleetPy to updated network (if not given, no statistics are gathered)
 G_SUMO_SIM_TIME_OFFSET = "sumo_sim_time_offset" # offset between fleetpy and sumo simulation time (fleetpy simtime = sumo simtim + offset; if not given, 0)
+G_SUMO_FCD_VEHICLES = "sumo_fcd_vehicles" # vehicles that are providing FCD for the Real-Time Traffic Data used by Fleet Control ("all": all vehicles): Specified as: op_{operator_id_1}_{operator_id_2}_...-pv_{pv_share}
+G_SUMO_ROUTE_STEPS = "sumo_route-steps"
+G_SUMO_NO_INTERNAL_LINKS = "sumo_no-internal-links"
+G_SUMO_IGNORE_JUNCTION_BLOCKER = "sumo_ignore-junction-blocker"
+G_SUMO_TIME_TO_TELEPORT = "sumo_time-to-teleport"
+G_SUMO_TIME_TO_TELEPORT_HIGHWAYS = "sumo_time-to-teleport.highways"
+G_SUMO_EAGER_INSERT = "sumo_eager-insert"
+G_SUMO_EDGE_DATA_INTERVAL = "sumo_edgeData.interval"
+G_SUMO_EDGE_DATA_WITH_INTERNAL = "sumo_edgeData.withInternal"
+G_SUMO_EDGE_DATA_EXCLUDE_EMPTY = "sumo_edgeData.excludeEmpty"
+
+# matsim api
+G_MATSIM_STAT_INT = "matsim_statistics_interval"    # interval in which new network statistics are gathered and sent to FleetPy to updated network (if not given, no statistics are gathered)
 
 # RPP fleetcontrol
 G_OP_PA_ASSTH = "op_parcel_assignment_threshold"
@@ -359,7 +381,8 @@ G_DIR_NETWORK = "network"
 G_DIR_DEMAND = "demand"
 G_DIR_ZONES = "zones"
 G_DIR_FC = "forecasts"
-G_DIR_PT = "pubtrans"
+G_DIR_PT = "pt"
+G_DIR_GTFS = "gtfs"
 G_DIR_VEH = "vehicles"
 G_DIR_FCTRL = "fleetctrl"
 G_DIR_BP = "boardingpoints"
@@ -470,6 +493,61 @@ G_RQ_PA_LPT = "parcel_latest_pickup_time"
 G_RQ_PA_EDT = "parcel_earliest_dropoff_time"
 G_RQ_PA_LDT = "parcel_latest_dropoff_time"
 
+# intermodal specific
+G_RQ_RID_STRUCT = "rid_struct"
+G_RQ_IS_PARENT_REQUEST = "is_parent_request"
+G_RQ_MODAL_STATE = "modal_state"
+G_RQ_MODAL_STATE_VALUE = "modal_state_value"
+G_RQ_TRANSFER_STATION_IDS = "transfer_station_ids"
+G_RQ_MAX_TRANSFERS = "max_transfers"
+G_RQ_SUB_TRIP_ID = "sub_trip_id"
+G_RQ_UNCATCHABLE_PT = "uncatchable_pt"  # flag for requests that missed their PT connection after FM leg
+# PAYG (Plan-As-You-Go) specific
+G_RQ_PAYG_INTERRUPTED = "payg_interrupted"  # flag for PAYG trips that were interrupted
+G_RQ_PAYG_INTERRUPT_STATE = "payg_interrupt_state"  # PAYG_TRIP_STATE value when interrupted
+G_RQ_PAYG_INTERRUPT_TIME = "payg_interrupt_time"  # simulation time when interrupted
+
+class RQ_MODAL_STATE(Enum):
+    """ This enum is used to identify different modal states of a traveler request.
+    MONOMODAL: only amod is used
+    FIRSTMILE: amod first mile and pt last mile
+    LASTMILE: amod last mile and pt first mile
+    FIRSTLASTMILE: amod first and last miles, pt in between
+    PT: only pt is used
+    ALL_OPTIONS: all options are used
+    """
+    MONOMODAL: int = 0
+    FIRSTMILE: int = 1
+    LASTMILE: int = 2
+    FIRSTLASTMILE: int = 3
+    PT: int = 4
+    ALL_OPTIONS: int = 5
+
+class RQ_SUB_TRIP_ID(Enum):
+    """ This enum is used to identify different sub-trip ids of a traveler request.
+    """
+    AMOD: int = 0
+    FM_AMOD: int = 1
+    FM_PT: int = 2
+    LM_PT: int = 3
+    LM_AMOD: int = 4
+    FLM_AMOD_0: int = 5
+    FLM_PT: int = 6
+    FLM_AMOD_1: int = 7
+    PT: int = 8
+
+class PAYG_TRIP_STATE(Enum):
+    """PAYG trip state tracking"""
+    PENDING = 0                    # Waiting for processing
+    FM_AMOD_BOOKED = 1             # FM/FLM: First AMoD leg booked
+    FM_AMOD_COMPLETED = 2          # FM/FLM: First AMoD leg completed
+    PT_BOOKED = 3                  # PT leg booked
+    PT_COMPLETED = 4               # PT leg completed
+    LM_AMOD_BOOKED = 5             # LM/FLM: Last AMoD leg booked
+    COMPLETED = 10                 # Trip completed
+    INTERRUPTED_NO_PT = -1         # Interrupted: No PT available
+    INTERRUPTED_NO_LM_AMOD = -2    # Interrupted: No LM AMoD available
+
 # output general
 # --------------
 G_RQ_TYPE = "rq_type"
@@ -485,7 +563,6 @@ G_RQ_DOL = "dropoff_location"
 G_RQ_FARE = "fare"
 G_RQ_ACCESS = "access_time"
 G_RQ_EGRESS = "egress_time"
-G_RQ_MODAL_STATE = "modal_state" # (see traveler modal state -> indicates monomodal/intermodal)
 
 # output environment specific
 # ---------------------------
@@ -506,12 +583,6 @@ G_RQ_DEC_MAX = "max_decisions"
 G_RQ_DEC_GROUP = "decision_group"
 G_RQ_DEC_WT_FAC = "waiting_time_factor"
 G_RQ_DEC_REAC = "reaction_time"
-
-# traveler modal state
-G_RQ_STATE_MONOMODAL = 0
-G_RQ_STATE_FIRSTMILE = 1
-G_RQ_STATE_LASTMILE = 2
-G_RQ_STATE_FIRSTLASTMILE = 3
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Mode Choice Model
@@ -547,6 +618,26 @@ G_OFFER_IS_VALID = "is_valid"   # indicates if offer is still valid at time of c
 G_OFFER_ADD_VMT = "add_fleet_vmt"   # for easyride broker
 G_OFFER_BROKER_FLAG = "chosen_by_broker"    # for easyride broker
 
+G_OFFER_REJECTION_REASON = "rejection_reason"
+
+# Rejection Reason
+# --------------
+class REJECTION_REASON(Enum):
+    OTHER = (-1, "other")
+    OUT_OF_OPERATING_AREA = (0, "out_of_operating_area")
+    NO_VEHICLE_AVAILABLE = (1, "no_vehicle_available")
+    OUT_OF_SERVICE_TIME = (2, "out_of_service_time")
+    INVALID_RQ = (3, "invalid_request")
+    TRAVEL_DISTANCE = (4, "invalid_travel_distance")
+
+    @DynamicClassAttribute
+    def value(self):
+        return self._value_[0]
+
+    @DynamicClassAttribute
+    def display_name(self):
+        return self._value_[1]
+
 G_OFFER_WALKING_DISTANCE_ORIGIN = "walking_distance_origin"
 G_OFFER_WALKING_DISTANCE_DESTINATION = "walking_distance_destination"
 
@@ -561,6 +652,35 @@ G_IM_OFFER_PT_COST = "im_pt_fare"
 G_IM_OFFER_MOD_DRIVE = "im_mod_t_drive"
 G_IM_OFFER_MOD_COST = "im_mod_fare"
 G_IM_OFFER_MOD_SUB = "im_mod_subsidy"
+
+G_IM_OFFER_OPERATOR_SUB_TRIP_TUPLE = "im_operator_sub_trip_tuple"  # tuple of operator ids for each sub-trip: ((operator_id, sub_trip_id),)
+G_IM_OFFER_FLM_WAIT_0 = "im_t_wait_flm_0" # Only used for FM AMoD segment in FLM
+G_IM_OFFER_FLM_WAIT_1 = "im_t_wait_flm_1" # Only used for LM AMoD segment in FLM
+G_IM_OFFER_FLM_DRIVE_0 = "im_t_drive_flm_0" # Only used for FM AMoD segment in FLM
+G_IM_OFFER_FLM_DRIVE_1 = "im_t_drive_flm_1" # Only used for LM AMoD segment in FLM
+G_IM_OFFER_FM_WAIT = "im_t_wait_fm" # Only used for AMoD segment in FM
+G_IM_OFFER_LM_WAIT = "im_t_wait_lm" # Only used fot AMoD segment in LM
+G_IM_OFFER_FM_DRIVE = "im_t_drive_fm" # Only used for AMoD segment in FM
+G_IM_OFFER_LM_DRIVE = "im_t_drive_lm" # Only used fot AMoD segment in LM
+G_IM_OFFER_PT_WAIT = "im_t_wait_pt" # total pt waiting time
+G_IM_OFFER_PT_DRIVE = "im_t_drive_pt" # total pt driving time
+G_IM_OFFER_DURATION = "im_t_duration" # total duration of intermodal offer
+
+# additional parameters for pt offers
+# ------------------------------------------
+G_PT_OFFER_SOURCE_STATION = "source_station_id"
+G_PT_OFFER_TARGET_STATION = "target_station_id"
+G_PT_OFFER_SOURCE_WALKING_TIME = "source_walking_time"
+G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME = "source_station_departure_time"
+G_PT_OFFER_SOURCE_TRANSFER_TIME = "source_transfer_time"
+G_PT_OFFER_SOURCE_WAITING_TIME = "source_waiting_time"
+G_PT_OFFER_TRIP_TIME = "trip_time"
+G_PT_OFFER_TARGET_TRANSFER_TIME = "target_transfer_time"
+G_PT_OFFER_TARGET_STATION_ARRIVAL_TIME = "target_station_arrival_time"
+G_PT_OFFER_TARGET_WALKING_TIME = "target_walking_time"
+G_PT_OFFER_NUM_TRANSFERS = "num_transfers"
+G_PT_OFFER_STEPS = "steps"
+G_PT_OFFER_DURATION = "duration" # PT segment total duration
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Fleet Simulation Pattern
@@ -693,6 +813,8 @@ G_FCTRL_CT_RES = "reservation_time_trigger"
 #--------------------------------------------------------------------------------------------------------------#
 # Evaluation specific params
 # ####################
+# which evaluation method to use
+G_EVAL_METHOD = "evaluation_method"
 
 # only evaluate data within specific interval
 G_EVAL_INT_START = "evaluation_int_start"
@@ -748,7 +870,8 @@ def get_directory_dict(scenario_parameters, list_operator_dicts, abs_fleetpy_dir
     if zone_name is not None:
         dirs[G_DIR_ZONES] = os.path.join(dirs[G_DIR_DATA], "zones", zone_name, network_name)
     if gtfs_name is not None:
-        dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pubtrans", gtfs_name)
+        dirs[G_DIR_PT] = os.path.join(dirs[G_DIR_DATA], "pt", gtfs_name)
+        dirs[G_DIR_GTFS] = os.path.join(dirs[G_DIR_DATA], "pt", network_name, gtfs_name, "matched")
     if infra_name is not None:
         dirs[G_DIR_INFRA] = os.path.join(dirs[G_DIR_DATA], "infra", infra_name, network_name)
     if parcel_demand_name is not None:
