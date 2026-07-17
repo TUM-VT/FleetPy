@@ -1053,7 +1053,7 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
                     self.station_dict[closest_station_id].street_network_node_id
                 )
                 walking_dist_dict[origin_dest] = walking_dist
-                walking_time[origin_dest] = walking_dist / self.walking_speed
+                walking_time[origin_dest] = (walking_dist * 1000) / self.walking_speed
 
         # update the pick-up / drop-off location to the assigned stop
         pick_up_pos = to_check["origin"]
@@ -1072,6 +1072,11 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         if self.rq_dict.get(rq.get_rid_struct()):
             return
         t0 = time.perf_counter()
+
+        if walking_time["origin"]:
+            rq.earliest_start_time += walking_time["origin"]
+            if rq.latest_start_time is not None:
+                rq.latest_start_time += walking_time["origin"]
 
         self.sim_time = sim_time
         prq = PlanRequest(rq, self.routing_engine, min_wait_time=self.min_wait_time,

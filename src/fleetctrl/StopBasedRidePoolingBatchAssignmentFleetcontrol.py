@@ -41,10 +41,6 @@ class StopBasedRidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchAssignment
             return 0.0, 0.0
         walking_speed = getattr(rq, "walking_speed", None)
         t_walk = total_walking_distance / walking_speed if walking_speed else 0.0
-        # true_o_node != o_node means the origin was swapped for the boarding node (access leg,
-        # i.e. walking_time_start); otherwise the destination was swapped (egress leg,
-        # walking_time_end) -- same condition StopBasedUserGroupRequest.__init__ uses to
-        # accumulate total_walking_distance in the first place.
         if getattr(rq, "true_o_node", None) != getattr(rq, "o_node", None):
             return t_walk, 0.0
         return 0.0, t_walk

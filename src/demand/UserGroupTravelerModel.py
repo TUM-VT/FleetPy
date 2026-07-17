@@ -177,8 +177,14 @@ class StopBasedUserGroupRequest(UserGroupRequest):
         self.true_d_node = true_d_node
         self.total_walking_distance = 0.0
         if true_o_node != self.o_node:
-            self.total_walking_distance += self._walking_distance(
+            access_walking_distance = self._walking_distance(
                 routing_engine, routing_engine.return_node_position(true_o_node), self.o_pos)
+            self.total_walking_distance += access_walking_distance
+            if self.walking_speed:
+                t_access_walk = access_walking_distance / self.walking_speed
+                self.earliest_start_time += t_access_walk
+                if self.latest_start_time is not None:
+                    self.latest_start_time += t_access_walk
         if true_d_node != self.d_node:
             self.total_walking_distance += self._walking_distance(
                 routing_engine, routing_engine.return_node_position(true_d_node), self.d_pos)

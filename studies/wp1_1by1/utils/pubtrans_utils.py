@@ -191,16 +191,18 @@ def _build_line_defs(rows, cols, cell_size, station_spacing_m, hubs, speed_kmh, 
 
 def generate_pubtrans(ranges):
     """Generate hub-anchored corridor-line PT infrastructure (stations.csv, schedules.csv,
-    alignment geojson) for each network x station_spacing x headway combination. 
-    Generated once regardless of which service types consume it e.g. fixed lines and sod.
+    alignment geojson) for each network x station_spacing x headway x num_parallel_lines
+    combination. Generated once regardless of which service types consume it e.g. fixed
+    lines and sod.
 
     For a single-hub network one line spans the whole corridor; for a two-hub network two
     half-lines are generated, each running hub -> corridor midpoint and back to the same hub.
 
-    Returns a list of dicts: pt_name, network_name, station_spacing_m, headway_min, lines. `lines`
-    carries per-line info (line_id, terminus_station_id, hub_node, route_length_km) -- one entry for
-    a single-hub network, two half-lines for a two-hub network. Consumers must read per-line values
-    from `lines`.
+    Returns a list of dicts: pt_name, network_name, station_spacing_m, headway_min,
+    num_parallel_lines, lines. `lines` carries per-line info (line_id, terminus_station_id,
+    hub_node, route_length_km) -- one entry for a single-hub network, two half-lines for a
+    two-hub network (each further split num_parallel_lines-many ways). Consumers must read
+    per-line values from `lines`.
     """
     nw_ranges = ranges["network"]
     pt_ranges = ranges.get("pubtrans", {})
@@ -212,8 +214,10 @@ def generate_pubtrans(ranges):
     speed_kmh = nw_ranges["default_speed"]
     cell_size = nw_ranges["cell_size"]
     # parallel lines per hub, sharing the same physical route -- lets a service's fleet be split
-    # across independent dispatch queues instead of one line's headway/insertion bottleneck
-    num_parallel_lines = nw_ranges.get("num_parallel_lines", 1)
+    # across independent dispatch queues instead of one line's headway/insertion bottleneck.
+    # Scalar or list (like every other axis here, see _as_list) -- swept, each value gets its
+    # own PT variant (see pl_tag below), consumed by every station_spacing x headway combo.
+    num_parallel_lines_list = _as_list(nw_ranges.get("num_parallel_lines", 1))
 
     pt_variants = []
 
@@ -230,51 +234,53 @@ def generate_pubtrans(ranges):
                 rows, cols = get_row_cols(length, width, cell_size)
 
                 for station_spacing_m in station_spacings_m:
-                    line_defs = _build_line_defs(
-                        rows, cols, cell_size, station_spacing_m, hubs, speed_kmh, vehicle_type,
-                        boarding_time_s, num_parallel_lines=num_parallel_lines)
+                    for num_parallel_lines in num_parallel_lines_list:
+                        line_defs = _build_line_defs(
+                            rows, cols, cell_size, station_spacing_m, hubs, speed_kmh, vehicle_type,
+                            boarding_time_s, num_parallel_lines=num_parallel_lines)
 
-                    # combined stations across all lines (unique ids); combined schedule
-                    all_stations = [s for ld in line_defs for s in ld["ordered"]]
-                    all_stations = sorted(all_stations, key=lambda s: s["station_id"])
-                    all_schedule_rows = [r for ld in line_defs for r in ld["schedule_rows"]]
+                        # combined stations across all lines (unique ids); combined schedule
+                        all_stations = [s for ld in line_defs for s in ld["ordered"]]
+                        all_stations = sorted(all_stations, key=lambda s: s["station_id"])
+                        all_schedule_rows = [r for ld in line_defs for r in ld["schedule_rows"]]
 
-                    for hw_min in headways_min:
-                        pl_tag = f"_pl{num_parallel_lines}" if num_parallel_lines != 1 else ""
-                        # vehicle_type is baked into schedules.csv (read back into
-                        # vehicles_to_initialize by SemiOnDemandBatchAssignmentFleetcontrol), so it
-                        # must be part of the on-disk directory key -- otherwise two ranges files
-                        # sharing a (network, station_spacing, headway) combo but different
-                        # vehicle_type (e.g. sod's 20-seat vs sod_8's 8-seat variant) would
-                        # silently overwrite each other's schedule on disk.
-                        pt_name = f"{nw_name}_mid_sp{station_spacing_m}_hw{hw_min}_{vehicle_type}{pl_tag}"
-                        pt_out_dir = os.path.join(PT_DIR, pt_name)
-                        os.makedirs(pt_out_dir, exist_ok=True)
+                        for hw_min in headways_min:
+                            pl_tag = f"_pl{num_parallel_lines}" if num_parallel_lines != 1 else ""
+                            # vehicle_type is baked into schedules.csv (read back into
+                            # vehicles_to_initialize by SemiOnDemandBatchAssignmentFleetcontrol), so it
+                            # must be part of the on-disk directory key -- otherwise two ranges files
+                            # sharing a (network, station_spacing, headway) combo but different
+                            # vehicle_type (e.g. sod's 20-seat vs sod_8's 8-seat variant) would
+                            # silently overwrite each other's schedule on disk.
+                            pt_name = f"{nw_name}_mid_sp{station_spacing_m}_hw{hw_min}_{vehicle_type}{pl_tag}"
+                            pt_out_dir = os.path.join(PT_DIR, pt_name)
+                            os.makedirs(pt_out_dir, exist_ok=True)
 
-                        pd.DataFrame(
-                            [{"station_id": s["station_id"], "network_node_index": s["node_index"]}
-                             for s in all_stations]
-                        ).to_csv(os.path.join(pt_out_dir, "stations.csv"), index=False)
+                            pd.DataFrame(
+                                [{"station_id": s["station_id"], "network_node_index": s["node_index"]}
+                                 for s in all_stations]
+                            ).to_csv(os.path.join(pt_out_dir, "stations.csv"), index=False)
 
-                        pd.DataFrame(all_schedule_rows).to_csv(
-                            os.path.join(pt_out_dir, "schedules.csv"), index=False)
+                            pd.DataFrame(all_schedule_rows).to_csv(
+                                os.path.join(pt_out_dir, "schedules.csv"), index=False)
 
-                        for ld in line_defs:
-                            _write_alignment_geojson(ld["ordered"], pt_out_dir, ld["line_id"], pt_name)
+                            for ld in line_defs:
+                                _write_alignment_geojson(ld["ordered"], pt_out_dir, ld["line_id"], pt_name)
 
-                        pt_variants.append({
-                            "pt_name": pt_name,
-                            "network_name": nw_name,
-                            "station_spacing_m": station_spacing_m,
-                            "headway_min": hw_min,
-                            "lines": [
-                                {"line_id": ld["line_id"],
-                                 "terminus_station_id": ld["terminus_station_id"],
-                                 "hub_node": ld["hub_node"],
-                                 "route_length_km": ld["route_length_km"]}
-                                for ld in line_defs
-                            ],
-                        })
+                            pt_variants.append({
+                                "pt_name": pt_name,
+                                "network_name": nw_name,
+                                "station_spacing_m": station_spacing_m,
+                                "headway_min": hw_min,
+                                "num_parallel_lines": num_parallel_lines,
+                                "lines": [
+                                    {"line_id": ld["line_id"],
+                                     "terminus_station_id": ld["terminus_station_id"],
+                                     "hub_node": ld["hub_node"],
+                                     "route_length_km": ld["route_length_km"]}
+                                    for ld in line_defs
+                                ],
+                            })
 
     return pt_variants
 
@@ -287,7 +293,15 @@ def is_pt_line_service(st_cfg):
 
 
 def pt_variant_lookup(pt_variants):
-    return {(v["network_name"], v["station_spacing_m"], v["headway_min"]): v for v in pt_variants}
+    """(network_name, station_spacing_m, headway_min) -> list of PT variants, one per
+    num_parallel_lines value generated for that combo (see generate_pubtrans). A service
+    type doesn't pick num_parallel_lines itself -- pt_scenario_rows fans out over every
+    variant found here, so it's purely a network-level generation axis."""
+    lookup = {}
+    for v in pt_variants:
+        key = (v["network_name"], v["station_spacing_m"], v["headway_min"])
+        lookup.setdefault(key, []).append(v)
+    return lookup
 
 
 def _split_fleet_across_lines(n, pt_variant, hub_counts):
@@ -348,7 +362,8 @@ def _pt_extra_cols(st_cfg, pt_variant, headway_min, fixed_length_km, n_veh,
         "pt_dispatch_delay": dispatch_delay,
         "pt_n_veh": n_veh,
 
-        "walking_speed": 4,
+        "walking_speed": 5,  # matches the "normal" demand-side user group's own walking_speed
+                             # (see scenario_ranges *.yaml user_group_params.normal.walking_speed)
 
         # Operator-side matching feasibility gates (distinct from the demand-side UserGroupRequest
         # acceptance thresholds). op_max_wait_time=900 gives the insertion heuristic real search
@@ -383,56 +398,63 @@ def pt_scenario_rows(base_name, dv, st_name, st_cfg, sim_end_time, variant_looku
     for station_spacing_m in st_cfg["station_spacings_m"]:
         for headway_min in st_cfg["headways_min"]:
             key = (dv["network_name"], station_spacing_m, headway_min)
-            pt_variant = variant_lookup.get(key)
-            if pt_variant is None:
+            variants = variant_lookup.get(key)
+            if not variants:
                 raise KeyError("No PT variant generated.")
 
-            if is_fixed_line:
-                fixed_length_variants = [(PT_FIXED_LENGTH_SENTINEL_KM, "full")]
-            else:
-                # TODO (later if needed) same fixed length applies to both lines in a two-hub scenario
-                fixed_length_variants = [
-                    (frac * pt_variant["lines"][0]["route_length_km"], f"fl{frac}")
-                    for frac in st_cfg.get("fixed_length_fractions", [0])
-                ]
-                # TODO (later if needed) find_closest_station_to_x resolves the fixed/flex boundary to the hub itself 
-                # if the fixed_length is shorter than the first non-hub station
-                for fixed_length_km, fl_tag in fixed_length_variants:
-                    if fixed_length_km * 1000 < station_spacing_m:
-                        raise ValueError(
-                            f"{st_name}/{fl_tag} at sp{station_spacing_m}: fixed_length="
-                            f"{fixed_length_km * 1000:.0f}m is shorter than the first non-hub "
-                            f"station ({station_spacing_m}m from hub) -- the fixed-route segment "
-                            f"would degenerate to just the hub. Raise this fixed_length_fraction "
-                            f"or reduce station_spacing_m."
-                        )
+            # num_parallel_lines is a network-level generation axis (see generate_pubtrans) --
+            # every variant found at this key is used, one scenario set per value; pl_tag is
+            # only appended when more than one was actually generated for this combo.
+            for pt_variant in variants:
+                num_parallel_lines = pt_variant.get("num_parallel_lines", 1)
+                pl_tag = f"_pl{num_parallel_lines}" if len(variants) > 1 else ""
 
-            for n, size_tag in fleet_entries(st_cfg, dv["total_lambda"]):
-                # pt_n_veh is the total n for a single line, or a per-line "line:n,..." split for
-                # two hubs; op_fleet_composition (via scenario_row's n) always gets the total.
-                pt_n_veh = _split_fleet_across_lines(n, pt_variant, dv.get("hub_counts", {}))
-                for fixed_length_km, fl_tag in fixed_length_variants:
-                    for flex_detour in flex_detours:
-                        for zone_min_t in zone_min_times:
-                            for zone_max_t in zone_max_times:
-                                for dispatch_delay in dispatch_delays:
-                                    detour_tag = ""
-                                    if len(flex_detours) > 1:
-                                        detour_tag += f"_fd{flex_detour}"
-                                    if len(zone_min_times) > 1:
-                                        detour_tag += f"_zmin{zone_min_t}"
-                                    if len(zone_max_times) > 1:
-                                        detour_tag += f"_zmax{zone_max_t}"
-                                    if len(dispatch_delays) > 1:
-                                        detour_tag += f"_dd{dispatch_delay}"
-                                    scenario_name = (
-                                        f"{base_name}_{st_name}_sp{station_spacing_m}_hw{headway_min}_"
-                                        f"{fl_tag}{detour_tag}_{size_tag}"
-                                    )
-                                    extra_cols = _pt_extra_cols(
-                                        st_cfg, pt_variant, headway_min, fixed_length_km, pt_n_veh,
-                                        flex_detour, zone_min_t, zone_max_t, dispatch_delay)
-                                    rows.append(scenario_row(
-                                        scenario_name, dv, st_cfg, sim_end_time, n, size_tag,
-                                        extra_cols=extra_cols))
+                if is_fixed_line:
+                    fixed_length_variants = [(PT_FIXED_LENGTH_SENTINEL_KM, "full")]
+                else:
+                    # TODO (later if needed) same fixed length applies to both lines in a two-hub scenario
+                    fixed_length_variants = [
+                        (frac * pt_variant["lines"][0]["route_length_km"], f"fl{frac}")
+                        for frac in st_cfg.get("fixed_length_fractions", [0])
+                    ]
+                    # TODO (later if needed) find_closest_station_to_x resolves the fixed/flex boundary to the hub itself
+                    # if the fixed_length is shorter than the first non-hub station
+                    for fixed_length_km, fl_tag in fixed_length_variants:
+                        if fixed_length_km * 1000 < station_spacing_m:
+                            raise ValueError(
+                                f"{st_name}/{fl_tag} at sp{station_spacing_m}: fixed_length="
+                                f"{fixed_length_km * 1000:.0f}m is shorter than the first non-hub "
+                                f"station ({station_spacing_m}m from hub) -- the fixed-route segment "
+                                f"would degenerate to just the hub. Raise this fixed_length_fraction "
+                                f"or reduce station_spacing_m."
+                            )
+
+                for n, size_tag in fleet_entries(st_cfg, dv["total_lambda"]):
+                    # pt_n_veh is the total n for a single line, or a per-line "line:n,..." split for
+                    # two hubs; op_fleet_composition (via scenario_row's n) always gets the total.
+                    pt_n_veh = _split_fleet_across_lines(n, pt_variant, dv.get("hub_counts", {}))
+                    for fixed_length_km, fl_tag in fixed_length_variants:
+                        for flex_detour in flex_detours:
+                            for zone_min_t in zone_min_times:
+                                for zone_max_t in zone_max_times:
+                                    for dispatch_delay in dispatch_delays:
+                                        detour_tag = ""
+                                        if len(flex_detours) > 1:
+                                            detour_tag += f"_fd{flex_detour}"
+                                        if len(zone_min_times) > 1:
+                                            detour_tag += f"_zmin{zone_min_t}"
+                                        if len(zone_max_times) > 1:
+                                            detour_tag += f"_zmax{zone_max_t}"
+                                        if len(dispatch_delays) > 1:
+                                            detour_tag += f"_dd{dispatch_delay}"
+                                        scenario_name = (
+                                            f"{base_name}_{st_name}_sp{station_spacing_m}_hw{headway_min}"
+                                            f"{pl_tag}_{fl_tag}{detour_tag}_{size_tag}"
+                                        )
+                                        extra_cols = _pt_extra_cols(
+                                            st_cfg, pt_variant, headway_min, fixed_length_km, pt_n_veh,
+                                            flex_detour, zone_min_t, zone_max_t, dispatch_delay)
+                                        rows.append(scenario_row(
+                                            scenario_name, dv, st_cfg, sim_end_time, n, size_tag,
+                                            extra_cols=extra_cols))
     return rows
