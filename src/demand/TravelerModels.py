@@ -700,15 +700,7 @@ class PTUtilityRequest(RequestBase):
 
         # Scenario parameter keys: try a few reasonable names, but require them to be present (no defaults)
         # U0: base PT utility
-        U0 = None
-        U0_keys = ('pt_u0', 'U_0_T', 'pt_u_0', 'pt_base_utility')
-        for key in U0_keys:
-            if key in scenario_parameters:
-                U0 = scenario_parameters.get(key)
-                break
-        if U0 is None:
-            raise KeyError(
-                f"Missing required scenario parameter for PT base utility. One of {U0_keys} must be set in your scenario configuration (e.g. 'pt_u0' or 'U_0_T').")
+        U0 = 0
 
         # alpha: per-minute penalty for PT travel time
         alpha_t_p = None
@@ -723,6 +715,8 @@ class PTUtilityRequest(RequestBase):
 
         self.highest_mod_utility = float("-inf")
         # compute PT utility
+        if np.isnan(gtfs_dur):
+            gtfs_dur = 100000  # assign a large penalty if GTFS duration is missing
         self.pt_utility: float = float(U0) - float(alpha_t_p) * float(gtfs_dur)
 
 
@@ -735,12 +729,13 @@ class PTUtilityRequest(RequestBase):
         """Use a max utility model to choose between MOD providers and PT"""
         selected_op = -1
         highest_utility = self.pt_utility
+        U0 = scenario_parameters.get('U_0_T')
         for op_id, offer in self.offer.items():
             if not offer.service_declined():
                 t_wait = offer[G_OFFER_WAIT]
                 t_drive = offer[G_OFFER_DRIVE]
                 fare = offer.get(G_OFFER_FARE, 0)
-                utility = - self.alpha_t_w * t_wait - self.alpha_t_d * t_drive - self.fare_conversion * fare
+                utility = - self.alpha_t_w * t_wait - self.alpha_t_d * t_drive - self.fare_conversion * fare + float(U0)
                 if utility > highest_utility:
                     highest_utility = utility
                     selected_op = op_id

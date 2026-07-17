@@ -189,8 +189,9 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         :param simulation_time: current simulation time
         :type simulation_time: float
         """
+        super().acknowledge_boarding(rid, vid, simulation_time)
         LOG.debug(f"acknowledge boarding {rid} in {vid} at {simulation_time}")
-        self.rq_dict[rid].set_pickup(vid, simulation_time)
+        # self.rq_dict[rid].set_pickup(vid, simulation_time)
 
     def acknowledge_alighting(self, rid, vid, simulation_time):
         """This method can trigger some database processes whenever a passenger is finishing to alight a vehicle.

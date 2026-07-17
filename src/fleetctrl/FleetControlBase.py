@@ -103,7 +103,12 @@ class FleetControlBase(metaclass=ABCMeta):
             self.routing_engine.update_network(scenario_parameters[G_SIM_START_TIME])
             self._use_own_routing_engine = True
         # TODO: is a zonesystem needed for the fleetcontrol module? -> moved to repo module
-        #self.zones: ZoneSystem = zone_system
+        self.zones: ZoneSystem = zone_system
+        self.waiting_time_df = pd.DataFrame({"vid": pd.Series(dtype="int64"),
+                                             "idle_since": pd.Series(dtype="float64"),
+                                             "idle_zone": pd.Series(dtype="object"),
+                                             "time_pickup": pd.Series(dtype="float64")})
+        
         self.dir_names = dir_names
         #
         self.sim_vehicles: List[SimulationVehicle] = list_vehicles
@@ -244,6 +249,10 @@ class FleetControlBase(metaclass=ABCMeta):
         repo_method = operator_attributes.get(G_OP_REPO_M)
         self.repo_time_step = operator_attributes.get(G_OP_REPO_TS)
         if repo_method is not None and self.repo_time_step is not None:
+            if repo_method == "DriverUtilityMax":
+                self.alpha_d = scenario_parameters.get(G_V_ALPHA_D) # ? to-do: is this the right place to read alpha_d -soma
+                self.agg_period = scenario_parameters.get("forecast_wait_agg_period")
+                self.default_wait = scenario_parameters.get("forecast_default_wait")
             RepoClass = load_repositioning_strategy(repo_method)
             self.repo : RepositioningBase = RepoClass(self, operator_attributes, dir_names)
             prt_strategy_str += f"\t Repositioning: {self.repo.__class__.__name__}\n"
@@ -251,6 +260,8 @@ class FleetControlBase(metaclass=ABCMeta):
         else:
             self.repo = None
             prt_strategy_str += f"\t Repositioning: None\n"
+        
+
 
         # pricing
         # -------
@@ -462,6 +473,15 @@ class FleetControlBase(metaclass=ABCMeta):
         :type simulation_time: float
         """
         self.rq_dict[rid].set_pickup(vid, simulation_time)
+        idle_pos = self.sim_vehicles[vid].idle_pos
+        if idle_pos == None:
+            idle_zone = None
+        else:
+            idle_zone = self.zones.get_zone_from_node(idle_pos[0])
+            self.waiting_time_df.loc[len(self.waiting_time_df)] = {"vid": vid, "idle_since": self.sim_vehicles[vid].idle_since, "idle_zone": idle_zone,"time_pickup": simulation_time}
+        idle_zone = idle_zone
+
+        
 
     @abstractmethod
     def acknowledge_alighting(self, rid : Any, vid : int, simulation_time : int):
@@ -671,6 +691,23 @@ class FleetControlBase(metaclass=ABCMeta):
             util = 1.0
         #LOG.info("comute utilization: {} {} {}".format(util, n_effective_utilized_vehicles, n_active_vehicles))
         return util, n_effective_utilized_vehicles, n_active_vehicles
+
+    def compute_veh_waiting_time(self,sim_time):
+        df = self.waiting_time_df[(self.waiting_time_df["time_pickup"] >= sim_time - self.agg_period)
+        & self.waiting_time_df["idle_since"].notna() & self.waiting_time_df["idle_zone"].notna()]
+        
+        df["waiting_time"] = (df["time_pickup"] - df["idle_since"]).clip(lower=0)
+        
+        avg_waiting_time = (df.groupby("idle_zone")["waiting_time"].mean().to_dict())
+
+        for zone in self.zones.get_all_zones():
+            avg_waiting_time.setdefault(zone, self.default_wait) # default veh waiting time set to 15 min
+        
+        return avg_waiting_time
+
+
+
+            
 
     @abstractmethod
     def _lock_vid_rid_pickup(self, sim_time, vid, rid):

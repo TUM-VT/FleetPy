@@ -133,6 +133,7 @@ def get_src_repositioning_strategies():
     repo_dict["FullSamplingRidePoolingRebalancingMultiStage"] = ("src.fleetctrl.repositioning.FullSamplingRidePoolingRebalancingMultiStage", "FullSamplingRidePoolingRebalancingMultiStage")
     repo_dict["FullSamplingRidePoolingRebalancingMultiStageReservation"] = ("src.fleetctrl.repositioning.FullSamplingRidePoolingRebalancingMultiStageReservation", "FullSamplingRidePoolingRebalancingMultiStageReservation")
     repo_dict["PavoneContinuous"] = ("src.fleetctrl.repositioning.PavoneContinuous", "PavoneContinuous")
+    repo_dict["DriverUtilityMax"] = ("src.fleetctrl.repositioning.DriverUtilityMax", "DriverUtilityMax")
     # add development content
     if dev_content is not None:
         dev_repo_dict = dev_content.add_repositioning_modules()

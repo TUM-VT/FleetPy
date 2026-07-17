@@ -462,7 +462,7 @@ def temporal_operator_plots(output_dir, op_id, show=False, evaluation_start_time
     # scenario_parameters, op_attributes, dir_names, 
     scenario_parameters, list_operator_attributes, dir_names = load_scenario_inputs(output_dir)
     if not os.path.isdir(dir_names[G_DIR_MAIN]):
-        dir_names = get_directory_dict(scenario_parameters)
+        dir_names = get_directory_dict(scenario_parameters, list_operator_attributes)
     op_attributes = list_operator_attributes[op_id]
 
     # evaluation interval
@@ -996,7 +996,7 @@ def run_complete_temporal_evaluation(output_dir, evaluation_start_time=None, eva
     :param evaluation_end_time: end time of evaluation
     """
     scenario_parameters, list_operator_attributes, _ = load_scenario_inputs(output_dir)
-    dir_names = get_directory_dict(scenario_parameters)
+    dir_names = get_directory_dict(scenario_parameters, list_operator_attributes)
     eval_dict = {}
     for op_id, op_attributes in enumerate(list_operator_attributes):
         eval_dict[op_id] = temporal_operator_plots(output_dir, op_id, print_comments=True)
@@ -1014,6 +1014,7 @@ if __name__ == "__main__":
 
     # normal script call
     # ------------------
+    run_complete_temporal_evaluation("G:\\studies\\soma_study\\results\\soma_test",evaluation_start_time=28800,evaluation_end_time=36000)
     if len(sys.argv) == 2:
         run_complete_temporal_evaluation(sys.argv[1])
     else:

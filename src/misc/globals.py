@@ -574,6 +574,7 @@ G_IM_OFFER_MOD_SUB = "im_mod_subsidy"
 G_V_OP_ID = "operator_id"
 G_V_VID = "vehicle_id"
 G_V_TYPE = "vehicle_type"
+G_V_ALPHA_D = "alpha_d"
 
 # Vehicle Final/Init Status
 # -------------------------

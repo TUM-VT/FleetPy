@@ -60,6 +60,8 @@ class SimulationVehicle:
         self.pos = None
         self.soc = None
         self.pax: tp.List[RequestBase] = []  # rq_obj
+        self.idle_since = None
+        self.idle_pos = None
         # assigned route = list of assigned vehicle legs
         self.assigned_route: tp.List[VehicleRouteLeg] = []
         # current leg (cl) info
@@ -311,10 +313,17 @@ class SimulationVehicle:
                 route_replay_str = ";".join([f"{self.cl_driven_route[i]}:{self.cl_driven_route_times[i]}"\
                                              for i in range(route_length)])
                 record_dict[G_VR_REPLAY_ROUTE] = route_replay_str
+            
+            # record state if idle (for waiting time estimation)
+            if len(list_alighting_pax) > 0 or self.status == VRL_STATES.REPOSITION:
+                self.idle_since = simulation_time
+                self.idle_pos = self.pos
+            
             # default status and shift to next leg
             self.reset_current_leg()
             self.assigned_route = self.assigned_route[1:]
             self.op_output.append(record_dict)
+
             return list_alighting_pax, ca
         elif self.start_next_leg_first:
             # this can happen when user_request makes assignment and batch optimization in same time step makes
