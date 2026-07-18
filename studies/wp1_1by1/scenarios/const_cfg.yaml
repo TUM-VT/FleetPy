@@ -22,8 +22,10 @@ op_rp_batch_optimizer: InsertionHeuristic
 op_vr_control_func_dict: OVERWRITE_IN_SCENARIO_CONFIG
 op_init_veh_distribution: OVERWRITE_IN_SCENARIO_CONFIG
 op_min_wait_time: 0
-op_max_wait_time: 600
-op_max_detour_time_factor: 40
+op_max_wait_time: 900
+# PT-line only, dtd/stops still use 0.
+op_max_wait_time_2: 900
+op_max_detour_time_factor: 60
 op_const_boarding_time: 30
 op_reoptimisation_timestep: 60
 # fare structure

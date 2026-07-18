@@ -470,6 +470,7 @@ G_RQ_EPT = "earliest_pickup_time"
 G_RQ_LPT = "latest_pickup_time"
 G_RQ_LDT = "latest_decision_time"
 G_RQ_MRD = "max_rel_detour"
+G_RQ_ACDT = "add_constant_detour_time"
 G_RQ_MAX_FARE = "max_fare"
 # parcel
 G_RQ_PA_SIZE = "parcel_size"

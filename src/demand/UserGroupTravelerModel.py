@@ -19,7 +19,7 @@ INPUT_PARAMETERS_UserGroupRequest = {
     sensitivity to unreliable service.""",
     "inherit": "RequestBase",
     "input_parameters_mandatory": [G_AR_MAX_WT, G_WALKING_SPEED, G_MAX_WALKING_DIST],
-    "input_parameters_optional": [G_RQ_MRD, G_MC_VOT, G_VOW_FACTOR, G_V_WAIT_FACTOR, G_MC_NO_OFFER_PENALTY],
+    "input_parameters_optional": [G_RQ_MRD, G_RQ_ACDT, G_MC_VOT, G_VOW_FACTOR, G_V_WAIT_FACTOR, G_MC_NO_OFFER_PENALTY],
     "mandatory_modules": [],
     "optional_modules": []
 }
@@ -36,8 +36,19 @@ class UserGroupRequest(BasicRequest):
             self.max_wait_time
         self.set_direct_route_travel_infos(routing_engine)
         self.rel_detour = rq_row.get(G_RQ_MRD, scenario_parameters[G_OP_MAX_DTF])
-        self.max_trip_time = (100 + self.rel_detour) * (self.direct_route_travel_time +
+        # add_constant_detour_time: an ABSOLUTE addition on top of the percentage-based
+        # max_rel_detour cap, applied per-request (unlike G_OP_ADD_CDT, the operator-side
+        # equivalent in PlanRequest.py -- that one never applies here, since UserGroupRequest
+        # always sets its own max_trip_time, see PlanRequest.py:81-82). Without this, a short
+        # trip has very little absolute slack to absorb a fixed per-stop dwell-time overhead
+        # (e.g. a headway-scheduled PT line's boarding time) before busting a % cap, while a
+        # long trip comfortably absorbs the same fixed overhead as a smaller relative share --
+        # structurally biasing declines against short trips. Defaults to 0 (no behavior change
+        # unless a ranges file sets it).
+        self.add_constant_detour_time = rq_row.get(G_RQ_ACDT, 0.0)
+        self.max_trip_time = ((100 + self.rel_detour) * (self.direct_route_travel_time +
                                                    scenario_parameters.get(G_OP_CONST_BT, 0)) / 100
+                               + self.add_constant_detour_time)
 
 
         self.walking_speed = rq_row[G_WALKING_SPEED]
@@ -91,10 +102,35 @@ class UserGroupRequest(BasicRequest):
         """ utility recorded for a declined/no-offer outcome: the walking-fallback disutility
         (what the traveler actually experiences -- walking the trip) plus the group's no-offer
         penalty (an additional, group-specific reliability penalty on top of that realistic
-        fallback; 0 for groups that aren't reliability-sensitive, see G_MC_NO_OFFER_PENALTY).
+        fallback; 0 for groups that aren't reliability-sensitive, see G_MC_NO_OFFER_PENALTY),
+        plus the disutility of how long the service actually took to answer with a decline
+        (self.leave_system_time, set immediately before this is called, both for an active
+        decline and for a request that gives up at its own decision deadline -- see
+        leaves_system() -- covers both outcomes uniformly). Weighted the same as ordinary
+        wait time (value_of_time * value_of_waiting_factor): the traveler doesn't know
+        they're being declined until this moment, so that time is spent waiting just like
+        the wait leg of a trip that gets accepted.
         :return: utility value (float)
         """
-        return self._walking_fallback_utility() - self.no_offer_penalty
+        wait_for_answer = 0.0
+        if self.leave_system_time is not None:
+            wait_for_answer = self.leave_system_time - self.rq_time
+        return (self._walking_fallback_utility() - self.no_offer_penalty
+                - self.value_of_time * self.value_of_waiting_factor * wait_for_answer)
+
+    def leaves_system(self, sim_time):
+        """ choose_offer() only calls _decline_utility() when it actively returns -1 (an
+        all-offers-declined outcome). A request that never receives any offer at all instead
+        stays "undecided" (choose_offer returns None) until its OWN user_max_decision_time
+        deadline expires here -- without this override, utility_chosen_mode would stay at its
+        None default for that outcome, silently dropping it (rather than recording its
+        decline disutility) from any downstream utility average.
+        :return: True/False, see RequestBase.leaves_system
+        """
+        left = super().leaves_system(sim_time)
+        if left and self.utility_chosen_mode is None:
+            self.utility_chosen_mode = self._decline_utility()
+        return left
 
     def _add_record(self, record_dict):
         record_dict[G_RQ_C_UTIL] = self.utility_chosen_mode
@@ -109,6 +145,7 @@ class UserGroupRequest(BasicRequest):
         Utility-based comparison across accepted offers is done in post-processing."""
         test_all_decline = super().choose_offer(sc_parameters, simulation_time)
         if test_all_decline is not None and test_all_decline < 0:
+            self.leave_system_time = simulation_time
             self.utility_chosen_mode = self._decline_utility()
             return -1
         sorted_amod_offer_ops = sorted([op_id for op_id in self.offer.keys() if op_id >= 0])
@@ -134,6 +171,7 @@ class UserGroupRequest(BasicRequest):
             self.utility_chosen_mode = self._compute_utility(offer)
             return op
         LOG.debug(f"all offers over threshold, decline: {offer_str(self.offer)}")
+        self.leave_system_time = simulation_time
         self.utility_chosen_mode = self._decline_utility()
         return -1
 

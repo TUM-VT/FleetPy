@@ -43,7 +43,7 @@ def get_ranges_list():
     return [read_ranges()]
 
 
-def build_scenario_rows(demand_scenarios, service_types, sim_end_time, pt_variants):
+def build_scenario_rows(demand_scenarios, service_types, sim_end_time, pt_variants, default_line_id=1):
     """Tie demand scenarios and service types together into scenario_cfg.csv rows, dispatching
     PT-line service types (sod/fixed_line) to the pubtrans row builder and the on-demand ones
     (dtd/stops) to a plain per-fleet-size row. Returns the row list (no I/O) so callers can
@@ -60,7 +60,7 @@ def build_scenario_rows(demand_scenarios, service_types, sim_end_time, pt_varian
         for st_name, st_cfg in service_types.items():
             if is_pt_line_service(st_cfg):
                 rows.extend(pt_scenario_rows(
-                    base_name, dv, st_name, st_cfg, sim_end_time, variant_lookup))
+                    base_name, dv, st_name, st_cfg, sim_end_time, variant_lookup, default_line_id))
             else:
                 for n, size_tag in fleet_entries(st_cfg, dv["total_lambda"]):
                     rows.append(scenario_row(
@@ -68,11 +68,13 @@ def build_scenario_rows(demand_scenarios, service_types, sim_end_time, pt_varian
     return rows
 
 
-def write_scenario_cfg(rows):
-    """Write accumulated scenario_cfg.csv rows (from one or more ranges files) to disk."""
+def write_scenario_cfg(rows, out_name="scenario_cfg.csv"):
+    """Write accumulated scenario_cfg.csv rows (from one or more ranges files) to disk.
+    out_name lets a one-off targeted run (e.g. a single ranges file's sweep) write to its own
+    file instead of clobbering the shared scenario_cfg.csv other work may still depend on."""
     scenarios_dir = os.path.join(STUDY_DIR, "scenarios")
     os.makedirs(scenarios_dir, exist_ok=True)
-    out_path = os.path.join(scenarios_dir, "scenario_cfg.csv")
+    out_path = os.path.join(scenarios_dir, out_name)
     df = pd.DataFrame(rows)
 
     if df["scenario_name"].duplicated().any():
@@ -82,13 +84,12 @@ def write_scenario_cfg(rows):
             f"{'...' if len(dupes) > 5 else ''}. Each ranges file's scenarios must be unique "
             f"when combined -- check for overlapping network/density/service_type combos.")
 
-    # Columns only PT-line rows (sod/fixed_line) set -- e.g. user_max_decision_time,
-    # op_max_wait_time -- come out NaN for other rows (dtd/stops) once combined into one CSV.
-    # FleetPy's config loader (src/misc/config.py: decode_config_str) converts that NaN to
-    # None, which then OVERRIDES the matching const_cfg.yaml default instead of falling back to
-    # it -- silently corrupting (or, for fields used in unguarded arithmetic, crashing) those
-    # rows. Backfill any such column from const_cfg.yaml's own value so an absent override is
-    # truly a no-op, not a None override.
+    # A column only some rows set (e.g. one service type overriding a normally-unset config key)
+    # comes out NaN for every other row once combined into one CSV. FleetPy's config loader
+    # (src/misc/config.py: decode_config_str) converts that NaN to None, which then OVERRIDES the
+    # matching const_cfg.yaml default instead of falling back to it -- silently corrupting (or,
+    # for fields used in unguarded arithmetic, crashing) those rows. Backfill any such column from
+    # const_cfg.yaml's own value so an absent override is truly a no-op, not a None override.
     const_cfg_path = os.path.join(scenarios_dir, "const_cfg.yaml")
     if os.path.isfile(const_cfg_path):
         with open(const_cfg_path) as f:
@@ -125,7 +126,9 @@ def generate_from_ranges(ranges):
 
     # Build scenario configuration rows
     sim_end_time = demand_window + ranges["simulation"]["cool_time"]
-    return build_scenario_rows(demand_scenarios, ranges["service_types"], sim_end_time, pt_variants)
+    default_line_id = ranges.get("pubtrans", {}).get("line_id", 1)
+    return build_scenario_rows(demand_scenarios, ranges["service_types"], sim_end_time, pt_variants,
+                                default_line_id)
 
 
 def main():

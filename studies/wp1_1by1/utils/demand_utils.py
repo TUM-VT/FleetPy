@@ -184,6 +184,7 @@ def generate_demand_scenario(nw_name, rq_name, areal_density_pax_km2h, corridor_
             "user_group": group,
             G_AR_MAX_WT: gp[G_AR_MAX_WT],
             G_RQ_MRD: gp[G_RQ_MRD],
+            G_RQ_ACDT: gp.get(G_RQ_ACDT, 0.0),
             G_WALKING_SPEED: gp[G_WALKING_SPEED],
             G_MAX_WALKING_DIST: gp[G_MAX_WALKING_DIST],
             G_MC_VOT: gp[G_MC_VOT],

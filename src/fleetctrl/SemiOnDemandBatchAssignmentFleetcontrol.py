@@ -1196,8 +1196,17 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
             new_unassigned_requests_2 = {}
             # rids to be assigned in first try
             for rid in self.unassigned_requests_1.keys():
+                # rq_dict can be missing rid here if the request already left the system
+                # (e.g. user_max_decision_time deadline hit via leaves_system()) between being
+                # added to unassigned_requests_1 and this batch running -- user_cancels_request()
+                # deletes rq_dict[rid] but doesn't know about this subclass's own
+                # unassigned_requests_1/2 bookkeeping, so a stale rid can still show up here.
+                # Skip it instead of crashing (matches the safe get-or-skip pattern
+                # user_cancels_request itself uses for rq_dict/rid_to_assigned_vid).
+                prq = self.rq_dict.get(rid)
+                if prq is None:
+                    continue
                 assigned_vid = self.rid_to_assigned_vid.get(rid, None)
-                prq = self.rq_dict[rid]
                 if assigned_vid is None:
                     if self.max_wait_time_2 is not None and self.max_wait_time_2 > 0:
                         # retry with new waiting time constraint (no offer returned)
@@ -1213,8 +1222,11 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
                     assigned_plan = self.veh_plans[assigned_vid]
                     self._create_user_offer(prq, simulation_time, assigned_vehicle_plan=assigned_plan)
             for rid in self.unassigned_requests_2.keys():  # check second try rids
+                # see the same guard/comment in the unassigned_requests_1 loop above.
+                prq = self.rq_dict.get(rid)
+                if prq is None:
+                    continue
                 assigned_vid = self.rid_to_assigned_vid.get(rid, None)
-                prq = self.rq_dict[rid]
                 if assigned_vid is None:  # decline if wait time reached
                     _, _, latest_pu = prq.get_o_stop_info()
                     if simulation_time >= latest_pu:
