@@ -463,7 +463,11 @@ def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, tem
         "areal_density": areal_density,
         "total_lambda": total_lambda,
         "spatial_distribution": spatial_dist,
-        "temporal_distribution": temporal_dist,
+        # temporal_label (not the raw temporal_dist) -- generate_scenarios.py's
+        # build_scenario_rows uses this field to build scenario_name/rq_file, which must
+        # stay distinct across different hub_schedule headway_s/ramp_s configs too, not just
+        # the demand CSV path (see the temporal_label comment above).
+        "temporal_distribution": temporal_label,
         "user_profile": profile_name,
         "directionality": direction_pct,
         "seed": seed,
