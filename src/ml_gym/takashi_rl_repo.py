@@ -361,7 +361,7 @@ if __name__ == "__main__":
         sc_config = os.path.join(scs_path, "sc_config_repo.csv")
 
     # env_config is forwarded to FleetPyRepoRL.__init__ as the `config` argument.
-    fleetpy_config = {"nr_zones": 6,
+    fleetpy_config = {"nr_zones": 63,
                     "constant_cfg_path": const_config,
                     "var_cfg_path": sc_config
                     }
@@ -375,18 +375,18 @@ if __name__ == "__main__":
     
     model = PPO('MlpPolicy',
                 env,
-                learning_rate=3e-4, # how much parameters are changed in 1 update
-                n_steps=24, # how many information steps are collected from environment before update
-                batch_size=24, # number of data used in 1 gradient update
+                learning_rate=3e-4,
+                n_steps=24,
+                batch_size=24,
                 n_epochs=10,
                 gamma=0.99,
                 clip_range=0.2,
                 ent_coef=0,
                 vf_coef=0.5,
-                verbose=1, # how detailed log is output→　0:none, 1:standard, 2:detail debug
+                verbose=1, # log detail→0:none, 1:standard, 2:detail debug
                 tensorboard_log="./tensorboard/"
                 )
     
-    model.learn(total_timesteps=10000, tb_log_name="PPO_FleetPy")
+    model.learn(total_timesteps=100, tb_log_name="PPO_FleetPy")
 
-    model.save("ppo_repo_model")
+    model.save("ppo_repo_model_2")

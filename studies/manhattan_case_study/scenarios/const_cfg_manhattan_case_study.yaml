@@ -37,10 +37,13 @@ op_optimisation_timeout: 30
 op_applied_heuristic: after_opt_rv_best_v2rb
 op_max_VR_con: 10
 ### repo
-op_repo_method: AlonsoMoraRepositioning
+op_repo_method: MLZoneBasedRepositioning
 op_repo_horizons: [0, 2700]
 op_repo_lock: False
 op_repo_timestep: 900
 op_temporal_resolution: 900
 ### zone system
 op_zone_system: Manhattan_Taxi_Zones
+### Additional
+op_fc_type: perfect_trips
+op_forecast_f: agg_example_200.csv
