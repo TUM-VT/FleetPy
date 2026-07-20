@@ -29,8 +29,8 @@ MIN_TRIP_DISTANCE_M = 500
 sys.path.insert(0, REPO_ROOT)
 
 from src.misc.globals import *
-from utils.distributions import (HUB_TRIANGULAR, HUB_TRIANGULAR_2D, get_location_distribution,
-                                 get_time_distribution)
+from utils.distributions import (HUB_SCHEDULE, HUB_TRIANGULAR, HUB_TRIANGULAR_2D,
+                                 get_location_distribution, get_time_distribution)
 from utils.network_utils import BOARDING_INFRA_NAME
 
 
@@ -440,7 +440,16 @@ def get_boarding_points_for_network(nw_name, infra_name=BOARDING_INFRA_NAME):
 # --- demand scenario sweep (across the range grid) ---
 
 def _demand_entry(nw_name, length_km, width_km, areal_density, spatial_dist, temporal_dist, profile_name, shares, direction_pct, seed, group_params, end_time, boarding_match_radius, headway_s=None, ramp_s=None, network_speed_kmh=None):
-    rq_name = f"{areal_density}pkm2h_dir{direction_pct}_seed{seed}_spatial_{spatial_dist}_temporal_{temporal_dist}_user_{profile_name}"
+    # HUB_SCHEDULE's headway_s/ramp_s aren't otherwise reflected anywhere in the demand
+    # filename -- two ranges files both using temporal_dist="hub_schedule" but different
+    # headway_s/ramp_s would generate the IDENTICAL rq_name and silently overwrite (or,
+    # combined into one scenario_cfg.csv, collide as duplicate scenario_names) each other's
+    # demand CSV. Fold the values into the label so distinct hub_schedule configs are
+    # distinct files; every other temporal_dist (headway_s/ramp_s both None) is unaffected.
+    temporal_label = temporal_dist
+    if temporal_dist == HUB_SCHEDULE and headway_s is not None and ramp_s is not None:
+        temporal_label = f"{temporal_dist}_hw{int(headway_s)}_ramp{int(ramp_s)}"
+    rq_name = f"{areal_density}pkm2h_dir{direction_pct}_seed{seed}_spatial_{spatial_dist}_temporal_{temporal_label}_user_{profile_name}"
     total_lambda = areal_density * length_km * width_km
     boarding_points = get_boarding_points_for_network(nw_name)
     hub_counts = generate_demand_scenario(
