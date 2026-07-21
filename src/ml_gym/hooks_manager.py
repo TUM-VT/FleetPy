@@ -14,10 +14,15 @@ from typing import List, Union
 LOG = logging.getLogger(__name__)
     
 class Events(Enum):
-    ML_OBSERVE = "ml_observe",
-    ML_ACTION = "ml_action",
-    OBSERVE_FLEET_STATE_AFTER_RECEIVING_STATUS_UPDATE = "observe_fleet_state_after_receiving_status_update", # this event is triggered after the fleetcontrol received a new status update of its vehicle and is about to trigger its optimization
-    OBSERVE_BEFORE_REPOSITIONING = "observe_bevore_repositioning" # this event is triggered directly before the repositioning algorithm would calculate new repositioning trips
+    # ML hook events and their string identifiers.
+    ML_OBSERVE = "ml_observe"
+    ML_ACTION = "ml_action"
+    # Triggered before the repositioning algorithm would calculate new repositioning trips.
+    OBSERVE_BEFORE_REPOSITIONING = "observe_bevore_repositioning"
+    # Triggered before each request is submitted in an immediate decision simulation.
+    OBSERVE_FLEET_STATE_BEFORE_IMMEDIATE_REQUEST_SUBMISSION = "observe_fleet_state_before_immediate_request_submission"
+    # Triggered on every Batch step after request/cancellation handling and before the fleet control time trigger.
+    OBSERVE_FLEET_STATE_BEFORE_BATCH_TIME_TRIGGER = "observe_fleet_state_before_batch_time_trigger"
 
 class HookManager:
     
@@ -111,9 +116,11 @@ class HookManager:
     def trigger(self, event: Events, fleetpy_module, **kwargs):
         in_queue, out_queue = self._in_out_queue_dict[self._process_id] if self._process_id is not None else (None, None)
         if event in self._hooks:
-            print(f"\ntrigger {event}")
+            # Record triggered events through the logger.
+            LOG.info("Trigger ML hook for event %s", event)
             for h in self._hooks[event]:
-                h.on_event(event, fleetpy_module, self._process_id, in_queue, out_queue)
+                # Forward optional context for further processing by the hook and its observers.
+                h.on_event(event, fleetpy_module, self._process_id, in_queue, out_queue, **kwargs)
 
     def reply_to_slave_processes(self, block=False, timeout_per_process = None):
         """ Uses the actor object of the master process to the reply to actors of all slave processes """
@@ -162,14 +169,17 @@ class Hook:
         raise AssertionError(f"The actor {actor_type} for hook id {self._hook_id} was not found. Make sure you are "
                              f"using multiprocessing, otherwise this method should not have been called.")
     
-    def on_event(self, event, fleetpy_module, process_id = None, in_queue: Queue = None, out_queue: Queue=None):
+    def on_event(self, event, fleetpy_module, process_id = None, in_queue: Queue = None, out_queue: Queue=None, **kwargs):
         if event != self._event:
             return
 
         observation = {}
         for observer in self._observers:
-            print(f"\nHook: trigger observer - {observer}")
-            observation.update(observer.observe(fleetpy_module))
+            # Record observer execution through the logger.
+            LOG.info("Trigger observer %s for event %s", type(observer).__name__, event)
+            # Observer implementations follow AbstractObserver and therefore
+            # must accept event-specific keyword context.
+            observation.update(observer.observe(fleetpy_module, **kwargs))
 
         for actor in self._actors:
             actor._act(observation, fleetpy_module, self._hook_id, process_id, in_queue, out_queue)

@@ -1,3 +1,0 @@
-op_module,scenario_name,rq_file,op_fleet_composition,ml_write_fleet_state
-PoolingIRSOnly,example_sl_pool_irsonly,example_100.csv,default_vehtype:5,True
-PoolingIRSOnly,example_sl_pool_irsonly_no_output,example_100.csv,default_vehtype:5,False

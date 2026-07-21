@@ -12,6 +12,7 @@ import json
 # src imports
 # -----------
 from src.FleetSimulationBase import FleetSimulationBase
+from src.ml_gym.hooks_manager import Events
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -86,6 +87,19 @@ class BatchOfferSimulation(FleetSimulationBase):
         # 4)
         self._check_waiting_request_cancellations(sim_time)
 
+        # Observe the post-arrival, pre-time-trigger fleet state on every step.
+        if self.hook_manager is not None:
+            new_request_ids = [rid for rid, _ in list_new_traveler_rid_obj]
+            for operator in self.operators:
+                self.hook_manager.trigger(
+                    Events.OBSERVE_FLEET_STATE_BEFORE_BATCH_TIME_TRIGGER,
+                    operator,
+                    new_request_ids=new_request_ids,
+                    optimization_request_ids=operator.get_optimization_request_ids(sim_time),
+                    prediction_request_ids=operator.get_prediction_request_ids(sim_time),
+                    sim_time=sim_time,
+                )
+
         # 5)
         for op_id, op_obj in enumerate(self.operators):
             # here offers are created in batch assignment
@@ -104,3 +118,8 @@ class BatchOfferSimulation(FleetSimulationBase):
                 ch_op.time_trigger(sim_time)
 
         self.record_stats()
+
+    def add_evaluate(self):
+        """Run evaluation steps specific to the batch-offer environment."""
+        # No additional evaluation; override the base method to avoid its warning.
+        pass

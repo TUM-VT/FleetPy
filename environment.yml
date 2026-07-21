@@ -8,6 +8,7 @@ dependencies:
   - plotly=5.24
   - python=3.10
   - scipy=1.15
+  - typeguard=4.5.2
   - pip:
     - cython==3.0.11
     - fiona==1.10.1

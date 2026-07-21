@@ -14,6 +14,7 @@ import json
 # -----------
 
 from src.FleetSimulationBase import FleetSimulationBase
+from src.ml_gym.hooks_manager import Events
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -87,6 +88,17 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         list_new_traveler_rid_obj = self.demand.get_new_travelers(sim_time, since=last_time)
         # 3)
         for rid, rq_obj in list_undecided_travelers + list_new_traveler_rid_obj:
+            # Observe each operator's fleet before this request is submitted.
+            if self.hook_manager is not None:
+                for operator in self.operators:
+                    self.hook_manager.trigger(
+                        Events.OBSERVE_FLEET_STATE_BEFORE_IMMEDIATE_REQUEST_SUBMISSION,
+                        operator,
+                        new_request_ids=[rid],
+                        optimization_request_ids=[rid],
+                        prediction_request_ids=[rid],
+                        sim_time=sim_time,
+                    )
             self.broker.inform_request(rid, rq_obj, sim_time)
             amod_offers = self.broker.collect_offers(rid)
             for op_id, amod_offer in amod_offers.items():

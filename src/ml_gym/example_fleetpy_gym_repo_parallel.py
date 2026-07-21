@@ -67,10 +67,10 @@ if __name__ == "__main__":
     constant_cfg["evaluate"] = 1
     constant_cfg["log_level"] = "info"
 
-    fleetpy_config = constant_cfg + scenario_cfgs[0]
+    fleetpy_configs = [constant_cfg + scenario_cfg for scenario_cfg in scenario_cfgs]
     
-    # init FleetPyMLInterface
-    fp_ml_interface = FleetPyMLInterface(fleetpy_config, nr_parallel=2)
+    # Run distinct scenario rows, with at most two simulations active at once.
+    fp_ml_interface = FleetPyMLInterface(fleetpy_configs, nr_parallel=2)
     
     # define event for interaction between FleetPy and ML environment
 

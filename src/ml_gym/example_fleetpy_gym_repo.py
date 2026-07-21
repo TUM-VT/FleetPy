@@ -87,14 +87,7 @@ if __name__ == "__main__":
     # register actor
     fp_ml_interface.register_actor(event, RandomReposition())
 
-    event = Events.OBSERVE_FLEET_STATE_AFTER_RECEIVING_STATUS_UPDATE
-    from src.ml_gym.Observers.fleet_control_observers import FleetStateObserver
-    fp_ml_interface.register_observer(event, FleetStateObserver())
-
-    from src.ml_gym.writers import JSONWriter
-    output_file = os.path.join(scs_path, "fleet_stats_output.json")
-    fp_ml_interface.register_actor(event, JSONWriter(output_file))
-
+    from src.ml_gym.Actors.writers import JSONWriter
     output_file = os.path.join(scs_path, "reposition_observer_output.json")
     repo_writer = JSONWriter(output_file)
     fp_ml_interface.register_actor(Events.OBSERVE_BEFORE_REPOSITIONING, repo_writer)

@@ -215,6 +215,23 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         """
         pass
 
+    def get_optimization_request_ids(self) -> List[Any]:
+        """Return the request ids considered by the next optimisation run.
+
+        The default matches insertion-style batch optimisers: only requests that
+        have not yet accepted an offer are processed, and requests explicitly
+        excluded from global optimisation are omitted. Algorithms that
+        re-optimise already assigned requests must override this method.
+
+        This method must be called before :meth:`compute_new_vehicle_assignments`,
+        because some algorithms clear ``unassigned_requests`` afterwards.
+        """
+        return [
+            rid
+            for rid in self.unassigned_requests
+            if self.rid_to_consider_for_global_optimisation.get(rid) is not None
+        ]
+
     def add_new_request(self, rid : Any, prq : PlanRequest, consider_for_global_optimisation : bool = True, is_allready_assigned : bool = False):
         """ this function adds a new request to the modules database and set entries that
         possible v2rbs are going to be computed in the next opt step.
@@ -427,4 +444,3 @@ class BatchAssignmentAlgorithmBase(metaclass=ABCMeta):
         :param exceeds_former_time_windows: True: new time window is larger the old one, False otherwise
         """
         pass
-

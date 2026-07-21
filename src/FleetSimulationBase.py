@@ -24,7 +24,6 @@ import numpy as np
 from src.misc.init_modules import load_fleet_control_module, load_routing_engine, load_broker_module
 from src.demand.demand import Demand, SlaveDemand
 from src.simulation.Vehicles import SimulationVehicle
-from src.ml_gym.hooks_manager import Events
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.routing.NetworkBase import NetworkBase
@@ -700,9 +699,6 @@ class FleetSimulationBase:
                 self.broker.receive_status_update(op_id, vid, next_time, passed_VRL, True)
             else:
                 self.broker.receive_status_update(op_id, vid, next_time, passed_VRL, force_update_plan)
-        if self.hook_manager is not None:
-            for op in self.operators:
-                self.hook_manager.trigger(Events.OBSERVE_FLEET_STATE_AFTER_RECEIVING_STATUS_UPDATE, op)
         # TODO # after ISTTT: live visualization: send vehicle states (self.live_visualization_flag==True)
 
     def update_vehicle_routes(self, sim_time):
@@ -765,7 +761,8 @@ class FleetSimulationBase:
         :param sim_time: current simulation time
         :return: None
         """
-        for rid, rq_obj in self.demand.waiting_rq.items():
+        # Iterate over a snapshot because cancellations remove entries from waiting_rq.
+        for rid, rq_obj in list(self.demand.waiting_rq.items()):
             chosen_operator = rq_obj.get_chosen_operator()
             in_vehicle = rq_obj.get_service_vehicle()
             if in_vehicle is None and chosen_operator is not None and rq_obj.cancels_booking(sim_time):

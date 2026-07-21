@@ -152,10 +152,10 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
                     self._create_user_offer(prq, simulation_time, assigned_vehicle_plan=assigned_plan)
             for rid in self.unassigned_requests_2.keys():   # check second try rids
                 assigned_vid = self.rid_to_assigned_vid.get(rid, None)
+                prq = self.rq_dict[rid]
                 if assigned_vid is None:    # decline
                     self._create_rejection(prq, simulation_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
                 else:
-                    prq = self.rq_dict[rid]
                     assigned_plan = self.veh_plans[assigned_vid]
                     self._create_user_offer(prq, simulation_time, assigned_vehicle_plan=assigned_plan)
             self.unassigned_requests_1 = {}
@@ -173,6 +173,42 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
             return True
         else:
             return False
+
+    def get_optimization_request_ids(self, sim_time):
+        """Return the mutable request context for the next optimisation.
+
+        This method must be called before :meth:`time_trigger`, because the batch
+        assignment algorithm may change or clear its request databases during
+        optimisation.
+
+        :param sim_time: current simulation time
+        :return: algorithm-ordered request ids whose assignment can still change,
+            or an empty list when no optimisation is due. Fixed requests remain
+            represented by the fleet state and vehicle plans.
+        :rtype: list
+        """
+        if sim_time % self.optimisation_time_step != 0:
+            return []
+        return self.RPBO_Module.get_optimization_request_ids()
+
+    def get_prediction_request_ids(self, sim_time):
+        """Return users awaiting an offer from the batch due at ``sim_time``.
+
+        These request ids identify the service-prediction targets for the
+        pre-optimisation fleet snapshot. They are distinct from the mutable
+        optimiser context, which can also contain already accepted requests.
+
+        :param sim_time: current simulation time
+        :return: first- and second-attempt request ids in offer-processing order,
+            or an empty list when no optimisation is due
+        :rtype: list
+        """
+        if sim_time % self.optimisation_time_step != 0:
+            return []
+        return list(dict.fromkeys([
+            *self.unassigned_requests_1,
+            *self.unassigned_requests_2,
+        ]))
 
     def _create_user_offer(self, prq : PlanRequest, simulation_time : int, assigned_vehicle_plan : VehiclePlan=None,
                            offer_dict_without_plan : dict={}) -> TravellerOffer:

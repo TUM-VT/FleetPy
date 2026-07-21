@@ -168,6 +168,23 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         self.alonso_mora_parallelization_manager.initOp(self.fo_id, self.objective_function, self.operator_attributes)
         self.optimisation_cores = self.alonso_mora_parallelization_manager.number_cores
 
+    def get_optimization_request_ids(self) -> List[Any]:
+        """Return requests whose assignment remains mutable in the next batch.
+
+        Alonso-Mora re-optimises requests that have already accepted an offer as
+        well as currently unassigned requests. Requests already locked to a
+        vehicle (in particular on-board passengers) remain represented by the
+        vehicle state and route, but are not repeated as mutable request inputs.
+        ``requests_to_compute`` is not used because it only identifies
+        incremental graph/tree rebuilds.
+        """
+        return [
+            rid
+            for rid in self.active_requests
+            if self.rid_to_consider_for_global_optimisation.get(rid) is not None
+            and self._get_associated_baserid(rid) not in self.r2v_locked
+        ]
+
     def compute_new_vehicle_assignments(self, sim_time : int, vid_to_list_passed_VRLs : Dict[int, List[VehicleRouteLeg]], 
                                      veh_objs_to_build : Dict[int, SimulationVehicle] = {}, new_travel_times : bool = False, build_from_scratch : bool = False):
         """ this function computes new vehicle assignments based on current fleet information
