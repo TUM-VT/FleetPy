@@ -17,7 +17,7 @@ rq_type: BasicRequest
 #zone_system_name: None
 # 2 - FleetControl
 op_module: RidePoolingBatchAssignmentFleetcontrol
-op_rp_batch_optimizer: AlonsoMora
+op_rp_batch_optimizer: InsertionHeuristic
 op_fleet_composition: OVERWRITE_IN_SCENARIO_CONFIG
 op_vr_control_func_dict: {func_key: distance_and_user_times_man, vot: 0.45833, dc: 0.0694}
 op_min_wait_time: 0
@@ -37,10 +37,12 @@ op_optimisation_timeout: 30
 op_applied_heuristic: after_opt_rv_best_v2rb
 op_max_VR_con: 10
 ### repo
-op_repo_method: AlonsoMoraRepositioning
+op_repo_method: MLZoneBasedRepositioning
 op_repo_horizons: [0, 2700]
 op_repo_lock: False
 op_repo_timestep: 900
 op_temporal_resolution: 900
 ### zone system
 op_zone_system: Manhattan_Taxi_Zones
+### Additional
+op_fc_type: perfect_dist

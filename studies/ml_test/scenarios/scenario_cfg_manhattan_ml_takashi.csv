@@ -1,0 +1,9 @@
+scenario_name,rq_file,op_fleet_composition
+test_manhattatan_scenario_1,2018-11-12_sample_5_1.csv,default_vehtype:80
+test_manhattatan_scenario_2,2018-11-12_sample_5_2.csv,default_vehtype:80
+test_manhattatan_scenario_3,2018-11-13_sample_5_1.csv,default_vehtype:80
+test_manhattatan_scenario_4,2018-11-13_sample_5_2.csv,default_vehtype:80
+test_manhattatan_scenario_5,2018-11-14_sample_5_1.csv,default_vehtype:80
+test_manhattatan_scenario_6,2018-11-14_sample_5_2.csv,default_vehtype:80
+test_manhattatan_scenario_7,2018-11-15_sample_5_1.csv,default_vehtype:80
+test_manhattatan_scenario_8,2018-11-15_sample_5_2.csv,default_vehtype:80

@@ -357,8 +357,8 @@ if __name__ == "__main__":
     else:
         # default (without arguments) paths for 2 csv files
         scs_path = os.path.join(MAIN_DIR, "studies", "ml_test", "scenarios") # studies/ml_test/scenarios
-        const_config = os.path.join(scs_path, "constant_config.csv") # studies/ml_test/scenarios/constant_config.csv
-        sc_config = os.path.join(scs_path, "sc_config_repo.csv")
+        const_config = os.path.join(scs_path, "const_cfg_manhattan_case_study.yaml") # studies/ml_test/scenarios/constant_config.csv
+        sc_config = os.path.join(scs_path, "scenario_cfg_manhattan_ml_takashi.csv")
 
     # env_config is forwarded to FleetPyRepoRL.__init__ as the `config` argument.
     fleetpy_config = {"nr_zones": 63,
