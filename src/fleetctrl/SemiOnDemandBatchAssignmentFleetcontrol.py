@@ -754,6 +754,8 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
         self.last_zonal_dept = None
 
         self.base_fare = scenario_parameters.get(G_PT_FARE_B, 0)
+        # scenario-level FALLBACK ONLY -- user_request() prefers the requesting traveler's own
+        # (user-group-specific) walking_speed attribute when the request object has one.
         self.walking_speed = scenario_parameters.get(G_WALKING_SPEED, 0)
         station_node_f = os.path.join(self.pt_data_dir, scenario_parameters.get(G_PT_STATION_F, 0))
         station_node_df = pd.read_csv(station_node_f)
@@ -1053,7 +1055,15 @@ class SemiOnDemandBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetC
                     self.station_dict[closest_station_id].street_network_node_id
                 )
                 walking_dist_dict[origin_dest] = walking_dist
-                walking_time[origin_dest] = (walking_dist * 1000) / self.walking_speed
+                # traveler's own (user-group-specific) walking speed, not self.walking_speed's
+                # scenario-level default -- mirrors StopBasedRidePoolingBatchAssignmentFleetcontrol.
+                # _stop_based_walking_times, which already reads getattr(rq, "walking_speed", ...)
+                # for the same reason: a fixed global speed here silently mis-shifts
+                # earliest_start_time/latest_start_time (see below) for every group whose real
+                # walking_speed differs from it -- mobility_constrained (slower) had their walk
+                # time UNDER-estimated, time_sensitive (faster) OVER-estimated.
+                traveler_walking_speed = getattr(rq, "walking_speed", None) or self.walking_speed
+                walking_time[origin_dest] = (walking_dist * 1000) / traveler_walking_speed
 
         # update the pick-up / drop-off location to the assigned stop
         pick_up_pos = to_check["origin"]

@@ -16,7 +16,15 @@ INPUT_PARAMETERS_UserGroupRequest = {
     based on the group's value of time and its waiting/walking weighting factors. If no offer is acceptable,
     the disutility of walking the whole direct trip is recorded instead (the realistic fallback for a
     declined traveler), plus the group's no-offer/reliability penalty on top, reflecting the group's
-    sensitivity to unreliable service.""",
+    sensitivity to unreliable service.
+
+    value_of_time is configured in EUR/HOUR (human-readable -- e.g. 10, 15, 5) and converted to
+    EUR/second here at read time (divided by 3600), since utility_chosen_mode's time terms
+    (t_wait/t_drive/t_walk) are all in seconds and need a per-second rate to come out monetized
+    in EUR, negative (FleetPy's native utility sign, not yet flipped to a disutility);
+    no_offer_penalty is in SECONDS (not EUR) -- a group-specific extra wait-equivalent penalty
+    for being declined, monetized the same way ordinary wait time is (self.value_of_time *
+    value_of_waiting_factor, both already per-second by that point), see _decline_utility.""",
     "inherit": "RequestBase",
     "input_parameters_mandatory": [G_AR_MAX_WT, G_WALKING_SPEED, G_MAX_WALKING_DIST],
     "input_parameters_optional": [G_RQ_MRD, G_RQ_ACDT, G_MC_VOT, G_VOW_FACTOR, G_V_WAIT_FACTOR, G_MC_NO_OFFER_PENALTY],
@@ -53,7 +61,9 @@ class UserGroupRequest(BasicRequest):
 
         self.walking_speed = rq_row[G_WALKING_SPEED]
         self.max_walking_distance = rq_row[G_MAX_WALKING_DIST]
-        self.value_of_time = rq_row.get(G_MC_VOT, 0.0)
+        # G_MC_VOT is configured in EUR/hour (see class docstring) -- convert to EUR/second here,
+        # once, so every downstream utility formula can keep working directly against seconds.
+        self.value_of_time = rq_row.get(G_MC_VOT, 0.0) / 3600.0
         self.value_of_walking_factor = rq_row.get(G_VOW_FACTOR, 1.0)
         self.value_of_waiting_factor = rq_row.get(G_V_WAIT_FACTOR, 1.0)
         self.no_offer_penalty = rq_row.get(G_MC_NO_OFFER_PENALTY, 0.0)
@@ -102,21 +112,23 @@ class UserGroupRequest(BasicRequest):
         """ utility recorded for a declined/no-offer outcome: the walking-fallback disutility
         (what the traveler actually experiences -- walking the trip) plus the group's no-offer
         penalty (an additional, group-specific reliability penalty on top of that realistic
-        fallback; 0 for groups that aren't reliability-sensitive, see G_MC_NO_OFFER_PENALTY),
-        plus the disutility of how long the service actually took to answer with a decline
-        (self.leave_system_time, set immediately before this is called, both for an active
-        decline and for a request that gives up at its own decision deadline -- see
-        leaves_system() -- covers both outcomes uniformly). Weighted the same as ordinary
-        wait time (value_of_time * value_of_waiting_factor): the traveler doesn't know
-        they're being declined until this moment, so that time is spent waiting just like
-        the wait leg of a trip that gets accepted.
+        fallback, in SECONDS -- 0 for groups that aren't reliability-sensitive, see
+        G_MC_NO_OFFER_PENALTY), plus the disutility of how long the service actually took to
+        answer with a decline (self.leave_system_time, set immediately before this is called,
+        both for an active decline and for a request that gives up at its own decision deadline
+        -- see leaves_system() -- covers both outcomes uniformly). Both extra terms are
+        monetized the same way as ordinary wait time (value_of_time * value_of_waiting_factor):
+        the traveler doesn't know they're being declined until this moment, so that time (plus
+        the group's own reliability penalty) is spent waiting just like the wait leg of a trip
+        that gets accepted.
         :return: utility value (float)
         """
         wait_for_answer = 0.0
         if self.leave_system_time is not None:
             wait_for_answer = self.leave_system_time - self.rq_time
-        return (self._walking_fallback_utility() - self.no_offer_penalty
-                - self.value_of_time * self.value_of_waiting_factor * wait_for_answer)
+        return (self._walking_fallback_utility()
+                - self.value_of_time * self.value_of_waiting_factor
+                * (self.no_offer_penalty + wait_for_answer))
 
     def leaves_system(self, sim_time):
         """ choose_offer() only calls _decline_utility() when it actively returns -1 (an
