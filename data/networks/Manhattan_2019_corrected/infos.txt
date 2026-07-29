@@ -1,0 +1,14 @@
+OSM-based network of Manhattan, NYC
+
+in comparison to "Manhattan_2019":
+dead-ends and doubled edges are remove
+-> network is fully connected
+
+2018-11-{x}_tt_factors.csv:
+- tt_factors for day x in the network
+- more infos ?
+
+2018-11-11_to_2018-11-18_tt_factors.csv:
+- tt_factors for whole week aggregated to one file
+- 0 corresponds to 0 of 2018-11-11
+- since 2018-11-11 is only used for warm-up no tt-data available here -> "real" simulation should start at 86400
