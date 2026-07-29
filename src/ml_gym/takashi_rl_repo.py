@@ -15,8 +15,14 @@ from src.misc.config import ConstantConfig, ScenarioConfig
 
 from gymnasium import spaces
 from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 
 from scipy.optimize import linprog
+from collections import deque
+
+import multiprocessing
+import copy
 
 np.set_printoptions(precision=2, suppress=True)
 
@@ -33,6 +39,9 @@ class RLReposition(ZoneBasedRepositioningActor):
         self.nr_zones = fleetpy_config["nr_zones"]
         self.zone_ids = list(range(self.nr_zones))
 
+        self.last_dn_int = None
+        self.last_u = None
+
     def translate_action(self, observation, action):
         """Convert the RL agent's action into a list of zone-to-zone repositioning moves.
         :param observation: merged dict from all registered observers
@@ -45,7 +54,13 @@ class RLReposition(ZoneBasedRepositioningActor):
         # the output format should be a list of (origin_zone_id, target_zone_id) tuples, e.g.:
         # return [(0, 2), (0, 2), (1, 3)]  # move 2 vehicles from zone 0 to 2, and 1 vehicle from zone 1 to 3
         
-        actions, _, _, _, _ = repo_optimization(action, observation, self.zone_ids, self.nr_zones)
+        actions, dn, dn_int, u, tt_matrix = repo_optimization(action,
+                                                              observation,
+                                                              self.zone_ids,
+                                                              self.nr_zones
+                                                              )
+        self.last_dn_int = dn_int
+        self.last_u = u
 
         return actions
 
@@ -82,9 +97,13 @@ class TakashiRLRepo(FleetPyGym):
         #   scenario_inx = (config.worker_index - 1) % len(scenario_cfgs)
         scenario_inx = 0
         fleetpy_config = constant_cfg + scenario_cfgs[scenario_inx]
+        env_id = config.get("env_id", 0)
+        fleetpy_config["scenario_name"] = (
+            f'{fleetpy_config["scenario_name"]}_env{env_id}'
+        )
 
         super().__init__(fleetpy_config)
-
+        
         self.tau = int(
             fleetpy_config["op_repo_horizons"][1]
             / fleetpy_config["op_repo_timestep"]
@@ -133,7 +152,12 @@ class TakashiRLRepo(FleetPyGym):
 
         # The actor pauses the simulation, hands the observation to the gym loop,
         # waits for the RL action, then writes it back into FleetPy.
-        self.register_actor(event, RLReposition())
+        self.actor = RLReposition()
+        self.register_actor(event, self.actor)
+
+        self.cost_unserved_history = []
+        self.cost_travel_history = []
+        self.cost_deviation_history = []
 
     def translate_observation(self, observation):
         """Flatten the raw FleetPy observation dict into a fixed-size numpy vector.
@@ -202,27 +226,29 @@ class TakashiRLRepo(FleetPyGym):
         # check
         # print("reward called, cumulative_unserved:", observation["cumulative_unserved"])
 
-        actions, dn, dn_int, u, tt_matrix = repo_optimization(action, observation, self.zone_ids, self.nr_zones)
+        # actions, dn, dn_int, u, tt_matrix = repo_optimization(action, observation, self.zone_ids, self.nr_zones)
+        dn_int = self.actor.last_dn_int
+        u = self.actor.last_u
+        tt_matrix = observation["tt_matrix"]
         
         if dn_int is None:
             return -1e6
 
         # Weights
-        w1 = 1
-        w2 = 0.001
-        w3 = 0.1
+        w1 = 0.03
+        w2 = 0.0006
+        w3 = 0.02
 
         # Cost terms
         cost_unserved = observation["cumulative_unserved"]
         cost_travel = np.sum(dn_int * tt_matrix)
         cost_deviation = np.sum(u)
 
-        reward = - (w1 * cost_unserved + w2 * cost_travel + w3 * cost_deviation)
+        self.cost_unserved_history.append(cost_unserved)
+        self.cost_travel_history.append(cost_travel)
+        self.cost_deviation_history.append(cost_deviation)
 
-        #print(f"cost_unserved  = {cost_unserved:.3f}")
-        #print(f"cost_travel    = {cost_travel:.3f}")
-        #print(f"cost_deviation = {cost_deviation:.3f}")
-        #print(f"reward         = {reward:.3f}")
+        reward = - (w1 * cost_unserved + w2 * cost_travel + w3 * cost_deviation)
 
         return float(reward)
 
@@ -233,7 +259,7 @@ def repo_optimization(action, observation, zone_ids, nr_zones):
     dp = exp_action / np.sum(exp_action)
     zone_to_idle = observation["zone_to_idle_vehicles"] # no. of idle vehicles by zones
     tt_matrix = observation["tt_matrix"] # matrix of travel times among zones
-    
+
     Z = nr_zones
     z = np.array([zone_to_idle.get(i, 0) for i in zone_ids])
 
@@ -250,7 +276,7 @@ def repo_optimization(action, observation, zone_ids, nr_zones):
             c.append(tt_matrix[i, j])
     
     # Add the deviation penalty term in the objective function
-    lam = 100 # Lagrangerian multiplier
+    lam = 500 # Lagrangerian multiplier
     c += [lam] * Z
     c = np.array(c)
     
@@ -345,9 +371,87 @@ def repo_optimization(action, observation, zone_ids, nr_zones):
 
     return actions, dn, dn_int, u, tt_matrix
 
+# Function for parallel computation
+def make_env(config, env_id):
+    def _init():
+        cfg = copy.deepcopy(config)
+        cfg["env_id"] = env_id
+        return TakashiRLRepo(cfg)
+    return _init
+
+# Early Stopping
+class RewardEarlyStoppingCallback(BaseCallback):
+    def __init__(self, window_size=10, patience=10, verbose = 1):
+        super().__init__(verbose)
+        self.window_size = window_size
+        self.patience = patience
+        self.recent_rewards = deque(maxlen=window_size)
+        self.best_mean_reward = -np.inf
+        self.no_improvement = 0
+        self.episode_rewards = None
+
+    # One cumulative reward for each environment
+    def _on_training_start(self):
+        n_envs = self.training_env.num_envs
+        self.episode_rewards = np.zeros(n_envs, dtype=np.float64)
+
+    def _on_step(self):
+        rewards = np.asarray(self.locals["rewards"], dtype=np.float64)
+        dones = np.asarray(self.locals["dones"], dtype=bool)
+
+        # Accumulate rewards
+        self.episode_rewards += rewards
+
+        # Collect all episodes that finished this step
+        finished_rewards = []
+
+        for env_id in np.where(dones)[0]:
+            finished_rewards.append(self.episode_rewards[env_id])
+            self.episode_rewards[env_id] = 0.0
+
+        if not finished_rewards:
+            return True
+
+        # Add finished episodes
+        self.recent_rewards.extend(finished_rewards)
+
+        # Wait until enough episodes are available
+        if len(self.recent_rewards) < self.window_size:
+            return True
+
+        mean_reward = np.mean(self.recent_rewards)
+
+        if mean_reward > self.best_mean_reward:
+            self.best_mean_reward = mean_reward
+            self.no_improvement = 0
+
+            if self.verbose:
+                print(f"New best reward = {mean_reward:.3f}")
+
+        else:
+            self.no_improvement += 1
+
+            if self.verbose:
+                print(
+                    f"Mean reward = {mean_reward:.3f} "
+                    f"({self.no_improvement}/{self.patience})"
+                )
+
+        if self.no_improvement >= self.patience:
+            if self.verbose:
+                print(
+                    f"Early stopping: mean reward did not improve "
+                    f"for {self.patience} evaluations."
+                )
+            return False
+        
+        return True
+
+
 # run RL
 if __name__ == "__main__":
 
+    multiprocessing.freeze_support()
     MAIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     
     # Condition for default or manual input of configuration files　
@@ -361,7 +465,7 @@ if __name__ == "__main__":
         sc_config = os.path.join(scs_path, "scenario_cfg_manhattan_ml_takashi.csv")
 
     # env_config is forwarded to FleetPyRepoRL.__init__ as the `config` argument.
-    fleetpy_config = {"nr_zones": 63,
+    fleetpy_config = {"nr_zones": 8,
                     "constant_cfg_path": const_config,
                     "var_cfg_path": sc_config
                     }
@@ -371,13 +475,17 @@ if __name__ == "__main__":
     # TODO: adjust the RLlib config as needed (e.g. learning algorithm, hyperparameters, number of workers, etc.). The current config is just a placeholder to get you started.
     # TODO: or use other lib like stable-baselines3 or your own training loop instead of RLlib if you prefer. The key part is that the environment (FleetPyRepoRL) can be used with any library that supports gymnasium.Env.
 
-    env = TakashiRLRepo(fleetpy_config)
+    n_envs = 4
+    env = SubprocVecEnv(
+        [make_env(fleetpy_config, i) for i in range(n_envs)]
+    )
+    env = VecMonitor(env)
     
     model = PPO('MlpPolicy',
                 env,
                 learning_rate=3e-4,
-                n_steps=24,
-                batch_size=24,
+                n_steps=64,
+                batch_size=64,
                 n_epochs=10,
                 gamma=0.99,
                 clip_range=0.2,
@@ -387,6 +495,17 @@ if __name__ == "__main__":
                 tensorboard_log="./tensorboard/"
                 )
     
-    model.learn(total_timesteps=100, tb_log_name="PPO_FleetPy")
+    callback = RewardEarlyStoppingCallback(
+        window_size=10,
+        patience=10,
+        verbose=1
+    )
 
-    model.save("ppo_repo_model_2")
+    model.learn(total_timesteps=100000,
+                tb_log_name="PPO_FleetPy",
+                callback=callback
+                )
+
+    model.save("ppo_repo_model")
+
+    print("Model saved")

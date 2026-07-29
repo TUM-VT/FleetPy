@@ -445,9 +445,9 @@ class FutureRequestsObserver(AbstractObserver):
         }
 
         for T in range(1, self.tau + 1):
-            t0 = (T-1) * delta_t
-            t1 = T * delta_t 
-            trip_origin_forecasts = zone_system.get_trip_arrival_forecasts(t0, t1)
+            t0 = sim_time + (T-1) * delta_t
+            t1 = sim_time + T * delta_t 
+            trip_origin_forecasts = zone_system.get_trip_departure_forecasts(t0, t1)
             zone_to_forecasted_requests[T] = trip_origin_forecasts
 
         return {"zone_to_forecasted_requests": zone_to_forecasted_requests}

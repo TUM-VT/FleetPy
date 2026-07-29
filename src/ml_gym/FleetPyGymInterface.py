@@ -1,5 +1,6 @@
 import sys
 import os
+import numpy as np
 import traceback
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))  # add fleetpy path
 
@@ -98,6 +99,26 @@ class FleetPyGym(gym.Env, ABC):
         new_observation, actor_type, done = self._poll_for_observation(process_id=0)
         if done:
             print("FleetPy thread is dead")
+
+            # Check values of terms in reward function 
+            for name, values in [
+                ("Unserved", self.cost_unserved_history),
+                ("Travel", self.cost_travel_history),
+                ("Deviation", self.cost_deviation_history),
+                ]:
+                if len(values) == 0:
+                    continue
+
+                print(f"\n{name}")
+                print(f"Mean   : {np.mean(values):.3f}")
+                print(f"Median : {np.median(values):.3f}")
+                print(f"Max    : {np.max(values):.3f}")
+                print(f"Min    : {np.min(values):.3f}")
+
+            self.cost_unserved_history.clear()
+            self.cost_travel_history.clear()
+            self.cost_deviation_history.clear()
+            
         else:
             observation = new_observation
             self.last_observation = observation
