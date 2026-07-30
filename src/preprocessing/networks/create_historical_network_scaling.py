@@ -5,7 +5,7 @@ Email:  arslan.syed@tum.de
 Date: 04-03-2026
 Description: This script scales the network edges to match the historical travel times from trips.
 """
-
+import traceback
 import pandas as pd
 import geopandas as gpd
 import numpy as np
@@ -346,11 +346,12 @@ def generate_scaled_dyn_edges(network_name, demand, demand_file_name, zones_name
             trip_df = trip_df.drop(columns=["path_nodes", "path_edges"])
             trip_df.to_csv(scale_demand_folder.joinpath(f"{time}.csv"))
         except:
-            print(f"Time {time}: Problem when reseting index of OD trips dataframe with dimension:"
+            traceback.print_exc()
+            print(f"Time {demand_file_name} {time}: Problem when reseting index of OD trips dataframe with dimension:"
                   f" {origin_dest_trips.shape}. Continueing with next time group.")
 
     dyn_folders_df = pd.DataFrame(dyn_factor_files)
-    dyn_file = network_folder.joinpath(f"dyn_factors_{objective}_{aggregation_period_min}.csv")
+    dyn_file = network_folder.joinpath(f"dyn_factors_{objective}_{aggregation_period_min}_{demand_file_name}.csv")
     dyn_folders_df.to_csv(dyn_file, index=False)
     print("\nThe scaled edges are saved in the following folder: ", scale_edges_main_folder)
     print("\nThe travel times of individual trips calculated using the scaled edges are saved in the following folder: ", scale_demand_folder)
