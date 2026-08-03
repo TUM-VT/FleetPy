@@ -24,3 +24,9 @@ dependencies:
     - requests
     - ipykernel
     - nbformat>=4.2.0
+    # Required by every repositioning module in src/fleetctrl/repositioning
+    # (all seven import gurobipy). The wheel ships a restricted licence that
+    # needs no registration but caps models at 2000 variables; PavoneFC uses
+    # N^2 - N variables for N zones, so that allows up to 45 zones. Beyond
+    # that, a full (e.g. academic) licence is needed.
+    - gurobipy

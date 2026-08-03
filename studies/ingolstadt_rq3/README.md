@@ -53,6 +53,27 @@ day's additional-file list so SUMO accepts the vehicles FleetPy dispatches.
 | Teleport threshold | 60 s | matches the vaas SUMO sim config |
 | Sim clock | SUMO seconds, 25200 (07:00) to 68400 (19:00) | vaas `configs/prediction/rq2_sims/*.yaml` |
 
+## Repositioning setup
+
+Repositioning needs three things Ingolstadt did not have:
+
+1. **A zone system.** Built by the vaas-side `scripts/routing/build_fleetpy_zones.py`.
+   Two are checked in: `ingolstadt_grid1000` (73 zones) and `ingolstadt_grid1500`
+   (35 zones).
+2. **A forecast model.** `op_fc_type=perfect` plus `op_temporal_resolution`.
+3. **Gurobi.** All seven repositioning modules import `gurobipy` (now in
+   `environment.yml`). The bundled restricted licence needs no registration but
+   caps models at **2000 variables**. PavoneFC uses `N^2 - N` for N zones, so
+   **35 zones = 1,190 variables fits; 73 zones = 5,256 does not.** Use
+   `ingolstadt_grid1500` unless a full licence is available. The bundled licence
+   is also marked non-production and expires 2027-11-29.
+
+Measured effect at 200 req/h (same demand, seed and window; see docs/6):
+repositioning beat raising `op_max_wait_time` on every KPI at once — service
+85.4→95.1%, wait 177→157 s, detour 211→202 s, utilisation 21.6→27.1%. Raising
+the wait cap to 600 s reached 99.5% service only by letting mean wait grow to
+284 s, so it relaxes the constraint rather than fixing the supply/demand mismatch.
+
 ## Scenario-design rules learned from the increment-A smoke run
 
 - **Inset the evaluation interval from the simulation interval.** FleetPy's user
