@@ -17,13 +17,22 @@ vaas repo. Do not cross the streams.
 
 ```bash
 conda activate fleetpy
-export SUMO_HOME=...                     # required for traci
+export SUMO_HOME=/usr/share/sumo
+export PYTHONPATH="$SUMO_HOME/tools:."   # see note below
 python src/coupling/SUMO/SUMOFleetPyServer.py \
     studies/ingolstadt_rq3/scenarios/constant_config.csv \
     studies/ingolstadt_rq3/scenarios/001_smoke_R1.csv \
     "<path to the day's .sumocfg>" \
     sumo info
 ```
+
+`PYTHONPATH` must include `$SUMO_HOME/tools`: `environment.yml` does not install
+`traci`, and `SUMOFleetPyServer.py` does not append the SUMO tools directory to
+`sys.path` itself (it only documents that `SUMO_HOME` "should be set"). The `.`
+entry is needed because the server imports `run_scenarios` from the repo root.
+
+Verified: the entry point imports cleanly under the `fleetpy` env with
+SUMO 1.27.0 (the template README says it was tested against 1.26.0).
 
 The `.sumocfg` is not duplicated here: the runs point at the existing
 Ingolstadt configs under `sumo_ingolstadt/simulation/Ingolstadt SUMO 365/`
