@@ -78,7 +78,7 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
             for t in range(t0, t1):
                 future_rqs = self._get_future_requests(t)
                 for rq in future_rqs.values():
-                    o_zone = self.get_zone_from_node(rq.o_node)
+                    o_zone = self.get_zone_from_node(rq.o_pos[0])
                     if o_zone >= 0:
                         try:
                             return_dict[o_zone] += 1
@@ -88,7 +88,7 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
             for t in range(t0, t1):
                 future_rqs = self._get_future_requests(t)
                 for rq in future_rqs.values():
-                    d_zone = self.get_zone_from_node(rq.d_node)
+                    d_zone = self.get_zone_from_node(rq.d_pos[0])
                     if d_zone >= 0:
                         try:
                             return_dict[d_zone] += 1
@@ -186,8 +186,8 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
         for t in range(t0, t1):
             future_rqs = self._get_future_requests(t)
             for rq in future_rqs.values():
-                o_zone = self.get_zone_from_node(rq.o_node)
-                d_zone = self.get_zone_from_node(rq.d_node)
+                o_zone = self.get_zone_from_node(rq.o_pos[0])
+                d_zone = self.get_zone_from_node(rq.d_pos[0])
                 if o_zone >= 0 and d_zone >= 0:
                     try:
                         return_dict[o_zone][d_zone] += 1 * scale
@@ -235,8 +235,8 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
             for t in range(time_bin[0], time_bin[1]):
                 future_rqs = self._get_future_requests(t)
                 for rq in future_rqs.values():
-                    o_zone = self.get_zone_from_node(rq.o_node)
-                    d_zone = self.get_zone_from_node(rq.d_node)
+                    o_zone = self.get_zone_from_node(rq.o_pos[0])
+                    d_zone = self.get_zone_from_node(rq.d_pos[0])
                     if o_zone >= 0 and d_zone >= 0:
                         try:
                             self._forecast[time_bin][o_zone][d_zone] += 1

@@ -193,6 +193,14 @@ class SUMOcontrolledSim(FleetSimulationBase):
                     self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
                 OpClass.continue_init(list_vehicles, self.start_time)
                 self.operators.append(OpClass)
+            # Mirrors FleetSimulationBase.init_blocking_fleet_control: a forecast
+            # zone system needs a reference to the demand object. This override
+            # replaces that method, so without this line self.demand never
+            # reaches the zone system and any repositioning module using a
+            # forecast dies with "'NoneType' object has no attribute
+            # 'future_requests'" on its first repositioning step.
+            if self.operators[-1].repo is not None and self.operators[-1].repo.zone_system is not None:
+                self.operators[-1].repo.zone_system.register_demand_ref(self.demand)
         veh_type_f = os.path.join(self.dir_names[G_DIR_OUTPUT], "2_vehicle_types.csv")
         veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
         veh_type_df.to_csv(veh_type_f, index=False)
