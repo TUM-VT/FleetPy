@@ -21,7 +21,7 @@ from src.misc.init_modules import load_simulation_environment
 import src.misc.config as config
 from src.misc.globals import *
 import src.evaluation.standard as eval
-from run_examples import run_scenarios
+from run_scenarios import run_scenarios
 import random
 import time
 
