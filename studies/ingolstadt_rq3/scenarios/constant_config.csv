@@ -38,7 +38,7 @@ log_level,info
 ##7,SUMO
 sumo_route-steps,200
 sumo_no-internal-links,False
-sumo_ignore-junction-blocker,20
+sumo_ignore-junction-blocker,15
 sumo_time-to-teleport,60
 sumo_time-to-teleport.highways,0
 sumo_eager-insert,False
