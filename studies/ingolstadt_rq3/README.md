@@ -53,6 +53,22 @@ day's additional-file list so SUMO accepts the vehicles FleetPy dispatches.
 | Teleport threshold | 60 s | matches the vaas SUMO sim config |
 | Sim clock | SUMO seconds, 25200 (07:00) to 68400 (19:00) | vaas `configs/prediction/rq2_sims/*.yaml` |
 
+## Scenario-design rules learned from the increment-A smoke run
+
+- **Inset the evaluation interval from the simulation interval.** FleetPy's user
+  stats count completed trips only, so requests arriving within roughly one mean
+  trip duration of `end_time` never appear and every service KPI is biased. In
+  the smoke run (mean wait+travel 981 s) the last logged arrival was 27938
+  against an `end_time` of 28800. Simulate wider than you evaluate: at least
+  ~20 min of tail, plus a warm-up so the fleet is not still spreading from its
+  initial positions.
+- **Match fleet size to demand.** At 60 requests/h the 100-vehicle fleet sat at
+  10.4% utilisation, which would mute the R1-vs-R2 contrast by construction.
+  Aim for a meaningfully loaded fleet (order 300-400 requests/h for 100
+  vehicles at ~16 min per trip).
+- **Cost anchor:** 842 s wall per simulated hour (~4.3x real time) at PR=10%
+  with 100 AMoD vehicles on the full Ingolstadt network.
+
 ## Still open
 
 - **`rq_file`** is a placeholder (`TBD_SEE_README.csv`) pending the D-demand
