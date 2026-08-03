@@ -1,0 +1,11 @@
+<!-- AMoD vehicle type for the Ingolstadt RQ3 / predictive-routing study.
+     The id must match the FleetPy vehicle-type CSV name (data/vehicles/amod.csv)
+     and the op_fleet_composition entry ("amod:100"), so that SUMO accepts the
+     vehicles FleetPy dispatches over TraCI.
+     rerouting device is off: FleetPy owns routing, SUMO must not re-route
+     these vehicles behind its back. -->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+     <vType id="amod" vClass="passenger" color="blue" desiredMaxSpeed="36.11">
+          <param key="has.rerouting.device" value="false"/>
+     </vType>
+</routes>
