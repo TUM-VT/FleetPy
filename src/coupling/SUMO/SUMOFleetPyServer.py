@@ -17,11 +17,12 @@ import time
 import numpy as np
 import pathlib
 from src.coupling.SUMO.SUMOcontrolledSim import SUMOcontrolledSim
+from src.coupling.SUMO.sumocfg_utils import merge_additional_files
 from src.misc.init_modules import load_simulation_environment
 import src.misc.config as config
 from src.misc.globals import *
 import src.evaluation.standard as eval
-from run_examples import run_scenarios
+from run_scenarios import run_scenarios
 import random
 import time
 
@@ -199,7 +200,11 @@ class SUMOFleetPyServer():
         sumoCmd = [self.sumo_binary, "-c", self.sumo_config_path ,
                 "--collision.action","warn",
                 "--begin",str(self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME)),
-                 "-a",EdgeDataCfgPath,
+                 # SUMO's -a REPLACES the sumocfg's <additional-files> rather
+                 # than extending it, so passing EdgeDataCfgPath alone would
+                 # silently drop the scenario's traffic-light programs, WAUT
+                 # switching and public transport. Merge them back in.
+                 "-a",merge_additional_files(self.sumo_config_path, EdgeDataCfgPath),
                 "--step-length","1",
                 "--tripinfo-output",TripInfoPath,
                 "--vehroute-output",vehRoutePath,
