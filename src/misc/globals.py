@@ -318,6 +318,8 @@ G_AIMSUN_VEH_TYPE_NAME = "aimsun_vehicle_type_name"
 G_SUMO_STAT_INT = "sumo_t_update"    # equals statistics interval, interval in which new network statistics are gathered and sent to FleetPy to updated network (if not given, no statistics are gathered)
 G_SUMO_SIM_TIME_OFFSET = "sumo_sim_time_offset" # offset between fleetpy and sumo simulation time (fleetpy simtime = sumo simtim + offset; if not given, 0)
 G_SUMO_FCD_VEHICLES = "sumo_fcd_vehicles" # vehicles that are providing FCD for the Real-Time Traffic Data used by Fleet Control ("all": all vehicles): Specified as: op_{operator_id_1}_{operator_id_2}_...-pv_{pv_share}
+G_SUMO_TT_SRC_DIR = "sumo_tt_source_dir" # directory of per-bin travel-time CSVs (tt_<sim_time>.csv) to route on instead of the probe measurements; relative paths are read from the FleetPy root. Unset = route on the measurements (see src/coupling/SUMO/tt_source.py)
+G_SUMO_TT_SRC_MIN_COV = "sumo_tt_source_min_coverage" # fraction of the scenario's travel-time updates that sumo_tt_source_dir must supply, checked before the simulation starts (default 1.0)
 G_SUMO_ROUTE_STEPS = "sumo_route-steps"
 G_SUMO_NO_INTERNAL_LINKS = "sumo_no-internal-links"
 G_SUMO_IGNORE_JUNCTION_BLOCKER = "sumo_ignore-junction-blocker"

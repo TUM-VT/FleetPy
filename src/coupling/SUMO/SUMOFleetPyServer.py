@@ -18,6 +18,8 @@ import numpy as np
 import pathlib
 from src.coupling.SUMO.SUMOcontrolledSim import SUMOcontrolledSim
 from src.coupling.SUMO.sumocfg_utils import merge_additional_files
+from src.coupling.SUMO.tt_source import (
+    coverage_error, requested_bin_times, resolve_source_dir, tt_file_for, write_source_stats)
 from src.misc.init_modules import load_simulation_environment
 import src.misc.config as config
 from src.misc.globals import *
@@ -178,6 +180,37 @@ class SUMOFleetPyServer():
         else:
             self.g_update_fleetsim_traveltimes = True
             self.g_sumo_t_update = int(self.fp_sim_env.scenario_parameters.get(G_SUMO_STAT_INT))
+
+        # Which travel times the fleet routes on. Unset = the probe measurements
+        # this server takes itself; set = a directory of per-bin CSVs prepared
+        # off-line (a current-state estimate or a prediction). Both go through
+        # the same load_tt_file channel, so the arms differ by one parameter.
+        self.g_tt_source_dir = resolve_source_dir(
+            self.fp_sim_env.scenario_parameters.get(G_SUMO_TT_SRC_DIR),
+            self.fp_sim_env.dir_names.get(G_DIR_MAIN))
+        self.g_tt_bins_loaded = 0
+        self.g_tt_bins_missing = 0
+        if self.g_tt_source_dir is not None:
+            self._check_tt_source_coverage()
+
+    def _check_tt_source_coverage(self):
+        """Refuse to start if the travel-time source cannot cover the run.
+
+        A cell costs the better part of an hour, and a source directory whose
+        file names sit off the request grid raises nothing at run time: every
+        edge simply keeps its previous travel time, so the arm quietly behaves
+        like the baseline it is meant to beat. Checking the whole grid here
+        turns that into a one-second failure that names the missing bins.
+        """
+        params = self.fp_sim_env.scenario_parameters
+        times = requested_bin_times(params[G_SIM_START_TIME], params[G_SIM_END_TIME],
+                                    self.g_sumo_t_update)
+        problem = coverage_error(self.g_tt_source_dir, times,
+                                 float(params.get(G_SUMO_TT_SRC_MIN_COV, 1.0)))
+        if problem:
+            raise FileNotFoundError(problem)
+        LOG.info(f"travel-time source {self.g_tt_source_dir}: "
+                 f"all {len(times)} requested bins present")
 
     def setup_sumo_simulation(self):
         """ 
@@ -357,8 +390,21 @@ class SUMOFleetPyServer():
 
                 res_list = []  # Clear res_list to prevent unlimited growth
                 if self.g_update_fleetsim_traveltimes==True:
-                    tt_file_path = os.path.join(resultsPath, "EdgeTravelTimes", f"SUMO_travel_times_{sim_time}.csv")
-                    self.fp_sim_env.routing_engine.load_tt_file(sim_time, ext_path=tt_file_path)  
+                    # The measured file is written either way (above), so every
+                    # cell keeps the probe-measured travel times as provenance
+                    # even when the fleet routes on something else.
+                    measured_path = os.path.join(resultsPath, "EdgeTravelTimes", f"SUMO_travel_times_{sim_time}.csv")
+                    tt_file_path = tt_file_for(self.g_tt_source_dir, sim_time, measured_path)
+                    if tt_file_path is None:
+                        # Skipping rather than falling back to measured_path: a
+                        # fallback would mix the baseline into the arm under
+                        # test one bin at a time, invisibly to every KPI.
+                        self.g_tt_bins_missing += 1
+                        LOG.warning(f"no travel-time file for bin {sim_time} in "
+                                    f"{self.g_tt_source_dir}; edges keep their previous values")
+                    else:
+                        self.g_tt_bins_loaded += 1
+                        self.fp_sim_env.routing_engine.load_tt_file(sim_time, ext_path=tt_file_path)
 
             # 6) collect the current positions of all fleet vehicles in SUMO
             vehicle_to_position_dict = self._get_current_vehicle_positions()
@@ -374,6 +420,11 @@ class SUMOFleetPyServer():
 
             step+=1
         traci.close()
+        LOG.info(f"travel times: {self.g_tt_bins_loaded} bins loaded, "
+                 f"{self.g_tt_bins_missing} missing "
+                 f"(source: {self.g_tt_source_dir or 'probe measurements'})")
+        write_source_stats(resultsPath, self.g_tt_source_dir,
+                           self.g_tt_bins_loaded, self.g_tt_bins_missing)
         self._post_sim_evaluation()
     
     def _post_sim_evaluation(self):
