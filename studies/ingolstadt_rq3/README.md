@@ -43,7 +43,7 @@ day's additional-file list so SUMO accepts the vehicles FleetPy dispatches.
 
 | Item | Value | Source |
 |---|---|---|
-| Network | `ingolstadt` (41,938 nodes / 76,301 edges) | converted, docs/6 step 3 |
+| Network | `ingolstadt` (41,946 nodes / 76,094 edges) | re-converted from the 365 net, docs/6 "Increment A" |
 | Fleet | `amod:100` | docs/6 §2.2 |
 | AMoD vType | `amod`, declared in `data/vehicles/amod.csv` + `sumo/FP_vType.xml` | docs/6 step 5 |
 | Simulation env | `SUMOcontrolledSim` | docs/6 §4.1 |
@@ -70,7 +70,9 @@ Repositioning needs three things Ingolstadt did not have:
 
 Measured effect at 200 req/h (same demand, seed and window; see docs/6):
 repositioning beat raising `op_max_wait_time` on every KPI at once — service
-85.4→95.1%, wait 177→157 s, detour 211→202 s, utilisation 21.6→27.1%. Raising
+85.4→95.1%, wait 177→157 s, detour 211→202 s, utilisation 43.2→46.0%
+(eval-window-normalised; FleetPy's own 21.6→27.1% is halved by the inset
+evaluation window — see the utilisation trap in docs/6). Raising
 the wait cap to 600 s reached 99.5% service only by letting mean wait grow to
 284 s, so it relaxes the constraint rather than fixing the supply/demand mismatch.
 
@@ -88,18 +90,33 @@ the wait cap to 600 s reached 99.5% service only by letting mean wait grow to
   Aim for a meaningfully loaded fleet (order 300-400 requests/h for 100
   vehicles at ~16 min per trip).
 - **Cost anchor:** 842 s wall per simulated hour (~4.3x real time) at PR=10%
-  with 100 AMoD vehicles on the full Ingolstadt network.
+  with 100 AMoD vehicles on the full Ingolstadt network, *without*
+  repositioning. With PavoneFC repositioning it is ~1,020 s per simulated hour
+  (cell 005: 2,037.9 s for a 2 h sim). No in-loop AVaS aggregator is attached in
+  either figure.
 
 ## Still open
 
-- **`rq_file`** is a placeholder (`TBD_SEE_README.csv`) pending the D-demand
-  decision. The smoke scenario cannot run until that is set.
-- **Evaluation window.** `001_smoke_R1.csv` uses 07:00-08:00 as a plumbing
-  smoke window only. The study window (event/peak ~3-4 h vs full 12 h) is a
-  separate decision and the single biggest cost lever.
+- **⚠️ The `R1` in these scenario names is wrong — they are `R0`.** As of
+  2026-08-04 the arms are a ladder: **R0** routes on FleetPy's native FCD travel
+  times (`sumo_fcd_vehicles = op_0-pv_0.1`), **R1** on the vaas-side LDD/AVaS
+  current-state estimate, **R2a/b/c** on the GNN prediction. Every cell built so
+  far is R0. They are kept under their original names because they are
+  operating-point calibration and never headline results, but
+  `aggregate_rq3_kpis.py` writes them to `kpi_R1.json` — do not read those as
+  estimate-arm results. Sweep cells must carry the correct label.
+- **`rq_file`** — resolved: D-demand settled 2026-08-03 (sample SUMO routes,
+  layered on untouched background; `scripts/routing/build_amod_demand.py`).
+- **Evaluation window** — resolved: midday, sim 43200-54000 (12:00-15:00),
+  eval 45000-52200 (12:30-14:30). The feasible band is only 09:00-15:00 (GNN
+  needs 2 h of history; 07-04 demand is truncated after 15:00). See docs/6.
+  `001_smoke_R1.csv`'s 07:00-08:00 is a plumbing smoke window only.
 - **`op_module`.** `PoolingIRSOnly` is inherited from the template and pools
-  requests. docs/6 §6 wants one request per vehicle at a time for the headline,
-  so this likely needs to change to a non-pooling assignment module.
+  requests (4-seat `amod` vehicles, `op_max_detour_time_factor = 40`). docs/6 §6
+  wants one request per vehicle at a time for the headline, so this likely needs
+  to change to a non-pooling assignment module. **Blocks the sweep:** the R1
+  calibration cells were all run with pooling on, so switching means re-running
+  them.
 - **`op_max_wait_time` (300 s) and the fare parameters** are template defaults,
   not calibrated for Ingolstadt.
 
