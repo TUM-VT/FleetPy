@@ -1,0 +1,4 @@
+scenario_name,rq_file,op_fleet_composition,op_rp_batch_optimizer,start_time,end_time,nw_dynamic_f,op_enable_ml_training,op_enable_ml_inference
+gnn_peak_2018-11-12,2018-11-12_sample_5_1.csv,default_vehtype:330,GNNAlonsoMora,21600,36000,2018-11-12_mean_tt_factor_hourly.csv,True,False
+gnn_peak_2018-11-13,2018-11-13_sample_5_1.csv,default_vehtype:330,GNNAlonsoMora,21600,36000,2018-11-13_mean_tt_factor_hourly.csv,True,False
+gnn_peak_2018-11-14,2018-11-14_sample_5_1.csv,default_vehtype:330,GNNAlonsoMora,21600,36000,2018-11-14_mean_tt_factor_hourly.csv,True,False
