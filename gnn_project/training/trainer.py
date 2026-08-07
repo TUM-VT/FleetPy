@@ -95,7 +95,9 @@ class Trainer:
                 # Save best model
                 torch.save({
                     MODEL_STATE_DICT: model.state_dict(),
-                    POS_WEIGHT: self.pos_weight
+                    POS_WEIGHT: self.pos_weight,
+                    RR_EDGE_DIM: self.config.rr_edge_dim,
+                    VR_EDGE_DIM: self.config.vr_edge_dim,
                 }, self.config.saved_model_path)
             else:
                 no_improve_epochs += 1

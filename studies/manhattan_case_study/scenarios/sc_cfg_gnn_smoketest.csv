@@ -1,0 +1,2 @@
+scenario_name,rq_file,op_fleet_composition,op_rp_batch_optimizer,end_time,op_enable_ml_training,op_enable_ml_inference
+gnn_smoketest,2018-11-12_sample_5_1.csv,default_vehtype:20,GNNAlonsoMora,900,True,False

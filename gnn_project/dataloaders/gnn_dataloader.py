@@ -15,6 +15,7 @@ import numpy as np
 from torch import Tensor
 from tqdm import tqdm
 import torch
+import torch_geometric.transforms as T
 from torch_geometric.data import HeteroData
 
 # Local imports
@@ -602,12 +603,22 @@ class GNNDataLoader:
                 timesteps = []
         else:
             timesteps = []
+        # RV_EDGE_NAME (the reverse of VR) only exists via this transform - the model
+        # (HeteroGAT) always builds a conv for it, so a graph without it crashes GATConv
+        # the moment it's used, on every single training batch. Was silently dropped in
+        # commit e8c476d - restoring it. (NormalizeFeatures() used to be applied here too,
+        # but deliberately dropped now: it row-normalizes to sum-to-1 across ALL columns,
+        # which flattens every feature - continuous, binary, one-hot alike - into the same
+        # narrow band, erasing the per-column z-score normalization done just before this.)
+        undirected_transform = T.ToUndirected(merge=True)
+
         graphs = []
         for timestep in timesteps:
             graph = HeteroData()
             self._add_node_features(graph, data, timestep)
             self._add_edge_features(graph, data, timestep)
-            graphs.append(graph)   
+            graph = undirected_transform(graph)
+            graphs.append(graph)
         return graphs
 
     def _add_node_features(self, graph: HeteroData, data: Dict, timestep: int) -> None:

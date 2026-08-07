@@ -1,7 +1,9 @@
 # Standard library imports
+import bz2
 import logging
 import math
 import os
+import pickle
 import shutil
 from collections import defaultdict
 from typing import Dict, List, Any, Optional
@@ -149,11 +151,11 @@ class DataProcessor:
         return all_data
 
     def _load_timestep_data(self, timestep: int) -> Dict:
-        """Load data for a specific timestep.
-        
-        Converts flattened parquet data back to nested dictionary structure:
-        - Request/Vehicle features: DataFrame -> dict of dicts
-        - RR/VR graphs: Edge list DataFrame -> nested dict
+        """Load data for a specific timestep from compressed pickle files.
+
+        Request/vehicle feature files are already {node_id: {feature: value}} dicts.
+        RR/VR graph files are flat lists of edge dicts with 'source'/'target' keys,
+        converted here to nested dicts: {source: {target: {features}}}.
 
         Args:
             timestep: The timestep to load data for
@@ -168,46 +170,25 @@ class DataProcessor:
 
         data = {}
         for file in os.scandir(timestep_dir):
-            if file.name.endswith('.parquet'):
-                name = file.name.split('.')[0]
-                try:
-                    df = pd.read_parquet(file.path)
-                    
-                    # Convert to nested dict structure based on data type
-                    if name in [self.r_key, self.v_key]:
-                        # Node features: DataFrame with 'id' column and feature columns
-                        # Convert to dict of dicts: {node_id: {feature: value}}
-                        if not df.empty:
-                            # Look for 'id' column
-                            if 'id' in df.columns:
-                                data[name] = df.set_index('id').to_dict('index')
-                            else:
-                                # Fallback: assume first column is the node ID
-                                id_col = df.columns[0]
-                                data[name] = df.set_index(id_col).to_dict('index')
-                        else:
-                            data[name] = {}
-                    elif name in [self.rr_key, self.vr_key]:
-                        # Edge features: DataFrame with 'source', 'target', and edge features
-                        # Convert to nested dict: {source: {target: {features}}}
-                        nested_dict = {}
-                        if not df.empty and 'source' in df.columns and 'target' in df.columns:
-                            for _, row in df.iterrows():
-                                src = row['source']
-                                tgt = row['target']
-                                # Get all columns except source and target
-                                edge_features = row.drop(['source', 'target']).to_dict()
-                                
-                                if src not in nested_dict:
-                                    nested_dict[src] = {}
-                                nested_dict[src][tgt] = edge_features
-                        data[name] = nested_dict
-                    else:
-                        # Other data types: keep as DataFrame
-                        data[name] = df
-                        
-                except Exception as e:
-                    logger.error(f"Error loading {file.name}: {str(e)}")
+            if not file.name.endswith('_compressed.pkl'):
+                continue
+            name = file.name[:-len('_compressed.pkl')]
+            try:
+                with bz2.BZ2File(file.path, 'rb') as f:
+                    raw = pickle.load(f)
+
+                if name in [self.rr_key, self.vr_key]:
+                    # Flat list of edge dicts -> nested dict {source: {target: {features}}}
+                    nested_dict = {}
+                    for edge in raw:
+                        edge_features = {k: v for k, v in edge.items() if k not in ('source', 'target')}
+                        nested_dict.setdefault(edge['source'], {})[edge['target']] = edge_features
+                    data[name] = nested_dict
+                else:
+                    data[name] = raw
+
+            except Exception as e:
+                logger.error(f"Error loading {file.name}: {str(e)}")
 
         for required_key in [self.r_key, self.v_key, self.rr_key, self.vr_key]:
             if required_key not in data:
@@ -250,23 +231,22 @@ class DataProcessor:
 
         return data
 
-    def create_nx_graphs(self, data: Dict) -> tuple[nx.DiGraph, nx.DiGraph, nx.DiGraph]:
-        """Create NetworkX DiGraphs for request-request, vehicle-request, and combined edges.
+    def create_nx_graphs(self, data: Dict) -> tuple[nx.Graph, nx.Graph, nx.Graph]:
+        """Create undirected NetworkX Graphs for request-request, vehicle-request, and combined edges.
 
         Args:
             data: Dictionary containing raw data for the timestep
 
-        Returns:
-            Tuple of three NetworkX DiGraphs: (G_rr, G_vr, G_combined)
+        Returns            Tuple of three NetworkX Graphs: (G_rr, G_vr, G_combined)
         """
         # Request-Request graph
-        G_rr = nx.DiGraph()
+        G_rr = nx.Graph()
         for src, targets in data[self.rr_key].items():
             for tgt in targets:
                 G_rr.add_edge(f'r{src}', f'r{tgt}')
 
         # Vehicle-Request graph
-        G_vr = nx.DiGraph()
+        G_vr = nx.Graph()
         for veh, targets in data[self.vr_key].items():
             for req in targets:
                 G_vr.add_edge(f'v{veh}', f'r{req}')
@@ -328,14 +308,18 @@ class DataProcessor:
             update_feats(feats, 'nx_combined',
                          centralities['combined'], f'v{veh_id}')
 
-    def _calculate_node_degrees(self, data: Dict, G_rr: nx.DiGraph, G_vr: nx.DiGraph, G_combined: nx.DiGraph) -> tuple[Dict[int, int], Dict[int, int]]:
-        """Calculate in and out degrees for all nodes using NetworkX. Nodes are prefixed with 'r' for requests and 'v' for vehicles.
+    def _calculate_node_degrees(self, data: Dict, G_rr: nx.Graph, G_vr: nx.Graph, G_combined: nx.Graph) -> tuple[Dict[int, int], Dict[int, int]]:
+        """Calculate degrees for all nodes using NetworkX. Nodes are prefixed with 'r' for requests and 'v' for vehicles.
+
+        G_rr/G_vr/G_combined are undirected, so in-degree and out-degree are identical here;
+        both dicts are still returned (and both populated with the same values) so
+        `_add_degree_features` below doesn't need to change.
 
         Args:
             data: Dictionary containing raw data for the timestep
-            G_rr: NetworkX DiGraph for request-request edges
-            G_vr: NetworkX DiGraph for vehicle-request edges
-            G_combined: NetworkX DiGraph for combined edges
+            G_rr: NetworkX Graph for request-request edges
+            G_vr: NetworkX Graph for vehicle-request edges
+            G_combined: NetworkX Graph for combined edges
 
         Returns:
             Tuple of two dictionaries: (in_degrees, out_degrees)
@@ -350,18 +334,15 @@ class DataProcessor:
 
         # Calculate degrees from request-request graph
         for node in G_rr.nodes():
-            rr_in_degrees[node] = G_rr.in_degree(node)
-            rr_out_degrees[node] = G_rr.out_degree(node)
+            rr_in_degrees[node] = rr_out_degrees[node] = G_rr.degree(node)
 
         # Calculate degrees from vehicle-request graph
         for node in G_vr.nodes():
-            vr_in_degrees[node] = G_vr.in_degree(node)
-            vr_out_degrees[node] = G_vr.out_degree(node)
+            vr_in_degrees[node] = vr_out_degrees[node] = G_vr.degree(node)
 
         # Calculate degrees from combined graph
         for node in G_combined.nodes():
-            combined_in_degrees[node] = G_combined.in_degree(node)
-            combined_out_degrees[node] = G_combined.out_degree(node)
+            combined_in_degrees[node] = combined_out_degrees[node] = G_combined.degree(node)
 
             # Add graph-specific degrees
             if node.startswith('r'):
@@ -430,9 +411,9 @@ class DataProcessor:
 
         Args:
             data: Dictionary containing raw data for the timestep
-            G_combined: NetworkX DiGraph representing the combined graph
+            G_combined: NetworkX Graph representing the combined graph
         """
-        def calculate_type_specific_metrics(src, tgt, G, data):
+        def calculate_type_specific_metrics(src, tgt, G, data, is_vr_edge=False):
             """Calculate type-specific neighborhood metrics."""
             if not (G.has_node(src) and G.has_node(tgt)):
                 return {
@@ -460,19 +441,28 @@ class DataProcessor:
 
             # Calculate common neighbors by type
             common_requests = src_req_neighbors & tgt_req_neighbors
-            common_vehicles = src_veh_neighbors & tgt_veh_neighbors
+            if is_vr_edge:
+                # src is a vehicle, and there's no vehicle-vehicle edge type in this graph,
+                # so src_veh_neighbors is always empty - an intersection here is always empty
+                # too. Use the request's other vehicle neighbors (competing vehicles) directly.
+                common_vehicles = tgt_veh_neighbors - {src}
+                exclusive_src_vehicles = set()
+                exclusive_tgt_vehicles = common_vehicles
+            else:
+                common_vehicles = src_veh_neighbors & tgt_veh_neighbors
+                # Calculate exclusive (uncommon) neighbors by type
+                exclusive_src_vehicles = src_veh_neighbors - tgt_veh_neighbors
+                exclusive_tgt_vehicles = tgt_veh_neighbors - src_veh_neighbors
 
             # Calculate exclusive (uncommon) neighbors by type
             exclusive_src_requests = src_req_neighbors - \
                 tgt_req_neighbors  # Only connected to source
             exclusive_tgt_requests = tgt_req_neighbors - \
                 src_req_neighbors  # Only connected to target
-            exclusive_src_vehicles = src_veh_neighbors - tgt_veh_neighbors
-            exclusive_tgt_vehicles = tgt_veh_neighbors - src_veh_neighbors
 
             # Calculate unions by type
             union_requests = src_req_neighbors | tgt_req_neighbors
-            union_vehicles = src_veh_neighbors | tgt_veh_neighbors
+            union_vehicles = common_vehicles if is_vr_edge else src_veh_neighbors | tgt_veh_neighbors
 
             # Calculate total common and union
             total_common = len(common_requests) + len(common_vehicles)
@@ -539,7 +529,10 @@ class DataProcessor:
         for veh, targets in data[self.vr_key].items():
             for req, features in targets.items():
                 metrics = calculate_type_specific_metrics(
-                    f'v{veh}', f'r{req}', G_combined, data)
+                    f'v{veh}', f'r{req}', G_combined, data, is_vr_edge=True)
+                # A vehicle can never have vehicle neighbors (no vehicle-vehicle edges exist),
+                # so this is always 0 for VR edges - not informative here (unlike on RR edges).
+                del metrics['exclusive_src_vehicles']
                 features.update(metrics)
                 # Add competition metrics
                 features['vehicle_competition'] = metrics['common_vehicle_neighbors']
@@ -558,13 +551,10 @@ class DataProcessor:
 
         Args:
             data: Dictionary containing raw data for the timestep
-            G_combined: NetworkX DiGraph representing the combined graph
+            G_combined: NetworkX Graph representing the combined graph
         """
-        # Convert to undirected for clustering calculations
-        G_combined_undir = G_combined.to_undirected()
-
         # Calculate clustering coefficients for the combined graph
-        clustering_combined = nx.clustering(G_combined_undir)
+        clustering_combined = nx.clustering(G_combined)
 
         # Add to all node features
         for req_id, feats in data[self.r_key].items():
@@ -585,14 +575,10 @@ class DataProcessor:
         # For requests
         for _, feats in data[self.r_key].items():
             # Time urgency features
-            time_until_earliest = feats[G_TRAIN_FEATURE_TW_PE] - \
-                current_time  # currently constant
             time_until_latest = feats[G_TRAIN_FEATURE_TW_PL] - current_time
             time_window_width = feats[G_TRAIN_FEATURE_TW_PL] - \
                 feats[G_TRAIN_FEATURE_TW_PE]  # currently constant
             feats.update({
-                # How soon can we serve
-                'time_until_earliest': max(0, time_until_earliest),
                 # How urgent is it
                 'time_until_latest': max(0, time_until_latest),
                 # How flexible is it
@@ -816,7 +802,14 @@ class DataProcessor:
                     edge_feats["assigned_min_max_detour_ratio"] = 0.0
     
     def _extract_travel_costs_from_edge(self, edge_feats: Dict) -> None:
-        """Extract travel costs from edge features. Removes nested structure and overwrites original dict.
+        """Rename raw RR edge travel features to the tt_/td_<pair> keys the rest of this
+        module expects, and drop everything else (e.g. the raw <pair>_travel_cost values).
+
+        Raw RR edges (from GNNAlonsoMoraAssignment.get_travel_time_r2r) are flat:
+        {'o1_o2_travel_time': ..., 'o1_o2_travel_dist': ..., 'o1_o2_travel_cost': ..., ...}
+        for each OD pair - not the nested {'travel_cost': {pair: {...}}} shape this used to
+        assume (stale from an older raw-data format; broke on every edge that actually had
+        RR candidates, since 'travel_cost' was never a top-level key at all).
 
         Args:
             edge_feats: Features of the edge
@@ -824,11 +817,11 @@ class DataProcessor:
         edge_feats_copy = edge_feats.copy()
         edge_feats.clear()
         for prefix, feature_type in [('tt', G_TRAIN_FEATURE_TRAVEL_TIME), ('td', G_TRAIN_FEATURE_TRAVEL_DIST)]:
-            data = {
-                f'{prefix}_{name}': feats.get(feature_type, 0.0)
-                for name, feats in edge_feats_copy[G_TRAIN_FEATURE_TRAVEL_COST].items()
-            }
-            edge_feats.update(data)
+            suffix = f'_{feature_type}'
+            for key, value in edge_feats_copy.items():
+                if key.endswith(suffix):
+                    pair_name = key[:-len(suffix)]
+                    edge_feats[f'{prefix}_{pair_name}'] = value
 
     def _calculate_spatial_proximity(self, edge_feats: Dict) -> Dict:
         """Calculate spatial proximity metrics between two requests.
@@ -1150,15 +1143,6 @@ class DataProcessor:
         )
         ride_sharing_efficiency = 1.0 / (1.0 + extra_time_ratio)
 
-        # --- Time-window based rough compatibility ---------
-        earliest_2 = req2_feats.get(G_TRAIN_FEATURE_TW_PE, 0.0)
-        latest_1 = req1_feats.get(G_TRAIN_FEATURE_TW_PL, 0.0)
-
-        # "If we serve R1 at its latest and drive direct, can we still start R2 on time?"
-        time_gap = earliest_2 - (latest_1 + direct_tt1)
-        temporal_compatibility = 1.0 if time_gap > 0 else 0.0
-        extra_waiting_time = max(0.0, time_gap)
-
         # --- Cap-aware "best" sequence selection ---------------------------------
         feasible_seqs = [
             info for info in seq_infos
@@ -1192,6 +1176,12 @@ class DataProcessor:
             for info in seq_infos
         )
 
+        # Temporal compatibility: is there a pooling sequence where both requests stay within
+        # the detour cap? (Previously derived from a "serve R1 to completion, then start R2"
+        # gap checked against R2's *earliest* window - always negative in practice, since it
+        # compared against the wrong bound and assumed no interleaving of pickups/dropoffs.)
+        temporal_compatibility = float(feasible_under_time_cap)
+
         return {
             # System-level shared ride stats
             "min_shared_ride_time": min_shared_ride_time,
@@ -1205,9 +1195,7 @@ class DataProcessor:
             "ride_sharing_efficiency": ride_sharing_efficiency,
 
             # Rough time-window compatibility
-            "time_gap": time_gap,
             "temporal_compatibility": temporal_compatibility,
-            "extra_waiting_time": extra_waiting_time,
 
             # Time-detour metrics for the chosen "best" sequence
             "max_time_detour_ratio": best["max_detour_ratio_t"],

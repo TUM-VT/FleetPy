@@ -397,10 +397,23 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         return {
             self.config.request_features_key: self.get_req_features(),
             self.config.vehicle_features_key: self.get_veh_features(),
-            self.config.vehicle_request_graph_key: self.get_v2r_graph_with_features(),
-            self.config.request_request_graph_key: self.get_rr_graph_with_features(),
+            # get_v2r/rr_graph_with_features() return flat edge-dict lists (the on-disk
+            # storage format) - DataProcessor._add_graph_features (called right after this,
+            # in _get_gnn_predictions) expects the nested {source: {target: features}} shape.
+            self.config.vehicle_request_graph_key: self._nest_edges(self.get_v2r_graph_with_features()),
+            self.config.request_request_graph_key: self._nest_edges(self.get_rr_graph_with_features()),
             self.config.init_assignment_key: self.current_assignments
         }
+
+    @staticmethod
+    def _nest_edges(flat_edges: List[dict]) -> dict:
+        """Convert a flat list of {'source', 'target', ...features} dicts into a nested
+        {source: {target: features}} dict, matching data_processor.py's _load_timestep_data."""
+        nested = defaultdict(dict)
+        for edge in flat_edges:
+            features = {k: v for k, v in edge.items() if k not in ('source', 'target')}
+            nested[edge['source']][edge['target']] = features
+        return nested
 
     def _get_predictions(self, data: dict):
         """Get predictions from the appropriate model"""
@@ -641,11 +654,13 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         self._gnn_dataloader._add_node_features(graph, data, self.sim_time)
         self._gnn_dataloader._add_edge_features(graph, data, self.sim_time)
 
-        # Apply transformations to match training pipeline
+        # Apply transformations to match training pipeline (NormalizeFeatures() deliberately
+        # not applied - it row-normalizes to sum-to-1 across all columns, flattening every
+        # feature into the same narrow band and erasing the per-column z-score normalization
+        # already done upstream; see gnn_dataloader.py's _create_heterogeneous_graphs)
         undirected_transform = T.ToUndirected(merge=True)
         graph = undirected_transform(graph)
-        graph = T.NormalizeFeatures()(graph)
-        
+
         # Validate feature names if available from training
         self._validate_feature_names(graph)
 

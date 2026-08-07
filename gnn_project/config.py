@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional
 import torch
 from pathlib import Path
 import multiprocessing as mp
@@ -86,6 +86,10 @@ class Config:
     classification_threshold: float = 0.5  # Threshold for binary classification
     num_classes: int = 1  # Binary classification
     hidden_channels: int = 32  # GNN hidden layer size
+    # RR/VR raw edge feature dims - not set by hand; derived from real data (train_utils
+    # infers them from the loaded graphs, or from a saved checkpoint) before the model is built.
+    rr_edge_dim: Optional[int] = None
+    vr_edge_dim: Optional[int] = None
     epochs: int = 500  # Maximum number of training epochs
     batch_size: int = 8  # Number of scenarios per batch
     learning_rate: float = 0.0001  # Learning rate for optimizer

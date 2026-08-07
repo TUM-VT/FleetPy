@@ -8,6 +8,7 @@ from gnn_project.models.hetero_gat import HeteroGAT
 from gnn_project.training.trainer import Trainer
 from gnn_project.dataloaders.gnn_dataloader import GNNDataLoader
 # from gnn_project.dataloaders.edge_dataloader import EdgeDataLoader
+from gnn_project.defaults import RR_EDGE_NAME, VR_EDGE_NAME, RR_EDGE_DIM, VR_EDGE_DIM, MODEL_STATE_DICT
 import torch
 import logging
 
@@ -92,6 +93,29 @@ def load_feature_names(config, experiment_name=None) -> dict:
     return loader.load_feature_names(experiment_name)
 
 
+def infer_edge_dims(data) -> tuple:
+    """Infer RR/VR raw edge feature dims from real graphs, rather than hardcoding them -
+    the RR/VR feature schema changes as features get added/removed upstream in DataProcessor.
+
+    Args:
+        data: List of HeteroData graphs (as returned by a dataloader's load_data()).
+
+    Returns:
+        (rr_edge_dim, vr_edge_dim)
+
+    Raises:
+        ValueError: if no graph in `data` has edges of both types (dims can't be determined).
+    """
+    for graph in data:
+        rr_dim = graph[RR_EDGE_NAME].edge_attr.shape[-1] if graph[RR_EDGE_NAME].num_edges > 0 else None
+        vr_dim = graph[VR_EDGE_NAME].edge_attr.shape[-1] if graph[VR_EDGE_NAME].num_edges > 0 else None
+        if rr_dim is not None and vr_dim is not None:
+            return int(rr_dim), int(vr_dim)
+    raise ValueError(
+        "Could not infer rr_edge_dim/vr_edge_dim: no graph in the loaded data has both RR and VR edges."
+    )
+
+
 def init_model_and_trainer(config, data, masks) -> tuple:
     """Initialize the model and trainer based on the configuration.
 
@@ -104,6 +128,7 @@ def init_model_and_trainer(config, data, masks) -> tuple:
         model: Initialized model.
         trainer: Initialized trainer.
     """
+    config.rr_edge_dim, config.vr_edge_dim = infer_edge_dims(data)
     model = build_model(config)
     optimizer = torch.optim.Adam(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
@@ -153,7 +178,6 @@ def load_saved_model(config) -> torch.nn.Module:
     Returns:
         model: Loaded model.
     """
-    model = build_model(config)
     # Add BaseStorage class to safe globals for loading
     torch.serialization.add_safe_globals([BaseStorage])
     torch.serialization.add_safe_globals(['numpy._core.multiarray.scalar'])
@@ -163,8 +187,21 @@ def load_saved_model(config) -> torch.nn.Module:
     except Exception as e:
         logger.error('Error loading checkpoint with weights_only=False:', exc_info=e)
         checkpoint = torch.load(config.saved_model_path, weights_only=True)
+
+    # Read the RR/VR edge dims the model was trained with (no dataset available here to
+    # infer them from - e.g. this path also runs at pure-inference time in the simulation).
+    if RR_EDGE_DIM not in checkpoint or VR_EDGE_DIM not in checkpoint:
+        raise KeyError(
+            f"Checkpoint at {config.saved_model_path} predates rr_edge_dim/vr_edge_dim "
+            "tracking and can't be safely rebuilt - it was trained on an older feature "
+            "schema and needs to be retrained from scratch, not just reloaded."
+        )
+    config.rr_edge_dim = checkpoint[RR_EDGE_DIM]
+    config.vr_edge_dim = checkpoint[VR_EDGE_DIM]
+    model = build_model(config)
+
     logger.info(f"Loading model from {config.saved_model_path}")
-    model.load_state_dict(checkpoint['model_state_dict'])
+    model.load_state_dict(checkpoint[MODEL_STATE_DICT])
     return model
 
 

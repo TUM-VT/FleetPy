@@ -8,23 +8,29 @@ from gnn_project.defaults import RR_EDGE_NAME, VR_EDGE_NAME, RV_EDGE_NAME, REQUE
 logger = logging.getLogger(__name__)
 
 class HeteroGAT(torch.nn.Module):
-    EDGE_DIM = {
-        RR_EDGE_NAME: 71,
-        VR_EDGE_NAME: 46,
-        RV_EDGE_NAME: 46,
-    }
-
     def __init__(self, config):
         super().__init__()
+        if config.rr_edge_dim is None or config.vr_edge_dim is None:
+            raise ValueError(
+                "config.rr_edge_dim/vr_edge_dim must be set before building HeteroGAT "
+                "(train_utils infers them from loaded graphs, or from a saved checkpoint) - "
+                "they can't be hardcoded since the RR/VR feature schema changes over time."
+            )
         torch.manual_seed(42)
         self.convs = torch.nn.ModuleList()
         self.dropout = Dropout(config.dropout)
         # Add LayerNorms for each layer
         self.layernorms = torch.nn.ModuleList()
-        # Initialize projection layers for each edge type
+        # Initialize projection layers for each edge type. RV shares VR's edge_attr (and thus
+        # its dim) since it's created by T.ToUndirected(merge=True) on the VR edges.
         self.edge_projs = torch.nn.ModuleDict()
         self.edge_stack_dim = config.hidden_channels * 3  # src + edge_attr + tgt
-        for et, dim in HeteroGAT.EDGE_DIM.items():
+        edge_dim = {
+            RR_EDGE_NAME: config.rr_edge_dim,
+            VR_EDGE_NAME: config.vr_edge_dim,
+            RV_EDGE_NAME: config.vr_edge_dim,
+        }
+        for et, dim in edge_dim.items():
             key = f"edge_proj_{et}"
             self.edge_projs[key] = Linear(dim, config.hidden_channels)
 

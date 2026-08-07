@@ -51,6 +51,8 @@ MAXS = 'maxs'
 
 MODEL_STATE_DICT = 'model_state_dict'
 POS_WEIGHT = 'pos_weight'
+RR_EDGE_DIM = 'rr_edge_dim'
+VR_EDGE_DIM = 'vr_edge_dim'
 
 RR_EDGE_NAME = ('request', 'connects', 'request')
 VR_EDGE_NAME = ('vehicle', 'connects', 'request')
