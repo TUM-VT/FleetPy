@@ -1,50 +1,42 @@
 """
 run_experiment.py
 
-Simple script to load config, prepare data, and train or load the model.
+Loads the peak-hours 8-day scenario data, builds/normalizes graphs, and trains
+the GNN model. Run from anywhere - paths are resolved relative to this file.
 """
 import logging
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
 from gnn_project.config import Config
-from gnn_project.training.train_utils import train_or_load_model, load_data
+from gnn_project.training.train_utils import train_or_load_model
 
 
 def main():
-    # --------------------------------------------------
-    # 1. Load configuration
-    # --------------------------------------------------
     config = Config(
-        ml_data_dir=Path('/Users/hoda_hamdy/Documents/Projects/fleetpy/FleetPy/gnn_project/data'),
-        experiment_name='gnn_v1',
-        sim_start=0,
-        sim_end=2*60*60,
+        ml_data_dir=Path(__file__).resolve().parent / 'data',
+        experiment_name='gnn_peak8day',
+        scenario_names={'manhattan_case_study': [
+            'gnn_peak_2018-11-11', 'gnn_peak_2018-11-12',
+            'gnn_peak_2018-11-13', 'gnn_peak_2018-11-14',  # train
+            'gnn_peak_2018-11-15', 'gnn_peak_2018-11-17',  # val (weekday + weekend)
+            'gnn_peak_2018-11-16', 'gnn_peak_2018-11-18',  # test (weekday + weekend)
+        ]},
+        train_ratio=0.5, val_ratio=0.25, test_ratio=0.25,
+        sim_start=25200, sim_end=36000, sim_step=30,
         overwrite_data=False,
         load_saved_model=False,
-        log_level='DEBUG',
+        log_level='INFO',
     )
 
-    print("Running experiment with model:", config.model_type)
-    print("Device:", config.device)
-
     logging.basicConfig(level=config.log_level)
+    print("Model:", config.model_type, "| Device:", config.device)
 
-    # --------------------------------------------------
-    # 2. Load dataset (optional: allow reuse)
-    # --------------------------------------------------
-    print("Loading data...")
-    data, masks = load_data(config)
-
-    # --------------------------------------------------
-    # 3. Train or load model
-    # --------------------------------------------------
-    print("Training or loading model...")
-    model, _ = train_or_load_model(config, data=data, masks=masks)
-
-    print("Done!")
+    model, _ = train_or_load_model(config)
+    print("Done! Model saved to", config.saved_model_path)
 
 
 if __name__ == "__main__":
