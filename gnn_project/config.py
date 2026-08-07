@@ -86,8 +86,7 @@ class Config:
     classification_threshold: float = 0.5  # Threshold for binary classification
     num_classes: int = 1  # Binary classification
     hidden_channels: int = 32  # GNN hidden layer size
-    # RR/VR raw edge feature dims - not set by hand; derived from real data (train_utils
-    # infers them from the loaded graphs, or from a saved checkpoint) before the model is built.
+    # set by train_utils from real data before model build, not hardcoded
     rr_edge_dim: Optional[int] = None
     vr_edge_dim: Optional[int] = None
     epochs: int = 500  # Maximum number of training epochs

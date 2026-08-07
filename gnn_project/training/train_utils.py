@@ -94,8 +94,7 @@ def load_feature_names(config, experiment_name=None) -> dict:
 
 
 def infer_edge_dims(data) -> tuple:
-    """Infer RR/VR raw edge feature dims from real graphs, rather than hardcoding them -
-    the RR/VR feature schema changes as features get added/removed upstream in DataProcessor.
+    """Infer RR/VR raw edge feature dims from real graphs instead of hardcoding them.
 
     Args:
         data: List of HeteroData graphs (as returned by a dataloader's load_data()).
@@ -104,7 +103,7 @@ def infer_edge_dims(data) -> tuple:
         (rr_edge_dim, vr_edge_dim)
 
     Raises:
-        ValueError: if no graph in `data` has edges of both types (dims can't be determined).
+        ValueError: if no graph in `data` has edges of both types.
     """
     for graph in data:
         rr_dim = graph[RR_EDGE_NAME].edge_attr.shape[-1] if graph[RR_EDGE_NAME].num_edges > 0 else None
@@ -188,13 +187,11 @@ def load_saved_model(config) -> torch.nn.Module:
         logger.error('Error loading checkpoint with weights_only=False:', exc_info=e)
         checkpoint = torch.load(config.saved_model_path, weights_only=True)
 
-    # Read the RR/VR edge dims the model was trained with (no dataset available here to
-    # infer them from - e.g. this path also runs at pure-inference time in the simulation).
+    # no dataset available at pure-inference time, so read dims from the checkpoint
     if RR_EDGE_DIM not in checkpoint or VR_EDGE_DIM not in checkpoint:
         raise KeyError(
             f"Checkpoint at {config.saved_model_path} predates rr_edge_dim/vr_edge_dim "
-            "tracking and can't be safely rebuilt - it was trained on an older feature "
-            "schema and needs to be retrained from scratch, not just reloaded."
+            "tracking - needs to be retrained, not just reloaded."
         )
     config.rr_edge_dim = checkpoint[RR_EDGE_DIM]
     config.vr_edge_dim = checkpoint[VR_EDGE_DIM]

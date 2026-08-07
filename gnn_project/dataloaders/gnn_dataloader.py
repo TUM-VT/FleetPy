@@ -603,13 +603,10 @@ class GNNDataLoader:
                 timesteps = []
         else:
             timesteps = []
-        # RV_EDGE_NAME (the reverse of VR) only exists via this transform - the model
-        # (HeteroGAT) always builds a conv for it, so a graph without it crashes GATConv
-        # the moment it's used, on every single training batch. Was silently dropped in
-        # commit e8c476d - restoring it. (NormalizeFeatures() used to be applied here too,
-        # but deliberately dropped now: it row-normalizes to sum-to-1 across ALL columns,
-        # which flattens every feature - continuous, binary, one-hot alike - into the same
-        # narrow band, erasing the per-column z-score normalization done just before this.)
+        # RV_EDGE_NAME only exists via this transform; HeteroGAT always builds a conv for
+        # it, so training crashes without it.
+        # NormalizeFeatures() is deliberately not applied: it row-normalizes all columns
+        # to sum to 1, which would erase the z-score normalization done just before this.
         undirected_transform = T.ToUndirected(merge=True)
 
         graphs = []

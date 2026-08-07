@@ -153,9 +153,7 @@ class DataProcessor:
     def _load_timestep_data(self, timestep: int) -> Dict:
         """Load data for a specific timestep from compressed pickle files.
 
-        Request/vehicle feature files are already {node_id: {feature: value}} dicts.
-        RR/VR graph files are flat lists of edge dicts with 'source'/'target' keys,
-        converted here to nested dicts: {source: {target: {features}}}.
+        RR/VR files are flat edge-dict lists, converted here to nested dicts.
 
         Args:
             timestep: The timestep to load data for
@@ -232,12 +230,16 @@ class DataProcessor:
         return data
 
     def create_nx_graphs(self, data: Dict) -> tuple[nx.Graph, nx.Graph, nx.Graph]:
-        """Create undirected NetworkX Graphs for request-request, vehicle-request, and combined edges.
+        """Create undirected request-request/vehicle-request/combined graphs.
+
+        Undirected since compatibility is symmetric, but the raw data only stores
+        one direction per pair - directed graphs made neighbor/degree features one-sided.
 
         Args:
             data: Dictionary containing raw data for the timestep
 
-        Returns            Tuple of three NetworkX Graphs: (G_rr, G_vr, G_combined)
+        Returns:
+            Tuple of three NetworkX Graphs: (G_rr, G_vr, G_combined)
         """
         # Request-Request graph
         G_rr = nx.Graph()
@@ -309,11 +311,10 @@ class DataProcessor:
                          centralities['combined'], f'v{veh_id}')
 
     def _calculate_node_degrees(self, data: Dict, G_rr: nx.Graph, G_vr: nx.Graph, G_combined: nx.Graph) -> tuple[Dict[int, int], Dict[int, int]]:
-        """Calculate degrees for all nodes using NetworkX. Nodes are prefixed with 'r' for requests and 'v' for vehicles.
+        """Calculate degrees for all nodes. Nodes are prefixed 'r'/'v' for requests/vehicles.
 
-        G_rr/G_vr/G_combined are undirected, so in-degree and out-degree are identical here;
-        both dicts are still returned (and both populated with the same values) so
-        `_add_degree_features` below doesn't need to change.
+        Graphs are undirected, so in/out degree are identical; both dicts are still
+        returned so `_add_degree_features` doesn't need to change.
 
         Args:
             data: Dictionary containing raw data for the timestep
@@ -442,9 +443,8 @@ class DataProcessor:
             # Calculate common neighbors by type
             common_requests = src_req_neighbors & tgt_req_neighbors
             if is_vr_edge:
-                # src is a vehicle, and there's no vehicle-vehicle edge type in this graph,
-                # so src_veh_neighbors is always empty - an intersection here is always empty
-                # too. Use the request's other vehicle neighbors (competing vehicles) directly.
+                # src is a vehicle - it has no vehicle neighbors, so intersecting is always
+                # empty. Use the request's other vehicle neighbors (competing vehicles) instead.
                 common_vehicles = tgt_veh_neighbors - {src}
                 exclusive_src_vehicles = set()
                 exclusive_tgt_vehicles = common_vehicles
@@ -530,8 +530,7 @@ class DataProcessor:
             for req, features in targets.items():
                 metrics = calculate_type_specific_metrics(
                     f'v{veh}', f'r{req}', G_combined, data, is_vr_edge=True)
-                # A vehicle can never have vehicle neighbors (no vehicle-vehicle edges exist),
-                # so this is always 0 for VR edges - not informative here (unlike on RR edges).
+                # always 0 for VR edges (vehicles have no vehicle neighbors), unlike on RR
                 del metrics['exclusive_src_vehicles']
                 features.update(metrics)
                 # Add competition metrics
@@ -803,13 +802,7 @@ class DataProcessor:
     
     def _extract_travel_costs_from_edge(self, edge_feats: Dict) -> None:
         """Rename raw RR edge travel features to the tt_/td_<pair> keys the rest of this
-        module expects, and drop everything else (e.g. the raw <pair>_travel_cost values).
-
-        Raw RR edges (from GNNAlonsoMoraAssignment.get_travel_time_r2r) are flat:
-        {'o1_o2_travel_time': ..., 'o1_o2_travel_dist': ..., 'o1_o2_travel_cost': ..., ...}
-        for each OD pair - not the nested {'travel_cost': {pair: {...}}} shape this used to
-        assume (stale from an older raw-data format; broke on every edge that actually had
-        RR candidates, since 'travel_cost' was never a top-level key at all).
+        module expects (raw keys are flat, e.g. 'o1_o2_travel_time'), dropping the rest.
 
         Args:
             edge_feats: Features of the edge
@@ -1176,10 +1169,8 @@ class DataProcessor:
             for info in seq_infos
         )
 
-        # Temporal compatibility: is there a pooling sequence where both requests stay within
-        # the detour cap? (Previously derived from a "serve R1 to completion, then start R2"
-        # gap checked against R2's *earliest* window - always negative in practice, since it
-        # compared against the wrong bound and assumed no interleaving of pickups/dropoffs.)
+        # reuses the detour-cap feasibility check computed above, since it already
+        # captures whether some pooling sequence keeps both requests within the cap
         temporal_compatibility = float(feasible_under_time_cap)
 
         return {

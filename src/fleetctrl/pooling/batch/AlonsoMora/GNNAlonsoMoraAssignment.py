@@ -397,9 +397,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         return {
             self.config.request_features_key: self.get_req_features(),
             self.config.vehicle_features_key: self.get_veh_features(),
-            # get_v2r/rr_graph_with_features() return flat edge-dict lists (the on-disk
-            # storage format) - DataProcessor._add_graph_features (called right after this,
-            # in _get_gnn_predictions) expects the nested {source: {target: features}} shape.
+            # get_v2r/rr_graph_with_features() return flat lists; _add_graph_features needs nested dicts
             self.config.vehicle_request_graph_key: self._nest_edges(self.get_v2r_graph_with_features()),
             self.config.request_request_graph_key: self._nest_edges(self.get_rr_graph_with_features()),
             self.config.init_assignment_key: self.current_assignments
@@ -654,10 +652,7 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         self._gnn_dataloader._add_node_features(graph, data, self.sim_time)
         self._gnn_dataloader._add_edge_features(graph, data, self.sim_time)
 
-        # Apply transformations to match training pipeline (NormalizeFeatures() deliberately
-        # not applied - it row-normalizes to sum-to-1 across all columns, flattening every
-        # feature into the same narrow band and erasing the per-column z-score normalization
-        # already done upstream; see gnn_dataloader.py's _create_heterogeneous_graphs)
+        # NormalizeFeatures() deliberately not applied here - see gnn_dataloader.py
         undirected_transform = T.ToUndirected(merge=True)
         graph = undirected_transform(graph)
 
