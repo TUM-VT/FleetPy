@@ -30,6 +30,10 @@ def main():
         overwrite_data=False,
         load_saved_model=False,
         log_level='INFO',
+        # fresh-processing multiple uncached days concurrently stacks memory per-thread
+        # (measured ~9-13GB for a single day) - keep it sequential to bound peak usage
+        max_workers=1,
+        epochs=50,
     )
 
     logging.basicConfig(level=config.log_level)
