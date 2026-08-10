@@ -253,7 +253,14 @@ class SUMOFleetPyServer():
                 "--time-to-teleport", str(self.fp_sim_env.scenario_parameters.get(G_SUMO_TIME_TO_TELEPORT, 300)),
                 "--time-to-teleport.highways", str(self.fp_sim_env.scenario_parameters.get(G_SUMO_TIME_TO_TELEPORT_HIGHWAYS, 0)),
                 "--eager-insert", str(self.fp_sim_env.scenario_parameters.get(G_SUMO_EAGER_INSERT, False)),
-                ]    
+                # Event-overlay cells block lanes mid-run. Edge 29119849#1
+                # carries PT routes, so a blockage can leave a bus with no path
+                # to its fixed stop, and SUMO treats that as fatal: the whole
+                # co-simulation aborts partway through. This downgrades it to a
+                # warning and drops the un-routable vehicle. Harmless on the
+                # no-event cells, which have no un-routable vehicles to drop.
+                "--ignore-route-errors", str(True),
+                ]
      
         traci.start(sumoCmd)
         print(f"SUMO-Simulation Initialized at t={self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME)}")
