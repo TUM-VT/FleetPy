@@ -92,8 +92,14 @@ class GNNDataLoader:
 
         # Step 1: Load or process feature dicts
         train_size = int(self.config.train_ratio * len(self.scenario_paths))
-        raw_scenario_data, scenario_sizes = self._load_or_process_feature_dicts(
-            train_size)
+        raw_scenario_data, scenario_sizes = self._load_or_process_feature_dicts()
+
+        # Step 1b: One-hot encode categorical features, fit from all training scenarios
+        # together so every scenario ends up with the same columns (see _fit_onehot_columns)
+        self._fit_onehot_columns([data for _, data in raw_scenario_data[:train_size]])
+        self._save_onehot_columns()
+        raw_scenario_data = [(name, self._encode_categorical_features(data))
+                             for name, data in raw_scenario_data]
 
         # Step 2: If norm stats missing or forced recomputation, compute them
         norm_stats_exist = (self.config.norm_stats_dir / MEANS_FILE).exists()
@@ -141,30 +147,28 @@ class GNNDataLoader:
         masks = {TRAIN_MASKS: train_masks, VAL_MASKS: val_masks, TEST_MASKS: test_masks}
         return masks
 
-    def _load_or_process_feature_dicts(self, train_size: int) -> tuple[List[Tuple[str, Dict]], List[int]]:
+    def _load_or_process_feature_dicts(self) -> tuple[List[Tuple[str, Dict]], List[int]]:
         """Load or process feature dicts for all scenarios."""
         # Use parallel processing if enabled and we have multiple scenarios
         if getattr(self.config, 'use_parallel_processing', True) and len(self.scenario_paths) > 1:
-            return self._load_or_process_feature_dicts_parallel(train_size)
+            return self._load_or_process_feature_dicts_parallel()
         else:
             # Sequential processing (original behavior)
-            return self._load_or_process_feature_dicts_sequential(train_size)
-    
-    def _load_or_process_feature_dicts_sequential(self, train_size: int) -> tuple[List[Tuple[str, Dict]], List[int]]:
+            return self._load_or_process_feature_dicts_sequential()
+
+    def _load_or_process_feature_dicts_sequential(self) -> tuple[List[Tuple[str, Dict]], List[int]]:
         """Sequential version of scenario processing (original behavior)."""
         norm_stats_exist = (self.config.norm_stats_dir / MEANS_FILE).exists()
         raw_scenario_data = []
         scenario_sizes = []
         
-        for idx, scenario_path in enumerate(tqdm(self.scenario_paths, desc="Loading/Processing feature dicts")):
+        for scenario_path in tqdm(self.scenario_paths, desc="Loading/Processing feature dicts"):
             scenario_name = self._get_scenario_name(scenario_path)
             data = None
             if norm_stats_exist:
                 data = self._try_load_feature_dict(scenario_name)
             if data is None:
-                is_training = idx < train_size
-                data = self._process_raw_data(
-                    scenario_path, scenario_name, is_training=is_training)
+                data = self._process_raw_data(scenario_path, scenario_name)
                 self._save_feature_dict(data, scenario_name)
             raw_scenario_data.append((scenario_name, data))
             
@@ -178,7 +182,7 @@ class GNNDataLoader:
             
         return raw_scenario_data, scenario_sizes
     
-    def _load_or_process_feature_dicts_parallel(self, train_size: int) -> tuple[List[Tuple[str, Dict]], List[int]]:
+    def _load_or_process_feature_dicts_parallel(self) -> tuple[List[Tuple[str, Dict]], List[int]]:
         """Parallel version of scenario processing.
         
         Uses ThreadPoolExecutor for better compatibility and error handling.
@@ -250,8 +254,7 @@ class GNNDataLoader:
                 for idx, scenario_path in tqdm(scenarios_needing_processing, desc="Processing raw data"):
                     try:
                         scenario_name = self._get_scenario_name(scenario_path)
-                        is_training = idx < train_size
-                        data = self._process_raw_data(scenario_path, scenario_name, is_training=is_training)
+                        data = self._process_raw_data(scenario_path, scenario_name)
                         self._save_feature_dict(data, scenario_name)
                         
                         req_key = self.config.request_features_key
@@ -270,7 +273,7 @@ class GNNDataLoader:
             
         except Exception as e:
             logger.warning(f"Parallel processing failed: {e}. Falling back to sequential processing.")
-            return self._load_or_process_feature_dicts_sequential(train_size)
+            return self._load_or_process_feature_dicts_sequential()
 
     def _try_load_feature_dict_simple(self, scenario_name: str) -> Optional[Dict]:
         """Simplified version of feature dict loading for parallel processing."""
@@ -430,27 +433,23 @@ class GNNDataLoader:
         scenario_path = os.path.normpath(scenario_path)
         return os.path.basename(scenario_path)
 
-    def _process_raw_data(self, scenario_path: str, scenario_name: str, is_training: bool = False) -> dict:
-        """Process raw data into graph format.
+    def _process_raw_data(self, scenario_path: str, scenario_name: str) -> dict:
+        """Process raw data for a scenario. Not one-hot encoded yet - that happens once
+        columns have been fit across all training scenarios, see _fit_onehot_columns.
 
         Args:
             scenario_path: Path to the scenario directory
             scenario_name: Name of the scenario
-            is_training: Whether this is training data (to set one-hot columns)
 
         Returns:
-            List of processed data dicts
+            Dict of raw (pre-onehot) processed dataframes
         """
         train_data_dir = os.path.join(
             scenario_path, self.config.train_data_dir)
         prefer_processed = not self.enable_overwrite_data
         processor = DataProcessor(
             train_data_dir, self.config, prefer_processed=prefer_processed)
-        data = processor.process_data(scenario_name)
-        data = self._encode_categorical_features(data, is_training=is_training)
-        if is_training:
-            self._save_onehot_columns()
-        return data
+        return processor.process_data(scenario_name)
 
     # ... rest of the methods remain the same as original implementation ...
 
@@ -511,12 +510,31 @@ class GNNDataLoader:
         graphs = self._create_heterogeneous_graphs(normalized_data)
         return graphs
 
-    def _encode_categorical_features(self, data: Dict, is_training: bool = False) -> Dict:
-        """Transform categorical features to one-hot encoded features, ensuring consistent columns.
+    def _fit_onehot_columns(self, training_raw_data: List[Dict]) -> None:
+        """Fit one-hot columns from the union of categories across all training scenarios.
+
+        Fitting from a single scenario at a time (the previous approach) gives each
+        scenario a different column count whenever a category value only appears on
+        some days (e.g. a vehicle status seen on one day but not another) - graphs
+        with different feature widths then fail to batch together.
+        """
+        for feature_type, categories in self.config.categorical_features.items():
+            frames = [d[feature_type] for d in training_raw_data
+                     if feature_type in d and isinstance(d[feature_type], pd.DataFrame) and not d[feature_type].empty]
+            if not frames:
+                continue
+            combined = pd.concat(frames, ignore_index=True)
+            categories_present = [c for c in categories if c in combined.columns]
+            if not categories_present:
+                continue
+            temp = pd.get_dummies(combined, columns=categories_present, dtype=float)
+            self._onehot_columns[feature_type] = temp.columns.tolist()
+
+    def _encode_categorical_features(self, data: Dict) -> Dict:
+        """Apply the fitted one-hot columns (from _fit_onehot_columns) to a scenario's data.
 
         Args:
             data: Dictionary of dataframes for different feature types
-            is_training: Whether this is training data (to set one-hot columns)
 
         Returns:
             Updated data dictionary with one-hot encoded categorical features
@@ -525,15 +543,15 @@ class GNNDataLoader:
             if feature_type not in data or data[feature_type].empty or not categories:
                 continue
 
-            categories = [
+            categories_present = [
                 cat for cat in categories if cat in data[feature_type].columns]
             temp = pd.get_dummies(
-                data[feature_type], columns=categories, dtype=float)
+                data[feature_type], columns=categories_present, dtype=float)
 
-            if is_training or feature_type not in self._onehot_columns:
+            if feature_type not in self._onehot_columns:
+                # no training scenario had this feature type - fall back to this scenario's own columns
                 self._onehot_columns[feature_type] = temp.columns.tolist()
             else:
-                # Add missing columns and reorder to match training
                 for col in self._onehot_columns[feature_type]:
                     if col not in temp.columns:
                         temp[col] = 0.0

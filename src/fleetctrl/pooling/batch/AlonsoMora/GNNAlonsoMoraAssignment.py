@@ -463,9 +463,9 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         # Log data statistics for debugging
         self._log_data_statistics(data_dfs, "After DataFrame conversion")
 
-        # 3. Encode categorical features (Must be done BEFORE normalization)
-        # Pass is_training=False to use saved one-hot columns from training
-        encoded_data = self._gnn_dataloader._encode_categorical_features(data_dfs, is_training=False)
+        # 3. Encode categorical features (Must be done BEFORE normalization), using the
+        # one-hot columns fitted during training (loaded via GNNDataLoader.__init__)
+        encoded_data = self._gnn_dataloader._encode_categorical_features(data_dfs)
         
         # Validation: Check that one-hot encoding was applied correctly
         for key, expected_cols in self._gnn_dataloader._onehot_columns.items():
