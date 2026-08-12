@@ -1,6 +1,7 @@
 import logging
 import pickle
 import os
+import time
 from typing import Dict, List, Callable
 from collections import defaultdict
 import pandas as pd
@@ -78,8 +79,10 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
                 G_OP_MODEL_TYPE, self.MODEL_TYPE_DEFAULT)  # 'xgboost' or 'gnn'
             self.ml_selection_method = operator_attributes.get(
                 G_OP_ML_SELECTION_METHOD, self.ML_SELECTION_METHOD_DEFAULT)  # 'threshold' or 'top_k_vehicles'
-            self.top_k_vr = operator_attributes.get(G_OP_TOP_K_VR, self.TOP_K_VR_DEFAULT)
-            self.top_k_rr = operator_attributes.get(G_OP_TOP_K_RR, self.TOP_K_RR_DEFAULT)
+            # int(): scenario CSV columns with blank cells in other rows get parsed as
+            # float64 by pandas (e.g. 999 -> 999.0), which nlargest() rejects as n
+            self.top_k_vr = int(operator_attributes.get(G_OP_TOP_K_VR, self.TOP_K_VR_DEFAULT))
+            self.top_k_rr = int(operator_attributes.get(G_OP_TOP_K_RR, self.TOP_K_RR_DEFAULT))
             self.prediction_threshold = operator_attributes.get(
                 G_OP_PREDICTION_THRESHOLD, self.PREDICTION_THRESHOLD_DEFAULT)
         
@@ -93,7 +96,9 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         # Initialize Config
         self.config = Config(
             ml_data_dir=os.path.join(self.fleetcontrol.dir_names[G_DIR_MAIN], 'gnn_project/data'),
-            experiment_name=self.EXPERIMENT_NAME,
+            # blank scenario-CSV cells show up as a present key with value None/NaN, which
+            # defeats dict.get()'s default - "or" catches that as well as a missing key
+            experiment_name=operator_attributes.get(G_OP_ML_EXPERIMENT_NAME) or self.EXPERIMENT_NAME,
             sim_start=0,
             sim_end=2*60*60,
             load_saved_model=True,
@@ -378,12 +383,22 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
                 self.train_data_path, self.config, prefer_processed=False)
 
         # Get current timestep data using existing data collection methods
+        t0 = time.time()
         data = self._get_current_timestep_data()
+        t_collect = time.time()
 
         try:
             # Get predictions and update connections
             edges_df = self._get_predictions(data)
+            t_predict = time.time()
             self._save_predictions(edges_df)
+            t_save = time.time()
+            LOG.info(
+                "ML TIMING {}: collect_features {:.3f}s | predict (incl. graph_features) {:.3f}s | "
+                "save_predictions {:.3f}s | total {:.3f}s".format(
+                    self.sim_time, t_collect - t0, t_predict - t_collect,
+                    t_save - t_predict, t_save - t0)
+            )
 
         except Exception as e:
             LOG.error(f"Error during prediction with {self.model_type}: {e}")
@@ -448,47 +463,62 @@ class GNNAlonsoMoraAssignment(AlonsoMoraAssignmentOriginal):
         Returns:
             DataFrame with predictions (source, target, pred_score, edge_type) or None if error
         """
+        stage_times = {}
+        t = time.time()
+
         # 1. Add graph features (in-place modification of data dicts)
         self._data_processor._add_graph_features(self.sim_time, data)
+        stage_times['add_graph_features'] = time.time() - t; t = time.time()
 
         # 2. Convert to DataFrames and map IDs to 0-based indices
         data_dfs, req_id_to_idx, veh_id_to_idx = self._convert_to_dataframes(
             data)
-        
+        stage_times['convert_to_dataframes'] = time.time() - t; t = time.time()
+
         # Validation: Check if we have data to predict on
         if not data_dfs:
             LOG.warning("No data available after DataFrame conversion.")
             return None
-        
+
         # Log data statistics for debugging
         self._log_data_statistics(data_dfs, "After DataFrame conversion")
 
         # 3. Encode categorical features (Must be done BEFORE normalization), using the
         # one-hot columns fitted during training (loaded via GNNDataLoader.__init__)
         encoded_data = self._gnn_dataloader._encode_categorical_features(data_dfs)
-        
+        stage_times['encode_categorical'] = time.time() - t; t = time.time()
+
         # Validation: Check that one-hot encoding was applied correctly
         for key, expected_cols in self._gnn_dataloader._onehot_columns.items():
             if key in encoded_data and isinstance(encoded_data[key], pd.DataFrame):
                 actual_cols = encoded_data[key].columns.tolist()
                 if set(expected_cols) != set(actual_cols):
                     LOG.warning(f"Column mismatch for {key}. Expected {len(expected_cols)} columns, got {len(actual_cols)}.")
-        
+
         # Log data statistics after encoding
         self._log_data_statistics(encoded_data, "After one-hot encoding")
-        
+
         # 4. Normalize features
         normalized_data = self._gnn_dataloader._normalize_data(
             encoded_data)
+        stage_times['normalize'] = time.time() - t; t = time.time()
 
         # 5. Create HeteroData Graph
         graph = self._create_hetero_graph(normalized_data)
-        
+        stage_times['create_hetero_graph'] = time.time() - t; t = time.time()
+
         # Validation: Check graph structure and dimensions
         self._validate_graph_structure(graph)
 
         # 6. Predict
-        return self._predict_with_gnn(graph, req_id_to_idx, veh_id_to_idx)
+        result = self._predict_with_gnn(graph, req_id_to_idx, veh_id_to_idx)
+        stage_times['gnn_predict'] = time.time() - t
+
+        LOG.info("ML STAGE TIMING {}: {}".format(
+            self.sim_time,
+            " | ".join(f"{k} {v:.3f}s" for k, v in stage_times.items())
+        ))
+        return result
 
     def _validate_graph_structure(self, graph: HeteroData) -> None:
         """Validate that the graph structure matches expectations.

@@ -331,6 +331,7 @@ G_OP_TOP_K_RR = "op_top_k_rr"
 G_OP_PREDICTION_THRESHOLD = "op_prediction_threshold"
 G_OP_FILE_FORMAT = "op_file_format"
 G_OP_TRAIN_DATA_DIR = "op_train_data_dir"
+G_OP_ML_EXPERIMENT_NAME = "op_ml_experiment_name"
 
 
 # -------------------------------------------------------------------------------------------------------------------- #

@@ -503,6 +503,7 @@ class AlonsoMoraAssignmentOriginal(BatchAssignmentAlgorithmBase):
                     m.optimize()  # optimization
                     LOG.info("=========")
                     LOG.info("OPT TIME {}:".format(self.sim_time))
+                    LOG.info("solve time {:.3f}s".format(m.Runtime))
                     LOG.info("solution status {}".format(m.status))
                     LOG.info("number solutions {}".format(m.SolCount))
                     LOG.info("number opt requests {} | number revealed requests {} | number active requests: {}".format(len(

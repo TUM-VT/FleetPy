@@ -5,6 +5,7 @@ import math
 import os
 import pickle
 import shutil
+import time
 from collections import defaultdict
 from typing import Dict, List, Any, Optional
 from pathlib import Path
@@ -205,27 +206,42 @@ class DataProcessor:
         Returns:
             Updated data dictionary with added graph features
         """
+        sub_times = {}
+        t = time.time()
+
         # Add domain-specific features first
         self._add_temporal_features(timestep, data)
         self._add_spatial_features(data)
         self._add_competition_features(data)
+        sub_times['temporal_spatial_competition'] = time.time() - t; t = time.time()
 
         # Create NetworkX graphs
         G_rr, G_vr, G_combined = self.create_nx_graphs(data)
+        sub_times['create_nx_graphs'] = time.time() - t; t = time.time()
 
         # Add basic node features using the combined graph
         in_degrees, out_degrees = self._calculate_node_degrees(
             data, G_rr, G_vr, G_combined)
         self._add_degree_features(data, in_degrees, out_degrees)
+        sub_times['degree_features'] = time.time() - t; t = time.time()
 
         # Add topological features using NetworkX
-        self._add_neighborhood_features(data, G_combined)
+        # neighborhood_features/centrality_features removed: per-feature ablation on a
+        # trained model found ~zero effect on VR/RR accuracy from every field they produced
+        # (all neighborhood/jaccard/overlap/competition columns, all centrality columns),
+        # while together they were ~90% of this method's runtime.
         self._add_clustering_features(data, G_combined)
-        self._add_centrality_features(data, G_rr, G_vr, G_combined)
+        sub_times['clustering_features'] = time.time() - t; t = time.time()
 
         # Add edge-specific features
         self._add_edge_compatibility_features(timestep, data)
+        sub_times['edge_compatibility_features'] = time.time() - t; t = time.time()
         self._add_assignment_features(data)
+        sub_times['assignment_features'] = time.time() - t
+
+        logger.info("ADD_GRAPH_FEATURES SUBSTEP TIMING {}: {}".format(
+            timestep, " | ".join(f"{k} {v:.3f}s" for k, v in sub_times.items())
+        ))
 
         return data
 
@@ -257,58 +273,6 @@ class DataProcessor:
         G_combined = nx.compose(G_rr, G_vr)
 
         return G_rr, G_vr, G_combined
-
-    def _add_centrality_features(self, data: Dict, G_rr, G_vr, G_combined) -> None:
-        """Add centrality features using the combined graph.
-
-        Calculate centrality measures on the complete heterogeneous graph structure,
-        as this better represents the actual graph that the GNN will process.
-
-        Selected centrality measures:
-        - Degree centrality: Direct connectivity in the complete graph
-        - Betweenness centrality: Path importance considering all node types
-        - PageRank: Global importance in the heterogeneous network
-        - Closeness centrality: Proximity to all other nodes in the complete graph
-        """
-
-        def calculate_centralities(G):
-            centralities = {
-                'degree': nx.degree_centrality(G),
-                'betweenness': nx.betweenness_centrality(G),
-                'pagerank': nx.pagerank(G),
-            }
-            try:
-                centralities['closeness'] = nx.closeness_centrality(G)
-            except Exception as e:
-                logger.warning(
-                    f"Warning: Could not calculate closeness centrality: {str(e)}")
-                centralities['closeness'] = {node: 0.0 for node in G.nodes()}
-            return centralities
-
-        centralities = {
-            'rr': calculate_centralities(G_rr) if len(G_rr) > 0 else None,
-            'vr': calculate_centralities(G_vr) if len(G_vr) > 0 else None,
-            'combined': calculate_centralities(G_combined) if len(G_combined) > 0 else None
-        }
-
-        def update_feats(feats, prefix, cdict, node_id):
-            if cdict:
-                feats.update({
-                    f'{prefix}_degree_centrality': cdict['degree'].get(node_id, 0.0),
-                    f'{prefix}_betweenness_centrality': cdict['betweenness'].get(node_id, 0.0),
-                    f'{prefix}_closeness_centrality': cdict['closeness'].get(node_id, 0.0),
-                    f'{prefix}_pagerank': cdict['pagerank'].get(node_id, 0.0)
-                })
-
-        for req_id, feats in data[self.r_key].items():
-            update_feats(feats, 'nx_rr', centralities['rr'], f'r{req_id}')
-            update_feats(feats, 'nx_combined',
-                         centralities['combined'], f'r{req_id}')
-
-        for veh_id, feats in data[self.v_key].items():
-            update_feats(feats, 'nx_vr', centralities['vr'], f'v{veh_id}')
-            update_feats(feats, 'nx_combined',
-                         centralities['combined'], f'v{veh_id}')
 
     def _calculate_node_degrees(self, data: Dict, G_rr: nx.Graph, G_vr: nx.Graph, G_combined: nx.Graph) -> tuple[Dict[int, int], Dict[int, int]]:
         """Calculate degrees for all nodes. Nodes are prefixed 'r'/'v' for requests/vehicles.
@@ -361,185 +325,59 @@ class DataProcessor:
     def _add_degree_features(self, data, in_degrees, out_degrees) -> None:
         """Add degree features to node attributes. Degree dictionaries use prefixed node IDs.
 
+        Stored as fractions of the total active request/vehicle count rather than raw
+        degree counts, so they don't shift out-of-distribution with fleet/demand scale.
+
         Args:
             data: Dictionary containing raw data for the timestep
             in_degrees: Dictionary of in-degree counts for nodes
             out_degrees: Dictionary of out-degree counts for nodes
         """
+        total_requests = len(data[self.r_key])
+        total_vehicles = len(data[self.v_key])
+
         # Process requests (have both RR and VR degrees)
         for req_id, feats in data[self.r_key].items():
             node_id = f'r{req_id}'
+            raw_in_total = in_degrees[node_id]
+            raw_out_total = out_degrees[node_id]
+            raw_in_rr = in_degrees[f"{node_id}_rr"]
+            raw_out_rr = out_degrees[f"{node_id}_rr"]
+            raw_in_vr = in_degrees[f"{node_id}_vr"]
+            raw_out_vr = out_degrees[f"{node_id}_vr"]
+
+            # Ratio features, computed from the raw (already scale-relative) counts
+            feats['request_vehicle_in_ratio'] = raw_in_vr / max(1, raw_in_total)
+            feats['request_vehicle_out_ratio'] = raw_out_vr / max(1, raw_out_total)
+
             # Combined graph degrees
-            feats['in_degree_total'] = in_degrees[node_id]
-            feats['out_degree_total'] = out_degrees[node_id]
+            feats['in_degree_total'] = raw_in_total / max(1, total_requests - 1 + total_vehicles)
+            feats['out_degree_total'] = raw_out_total / max(1, total_requests - 1 + total_vehicles)
 
             # Request-Request graph degrees
-            feats['in_degree_from_requests'] = in_degrees[f"{node_id}_rr"]
-            feats['out_degree_to_requests'] = out_degrees[f"{node_id}_rr"]
+            feats['in_degree_from_requests'] = raw_in_rr / max(1, total_requests - 1)
+            feats['out_degree_to_requests'] = raw_out_rr / max(1, total_requests - 1)
 
             # Vehicle-Request graph degrees
-            feats['in_degree_from_vehicles'] = in_degrees[f"{node_id}_vr"]
-            feats['out_degree_to_vehicles'] = out_degrees[f"{node_id}_vr"]
-
-            # Ratio features
-            # Avoid division by zero
-            total_in = max(1, feats['in_degree_total'])
-            total_out = max(1, feats['out_degree_total'])
-            feats['request_vehicle_in_ratio'] = feats['in_degree_from_vehicles'] / total_in
-            feats['request_vehicle_out_ratio'] = feats['out_degree_to_vehicles'] / total_out
+            feats['in_degree_from_vehicles'] = raw_in_vr / max(1, total_vehicles)
+            feats['out_degree_to_vehicles'] = raw_out_vr / max(1, total_vehicles)
 
         # Process vehicles (only have VR degrees)
         for veh_id, feats in data[self.v_key].items():
             node_id = f'v{veh_id}'
+            raw_in_vr = in_degrees[f"{node_id}_vr"]
+            raw_out_vr = out_degrees[f"{node_id}_vr"]
+
             # Combined graph degrees (same as VR for vehicles)
-            feats['in_degree'] = in_degrees[node_id]
-            feats['out_degree'] = out_degrees[node_id]
+            feats['in_degree'] = in_degrees[node_id] / max(1, total_requests)
+            feats['out_degree'] = out_degrees[node_id] / max(1, total_requests)
 
             # Vehicle-Request specific degrees
-            feats['in_degree_from_requests'] = in_degrees[f"{node_id}_vr"]
-            feats['out_degree_to_requests'] = out_degrees[f"{node_id}_vr"]
+            feats['in_degree_from_requests'] = raw_in_vr / max(1, total_requests)
+            feats['out_degree_to_requests'] = raw_out_vr / max(1, total_requests)
 
             # Add total connections
-            feats['total_request_connections'] = feats['in_degree_from_requests'] + \
-                feats['out_degree_to_requests']
-
-    def _add_neighborhood_features(self, data: Dict, G_combined) -> None:
-        """Add neighborhood-based features to edges using NetworkX for common neighbors and Jaccard coefficient.
-
-        Calculates type-specific neighborhood metrics:
-        - For request-request edges: common request neighbors and common vehicle neighbors
-        - For vehicle-request edges: common request neighbors and common vehicle neighbors
-
-        Args:
-            data: Dictionary containing raw data for the timestep
-            G_combined: NetworkX Graph representing the combined graph
-        """
-        def calculate_type_specific_metrics(src, tgt, G, data, is_vr_edge=False):
-            """Calculate type-specific neighborhood metrics."""
-            if not (G.has_node(src) and G.has_node(tgt)):
-                return {
-                    'common_request_neighbors': 0,
-                    'common_vehicle_neighbors': 0,
-                    'total_common_neighbors': 0,
-                    'request_jaccard': 0.0,
-                    'vehicle_jaccard': 0.0,
-                    'combined_jaccard': 0.0
-                }
-
-            # Get all neighbors
-            neighbors_src = set(G.neighbors(src))
-            neighbors_tgt = set(G.neighbors(tgt))
-
-            # Split neighbors by type - check prefix since nodes are prefixed
-            src_req_neighbors = {
-                n for n in neighbors_src if n.startswith('r')}
-            src_veh_neighbors = {
-                n for n in neighbors_src if n.startswith('v')}
-            tgt_req_neighbors = {
-                n for n in neighbors_tgt if n.startswith('r')}
-            tgt_veh_neighbors = {
-                n for n in neighbors_tgt if n.startswith('v')}
-
-            # Calculate common neighbors by type
-            common_requests = src_req_neighbors & tgt_req_neighbors
-            if is_vr_edge:
-                # src is a vehicle - it has no vehicle neighbors, so intersecting is always
-                # empty. Use the request's other vehicle neighbors (competing vehicles) instead.
-                common_vehicles = tgt_veh_neighbors - {src}
-                exclusive_src_vehicles = set()
-                exclusive_tgt_vehicles = common_vehicles
-            else:
-                common_vehicles = src_veh_neighbors & tgt_veh_neighbors
-                # Calculate exclusive (uncommon) neighbors by type
-                exclusive_src_vehicles = src_veh_neighbors - tgt_veh_neighbors
-                exclusive_tgt_vehicles = tgt_veh_neighbors - src_veh_neighbors
-
-            # Calculate exclusive (uncommon) neighbors by type
-            exclusive_src_requests = src_req_neighbors - \
-                tgt_req_neighbors  # Only connected to source
-            exclusive_tgt_requests = tgt_req_neighbors - \
-                src_req_neighbors  # Only connected to target
-
-            # Calculate unions by type
-            union_requests = src_req_neighbors | tgt_req_neighbors
-            union_vehicles = common_vehicles if is_vr_edge else src_veh_neighbors | tgt_veh_neighbors
-
-            # Calculate total common and union
-            total_common = len(common_requests) + len(common_vehicles)
-            total_union = len(union_requests) + len(union_vehicles)
-
-            # Calculate total exclusive neighbors
-            total_exclusive_src = len(
-                exclusive_src_requests) + len(exclusive_src_vehicles)
-            total_exclusive_tgt = len(
-                exclusive_tgt_requests) + len(exclusive_tgt_vehicles)
-
-            return {
-                # Common neighbor metrics
-                'common_request_neighbors': len(common_requests),
-                'common_vehicle_neighbors': len(common_vehicles),
-                'total_common_neighbors': total_common,
-
-                # Exclusive neighbor metrics
-                'exclusive_src_requests': len(exclusive_src_requests),
-                'exclusive_tgt_requests': len(exclusive_tgt_requests),
-                'exclusive_src_vehicles': len(exclusive_src_vehicles),
-                'exclusive_tgt_vehicles': len(exclusive_tgt_vehicles),
-                'total_exclusive_src': total_exclusive_src,
-                'total_exclusive_tgt': total_exclusive_tgt,
-
-                # Jaccard coefficients
-                'request_jaccard': len(common_requests) / len(union_requests) if union_requests else 0.0,
-                'vehicle_jaccard': len(common_vehicles) / len(union_vehicles) if union_vehicles else 0.0,
-                'combined_jaccard': total_common / total_union if total_union else 0.0,
-
-                # Overlap ratios
-                'request_overlap_ratio': len(common_requests) / max(1, len(union_requests)),
-                'vehicle_overlap_ratio': len(common_vehicles) / max(1, len(union_vehicles)),
-
-                # Exclusivity ratios
-                'src_exclusivity_ratio': total_exclusive_src / max(1, len(neighbors_src)),
-                'tgt_exclusivity_ratio': total_exclusive_tgt / max(1, len(neighbors_tgt)),
-
-                # Competition metrics
-                'request_competition_index': (
-                    len(exclusive_src_requests) + len(exclusive_tgt_requests)
-                ) / max(1, len(union_requests)),
-                'vehicle_competition_index': (
-                    len(exclusive_src_vehicles) + len(exclusive_tgt_vehicles)
-                ) / max(1, len(union_vehicles)),
-
-                # Service area overlap
-                'service_area_overlap': total_common / max(1, total_common + total_exclusive_src + total_exclusive_tgt)
-            }
-
-        # Calculate metrics for request-request edges
-        for src, targets in data[self.rr_key].items():
-            for tgt, features in targets.items():
-                metrics = calculate_type_specific_metrics(
-                    f'r{src}', f'r{tgt}', G_combined, data)
-                features.update(metrics)
-                # Add edge-specific ratios
-                features['request_to_vehicle_neighbor_ratio'] = (
-                    metrics['common_request_neighbors'] /
-                    max(1, metrics['common_vehicle_neighbors'])
-                )
-
-        # Calculate metrics for vehicle-request edges
-        for veh, targets in data[self.vr_key].items():
-            for req, features in targets.items():
-                metrics = calculate_type_specific_metrics(
-                    f'v{veh}', f'r{req}', G_combined, data, is_vr_edge=True)
-                # always 0 for VR edges (vehicles have no vehicle neighbors), unlike on RR
-                del metrics['exclusive_src_vehicles']
-                features.update(metrics)
-                # Add competition metrics
-                features['vehicle_competition'] = metrics['common_vehicle_neighbors']
-                features['request_competition'] = metrics['common_request_neighbors']
-                features['competition_ratio'] = (
-                    metrics['common_vehicle_neighbors'] /
-                    max(0.001, metrics['common_request_neighbors'])
-                )
+            feats['total_request_connections'] = (raw_in_vr + raw_out_vr) / max(1, total_requests)
 
     def _add_clustering_features(self, data: Dict, G_combined) -> None:
         """Add clustering coefficient features to nodes using the combined graph.
@@ -625,6 +463,12 @@ class DataProcessor:
                 request_locations[req_id] = (
                     feats[G_TRAIN_FEATURE_O_POS_LAT], feats[G_TRAIN_FEATURE_O_POS_LON])
 
+        # Stored as fractions of the total active request/vehicle count rather than raw
+        # counts, so the feature doesn't shift out of the training distribution just because
+        # a run uses a different fleet size or demand density than training did.
+        total_requests = len(data[self.r_key])
+        total_vehicles = len(data[self.v_key])
+
         # For each request, count nearby requests and vehicles
         for req_id, feats in data[self.r_key].items():
             if req_id not in request_locations:
@@ -654,8 +498,8 @@ class DataProcessor:
                         nearby_vehicles += 1
 
             feats.update({
-                'nearby_requests': nearby_requests,
-                'nearby_vehicles': nearby_vehicles,
+                'nearby_requests': nearby_requests / max(1, total_requests - 1),  # exclude self
+                'nearby_vehicles': nearby_vehicles / max(1, total_vehicles),
                 'demand_supply_ratio': nearby_requests / max(1, nearby_vehicles)
             })
 
@@ -738,11 +582,14 @@ class DataProcessor:
             locked_set = set(locked_reqs)
             assigned_set = set(assigned_reqs)
 
-            # Precompute some vehicle-level features once per vehicle
+            # Precompute some vehicle-level features once per vehicle. Normalized by vehicle
+            # capacity rather than left as raw counts, so "how full is this vehicle" stays
+            # meaningful regardless of the capacity config used at inference time.
+            capacity = max(1, self.config.vehicle_capacity)
             veh_level_features = {
-                "veh_n_assigned": float(n_assigned),
-                "veh_n_locked_assigned": float(n_locked),
-                "veh_n_unlocked_assigned": float(n_unlocked),
+                "veh_n_assigned": float(n_assigned) / capacity,
+                "veh_n_locked_assigned": float(n_locked) / capacity,
+                "veh_n_unlocked_assigned": float(n_unlocked) / capacity,
                 "veh_locked_fraction": float(n_locked) / max(1.0, float(n_assigned)),
             }
 
