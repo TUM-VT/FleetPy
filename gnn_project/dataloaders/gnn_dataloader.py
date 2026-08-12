@@ -17,6 +17,7 @@ from tqdm import tqdm
 import torch
 import torch_geometric.transforms as T
 from torch_geometric.data import HeteroData
+from torch_geometric.data.storage import BaseStorage
 
 # Local imports
 from gnn_project.config import Config
@@ -30,6 +31,18 @@ from gnn_project.dataloaders.normalization import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _torch_load_graphs(path):
+    """torch.load for saved HeteroData graph lists, tolerant of the weights_only default
+    flipping to True in PyTorch >=2.6 (which rejects PyG's BaseStorage global otherwise)."""
+    torch.serialization.add_safe_globals([BaseStorage])
+    torch.serialization.add_safe_globals(['numpy._core.multiarray.scalar'])
+    try:
+        return torch.load(path, weights_only=False)
+    except Exception as e:
+        logger.error('Error loading graphs with weights_only=False:', exc_info=e)
+        return torch.load(path, weights_only=True)
 
 
 class GNNDataLoader:
@@ -125,9 +138,9 @@ class GNNDataLoader:
         test_path = processed_dir / TEST_GRAPHS
         
         if train_path.exists() and val_path.exists() and test_path.exists():
-            train_graphs = torch.load(train_path)
-            val_graphs = torch.load(val_path)
-            test_graphs = torch.load(test_path)
+            train_graphs = _torch_load_graphs(train_path)
+            val_graphs = _torch_load_graphs(val_path)
+            test_graphs = _torch_load_graphs(test_path)
             normalized_scenario_data = train_graphs + val_graphs + test_graphs
             masks = self.create_masks(len(normalized_scenario_data), len(train_graphs), len(val_graphs))
             # Load feature names if available
