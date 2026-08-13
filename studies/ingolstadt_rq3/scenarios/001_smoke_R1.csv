@@ -1,2 +1,0 @@
-scenario_name,op_module,rq_file,demand_name,op_fleet_composition,network_type,op_vr_control_func_dict,sim_env,network_name,start_time,end_time,evaluation_int_start,evaluation_int_end,sumo_t_update,sumo_fcd_vehicles,random_seed
-001_smoke_R1_2023-07-04_p10,PoolingIRSOnly,ingolstadt_rq3.csv,ingolstadt_rq3,amod:100,NetworkBasicWithStoreCpp,func_key:total_system_time,SUMOcontrolledSim,ingolstadt,25200,28800,25200,28800,300,op_0-pv_0.1,42
