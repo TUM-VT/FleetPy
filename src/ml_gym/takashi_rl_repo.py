@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import argparse
 import numpy as np
 import pandas as pd
 
@@ -448,39 +449,28 @@ class RewardEarlyStoppingCallback(BaseCallback):
         return True
 
 
-# run RL
-if __name__ == "__main__":
+def train(const_config, sc_config, nr_zones, model_path, n_envs, total_timesteps):
+    """Train a PPO repositioning policy on a FleetPy scenario and save it.
 
-    multiprocessing.freeze_support()
-    MAIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    
-    # Condition for default or manual input of configuration files　
-    if len(sys.argv) >= 3: # case when 3 arguments are input in terminal (arg0:exe file, arg1:const_config, arg2:scenario_config)
-        const_config = sys.argv[1]
-        sc_config = sys.argv[2]
-    else:
-        # default (without arguments) paths for 2 csv files
-        scs_path = os.path.join(MAIN_DIR, "studies", "ml_test", "scenarios") # studies/ml_test/scenarios
-        const_config = os.path.join(scs_path, "const_cfg_manhattan_case_study.yaml") # studies/ml_test/scenarios/constant_config.csv
-        sc_config = os.path.join(scs_path, "scenario_cfg_manhattan_ml_takashi.csv")
-
-    # env_config is forwarded to FleetPyRepoRL.__init__ as the `config` argument.
-    fleetpy_config = {"nr_zones": 8,
+    :param const_config: path to the FleetPy constant_config file for this scenario
+    :param sc_config: path to the FleetPy scenario config CSV for this scenario
+    :param nr_zones: number of zones in the scenario
+    :param model_path: where to save the trained SB3 model (no .zip extension)
+    :param n_envs: number of parallel FleetPy environments to collect rollouts from
+    :param total_timesteps: number of environment steps to train for
+    :return: the trained PPO model
+    """
+    fleetpy_config = {"nr_zones": nr_zones,
                     "constant_cfg_path": const_config,
                     "var_cfg_path": sc_config
                     }
 
-    # num_env_runners=0 runs rollouts in the main process (easier for debugging).
-    # Increase num_env_runners to parallelize data collection across multiple FleetPy instances.
-    # TODO: adjust the RLlib config as needed (e.g. learning algorithm, hyperparameters, number of workers, etc.). The current config is just a placeholder to get you started.
-    # TODO: or use other lib like stable-baselines3 or your own training loop instead of RLlib if you prefer. The key part is that the environment (FleetPyRepoRL) can be used with any library that supports gymnasium.Env.
-
-    n_envs = 4
+    # TODO: adjust the RL setup as needed (e.g. learning algorithm, hyperparameters, number of parallel envs). The current config is just a placeholder to get you started.
     env = SubprocVecEnv(
         [make_env(fleetpy_config, i) for i in range(n_envs)]
     )
     env = VecMonitor(env)
-    
+
     model = PPO('MlpPolicy',
                 env,
                 learning_rate=3e-4,
@@ -494,18 +484,91 @@ if __name__ == "__main__":
                 verbose=1, # log detail→0:none, 1:standard, 2:detail debug
                 tensorboard_log="./tensorboard/"
                 )
-    
+
     callback = RewardEarlyStoppingCallback(
         window_size=10,
         patience=10,
         verbose=1
     )
 
-    model.learn(total_timesteps=100000,
+    model.learn(total_timesteps=total_timesteps,
                 tb_log_name="PPO_FleetPy",
                 callback=callback
                 )
 
-    model.save("ppo_repo_model")
+    model.save(model_path)
+    print(f"Model saved to {model_path}")
+    return model
 
-    print("Model saved")
+
+def evaluate(const_config, sc_config, model_path, nr_zones, n_episodes, deterministic=True):
+    """Roll out a trained PPO policy on a FleetPy scenario (no training).
+
+    The scenario's zone count and repositioning horizon/timestep (which together
+    fix self.tau in TakashiRLRepo) must match what the model was trained with,
+    since they determine the observation/action space dimensions of the loaded
+    network. Everything else about the scenario (demand, dates, network) can
+    differ freely.
+
+    :param const_config: path to the FleetPy constant_config file for this scenario
+    :param sc_config: path to the FleetPy scenario config CSV for this scenario
+    :param model_path: path to the saved SB3 model (no .zip extension)
+    :param nr_zones: number of zones in the scenario
+    :param n_episodes: number of simulation episodes to roll out
+    :param deterministic: if True, use the policy mean action instead of sampling
+    :return: list of total (summed) reward per episode
+    """
+    fleetpy_config = {"nr_zones": nr_zones,
+                    "constant_cfg_path": const_config,
+                    "var_cfg_path": sc_config
+                    }
+    env = TakashiRLRepo(fleetpy_config)
+    model = PPO.load(model_path)
+
+    episode_rewards = []
+    for ep in range(n_episodes):
+        obs, _ = env.reset()
+        done = False
+        total_reward = 0.0
+        while not done:
+            action, _ = model.predict(obs, deterministic=deterministic)
+            obs, reward, done, truncated, info = env.step(action)
+            total_reward += reward
+        episode_rewards.append(total_reward)
+        print(f"Episode {ep + 1}/{n_episodes}: total reward = {total_reward:.3f}")
+
+    print(f"\nMean reward over {n_episodes} episode(s): {np.mean(episode_rewards):.3f}")
+    return episode_rewards
+
+
+# run RL
+if __name__ == "__main__":
+
+    multiprocessing.freeze_support()
+    MAIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    mode = "train" # "train" or "evaluate"
+
+    # Fixed across train/evaluate so a saved model's observation/action space always
+    # matches what it's loaded against. Change here (not per-call) if you need a
+    # different zone system or repositioning horizon.
+    nr_zones = 8
+    model_path = "ppo_repo_model"
+
+    # default (without arguments) paths for the Manhattan case study configs
+    scs_path = os.path.join(MAIN_DIR, "studies", "ml_test", "scenarios") # studies/ml_test/scenarios
+    const_config = os.path.join(scs_path, "const_cfg_manhattan_case_study.yaml")
+    sc_config = os.path.join(scs_path, "scenario_cfg_manhattan_ml_takashi.csv")
+
+    if mode == "train":
+        timesteps = 100000 # TODO define!
+        n_envs = 4 # TODO define!
+        train(const_config, sc_config, nr_zones, model_path,
+              n_envs=n_envs, total_timesteps=timesteps)
+    elif mode == "evaluate":
+        n_episodes = 500 # TODO define!
+        deterministic = True # TODO define! 
+        evaluate(const_config, sc_config, model_path, nr_zones,
+                  n_episodes, deterministic=deterministic)
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
