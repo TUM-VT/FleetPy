@@ -36,7 +36,7 @@ class RLReposition(ZoneBasedRepositioningActor):
     The current implementation ignores the RL action and instead does a random demand-driven
     matching — replace this logic with your actual action decoding once you have a trained policy.
     """
-    def __init__(self):
+    def __init__(self, fleetpy_config):
         self.nr_zones = fleetpy_config["nr_zones"]
         self.zone_ids = list(range(self.nr_zones))
 
@@ -79,6 +79,12 @@ class TakashiRLRepo(FleetPyGym):
         constant_cfg_path (str): path to FleetPy constant_config.csv
         var_cfg_path      (str): path to FleetPy scenario config CSV
         nr_zones          (int): number of zones in the zone system
+        skip_output       (bool): if True, FleetPy writes no result files at all
+            (fastest; use during training, where rewards come from the observation
+            dict, not from output files). If False, each episode gets its own
+            uniquely-named output folder (via reset(), see below) so repeated
+            episodes with the same scenario_name don't overwrite each other's
+            results. Defaults to False.
     """
 
     def __init__(self, config):
@@ -87,10 +93,11 @@ class TakashiRLRepo(FleetPyGym):
         scenario_cfgs = ScenarioConfig(config["var_cfg_path"])
 
         study_name = os.path.basename(os.path.dirname(os.path.dirname(os.path.abspath(config["constant_cfg_path"]))))
-        constant_cfg[G_STUDY_NAME] = study_name 
+        constant_cfg[G_STUDY_NAME] = study_name
         constant_cfg["n_cpu_per_sim"] = 1
         constant_cfg["evaluate"] = 1
         constant_cfg["log_level"] = "info"
+        constant_cfg[G_SKIP_OUTPUT] = 1 if config.get("skip_output", False) else 0
 
         # Select which scenario config to use.
         # When running multiple Ray workers you can use config.worker_index to assign
@@ -99,12 +106,25 @@ class TakashiRLRepo(FleetPyGym):
         scenario_inx = 0
         fleetpy_config = constant_cfg + scenario_cfgs[scenario_inx]
         env_id = config.get("env_id", 0)
+        # pid suffix: env_id alone collides whenever this class is instantiated by
+        # more than one independently-launched OS process (e.g. several evaluate()
+        # runs, or several SLURM tasks) since it defaults to 0 outside SubprocVecEnv.
+        # Without a unique scenario_name, two processes end up writing/deleting the
+        # same 00_simulation.log, which raises WinError 32 on Windows.
         fleetpy_config["scenario_name"] = (
-            f'{fleetpy_config["scenario_name"]}_env{env_id}'
+            f'{fleetpy_config["scenario_name"]}_env{env_id}_pid{os.getpid()}'
         )
 
         super().__init__(fleetpy_config)
-        
+
+        # Each episode reuses self.scenario_parameters, so without a per-episode
+        # suffix every reset() would point at the same output folder and FleetPy
+        # would wipe the previous episode's results before writing new ones
+        # (see create_or_empty_dir() in FleetSimulationBase). Only matters when
+        # skip_output is False, but it's harmless to always track.
+        self._base_scenario_name = fleetpy_config[G_SCENARIO_NAME]
+        self._episode_counter = 0
+
         self.tau = int(
             fleetpy_config["op_repo_horizons"][1]
             / fleetpy_config["op_repo_timestep"]
@@ -153,12 +173,17 @@ class TakashiRLRepo(FleetPyGym):
 
         # The actor pauses the simulation, hands the observation to the gym loop,
         # waits for the RL action, then writes it back into FleetPy.
-        self.actor = RLReposition()
+        self.actor = RLReposition(config)
         self.register_actor(event, self.actor)
 
         self.cost_unserved_history = []
         self.cost_travel_history = []
         self.cost_deviation_history = []
+
+    def reset(self, *, seed=None, options=None):
+        self._episode_counter += 1
+        self.scenario_parameters[G_SCENARIO_NAME] = f"{self._base_scenario_name}_ep{self._episode_counter}"
+        return super().reset(seed=seed, options=options)
 
     def translate_observation(self, observation):
         """Flatten the raw FleetPy observation dict into a fixed-size numpy vector.
@@ -462,7 +487,8 @@ def train(const_config, sc_config, nr_zones, model_path, n_envs, total_timesteps
     """
     fleetpy_config = {"nr_zones": nr_zones,
                     "constant_cfg_path": const_config,
-                    "var_cfg_path": sc_config
+                    "var_cfg_path": sc_config,
+                    "skip_output": True,  # rewards come from the observation dict, not output files
                     }
 
     # TODO: adjust the RL setup as needed (e.g. learning algorithm, hyperparameters, number of parallel envs). The current config is just a placeholder to get you started.
@@ -520,7 +546,8 @@ def evaluate(const_config, sc_config, model_path, nr_zones, n_episodes, determin
     """
     fleetpy_config = {"nr_zones": nr_zones,
                     "constant_cfg_path": const_config,
-                    "var_cfg_path": sc_config
+                    "var_cfg_path": sc_config,
+                    "skip_output": False,  # keep results; reset() gives each episode a unique scenario_name
                     }
     env = TakashiRLRepo(fleetpy_config)
     model = PPO.load(model_path)

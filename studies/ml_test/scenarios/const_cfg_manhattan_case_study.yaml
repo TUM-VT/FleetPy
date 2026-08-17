@@ -43,6 +43,6 @@ op_repo_lock: False
 op_repo_timestep: 900
 op_temporal_resolution: 900
 ### zone system
-op_zone_system: Manhattan_Taxi_Zones
+op_zone_system: Manhattan_corrected_12min_max
 ### Additional
 op_fc_type: perfect_dist
