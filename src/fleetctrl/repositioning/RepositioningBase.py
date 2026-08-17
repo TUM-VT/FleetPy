@@ -215,13 +215,20 @@ class RepositioningBase(ABC):
             d_pos = self.routing_engine.return_node_position(self.zone_system.get_random_centroid_node(d_zone_id))
             if o_pos[0] >= 0 and d_pos[0] >= 0:
                 route_info = self.routing_engine.return_travel_costs_1to1(o_pos, d_pos)
-                if route_info:
+                # An unreachable pair comes back as (inf, inf, inf), which is
+                # truthy -- so test the numbers, not the tuple. Letting an inf
+                # through would become an LP objective coefficient >= 1e30,
+                # which gurobi reads as "forbid this arc" and can turn the
+                # whole repositioning model infeasible.
+                if route_info and np.isfinite(route_info[1]) and np.isfinite(route_info[2]):
                     return route_info[1], route_info[2]
                 loop_iter += 1
                 if loop_iter == 10:
                     break
             else:
                 break
+        LOG.warning(f"no finite route between zones {o_zone_id} and {d_zone_id}"
+                    f" at time {sim_time}; falling back to LARGE_INT")
         # TODO # v1) think about the use of centroids!
         return LARGE_INT, LARGE_INT
 
