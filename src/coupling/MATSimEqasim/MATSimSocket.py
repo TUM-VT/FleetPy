@@ -364,20 +364,24 @@ class MATSimSocket:
         if iteration > 0:
             last_output_dir = self.fs_obj.dir_names[G_DIR_OUTPUT]
             self.fs_obj.terminate()
-            
+
             self.fs_obj = None
-            
+
             print("MATSimSocket: Starting iteration ", iteration)
             print(" -> delete old log and travel time files from folder: {}".format(last_output_dir))
             if self.log_f is not None and os.path.exists(self.log_f):
                 ## delete old log file
-                os.remove(self.log_f)
+                try:
+                    os.remove(self.log_f)
+                except PermissionError as e:
+                    LOG.warning(f"Could not delete old log file {self.log_f} (still locked): {e}")
             # delete previous travel time files
             for f in os.listdir(last_output_dir):
-                if f.startswith("matsim_edge_traveltimes_") and f.endswith(".csv"):
-                    os.remove(os.path.join(last_output_dir, f))
-                if f.endswith(".log"):
-                    os.remove(os.path.join(last_output_dir, f))
+                if (f.startswith("matsim_edge_traveltimes_") and f.endswith(".csv")) or f.endswith(".log"):
+                    try:
+                        os.remove(os.path.join(last_output_dir, f))
+                    except PermissionError as e:
+                        LOG.warning(f"Could not delete {f} in {last_output_dir} (still locked): {e}")
         
             scenario_parameters = self.scenario_parameters.copy()
 

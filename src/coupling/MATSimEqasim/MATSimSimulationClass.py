@@ -242,6 +242,7 @@ class MATSimSimulationClass(FleetSimulationBase):
         self.demand.record_remaining_users()
 
         self.evaluate()    
+        super().terminate()
         
     def get_current_assignments(self, sim_time):
         """

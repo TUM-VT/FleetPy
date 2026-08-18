@@ -183,6 +183,7 @@ class FleetSimulationBase:
         else:
             # remove old log handlers (otherwise sequential simulations only log to first simulation)
             for handler in logging.root.handlers[:]:
+                handler.close()  # release file handle (Windows keeps it locked otherwise)
                 logging.root.removeHandler(handler)
             # start new log file
             logging.VERBOSE = 5
@@ -841,6 +842,8 @@ class FleetSimulationBase:
         LOG.info(prt_str)
         self._end_realtime_plot()
 
+        self.terminate()
+
     def _start_realtime_plot(self):
         """ This method starts a separate process for real time python plots """
         if self.realtime_plot_flag in {1, 2}:
@@ -925,3 +928,10 @@ class FleetSimulationBase:
     def add_evaluate(self):
         LOG.warning("abstractmethod not overwritten! When defined as ABC in next commits, this will raise an error!")
         pass
+
+    def terminate(self):
+        """ This method can be used to terminate the simulation environment and clean up resources 
+        its the last method called in the run() method and can be used to close files, connections, etc."""
+        for handler in logging.root.handlers[:]:
+            handler.close()  # release file handle (Windows keeps it locked otherwise)
+            logging.root.removeHandler(handler)

@@ -207,6 +207,7 @@ dmypy.json
 
 # other
 CLAUDE.md
+src/ml_gym/tensorboard/*
 # MacOS
 .DS_Store
 
