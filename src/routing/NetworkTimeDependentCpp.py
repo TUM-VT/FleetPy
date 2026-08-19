@@ -95,6 +95,9 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
         self._layer_seconds_source = None   # the directory it was measured on
         self._in_backward_query = False
         self._offset_bucket = None
+        # Start of the bin the loaded layers describe; the offset is measured
+        # from it, so the search knows where inside the bin a query sits.
+        self._last_tt_load_time = None
         # Provenance, read back by the KPI aggregator: a cell that silently ran
         # static because its horizon files were missing must be visible.
         self.td_bins_loaded = 0
@@ -133,6 +136,10 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
 
         # the layers now describe intervals measured from this bin, so the
         # reading point goes back to its start
+        try:
+            self._last_tt_load_time = float(scenario_time)
+        except (TypeError, ValueError):
+            self._last_tt_load_time = None
         self._offset_bucket = 0
         self.cpp_router.setQueryOffset(0.0)
 
