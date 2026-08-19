@@ -45,6 +45,24 @@ cdef class PyNetwork:
         """
         self.c_net.updateEdgeTravelTimesLayer(file_path, layer)
 
+    def clearAllLayers(self):
+        """drops every edge's forecast layers (call before loading a new bin's)"""
+        self.c_net.clearAllLayers()
+
+    def setQueryOffset(self, double query_offset):
+        """
+        seconds between the start of the bin the layers describe and the query.
+
+        The layers describe absolute clock intervals, so a query issued 240 s
+        into a 300 s bin reaches the second layer after 60 s of driving, not
+        after 300. Refresh it as the simulation clock moves.
+        """
+        self.c_net.setQueryOffset(query_offset)
+
+    def getQueryOffset(self):
+        """seconds into the current bin that queries are being answered for"""
+        return self.c_net.getQueryOffset()
+
     def setLayerSeconds(self, double layer_seconds):
         """
         turns departure-time-dependent search on or off.

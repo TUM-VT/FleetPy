@@ -211,8 +211,27 @@ void Network::updateEdgeTravelTimesLayer(std::string file_path, int layer) {
     loadTravelTimeFile_(file_path, layer);
 }
 
+void Network::clearAllLayers() {
+    for (Node& node : nodes) {
+        for (Edge& edge : node.getOutgoingEdges()) {
+            edge.clearLayers();
+        }
+        for (Edge& edge : node.getIncomingEdges()) {
+            edge.clearLayers();
+        }
+    }
+}
+
 void Network::setLayerSeconds(double layer_seconds) {
     layer_seconds_ = layer_seconds;
+}
+
+void Network::setQueryOffset(double query_offset) {
+    query_offset_ = query_offset >= 0.0 ? query_offset : 0.0;
+}
+
+double Network::getQueryOffset() {
+    return query_offset_;
 }
 
 double Network::getLayerSeconds() {
@@ -320,6 +339,12 @@ void Network::updateEdgeTravelTime(int start_node_index, int end_node_index, dou
 }
 
 void Network::updateEdgeTravelTimeLayer(int start_node_index, int end_node_index, double edge_travel_time, int layer) {
+    if (start_node_index < 0 || end_node_index < 0 ||
+        start_node_index >= (int)nodes.size() || end_node_index >= (int)nodes.size()) {
+        cout << "C++ ERROR: node out of range in layer file: " << start_node_index
+             << " " << end_node_index << endl;
+        return;
+    }
     bool fw_found = false;
     for (Edge &edge : nodes[start_node_index].getOutgoingEdges()) {
         if (edge.getEndNode() == end_node_index) {
@@ -452,7 +477,8 @@ void Network::dijkstraStepForward_(std::priority_queue<std::pair<double, int>>& 
             // route is priced by the layer covering minute 15, not by the one
             // covering the departure bin.
             next_cost = current_cost + (layer_seconds_ > 0.0
-                                        ? edge.getTravelTimeAt(current_cost, layer_seconds_)
+                                        ? edge.getTravelTimeAt(current_cost + query_offset_,
+                                                               layer_seconds_)
                                         : edge.getTravelTime());
             if (!next_node.isVisitedFw(dijkstra_number)) {
                 next_node.setPrev(current_node.getIndex());

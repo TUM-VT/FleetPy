@@ -186,7 +186,8 @@ def tt_file_for(source_dir: Optional[str], sim_time, measured_path: str) -> Opti
 
 
 def write_source_stats(results_dir: str, source_dir: Optional[str],
-                       bins_loaded: int, bins_missing: int) -> str:
+                       bins_loaded: int, bins_missing: int,
+                       routing_engine=None) -> str:
     """Record which travel times the run routed on, next to the bin files.
 
     Without this the arm a cell ran is only inferable from its scenario name --
@@ -197,10 +198,22 @@ def write_source_stats(results_dir: str, source_dir: Optional[str],
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, STATS_FILENAME)
     with open(path, "w") as fh:
-        json.dump({
+        stats = {
             "tt_source": "external" if source_dir else "measured",
             "tt_source_dir": source_dir,
             "bins_loaded": int(bins_loaded),
             "bins_missing": int(bins_missing),
-        }, fh, indent=2)
+        }
+        # A time-dependent engine that found no horizon files routes on its base
+        # table alone and IS its static twin, silently and for the whole run.
+        # The engine name alone cannot tell the two apart, so the counters that
+        # can are written here beside it.
+        if routing_engine is not None and hasattr(routing_engine, "td_bins_loaded"):
+            stats["routing_engine"] = type(routing_engine).__name__
+            stats["td_bins_loaded"] = int(routing_engine.td_bins_loaded)
+            stats["td_layers_loaded"] = int(routing_engine.td_layers_loaded)
+            stats["td_bins_without_layers"] = int(routing_engine.td_bins_without_layers)
+            stats["td_layer_seconds"] = float(
+                getattr(routing_engine, "_layer_seconds", -1.0))
+        json.dump(stats, fh, indent=2)
     return path

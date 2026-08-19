@@ -19,7 +19,12 @@ What this does NOT change, and why
   from a destination backwards over candidate vehicles, and a backward search
   cannot know the arrival time it is solving for. Those queries screen vehicles
   for a pickup, which happens now, so horizon 1 is the right table for them
-  anyway.
+  anyway. **Their costs are kept out of the store**, because the parent writes
+  every origin a backward search reaches into the same ``travel_time_infos`` the
+  1to1 path reads *before* searching: the fleet control screens candidates with
+  Xto1 and then asks about the same pairs with 1to1, so leaving them in handed
+  the time-dependent query a static answer for exactly the pairs that matter, and
+  the arm would have been its static twin wherever it was screened first.
 * **A query's departure time is the current bin.** FleetPy's routing API takes no
   departure time, so a leg that will not start until after a pickup is still
   priced from now. Layer 0 therefore covers the first 300 s of the route rather
@@ -64,6 +69,12 @@ INPUT_PARAMETERS_NetworkTimeDependentCpp = {
 #: leave layer 0 and the arm silently reproduced its static twin.
 DEFAULT_LAYER_SECONDS = 300.0
 
+#: How finely the intra-bin offset is tracked. The result store is keyed on
+#: (origin, destination) with no time in it, so it has to be dropped whenever the
+#: offset moves; quantising trades a bounded phase error for keeping that cache
+#: useful within a bucket. At 60 s the residual is a fifth of a layer.
+OFFSET_QUANTUM_SECONDS = 60.0
+
 #: Horizons the exporter writes beside the base table. Horizon 1 IS the base
 #: table, so the siblings run 2..6 and occupy C++ layers 1..5.
 MAX_HORIZON = 6
@@ -82,6 +93,8 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
                          scenario_time=scenario_time)
         self._layer_seconds = DEFAULT_LAYER_SECONDS
         self._layer_seconds_source = None   # the directory it was measured on
+        self._in_backward_query = False
+        self._offset_bucket = None
         # Provenance, read back by the KPI aggregator: a cell that silently ran
         # static because its horizon files were missing must be visible.
         self.td_bins_loaded = 0
@@ -103,6 +116,12 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
 
         self._update_layer_seconds(ext_path)
 
+        # The base table was just refreshed for the links this bin lists; the
+        # layers must not outlive it. A link the exporter drops from one bin's
+        # horizon file would otherwise keep the previous bin's forecast beside
+        # this bin's base value, and one route would mix two forecasts.
+        self.cpp_router.clearAllLayers()
+
         loaded = 0
         for horizon in range(2, MAX_HORIZON + 1):
             path = horizon_file(ext_path, horizon)
@@ -111,6 +130,11 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
             # C++ layer 0 is the base table, so horizon h lives in layer h-1.
             self.cpp_router.updateEdgeTravelTimesLayer(path.encode(), horizon - 1)
             loaded += 1
+
+        # the layers now describe intervals measured from this bin, so the
+        # reading point goes back to its start
+        self._offset_bucket = 0
+        self.cpp_router.setQueryOffset(0.0)
 
         self.td_bins_loaded += 1
         self.td_layers_loaded += loaded
@@ -122,6 +146,62 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
             self.td_bins_without_layers += 1
             self.cpp_router.setLayerSeconds(-1.0)
             LOG.warning("no horizon files beside %s; this bin routes statically", ext_path)
+
+    def return_travel_costs_Xto1(self, *args, **kwargs):
+        """Screen candidate vehicles, without teaching the store a static answer.
+
+        The parent stores every (origin, destination) a backward search reaches.
+        Those costs are horizon-1 by construction, and `return_travel_costs_1to1`
+        consults the store before it searches, so without this the layered search
+        is skipped for precisely the pairs the fleet control looked at first.
+        """
+        self._in_backward_query = True
+        try:
+            return super().return_travel_costs_Xto1(*args, **kwargs)
+        finally:
+            self._in_backward_query = False
+
+    def _add_to_database(self, o_node, d_node, cfv, tt, dis):
+        """Cache a backward result only where it agrees with the forward one.
+
+        A route that finishes inside the first layer is priced identically by
+        both searches, so storing it is exact and keeps the fast path the fleet
+        control leans on: with `op_max_wait_time` at 300 s every backward search
+        this study issues is bounded by exactly one layer. A longer one would be
+        a static answer to a time-dependent question, and the store is consulted
+        before the layered search runs, so it must not go in.
+        """
+        if (getattr(self, "_in_backward_query", False)
+                and self.cpp_router.getLayerSeconds() > 0
+                and tt >= self._layer_seconds):
+            return
+        super()._add_to_database(o_node, d_node, cfv, tt, dis)
+
+    def update_network(self, simulation_time, update_state=True):
+        """Move the layers' reading point with the simulation clock.
+
+        The layers describe absolute clock intervals measured from the bin they
+        were loaded in, but the search measures elapsed travel time from the
+        query. A request answered 240 s into a 300 s bin therefore reaches the
+        second layer after 60 s of driving, not after 300, and without this
+        offset every route is priced as if it had departed at the bin boundary:
+        a phase lead averaging half a layer, always toward the nearer-term
+        forecast the arm exists to improve on.
+
+        The offset is quantised, and the result store is dropped when it moves,
+        because that store is keyed on (origin, destination) alone and its
+        entries are only valid for the offset they were computed at.
+        """
+        res = super().update_network(simulation_time, update_state=update_state)
+        if self._last_tt_load_time is None or self.cpp_router.getLayerSeconds() <= 0:
+            return res
+        offset = max(0.0, float(simulation_time) - self._last_tt_load_time)
+        bucket = int(offset // OFFSET_QUANTUM_SECONDS)
+        if bucket != self._offset_bucket:
+            self._offset_bucket = bucket
+            self.cpp_router.setQueryOffset(bucket * OFFSET_QUANTUM_SECONDS)
+            self._reset_internal_attributes_after_travel_time_update()
+        return res
 
     def _update_layer_seconds(self, ext_path):
         """Measure one horizon's length from the export's own bin grid.

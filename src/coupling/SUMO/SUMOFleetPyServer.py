@@ -191,8 +191,11 @@ class SUMOFleetPyServer():
             self.fp_sim_env.dir_names.get(G_DIR_MAIN))
         self.g_tt_bins_loaded = 0
         self.g_tt_bins_missing = 0
-        if self.g_tt_source_dir is not None:
-            self._check_tt_source_coverage()
+        # Run unconditionally: a time-dependent engine with NO source directory
+        # is the one misconfiguration that produces a complete, plausible cell
+        # that routed statically from end to end, and the old guard skipped
+        # exactly that case because it only ran when a directory was set.
+        self._check_tt_source_coverage()
 
     def _check_tt_source_coverage(self):
         """Refuse to start if the travel-time source cannot cover the run.
@@ -206,14 +209,19 @@ class SUMOFleetPyServer():
         params = self.fp_sim_env.scenario_parameters
         times = requested_bin_times(params[G_SIM_START_TIME], params[G_SIM_END_TIME],
                                     self.g_sumo_t_update)
-        problem = coverage_error(self.g_tt_source_dir, times,
-                                 float(params.get(G_SUMO_TT_SRC_MIN_COV, 1.0)))
-        if problem:
-            raise FileNotFoundError(problem)
-        # A time-dependent engine reads five more files per bin. Missing ones do
-        # not fail either -- they leave the arm routing on its base table alone,
-        # which is exactly its static twin -- so the grid is checked here too.
-        if type(self.fp_sim_env.routing_engine).__name__.startswith("NetworkTimeDependent"):
+        time_dependent = type(
+            self.fp_sim_env.routing_engine).__name__.startswith("NetworkTimeDependent")
+        if self.g_tt_source_dir is not None:
+            problem = coverage_error(self.g_tt_source_dir, times,
+                                     float(params.get(G_SUMO_TT_SRC_MIN_COV, 1.0)))
+            if problem:
+                raise FileNotFoundError(problem)
+        elif not time_dependent:
+            return      # R0: the server's own probe measurements, nothing to check
+        # A time-dependent engine reads five more files per bin, and an unset
+        # directory leaves it nothing at all. Neither fails at run time -- both
+        # leave the arm routing on a base table alone, which is its static twin.
+        if time_dependent:
             layer_problem = layer_coverage_error(self.g_tt_source_dir, times)
             if layer_problem:
                 raise FileNotFoundError(layer_problem)
@@ -439,7 +447,8 @@ class SUMOFleetPyServer():
                  f"{self.g_tt_bins_missing} missing "
                  f"(source: {self.g_tt_source_dir or 'probe measurements'})")
         write_source_stats(resultsPath, self.g_tt_source_dir,
-                           self.g_tt_bins_loaded, self.g_tt_bins_missing)
+                           self.g_tt_bins_loaded, self.g_tt_bins_missing,
+                           routing_engine=self.fp_sim_env.routing_engine)
         self._post_sim_evaluation()
     
     def _post_sim_evaluation(self):

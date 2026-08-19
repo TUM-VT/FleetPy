@@ -23,6 +23,12 @@ private:
 	// Seconds one forecast layer covers. <= 0 means the search is static, which
 	// is the state every existing scenario runs in.
 	double layer_seconds_ = -1.0;
+	// Seconds between the bin the layers describe and the query being answered.
+	// The layers describe absolute clock intervals from the bin's start, so a
+	// query issued 240 s into a 300 s bin reaches the second layer after only
+	// 60 s of driving. Without this the whole route is priced as if it had
+	// departed at the bin boundary.
+	double query_offset_ = 0.0;
 
 	void setTargets(const std::vector<int>& targets);
 	int dijkstraForward(int start_node_index, double time_range = -1, int max_targets = -1);
@@ -46,6 +52,13 @@ public:
 	void updateEdgeTravelTimesLayer(std::string file_path, int layer);
 	// Turn departure-time-dependent search on (layer_seconds > 0) or off.
 	void setLayerSeconds(double layer_seconds);
+	void setQueryOffset(double query_offset);
+	double getQueryOffset();
+	// Drop every edge's layers. Called before a bin's horizons are loaded: the
+	// base table is refreshed for the links a bin lists and the layers must not
+	// outlive it, or a link the exporter drops from one horizon file keeps the
+	// previous bin's forecast beside this bin's base value.
+	void clearAllLayers();
 	double getLayerSeconds();
 	unsigned int getNumberNodes();
 	std::vector<Resultstruct> computeTravelCosts1toX(int start_node_index, const std::vector<int>& targets, double time_range = -1, int max_targets = -1);
