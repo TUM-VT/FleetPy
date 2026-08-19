@@ -204,7 +204,25 @@ Network::Network(string node_path, string edge_path) {
 }
 
 void Network::updateEdgeTravelTimes(std::string file_path) {
-    cout << "c++ update tts " << file_path << endl;
+    loadTravelTimeFile_(file_path, -1);
+}
+
+void Network::updateEdgeTravelTimesLayer(std::string file_path, int layer) {
+    loadTravelTimeFile_(file_path, layer);
+}
+
+void Network::setLayerSeconds(double layer_seconds) {
+    layer_seconds_ = layer_seconds;
+}
+
+double Network::getLayerSeconds() {
+    return layer_seconds_;
+}
+
+// layer < 0 writes the edge's base travel time, which is what the static router
+// reads and what layer 0 of a time-dependent search falls back to.
+void Network::loadTravelTimeFile_(std::string file_path, int layer) {
+    cout << "c++ update tts " << file_path << " layer " << layer << endl;
     ifstream file(file_path);
     if (file.is_open()) {
         cout << "is open!" << endl;
@@ -256,7 +274,12 @@ void Network::updateEdgeTravelTimes(std::string file_path) {
             }
             //cout << endl;
             if (column_counter >= 3) {
-                updateEdgeTravelTime(from_node_index, to_node_index, edge_tt);
+                if (layer < 0) {
+                    updateEdgeTravelTime(from_node_index, to_node_index, edge_tt);
+                }
+                else {
+                    updateEdgeTravelTimeLayer(from_node_index, to_node_index, edge_tt, layer);
+                }
             }
             //cout << row_counter << " " << column_counter << endl;
             //cout << " -> " << nodes.size() << endl;
@@ -294,6 +317,28 @@ void Network::updateEdgeTravelTime(int start_node_index, int end_node_index, dou
         cout << "C++ ERROR: edge not found: " << start_node_index << " " << end_node_index << endl;
     }
     //cout << "C++ ERROR: edge not found: " << start_node_index << " " << end_node_index << endl;
+}
+
+void Network::updateEdgeTravelTimeLayer(int start_node_index, int end_node_index, double edge_travel_time, int layer) {
+    bool fw_found = false;
+    for (Edge &edge : nodes[start_node_index].getOutgoingEdges()) {
+        if (edge.getEndNode() == end_node_index) {
+            edge.setLayerTravelTime(layer, edge_travel_time);
+            fw_found = true;
+            break;
+        }
+    }
+    bool bw_found = false;
+    for (Edge& edge : nodes[end_node_index].getIncomingEdges()) {
+        if (edge.getStartNode() == start_node_index) {
+            edge.setLayerTravelTime(layer, edge_travel_time);
+            bw_found = true;
+            break;
+        }
+    }
+    if (!fw_found || !bw_found) {
+        cout << "C++ ERROR: edge not found: " << start_node_index << " " << end_node_index << endl;
+    }
 }
 
 unsigned int Network::getNumberNodes() {
@@ -401,7 +446,14 @@ void Network::dijkstraStepForward_(std::priority_queue<std::pair<double, int>>& 
         Node& next_node = nodes[edge.getEndNode()];
         //cout << current_node.getStr() << " " << next_node.getStr() << endl;
         if (!next_node.isSettledFw(dijkstra_number)) {
-            next_cost = current_cost + edge.getTravelTime();
+            // current_cost is the elapsed travel time from the query's origin,
+            // so it is also the offset at which this vehicle enters the edge.
+            // That is the whole of the time dependence: a leg 15 minutes into a
+            // route is priced by the layer covering minute 15, not by the one
+            // covering the departure bin.
+            next_cost = current_cost + (layer_seconds_ > 0.0
+                                        ? edge.getTravelTimeAt(current_cost, layer_seconds_)
+                                        : edge.getTravelTime());
             if (!next_node.isVisitedFw(dijkstra_number)) {
                 next_node.setPrev(current_node.getIndex());
                 next_node.setCostFw(pair<double, double>(next_cost, current_node.getCostFw().second + edge.getTravelDistance()));
@@ -534,7 +586,27 @@ void Network::dijkstraStepBackward_(std::priority_queue<std::pair<double, int>>&
     }
 }
 
+bool Network::dijkstraForwardTo_(int start_node_index, int end_node_index) {
+    std::vector<int> one_target = {end_node_index};
+    setTargets(one_target);
+    dijkstraForward(start_node_index);
+    nodes[end_node_index].unsetTarget();
+    return nodes[end_node_index].isSettledFw(dijkstra_number);
+}
+
 void Network::computeTravelCosts1To1py(int start_node_index, int end_node_index, double* tt, double* dis) {
+    if (layer_seconds_ > 0.0) {
+        if (dijkstraForwardTo_(start_node_index, end_node_index)) {
+            pair<double, double> cost = nodes[end_node_index].getCostFw();
+            *tt = cost.first;
+            *dis = cost.second;
+        }
+        else {
+            *tt = -1.0;
+            *dis = -1.0;
+        }
+        return;
+    }
     int meeting_node = 1;
     pair<double, double> result = dijkstraBidirectional(start_node_index, end_node_index, &meeting_node);
     *tt = result.first;
@@ -667,6 +739,23 @@ pair<double, double> Network::dijkstraBidirectional(int start_node_index, int en
 }
 
 int Network::computeRouteSize1to1(int start_node_index, int end_node_index) {
+    if (layer_seconds_ > 0.0) {
+        // The forward search already holds the whole path in prev, so the route
+        // is one walk back from the target. _last_found_route_fw is written in
+        // target-to-start order because writeRoute reverses it.
+        if (!dijkstraForwardTo_(start_node_index, end_node_index)) {
+            return -1;
+        }
+        _last_found_route_fw = {};
+        _last_found_route_bw = {};
+        int current = end_node_index;
+        _last_found_route_fw.push_back(current);
+        while ((nodes[current].getPrev() >= 0) & (nodes[current].getPrev() != current)) {
+            current = nodes[current].getPrev();
+            _last_found_route_fw.push_back(current);
+        }
+        return _last_found_route_fw.size();
+    }
     int meeting_node_index = -1;
     pair<double, double> result = dijkstraBidirectional(start_node_index, end_node_index, &meeting_node_index);
     if (meeting_node_index >= 0) {

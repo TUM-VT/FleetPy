@@ -16,6 +16,9 @@ cdef extern from "Network.h":
     cdef cppclass Network:
         Network(string, string) except +
         void updateEdgeTravelTimes(string) except +
+        void updateEdgeTravelTimesLayer(string, int) except +
+        void setLayerSeconds(double) except +
+        double getLayerSeconds() except +
         int computeTravelCosts1ToXpy(int start_node_index, int number_targets, int* targets, int* reached_targets, double* reached_target_tts, double* reached_target_dis, double time_range, int max_targets) except +
         int computeTravelCostsXTo1py(int start_node_index, int number_targets, int* targets, int* reached_targets, double* reached_target_tts, double* reached_target_dis, double time_range, int max_targets) except +
         void computeTravelCosts1To1py(int start_node_index, int end_node_index, double* tt, double* dis) except +

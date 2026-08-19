@@ -18,6 +18,11 @@ private:
 	int dijkstra_number = 0;
 
 	void updateEdgeTravelTime(int start_node_index, int end_node_index, double edge_travel_time);
+	void updateEdgeTravelTimeLayer(int start_node_index, int end_node_index, double edge_travel_time, int layer);
+	void loadTravelTimeFile_(std::string file_path, int layer);
+	// Seconds one forecast layer covers. <= 0 means the search is static, which
+	// is the state every existing scenario runs in.
+	double layer_seconds_ = -1.0;
 
 	void setTargets(const std::vector<int>& targets);
 	int dijkstraForward(int start_node_index, double time_range = -1, int max_targets = -1);
@@ -25,6 +30,10 @@ private:
 	int dijkstraBackward(int start_node_index, double time_range = -1, int max_targets = -1);
 	void dijkstraStepBackward_(std::priority_queue<std::pair<double, int>>& current_pq, Node& current_node, double current_cost);
 	std::pair<double, double> dijkstraBidirectional(int start_node_index, int end_node_index, int* meeting_node_index);
+	// Forward-only search to one target. A bidirectional search cannot carry a
+	// departure time -- its backward half would have to know the arrival time it
+	// is solving for -- so time-dependent queries take this instead.
+	bool dijkstraForwardTo_(int start_node_index, int end_node_index);
 
 	std::vector<int> _last_found_route_fw;
 	std::vector<int> _last_found_route_bw;
@@ -32,6 +41,12 @@ private:
 public:
 	Network(std::string node_path, std::string edge_path);
 	void updateEdgeTravelTimes(std::string file_path);
+	// Load one forecast layer. Layer 0 is the ordinary table; layers 1..n-1 are
+	// what the same export predicts for later bins.
+	void updateEdgeTravelTimesLayer(std::string file_path, int layer);
+	// Turn departure-time-dependent search on (layer_seconds > 0) or off.
+	void setLayerSeconds(double layer_seconds);
+	double getLayerSeconds();
 	unsigned int getNumberNodes();
 	std::vector<Resultstruct> computeTravelCosts1toX(int start_node_index, const std::vector<int>& targets, double time_range = -1, int max_targets = -1);
 	std::vector<Resultstruct> computeTravelCostsXto1(int start_node_index, const std::vector<int>& targets, double time_range = -1, int max_targets = -1);

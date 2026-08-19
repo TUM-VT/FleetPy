@@ -19,7 +19,8 @@ import pathlib
 from src.coupling.SUMO.SUMOcontrolledSim import SUMOcontrolledSim
 from src.coupling.SUMO.sumocfg_utils import merge_additional_files
 from src.coupling.SUMO.tt_source import (
-    coverage_error, requested_bin_times, resolve_source_dir, tt_file_for, write_source_stats)
+    coverage_error, layer_coverage_error, requested_bin_times, resolve_source_dir,
+    tt_file_for, write_source_stats)
 from src.misc.init_modules import load_simulation_environment
 import src.misc.config as config
 from src.misc.globals import *
@@ -209,6 +210,13 @@ class SUMOFleetPyServer():
                                  float(params.get(G_SUMO_TT_SRC_MIN_COV, 1.0)))
         if problem:
             raise FileNotFoundError(problem)
+        # A time-dependent engine reads five more files per bin. Missing ones do
+        # not fail either -- they leave the arm routing on its base table alone,
+        # which is exactly its static twin -- so the grid is checked here too.
+        if type(self.fp_sim_env.routing_engine).__name__.startswith("NetworkTimeDependent"):
+            layer_problem = layer_coverage_error(self.g_tt_source_dir, times)
+            if layer_problem:
+                raise FileNotFoundError(layer_problem)
         LOG.info(f"travel-time source {self.g_tt_source_dir}: "
                  f"all {len(times)} requested bins present")
 

@@ -30,6 +30,34 @@ cdef class PyNetwork:
         """
         self.c_net.updateEdgeTravelTimes(file_path)
 
+    def updateEdgeTravelTimesLayer(self, string file_path, int layer):
+        """
+        loads one forecast layer of edge travel times.
+
+        Layer k holds what the same forecast says about the k-th bin after a
+        routing query, so a search that knows its elapsed travel time can price
+        each edge at the layer covering the moment the vehicle enters it. Layer
+        0 is not loaded here: it is the ordinary table written by
+        updateEdgeTravelTimes, which every layer falls back to when it is
+        missing.
+        :param file_path: byte string, the CSV for that layer
+        :param layer: int >= 1
+        """
+        self.c_net.updateEdgeTravelTimesLayer(file_path, layer)
+
+    def setLayerSeconds(self, double layer_seconds):
+        """
+        turns departure-time-dependent search on or off.
+
+        :param layer_seconds: seconds one layer covers (300 for 5-minute bins).
+            <= 0 restores the static search every other scenario uses.
+        """
+        self.c_net.setLayerSeconds(layer_seconds)
+
+    def getLayerSeconds(self):
+        """seconds per forecast layer, or <= 0 when the search is static"""
+        return self.c_net.getLayerSeconds()
+
     def computeTravelCostsXto1(self, start_node_index, list_target_node_indices, max_time_range = None, max_targets = None):
         """
         :param start_node_index: int start node

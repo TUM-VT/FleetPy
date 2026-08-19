@@ -101,6 +101,50 @@ def missing_bins(source_dir: str, times: Sequence[int]) -> List[int]:
             if not os.path.isfile(os.path.join(source_dir, tt_bin_filename(t)))]
 
 
+def layer_bin_filename(sim_time, horizon: int) -> str:
+    """Name of one forecast layer, mirroring ``export_gnn_tt.layer_filename``."""
+    if int(horizon) <= 1:
+        return tt_bin_filename(sim_time)
+    return "tt_{}_h{}.csv".format(int(round(float(sim_time))), int(horizon))
+
+
+def bins_without_layers(source_dir: str, times: Sequence[int],
+                        horizons: Sequence[int] = (2, 3, 4, 5, 6)) -> List[int]:
+    """Which of ``times`` have a base table but no forecast layers beside it.
+
+    A time-dependent arm whose layers are absent does not fail: every edge is
+    priced from the base table and the arm silently becomes its own static twin,
+    which is the one outcome that would look like a finished experiment.
+    """
+    out = []
+    for t in times:
+        if not os.path.isfile(os.path.join(source_dir, tt_bin_filename(t))):
+            continue
+        if not all(os.path.isfile(os.path.join(source_dir, layer_bin_filename(t, h)))
+                   for h in horizons):
+            out.append(t)
+    return out
+
+
+def layer_coverage_error(source_dir: Optional[str], times: Sequence[int],
+                         horizons: Sequence[int] = (2, 3, 4, 5, 6)) -> Optional[str]:
+    """Why ``source_dir`` cannot serve a *time-dependent* run, or ``None``."""
+    if source_dir is None:
+        return ("a time-dependent routing engine needs {}, which is unset; "
+                "without it there is nothing to route the later horizons on"
+                .format(PARAM_SOURCE_DIR))
+    if not os.path.isdir(source_dir):
+        return "{}={} does not exist".format(PARAM_SOURCE_DIR, source_dir)
+    incomplete = bins_without_layers(source_dir, times, horizons)
+    if not incomplete:
+        return None
+    return (
+        "{}={} is missing forecast layers for {} of {} bins, so those bins would "
+        "route on the base table alone and the arm would silently be its static "
+        "twin; first: {}. Export with --all-horizons."
+    ).format(PARAM_SOURCE_DIR, source_dir, len(incomplete), len(times), incomplete[:5])
+
+
 def coverage_error(source_dir: str, times: Sequence[int],
                    min_coverage: float = 1.0) -> Optional[str]:
     """Why ``source_dir`` cannot serve this run, or ``None`` if it can.
