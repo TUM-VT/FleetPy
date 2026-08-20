@@ -444,7 +444,6 @@ class SUMOFleetPyServer():
 
                                 except:
                                     LOG.warning(f"Vehicle {sumo_vid} could not be rerouted")
-                                    breakpoint()
                     else:
                         LOG.debug(f"Vehicle {sumo_vid} is Loaded and in Network and SumoRoute {sumoRoute} is current Route {currentRoute}")
                         pass 
@@ -633,15 +632,24 @@ class SUMOFleetPyServer():
             ## A) Vehicle Moving on the Road --> Get Update 
             if str(sumo_vid) in current_sumo_vehicle_ids_set:
                 LOG.debug("Vehicle is in IDList and position should be updated")
-                currentLane = traci.vehicle.getLaneID(str(sumo_vid))
-                laneLength = traci.lane.getLength(currentLane)
-                currentLanePosition = traci.vehicle.getLanePosition(str(sumo_vid)) #returns something like: 20.267898023103246 (Other format needed?!)
-                frac_position = currentLanePosition/laneLength
-                currentEdge = traci.lane.getEdgeID(currentLane)
-                if self.g_sumo_edge_id_to_fs_edge.get(currentEdge) is not None:
-                    o_node, d_node = self.g_sumo_edge_id_to_fs_edge[currentEdge]
-                    CurrentPosition = (o_node, d_node, frac_position)
-                    vehicle_to_position_dict[opid_vid_tuple] = CurrentPosition
+                # Vehicles have no lane in the mesoscopic model: traci.vehicle.getLaneID()
+                # returns "" there, which makes traci.lane.getLength() raise and aborts the
+                # coupling. Take the edge from getRoadID() instead and its length from the
+                # network tables, both of which are available in micro and in meso.
+                currentEdge = traci.vehicle.getRoadID(str(sumo_vid))
+                fs_edge = self.g_sumo_edge_id_to_fs_edge.get(currentEdge)
+                if fs_edge is not None and currentEdge and not currentEdge.startswith(":"):
+                    edgeLength = self.g_fs_edge_to_len.get(fs_edge)
+                    try:
+                        currentLanePosition = traci.vehicle.getLanePosition(str(sumo_vid))
+                    except traci.exceptions.TraCIException:
+                        currentLanePosition = 0.0
+                    if edgeLength and edgeLength > 0:
+                        frac_position = min(max(currentLanePosition / edgeLength, 0.0), 1.0)
+                    else:
+                        frac_position = 0.000001
+                    o_node, d_node = fs_edge
+                    vehicle_to_position_dict[opid_vid_tuple] = (o_node, d_node, frac_position)
                 else:
                     LOG.debug(f"Edge {currentEdge} not known in FP, no update this timestep")
 
