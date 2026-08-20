@@ -115,20 +115,45 @@ def create_nodes_and_edges_from_xml(xmlfile, allowed_modes="all"):
     
                 
     #Add Connecting edges (within intersections)
+    # Index the edge elements once. Looking them up with root_node.findall("edge")
+    # inside the connection loop is O(#connections * #edges) -- on a city network
+    # (~38k connections, ~22k edges) that is ~850M iterations.
+    edge_elements_by_id = {edge.get("id"): edge for edge in root_node.findall("edge")}
+
     for connection in tqdm(root_node.findall('connection'),desc="Add Connecting edges (within intersections)"):
         fromEdge = connection.get('from')
         toEdge = connection.get('to')
         if fromEdge not in edges.keys() or toEdge not in edges.keys() or ":" in fromEdge or ":" in toEdge:
             continue
+
+        from_node_index = nodes[f"E_{fromEdge}"]["node_index"]
+        to_node_index = nodes[f"S_{toEdge}"]["node_index"]
+        edge_connection = f"i_{fromEdge}_{toEdge}"
+
         internalEdge_id = connection.get("via")
+        if internalEdge_id is None:
+            # Network built with netconvert --no-internal-links: connections carry no
+            # "via" and the net holds no internal edges. Without a connector edge here
+            # every SUMO edge stays an isolated two-node component, so no request can
+            # ever be routed. E_fromEdge and S_toEdge are the same junction, hence a
+            # zero-length connector. The leading ":" marks it internal so the coupling's
+            # _transform_route_fp_to_sumo() drops it from the SUMO route instead of
+            # sending a synthetic edge id to SUMO (turns are implicit at junctions).
+            connector_id = f":c_{fromEdge}__{toEdge}"
+            edges[connector_id] = {"from_node" : from_node_index, "to_node" : to_node_index, "distance" : 0.0, "travel_time" : 0.0, "source_edge_id" : connector_id, "number_of_usable_lanes":1,"connecting_edges":edge_connection}
+            continue
+
         if "_" in internalEdge_id:
             last_underscore_index = internalEdge_id.rfind('_') 
             if last_underscore_index != -1:
                 internalEdge_id= internalEdge_id[:last_underscore_index]
 
-        for edge_element in root_node.findall("edge"): #find internal edge element for id
-            if edge_element.get("id")==internalEdge_id:
-                break
+        edge_element = edge_elements_by_id.get(internalEdge_id)
+        if edge_element is None:
+            # Previously the search loop left edge_element pointing at the last edge of
+            # the network when no id matched, so the connector silently got that
+            # unrelated edge's length and speed.
+            continue
         
         ## Get average speed and length of internal lanes
         internal_lanes_speeds = []
@@ -153,9 +178,6 @@ def create_nodes_and_edges_from_xml(xmlfile, allowed_modes="all"):
             internal_lanes_length_avg = round(internal_lanes_length_avg,1)
         else:
             continue   
-        edge_connection = f"i_{fromEdge}_{toEdge}"
-        from_node_index = nodes[f"E_{fromEdge}"]["node_index"]
-        to_node_index = nodes[f"S_{toEdge}"]["node_index"]
         edges[internalEdge_id] = {"from_node" : from_node_index, "to_node" : to_node_index, "distance" : internal_lanes_length_avg, "travel_time" : min_travel_time, "source_edge_id" : internalEdge_id, "number_of_usable_lanes":internal_lanes_count,"connecting_edges":edge_connection}
   
 
