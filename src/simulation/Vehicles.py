@@ -229,6 +229,8 @@ class SimulationVehicle:
                 else:
                     if not ca.locked:
                         # this will usually only happen for waiting tasks, which can be stopped at any time
+                        LOG.error(f"DIAGNOSTIC start_next_leg sets cl_remaining_time=None: vid={self.vid} "
+                                  f"status={self.status} ca_status={ca.status} sim_time={simulation_time} ca={ca}")
                         self.cl_remaining_time = None
                     else:
                         # raise AssertionError(f"Current locked task of vehicle {self.vid}"
@@ -355,7 +357,8 @@ class SimulationVehicle:
         if self.assigned_route:
             if not list_route_legs or list_route_legs[0] != self.assigned_route[0]:
                 if list_route_legs and self.status == VRL_STATES.WAITING and list_route_legs[0].earliest_start_time > sim_time: # dont write multiple waiting legs
-                    LOG.debug(f"update waiting time for {self.vid} at {sim_time} from {self.cl_remaining_time} to {list_route_legs[0].earliest_start_time - sim_time}")
+                    LOG.error(f"DIAGNOSTIC assign_vehicle_plan WAITING-refresh: vid={self.vid} at {sim_time} "
+                              f"cl_remaining_time {self.cl_remaining_time} -> {list_route_legs[0].earliest_start_time - sim_time}")
                     self.cl_remaining_time = list_route_legs[0].earliest_start_time - sim_time
                     list_route_legs = [self.assigned_route[0]] + list_route_legs
                     list_route_legs[0].duration = list_route_legs[1].earliest_start_time - self.cl_start_time
@@ -439,7 +442,16 @@ class SimulationVehicle:
                             dict_start_alighting[rid] = (c_time, self.pos)
             elif self.status != VRL_STATES.IDLE: #elif self.status != 0 and not self.status in G_IDLE_BUSY_STATUS:
                 # 2) non-moving:
-                # LOG.debug(f"Vehicle {self.vid} performs non-moving task between {c_time} and {next_time}")    
+                # LOG.debug(f"Vehicle {self.vid} performs non-moving task between {c_time} and {next_time}")
+                if self.cl_remaining_time is None:
+                    LOG.error(
+                        f"DIAGNOSTIC cl_remaining_time is None: vid={self.vid} status={self.status} "
+                        f"pos={self.pos} cl_start_time={self.cl_start_time} cl_start_pos={self.cl_start_pos} "
+                        f"start_next_leg_first={self.start_next_leg_first} current_time={current_time} "
+                        f"next_time={next_time} c_time={c_time} remaining_step_time={remaining_step_time}\n"
+                        f"assigned_route ({len(self.assigned_route)} legs): "
+                        + " | ".join(str(x) for x in self.assigned_route)
+                    )
                 if remaining_step_time < self.cl_remaining_time:
                     #   a) duration is ongoing: do nothing
                     self.cl_remaining_time -= remaining_step_time

@@ -543,14 +543,29 @@ class FleetControlBase(metaclass=ABCMeta):
         if assigned_charging_task is not None:
             self._active_charging_processes[assigned_charging_task[0]] = assigned_charging_task[1]
             self._vid_to_assigned_charging_process[veh_obj.vid] = assigned_charging_task[0]
-        new_list_vrls = self._build_VRLs(vehicle_plan, veh_obj, sim_time)
-        veh_obj.assign_vehicle_plan(new_list_vrls, sim_time, force_ignore_lock=force_assign)
+        self._dispatch_vehicle_plan(veh_obj, vehicle_plan, sim_time, force_assign=force_assign)
         self.veh_plans[veh_obj.vid] = vehicle_plan
         for rid in get_assigned_rids_from_vehplan(vehicle_plan):
             pax_info = vehicle_plan.get_pax_info(rid)
             self.rq_dict[rid].set_assigned(pax_info[0], pax_info[1])
             self.rid_to_assigned_vid[rid] = veh_obj.vid
         self._additional_assignment_records(veh_obj, vehicle_plan, sim_time)
+
+    def _dispatch_vehicle_plan(self, veh_obj : SimulationVehicle, vehicle_plan : VehiclePlan, sim_time : int,
+                               force_assign : bool=False):
+        """ this method pushes an assigned vehicle plan to the actual vehicle. it is the single seam between
+        fleetctrl's internal planning representation (VehiclePlan/PlanStop) and the vehicle-side execution
+        (VehicleRouteLeg/SimulationVehicle). override this method (instead of assign_vehicle_plan) to dispatch
+        plans to a different vehicle/execution layer, e.g. a remote fleet backend, without having to duplicate
+        the request/plan bookkeeping done in assign_vehicle_plan().
+
+        :param veh_obj: vehicle obj to assign vehicle plan to
+        :param vehicle_plan: vehicle plan that should be assigned
+        :param sim_time: current simulation time in seconds
+        :param force_assign: this parameter can be used to enforce the assignment, when a plan is (partially) locked
+        """
+        new_list_vrls = self._build_VRLs(vehicle_plan, veh_obj, sim_time)
+        veh_obj.assign_vehicle_plan(new_list_vrls, sim_time, force_ignore_lock=force_assign)
 
     def time_trigger(self, simulation_time : int):
         """This method is used to perform time-triggered processes. These are split into the following:

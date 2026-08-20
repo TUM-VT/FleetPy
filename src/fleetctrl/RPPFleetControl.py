@@ -776,8 +776,7 @@ class RPPFleetControlSingleStopInsertion(RPPFleetControlFullInsertion):
         """
         LOG.debug(f"assign to {veh_obj.vid} at time {sim_time} : {vehicle_plan}")
         vehicle_plan.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
-        new_vrl = self._build_VRLs(vehicle_plan, veh_obj, sim_time)
-        veh_obj.assign_vehicle_plan(new_vrl, sim_time, force_ignore_lock=force_assign)
+        self._dispatch_vehicle_plan(veh_obj, vehicle_plan, sim_time, force_assign=force_assign)
         self.veh_plans[veh_obj.vid] = vehicle_plan
         for rid in list(vehicle_plan.pax_info.keys()):
             pax_info = vehicle_plan.get_pax_info(rid)
