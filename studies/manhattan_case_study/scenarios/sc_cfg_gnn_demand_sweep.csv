@@ -1,0 +1,9 @@
+scenario_name,rq_file,op_fleet_composition,op_rp_batch_optimizer,start_time,end_time,nw_dynamic_f,op_enable_ml_training,op_enable_ml_inference,op_model_type,op_ml_selection_method,op_top_k_vr,op_top_k_rr,op_ml_experiment_name
+gnn_sweep_5pct_baseline,2018-11-16_sample_5_1.csv,default_vehtype:150,GNNAlonsoMora,25200,36000,2018-11-16_mean_tt_factor_hourly.csv,False,False,,,,,
+gnn_sweep_5pct_vr_only,2018-11-16_sample_5_1.csv,default_vehtype:150,GNNAlonsoMora,25200,36000,2018-11-16_mean_tt_factor_hourly.csv,False,True,gnn,top_k,5,99999,gnn_peak8day
+gnn_sweep_10pct_baseline,2018-11-16_sample_10_1.csv,default_vehtype:330,GNNAlonsoMora,25200,36000,2018-11-16_mean_tt_factor_hourly.csv,False,False,,,,,
+gnn_sweep_10pct_vr_only,2018-11-16_sample_10_1.csv,default_vehtype:330,GNNAlonsoMora,25200,36000,2018-11-16_mean_tt_factor_hourly.csv,False,True,gnn,top_k,5,99999,gnn_peak8day
+gnn_sweep_20pct_baseline,2018-11-16_sample_20_1.csv,default_vehtype:550,GNNAlonsoMora,25200,36000,2018-11-16_mean_tt_factor_hourly.csv,False,False,,,,,
+gnn_sweep_20pct_vr_only,2018-11-16_sample_20_1.csv,default_vehtype:550,GNNAlonsoMora,25200,36000,2018-11-16_mean_tt_factor_hourly.csv,False,True,gnn,top_k,5,99999,gnn_peak8day
+gnn_sweep_50pct_baseline,2018-11-16_sample_50_1.csv,default_vehtype:500,GNNAlonsoMora,25200,36000,2018-11-16_mean_tt_factor_hourly.csv,False,False,,,,,
+gnn_sweep_50pct_vr_only,2018-11-16_sample_50_1.csv,default_vehtype:500,GNNAlonsoMora,25200,36000,2018-11-16_mean_tt_factor_hourly.csv,False,True,gnn,top_k,5,99999,gnn_peak8day
