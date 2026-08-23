@@ -1,6 +1,6 @@
 # 1 - FleetSimulation
 sim_env: BatchOfferSimulation
-log_level: info
+log_level: error
 network_type: NetworkTTMatrix
 network_name: Manhattan_2019_corrected
 nw_dynamic_f: 2018-11-12_mean_tt_factor_hourly.csv

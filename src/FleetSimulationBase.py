@@ -190,6 +190,7 @@ class FleetSimulationBase:
             # remove old log handlers (otherwise sequential simulations only log to first simulation)
             for handler in logging.root.handlers[:]:
                 logging.root.removeHandler(handler)
+                handler.close()
             # start new log file
             logging.VERBOSE = 5
             logging.addLevelName(logging.VERBOSE, "VERBOSE")

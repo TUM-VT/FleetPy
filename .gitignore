@@ -197,3 +197,7 @@ dmypy.json
 
 # tensorflow in ml_gym
 src/ml_gym/tensorboard/*
+tensorboard/*
+best_model/*
+eval_logs/*
+ppo_repo_model*.zip

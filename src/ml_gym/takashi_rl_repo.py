@@ -16,7 +16,7 @@ from src.misc.config import ConstantConfig, ScenarioConfig
 
 from gymnasium import spaces
 from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import BaseCallback, CallbackList
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 
 from scipy.optimize import linprog
@@ -103,7 +103,7 @@ class TakashiRLRepo(FleetPyGym):
         # When running multiple Ray workers you can use config.worker_index to assign
         # each worker a different scenario, e.g.:
         #   scenario_inx = (config.worker_index - 1) % len(scenario_cfgs)
-        scenario_inx = 0
+        scenario_inx = config.get("scenario_inx", 0)
         fleetpy_config = constant_cfg + scenario_cfgs[scenario_inx]
         env_id = config.get("env_id", 0)
         # pid suffix: env_id alone collides whenever this class is instantiated by
@@ -261,9 +261,10 @@ class TakashiRLRepo(FleetPyGym):
             return -1e6
 
         # Weights
-        w1 = 0.03
-        w2 = 0.0006
-        w3 = 0.02
+        w = 0.0000167
+        w1 = 1800
+        w2 = 1
+        w3 = 10
 
         # Cost terms
         cost_unserved = observation["cumulative_unserved"]
@@ -274,9 +275,19 @@ class TakashiRLRepo(FleetPyGym):
         self.cost_travel_history.append(cost_travel)
         self.cost_deviation_history.append(cost_deviation)
 
-        reward = - (w1 * cost_unserved + w2 * cost_travel + w3 * cost_deviation)
+        reward = - w * (w1 * cost_unserved + w2 * cost_travel + w3 * cost_deviation)
 
         return float(reward)
+    
+    def get_last_costs(self):
+        if not self.cost_unserved_history:
+            return (0.0, 0.0, 0.0)
+
+        return (
+            self.cost_unserved_history[-1],
+            self.cost_travel_history[-1],
+            self.cost_deviation_history[-1],
+        )
 
 # Optimize repositioning based on action (desired proportion)
 def repo_optimization(action, observation, zone_ids, nr_zones):
@@ -302,7 +313,7 @@ def repo_optimization(action, observation, zone_ids, nr_zones):
             c.append(tt_matrix[i, j])
     
     # Add the deviation penalty term in the objective function
-    lam = 500 # Lagrangerian multiplier
+    lam = 1800 # Lagrangerian multiplier
     c += [lam] * Z
     c = np.array(c)
     
@@ -398,19 +409,41 @@ def repo_optimization(action, observation, zone_ids, nr_zones):
     return actions, dn, dn_int, u, tt_matrix
 
 # Function for parallel computation
-def make_env(config, env_id):
+def make_env(config, env_id, n_train_scenarios):
     def _init():
         cfg = copy.deepcopy(config)
         cfg["env_id"] = env_id
+        cfg["scenario_inx"] = env_id % n_train_scenarios
         return TakashiRLRepo(cfg)
     return _init
 
+# Multiple Model Saves
+class SaveModelCallBack(BaseCallback):
+    def __init__(self, save_freq, save_path, verbose=1):
+        super().__init__(verbose)
+        self.save_freq = save_freq
+        self.save_path = save_path
+        self.last_save = 0
+
+    def _on_step(self):
+        if self.num_timesteps >= self.last_save + self.save_freq:
+            self.last_save += self.save_freq
+
+            path = f"{self.save_path}_{self.last_save}"
+            self.model.save(path)
+
+            if self.verbose:
+                print(f"Model saved to {path}")
+
+        return True
+
 # Early Stopping
 class RewardEarlyStoppingCallback(BaseCallback):
-    def __init__(self, window_size=10, patience=10, verbose = 1):
+    def __init__(self, window_size=50, patience=30, min_delta=1.0, verbose = 1):
         super().__init__(verbose)
         self.window_size = window_size
         self.patience = patience
+        self.min_delta = min_delta
         self.recent_rewards = deque(maxlen=window_size)
         self.best_mean_reward = -np.inf
         self.no_improvement = 0
@@ -435,6 +468,16 @@ class RewardEarlyStoppingCallback(BaseCallback):
             finished_rewards.append(self.episode_rewards[env_id])
             self.episode_rewards[env_id] = 0.0
 
+        # Show reward terms in Tensorboard
+        envs = self.training_env.env_method("get_last_costs")
+        unserved = np.mean([x[0] for x in envs])
+        travel = np.mean([x[1] for x in envs])
+        deviation = np.mean([x[2] for x in envs])
+        self.logger.record("cost/unserved", unserved)
+        self.logger.record("cost/travel", travel)
+        self.logger.record("cost/deviation", deviation)
+        self.logger.dump(self.num_timesteps)
+
         if not finished_rewards:
             return True
 
@@ -447,7 +490,7 @@ class RewardEarlyStoppingCallback(BaseCallback):
 
         mean_reward = np.mean(self.recent_rewards)
 
-        if mean_reward > self.best_mean_reward:
+        if mean_reward > self.best_mean_reward + self.min_delta:
             self.best_mean_reward = mean_reward
             self.no_improvement = 0
 
@@ -470,7 +513,6 @@ class RewardEarlyStoppingCallback(BaseCallback):
                     f"for {self.patience} evaluations."
                 )
             return False
-        
         return True
 
 
@@ -492,30 +534,48 @@ def train(const_config, sc_config, nr_zones, model_path, n_envs, total_timesteps
                     }
 
     # TODO: adjust the RL setup as needed (e.g. learning algorithm, hyperparameters, number of parallel envs). The current config is just a placeholder to get you started.
+    n_train_scenarios = 28
     env = SubprocVecEnv(
-        [make_env(fleetpy_config, i) for i in range(n_envs)]
+        [make_env(fleetpy_config, i, n_train_scenarios) for i in range(n_envs)]
     )
     env = VecMonitor(env)
 
     model = PPO('MlpPolicy',
                 env,
                 learning_rate=3e-4,
-                n_steps=64,
-                batch_size=64,
-                n_epochs=10,
+                n_steps=32,
+                batch_size=128,
+                n_epochs=5,
                 gamma=0.99,
                 clip_range=0.2,
                 ent_coef=0,
                 vf_coef=0.5,
                 verbose=1, # log detail→0:none, 1:standard, 2:detail debug
-                tensorboard_log="./tensorboard/"
+                tensorboard_log=os.path.join(
+                    MAIN_DIR,
+                    "studies",
+                    "ml_test",
+                    "results",
+                    "tensorboard"
+                )
                 )
 
-    callback = RewardEarlyStoppingCallback(
-        window_size=10,
-        patience=10,
+    early_stopping_callback = RewardEarlyStoppingCallback(
+        window_size=50,
+        patience=1000,
+        min_delta=0,
         verbose=1
     )
+
+    save_callback = SaveModelCallBack(
+        save_freq=100000,
+        save_path=model_path
+    )
+
+    callback = CallbackList([
+        early_stopping_callback,
+        save_callback
+    ])
 
     model.learn(total_timesteps=total_timesteps,
                 tb_log_name="PPO_FleetPy",
@@ -527,7 +587,7 @@ def train(const_config, sc_config, nr_zones, model_path, n_envs, total_timesteps
     return model
 
 
-def evaluate(const_config, sc_config, model_path, nr_zones, n_episodes, deterministic=True):
+def evaluate(const_config, sc_config, model_path, nr_zones, scenario_inx, n_episodes, deterministic=True):
     """Roll out a trained PPO policy on a FleetPy scenario (no training).
 
     The scenario's zone count and repositioning horizon/timestep (which together
@@ -548,6 +608,7 @@ def evaluate(const_config, sc_config, model_path, nr_zones, n_episodes, determin
                     "constant_cfg_path": const_config,
                     "var_cfg_path": sc_config,
                     "skip_output": False,  # keep results; reset() gives each episode a unique scenario_name
+                    "scenario_inx": scenario_inx
                     }
     env = TakashiRLRepo(fleetpy_config)
     model = PPO.load(model_path)
@@ -580,7 +641,15 @@ if __name__ == "__main__":
     # matches what it's loaded against. Change here (not per-call) if you need a
     # different zone system or repositioning horizon.
     nr_zones = 8
-    model_path = "ppo_repo_model"
+    model_path = os.path.join(
+        MAIN_DIR,
+        "studies",
+        "ml_test",
+        "results",
+        "models",
+        "ppo_repo_model"
+    )
+   
 
     # default (without arguments) paths for the Manhattan case study configs
     scs_path = os.path.join(MAIN_DIR, "studies", "ml_test", "scenarios") # studies/ml_test/scenarios
@@ -588,14 +657,27 @@ if __name__ == "__main__":
     sc_config = os.path.join(scs_path, "scenario_cfg_manhattan_ml_takashi.csv")
 
     if mode == "train":
-        timesteps = 100000 # TODO define!
-        n_envs = 4 # TODO define!
-        train(const_config, sc_config, nr_zones, model_path,
-              n_envs=n_envs, total_timesteps=timesteps)
+        timesteps = 5000000 # TODO define!
+        n_envs = 28 # TODO define!
+        train(const_config,
+              sc_config,
+              nr_zones,
+              model_path,
+              n_envs=n_envs,
+              total_timesteps=timesteps
+            )
     elif mode == "evaluate":
-        n_episodes = 500 # TODO define!
-        deterministic = True # TODO define! 
-        evaluate(const_config, sc_config, model_path, nr_zones,
-                  n_episodes, deterministic=deterministic)
+        n_episodes = 1 # TODO define!
+        deterministic = True # TODO define!
+        test_scenario_inx = 28
+        evaluate(
+            const_config,
+            sc_config,
+            model_path,
+            nr_zones,
+            test_scenario_inx,
+            n_episodes,
+            deterministic=deterministic
+        )
     else:
         raise ValueError(f"Unknown mode: {mode}")
