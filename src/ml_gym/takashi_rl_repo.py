@@ -140,8 +140,8 @@ class TakashiRLRepo(FleetPyGym):
         # Adapt this to match the action representation your policy network produces.
         # TODO: replace with your actual action space. The current shape is just a placeholder and doesn't reflect any real constraints (e.g. available idle vehicles in origin zones).
         self.action_space = spaces.Box(
-            low=-5,
-            high=5,
+            low=0,
+            high=1,
             shape=(self.nr_zones,),
             dtype=np.float32
         )
@@ -152,7 +152,7 @@ class TakashiRLRepo(FleetPyGym):
         self.observation_space = spaces.Box(
             low=0.0,
             high=np.inf,
-            shape=((3 * self.tau + 2) * self.nr_zones,),
+            shape=((3 * self.tau + 2) * self.nr_zones + 1,),
             dtype=np.float32
         )
 
@@ -200,6 +200,7 @@ class TakashiRLRepo(FleetPyGym):
         # print("translate observation", observation)
         # TODO: implement your actual observation translation logic here. The current implementation is just an example that combines some of the observed values into a flat vector, but you can customize it as needed based on what your observers return and what information you want to feed into the RL policy.
         
+        t = observation["sim_time"] / 86400.0
         zone_to_future_dropoffs = observation["zone_to_future_dropoffs"]
         zone_to_future_repo_completions = observation["zone_to_future_repo_completions"]
         zone_to_idle_vehicles = observation["zone_to_idle_vehicles"]
@@ -228,7 +229,7 @@ class TakashiRLRepo(FleetPyGym):
             for zone_id in self.zone_ids
         ], dtype=np.float32)
 
-        processed_observation = np.concatenate([dropoffs, repo_completions, idles, unserved_rq, forecasted_rq], axis=0).astype(np.float32)
+        processed_observation = np.concatenate([[t], dropoffs, repo_completions, idles, unserved_rq, forecasted_rq], axis=0).astype(np.float32)
 
         return processed_observation
 
@@ -264,7 +265,7 @@ class TakashiRLRepo(FleetPyGym):
         w = 0.0000167
         w1 = 1800
         w2 = 1
-        w3 = 10
+        w3 = 1000
 
         # Cost terms
         cost_unserved = observation["cumulative_unserved"]
@@ -291,9 +292,19 @@ class TakashiRLRepo(FleetPyGym):
 
 # Optimize repositioning based on action (desired proportion)
 def repo_optimization(action, observation, zone_ids, nr_zones):
-    # Softmax
-    exp_action = np.exp(action - np.max(action))
-    dp = exp_action / np.sum(exp_action)
+    ## Softmax
+    # exp_action = np.exp(action - np.max(action))
+    # dp = exp_action / np.sum(exp_action)
+    
+    # Proportional allocation
+    action = np.asarray(action, dtype=np.float64)
+    total_action = np.sum(action)
+
+    if total_action <= 0:
+        dp = np.ones(nr_zones) / nr_zones
+    else:
+        dp = action / total_action
+
     zone_to_idle = observation["zone_to_idle_vehicles"] # no. of idle vehicles by zones
     tt_matrix = observation["tt_matrix"] # matrix of travel times among zones
 
@@ -647,6 +658,7 @@ if __name__ == "__main__":
         "ml_test",
         "results",
         "models",
+        "0902",
         "ppo_repo_model"
     )
    
@@ -657,7 +669,7 @@ if __name__ == "__main__":
     sc_config = os.path.join(scs_path, "scenario_cfg_manhattan_ml_takashi.csv")
 
     if mode == "train":
-        timesteps = 5000000 # TODO define!
+        timesteps = 1000000 # TODO define!
         n_envs = 28 # TODO define!
         train(const_config,
               sc_config,
@@ -669,7 +681,7 @@ if __name__ == "__main__":
     elif mode == "evaluate":
         n_episodes = 1 # TODO define!
         deterministic = True # TODO define!
-        test_scenario_inx = 28
+        test_scenario_inx = 28 # 0~31
         evaluate(
             const_config,
             sc_config,
