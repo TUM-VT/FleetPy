@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 BASEPATH = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.append(BASEPATH)
-from src.routing.NetworkBasicWithStoreCpp import NetworkBasicWithStoreCpp
+from src.routing.road.NetworkBasicWithStoreCpp import NetworkBasicWithStoreCpp
 from src.misc.safe_pathname import slugify
 from src.misc.globals import *
 

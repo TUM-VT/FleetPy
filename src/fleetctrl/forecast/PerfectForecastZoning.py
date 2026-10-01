@@ -44,6 +44,9 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
         super().__init__(zone_network_dir, scenario_parameters, dir_names, operator_attributes)
         if self.fc_temp_resolution is None:
             self.fc_temp_resolution = operator_attributes[G_RA_FC_TR] # TODO ?
+            
+    def _get_future_requests(self, t):
+        return self.demand.future_requests.get(t, {})
 
     def _get_trip_forecasts(self, trip_type, t0, t1, aggregation_level):
         """This method returns the number of expected trip arrivals or departures inside a zone in the
@@ -73,9 +76,9 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
         return_dict = {}
         if not incoming:
             for t in range(t0, t1):
-                future_rqs = self.demand.future_requests.get(t, {})
+                future_rqs = self._get_future_requests(t)
                 for rq in future_rqs.values():
-                    o_zone = self.get_zone_from_node(rq.o_node)
+                    o_zone = self.get_zone_from_pos(rq.o_pos)
                     if o_zone >= 0:
                         try:
                             return_dict[o_zone] += 1
@@ -83,9 +86,9 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
                             return_dict[o_zone] = 1
         else:
             for t in range(t0, t1):
-                future_rqs = self.demand.future_requests.get(t, {})
+                future_rqs = self._get_future_requests(t)
                 for rq in future_rqs.values():
-                    d_zone = self.get_zone_from_node(rq.d_node)
+                    d_zone = self.get_zone_from_pos(rq.d_pos)
                     if d_zone >= 0:
                         try:
                             return_dict[d_zone] += 1
@@ -136,7 +139,7 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
         :type attribute_value: type(request_attribute)
         :param scale: (not for this class) scales forecast distribution by this values
         :type scale: float
-        :return: list of (time, origin_node, destination_node) of future requests
+        :return: list of (time, origin_pos, destination_pos) of future requests
         :rtype: list of 3-tuples
         """ 
         if scale is not None:
@@ -144,22 +147,22 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
         future_list = []
         if request_attribute is None and attribute_value is None:
             for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
-                future_rqs = self.demand.future_requests.get(t, {})
+                future_rqs = self._get_future_requests(t)
                 for rq in future_rqs.values():
-                    future_list.append( (t, rq.o_node, rq.d_node) )
+                    future_list.append( (t, rq.o_pos, rq.d_pos) )
         elif request_attribute is not None:
             if attribute_value is None:
                 for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
-                    future_rqs = self.demand.future_requests.get(t, {})
+                    future_rqs = self._get_future_requests(t)
                     for rq in future_rqs.values():
                         if rq.__dict__.get(request_attribute) is not None:
-                            future_list.append( (t, rq.o_node, rq.d_node) )
+                            future_list.append( (t, rq.o_pos, rq.d_pos) )
             else:
                 for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
-                    future_rqs = self.demand.future_requests.get(t, {})
+                    future_rqs = self._get_future_requests(t)
                     for rq in future_rqs.values():
                         if rq.__dict__.get(request_attribute) is not None and rq.__dict__.get(request_attribute) == attribute_value:
-                            future_list.append( (t, rq.o_node, rq.d_node) )
+                            future_list.append( (t, rq.o_pos, rq.d_pos) )
         LOG.info("perfect forecast list: {}".format(future_list))
         return future_list
     
@@ -181,10 +184,10 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
             scale = 1.0
         return_dict = {}
         for t in range(t0, t1):
-            future_rqs = self.demand.future_requests.get(t, {})
+            future_rqs = self._get_future_requests(t)
             for rq in future_rqs.values():
-                o_zone = self.get_zone_from_node(rq.o_node)
-                d_zone = self.get_zone_from_node(rq.d_node)
+                o_zone = self.get_zone_from_pos(rq.o_pos)
+                d_zone = self.get_zone_from_pos(rq.d_pos)
                 if o_zone >= 0 and d_zone >= 0:
                     try:
                         return_dict[o_zone][d_zone] += 1 * scale
@@ -230,10 +233,10 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
         x = super().register_demand_ref(demand_ref)
         for time_bin in self._forecast.keys():
             for t in range(time_bin[0], time_bin[1]):
-                future_rqs = self.demand.future_requests.get(t, {})
+                future_rqs = self._get_future_requests(t)
                 for rq in future_rqs.values():
-                    o_zone = self.get_zone_from_node(rq.o_node)
-                    d_zone = self.get_zone_from_node(rq.d_node)
+                    o_zone = self.get_zone_from_pos(rq.o_pos)
+                    d_zone = self.get_zone_from_pos(rq.d_pos)
                     if o_zone >= 0 and d_zone >= 0:
                         try:
                             self._forecast[time_bin][o_zone][d_zone] += 1
@@ -257,7 +260,7 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
         :type attribute_value: type(request_attribute)
         :param scale: (not for this class) scales forecast distribution by this values
         :type scale: float
-        :return: list of (time, origin_node, destination_node) of future requests
+        :return: list of (time, origin_pos, destination_pos) of future requests
         :rtype: list of 3-tuples
         """ 
         
@@ -285,10 +288,10 @@ class PerfectForecastDistributionZoneSystem(PerfectForecastZoneSystem):
                     number_rqs = np.random.poisson(poisson_rate * scale_int)
                     ts = [np.random.randint(start_int, high=end_int) for _ in range(number_rqs)]
                     for t in ts:
-                        o_n = self.get_random_node(o_zone, only_boarding_nodes=True)
-                        d_n = self.get_random_node(d_zone, only_boarding_nodes=True)
-                        if o_n >= 0 and d_n >= 0:
-                            future_list.append( (t, o_n, d_n) )
+                        o_p = (self.get_random_node(o_zone, only_boarding_nodes=True), None, None)
+                        d_p = (self.get_random_node(d_zone, only_boarding_nodes=True), None, None)
+                        if o_p[0] >= 0 and d_p[0] >= 0:
+                            future_list.append( (t, o_p, d_p) )
                         else:
                             LOG.warning(f"no node found for zone {o_zone} or {d_zone}")
         future_list.sort(key=lambda x:x[0])

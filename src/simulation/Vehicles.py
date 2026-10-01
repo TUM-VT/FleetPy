@@ -14,7 +14,7 @@ from src.simulation.StationaryProcess import ChargingProcess
 
 if tp.TYPE_CHECKING:
     from src.demand.TravelerModels import RequestBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.fleetctrl.FleetControlBase import FleetControlBase
 
 LOG = logging.getLogger(__name__)
@@ -23,14 +23,15 @@ LOG = logging.getLogger(__name__)
 # ------------------------
 # > guarantee consistent movements in simulation and output
 class SimulationVehicle:
-    def __init__(self, operator_id : int, vehicle_id : int, vehicle_data_dir : str, vehicle_type : str, routing_engine : NetworkBase, rq_db : tp.Dict[tp.Any, RequestBase], op_output : str,
+    def __init__(self, operator_id : int, vehicle_id : int, veh_attributes_dict : dict, 
+                 routing_engine : NetworkBase, rq_db : tp.Dict[tp.Any, RequestBase], op_output : str,
                  record_route_flag : bool, replay_flag : bool):
         """
         Initialization of vehicle in the simulation environment.
         :param operator_id: id of fleet operator the vehicle belongs to
         :param vehicle_id: id of the vehicle within the operator's fleet
-        :param vehicle_data_dir: vehicle data directory
-        :param vehicle_type: checks vehicle data base for existing model
+        :param vehicle_attributes_dict: dictionary that includes at least values for G_VTYPE_NAME, G_VTYPE_MAX_PAX, G_VTYPE_MAX_PARCELS (optional),
+                G_VTYPE_FIX_COST, G_VTYPE_DIST_COST, G_VTYPE_BATTERY_SIZE, G_VTYPE_RANGE
         :param routing_engine: routing engine for queries
         :param rq_db: simulation request database (for conversion from plan requests)
         :param op_output: output for VRL records
@@ -44,16 +45,14 @@ class SimulationVehicle:
         self.op_output = op_output
         self.record_route_flag = record_route_flag
         self.replay_flag = replay_flag
-        #
-        veh_data_f = os.path.join(vehicle_data_dir, f"{vehicle_type}.csv")
-        veh_data = pd.read_csv(veh_data_f, header=None, index_col=0).squeeze("columns")
-        self.veh_type = veh_data[G_VTYPE_NAME]
-        self.max_pax = int(veh_data[G_VTYPE_MAX_PAX])
-        self.max_parcels = int(veh_data.get(G_VTYPE_MAX_PARCELS, 0))
-        self.daily_fix_cost = float(veh_data[G_VTYPE_FIX_COST])
-        self.distance_cost = float(veh_data[G_VTYPE_DIST_COST])/1000.0
-        self.battery_size = float(veh_data[G_VTYPE_BATTERY_SIZE])
-        self.range = float(veh_data[G_VTYPE_RANGE])
+        ## vehicle attributes
+        self.veh_type = veh_attributes_dict[G_VTYPE_NAME]
+        self.max_pax = int(veh_attributes_dict[G_VTYPE_MAX_PAX])
+        self.max_parcels = int(veh_attributes_dict.get(G_VTYPE_MAX_PARCELS, 0))
+        self.daily_fix_cost = float(veh_attributes_dict[G_VTYPE_FIX_COST])
+        self.distance_cost = float(veh_attributes_dict[G_VTYPE_DIST_COST])/1000.0
+        self.battery_size = float(veh_attributes_dict[G_VTYPE_BATTERY_SIZE])
+        self.range = float(veh_attributes_dict[G_VTYPE_RANGE])
         self.soc_per_m = 1/(self.range*1000)
         # current info
         self.status = VRL_STATES.IDLE
@@ -195,6 +194,7 @@ class SimulationVehicle:
             self.cl_driven_distance = 0.0
             self.cl_driven_route = []
             ca = self.assigned_route[0]
+            ca.started = True
             self.status = ca.status
             if self.pos != ca.destination_pos:
                 if ca.route and self.pos[0] == ca.route[0]:
@@ -276,8 +276,13 @@ class SimulationVehicle:
             record_dict[G_VR_LEG_START_TIME] = self.cl_start_time
             record_dict[G_VR_LEG_END_TIME] = simulation_time
             if self.cl_start_pos is None:
-                LOG.error(f"current cl starting point not set before! {self.vid} {self.status.display_name} {self.cl_start_time}")
-                raise EnvironmentError
+                LOG.warning(f"ending a leg that has not been started before! {self.vid} {self.status.display_name} {self.cl_start_time}")
+                if len(ca.rq_dict.get(1, [])) != 0 or len(ca.rq_dict.get(-1, [])) != 0:
+                    LOG.error(f"THERE SHOULD HAVE BEEN A BOARDING! {ca.rq_dict.get(1, [])} {ca.rq_dict.get(-1, [])}")
+                    raise EnvironmentError(f"THERE SHOULD HAVE BEEN A BOARDING! {ca.rq_dict.get(1, [])} {ca.rq_dict.get(-1, [])}")
+                self.reset_current_leg()
+                self.assigned_route = self.assigned_route[1:]
+                return ([], {})
             record_dict[G_VR_LEG_START_POS] = self.routing_engine.return_position_str(self.cl_start_pos)
             record_dict[G_VR_LEG_END_POS] = self.routing_engine.return_position_str(self.pos)
             record_dict[G_VR_LEG_DISTANCE] = self.cl_driven_distance
@@ -339,12 +344,13 @@ class SimulationVehicle:
         # transform rq from PlanRequest to SimulationRequest (based on RequestBase)
         # LOG.info(f"Vehicle {self.vid} before new assignment: {[str(x) for x in self.assigned_route]} at time {sim_time}")
         for vrl in list_route_legs:
-            boarding_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(1,[])]
-            alighting_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(-1,[])]
+            boarding_list = [self.rq_db[prq.get_rid_struct()] for prq in vrl.rq_dict.get(1,[])]
+            alighting_list = [self.rq_db[prq.get_rid_struct()] for prq in vrl.rq_dict.get(-1,[])]
             vrl.rq_dict = {1:boarding_list, -1:alighting_list}
-        LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
-        LOG.debug(f"  -> current assignment: {[str(x) for x in self.assigned_route]}")
-        LOG.debug(f" -> force: {force_ignore_lock}")
+        if logging.DEBUG  >= LOG.getEffectiveLevel():
+            LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
+            LOG.debug(f"  -> current assignment: {[str(x) for x in self.assigned_route]}")
+            LOG.debug(f" -> force: {force_ignore_lock}")
         start_flag = True
         if self.assigned_route:
             if not list_route_legs or list_route_legs[0] != self.assigned_route[0]:
@@ -374,10 +380,6 @@ class SimulationVehicle:
         if list_route_legs:
             if start_flag:
                 self.start_next_leg_first = True
-                # print("THIS IS NOT ALLOWED TO HAPPEN HERE IN CASE OF IMIDIATE BOARDINGS/DEBOARDINGS") # TODO #
-                # exit()
-                # self.start_next_leg(sim_time)
-        # LOG.info(f"Vehicle {self.vid} after new assignment: {[str(x) for x in self.assigned_route]} at time {sim_time}")
 
     def update_veh_state(self, current_time:float, next_time:float)->tp.Tuple[tp.Dict[tp.Any, tp.Tuple[float, tuple]], tp.Dict[tp.Any, tp.Tuple[float, tuple]], tp.List[VehicleRouteLeg], tp.Dict[tp.Any, tp.Tuple[float, tuple]]]:
         """This method updates the current state of a simulation vehicle. This includes moving, boarding etc.
@@ -391,7 +393,8 @@ class SimulationVehicle:
         :return:(dict of boarding requests -> (time, position), dict of alighting request objects -> (time, position), list of passed VRL, dict_start_alighting)
         :rtype: list
         """
-        LOG.debug(f"update veh state {current_time} -> {next_time} : {self}")
+        if logging.DEBUG  >= LOG.getEffectiveLevel():
+            LOG.debug(f"update veh state {current_time} -> {next_time} : {self}")
         dict_boarding_requests = {}
         dict_start_alighting = {}
         dict_alighting_requests = {}
@@ -547,10 +550,12 @@ class SimulationVehicle:
         :param update_start_time: time when update step started
         :return: arrival in time step (-1 if still moving at end of update step, time of arrival at end of route otherwise"""        
         (new_pos, driven_distance, arrival_in_time_step, passed_nodes, passed_node_times) = \
-            self.routing_engine.move_along_route(self.cl_remaining_route, self.pos, remaining_step_time,
+            self.routing_engine.move_along_route(self.cl_remaining_route, self.pos, remaining_step_time, target_position=self.assigned_route[0].destination_pos,
                                                     sim_vid_id=(self.op_id, self.vid),
                                                     new_sim_time=c_time,
                                                     record_node_times=self.replay_flag)
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(f"veh {self.vid} move {self.pos} -> {new_pos} driven {driven_distance} m in {remaining_step_time} s to {arrival_in_time_step} passed nodes {passed_nodes}")
         last_node = self.pos[0]
         self.pos = new_pos
         self.cl_driven_distance += driven_distance
@@ -585,8 +590,8 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
     an microscopic traffic simulation.
     boarding processes are still handled in this class, but vehicles only move if their positions are actively updated
     and driving legs are only ended if reaching a destination is externally triggered """
-    def __init__(self, operator_id, vehicle_id, vehicle_data_dir, vehicle_type, routing_engine, rq_db, op_output, record_route_flag, replay_flag):
-        super().__init__(operator_id, vehicle_id, vehicle_data_dir, vehicle_type, routing_engine, rq_db, op_output, record_route_flag, replay_flag)
+    def __init__(self, operator_id, vehicle_id, veh_attributes_dict, routing_engine, rq_db, op_output, record_route_flag, replay_flag):
+        super().__init__(operator_id, vehicle_id, veh_attributes_dict, routing_engine, rq_db, op_output, record_route_flag, replay_flag)
         self._route_update_needed = False # set true if new route available or vehicle doesnt move on planned route
 
     def update_vehicle_position(self, veh_pos, simulation_time):
@@ -597,7 +602,8 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
         #LOG.debug(f"update pos {self} -> {veh_pos}")
         if self.status in G_DRIVING_STATUS:
             if veh_pos is None:
-                LOG.debug("non moving vehicle registered? {}".format(self))
+                if logging.DEBUG >= LOG.getEffectiveLevel():
+                    LOG.debug("non moving vehicle registered? {}".format(self))
                 self._route_update_needed = True
             else:
                 self.pos = veh_pos
@@ -619,7 +625,8 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                     elif len(self.cl_remaining_route) == 0:
                         LOG.warning("no route planned anymore? {} {}".format(veh_pos, self))
         elif veh_pos is not None and not self.start_next_leg_first:
-            raise EnvironmentError(f"moving without having a driving task? {self}")
+            LOG.warning(f"moving without having a driving task veh {self},{self.start_next_leg_first}")
+            #raise EnvironmentError(f"moving without having a driving task? {self}")
 
     def start_next_leg(self, simulation_time):
         """
@@ -638,7 +645,8 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
     def _compute_new_route(self, target_pos):
         """ a new route has to be computed -> set also flag that this route will be sent to vehicle controller """
         self._route_update_needed = True
-        LOG.debug(" -> compute new route for {}".format(self))
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(" -> compute new route for {}".format(self))
         return super()._compute_new_route(target_pos)
 
     def _move(self, c_time, remaining_step_time, update_start_time):
@@ -648,28 +656,57 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
         return -1
 
     def get_new_route(self):
-        """ this function is used to return the current pos of the vehicle and the route that is needed to be driven in the aimsun simulation
+        """ this function is used to return the current pos of the vehicle and the route that is needed to be driven in the SUMO simulation
         if something is return (i.e. a new driven vrl needs to be started) is indicated by the flag self.start_new_route_flag
         :return: None, if no route has to be started; node_index_list otherwise
         """
-        #LOG.debug(f"get_pos_and_route: {self.vid} | {self.start_new_route_flag} | {self.assigned_route} | {self.pos} | {self.cl_remaining_route}")
-        #LOG.debug('Is this ever entered?')
+        if self._route_update_needed: 
+            leglist = []
+            for leg in self.assigned_route:
+                leglist.append(leg)
+            LOG.info(f"get_pos_and_route: {self.vid}, {self.status} |{[(leg.destination_pos,leg.status) for leg in self.assigned_route]} | {self.pos} | {self.cl_remaining_route} | {[pax.rid for pax in self.pax]} | {self._route_update_needed}")
+        
         if self._route_update_needed:
             #LOG.debug(f"new route for vehicle {self}")
-            self._route_update_needed = False
+            
             if not self.assigned_route:
+                LOG.warning(f"Veh {self.vid} needs Route update but has no route assigned! {self}")
+                # Vehicle without assigned FP-Route found on Edge:
                 if self.pos[1] is not None:
                     LOG.debug(f" -> {self.vid} -> {[self.pos[0], self.pos[1]]}")
+                    self._route_update_needed = False
                     return [self.pos[0], self.pos[1]]
+                
+                # Vehicle without assigned FP-Route found on Node:
                 else:
-                    LOG.warning("new route to start after unassignment but on edge!")
-                    LOG.debug(f" -> {self.vid} -> {[self.pos[0]]}")
+                    
+                    LOG.info(f" -> {self.vid} -> {[self.pos[0]]}")
+                    self._route_update_needed = False
                     return [self.pos[0]]
             else:
-                route = self.cl_remaining_route
-                route = [self.pos[0]] + route
-                LOG.debug(f" -> {self.vid} -> {route}")
-                return route
+                # New Route already saved in current Leg:
+                if len(self.cl_remaining_route) > 0: 
+                    route = self.cl_remaining_route
+                    route = [self.pos[0]] + route
+                    LOG.info(f"veh {self.vid} at {self.pos}  gets new Route  -> {route}")
+                    self._route_update_needed = False
+                    return route
+                
+                # New Route not saved in current Leg --> will hapen in next FP step --> Vehicle gets no update this time step
+                else: 
+                    self._route_update_needed = True
+                    if self.pos[1] != None:
+                        route = [self.pos[0],self.pos[1]]
+                        LOG.info(f"BEFORE: veh {self.vid} clears edge {self.pos} before it gets new Route  -> {route}")
+                        route = None
+                        LOG.info(f"NOW: veh {self.vid} on edge {self.pos} gets no Route but will get it in next timestep. Proceeds with current Route: {route}")
+                        return route
+
+                    else:
+                        route = None
+                        LOG.warning(f"Veh {self.vid} at {self.pos} is at node and stays there -> {route}")
+                        return route                       
+               
         else:
             #LOG.debug('_route_update_needed is False')
             return None
@@ -708,79 +745,300 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
                         LOG.error("new additional infos: {}".format(list_route_legs[0].additional_str_infos()))
                         raise AssertionError("assign_vehicle_plan(): Trying to assign new VRLs instead of a locked VRL.")
             else:
+                if list_route_legs and list_route_legs[0] == self.assigned_route[0]:
+                    list_route_legs[0].started = self.assigned_route[0].started
                 start_flag = False
 
         self.assigned_route = list_route_legs
         if list_route_legs:
             if start_flag:
                 self.start_next_leg_first = True
-                if self.status in G_DRIVING_STATUS:
+                if self.status in G_DRIVING_STATUS or self.status == VRL_STATES.IDLE:
                     if not self.assigned_route[0].status in G_DRIVING_STATUS:
                         LOG.warning("while currently driving a new route without start driving vrl assigned {} {}".format(self, list_route_legs))
-                        driving_vrl = VehicleRouteLeg(self.status, self.assigned_route[0].destination_pos, {})
+                        if self.status == VRL_STATES.IDLE:
+                            next_status = VRL_STATES.ROUTE
+                        else:
+                            next_status = self.status
+                        driving_vrl = VehicleRouteLeg(next_status, self.assigned_route[0].destination_pos, {})
                         self.assigned_route = [driving_vrl] + self.assigned_route[:]
         else: # check if vehicle needs to be stopped in aimsun control
             if self.status in G_DRIVING_STATUS:
                 self._route_update_needed = True
 
     def reached_destination(self, simulation_time):
-        """ this function is called, when the corresponding aimsun vehicle reaches its destination in aimsun
+        """ this function is called, when the corresponding SUMO vehicle reaches its destination
         :param simulation_time: time the vehicle reached destination
         """
-        if self.status in G_DRIVING_STATUS:
-            if self.pos[1] is not None:
-                LOG.debug(f'cl_driven_route {self.cl_driven_route}')
-                if self.cl_driven_route[-1] != self.pos[1]:
-                    self.cl_driven_route.append(self.pos[1])
-                    self.cl_driven_route_times.append(simulation_time)
-                self.pos = self.routing_engine.return_node_position(self.pos[1])
-            if len(self.cl_driven_route) > 1:
-                try:
-                    _, driven_distance = self.routing_engine.return_route_infos(self.cl_driven_route, 0.0, 0.0)
-                except KeyError:
-                    LOG.debug(f'reached_destination had a Keyerror')
-                    driven_distance = 0
-                    if len(self.cl_driven_route) > 2:
-                        for i in range(2, len(self.cl_driven_route)):
-                            try:
-                                tt, dis = self.routing_engine.get_section_infos(self.cl_driven_route[i-1], self.cl_driven_route[i])
-                            except:
-                                dis = 0
-                            driven_distance += dis
-                            LOG.debug(f'driven_distance {driven_distance}')
-            else:
+        
+
+        if self.pos[1] is not None: ## Vehicle on Edge
+            LOG.debug(f'cl_driven_route {self.cl_driven_route}')
+            if len(self.cl_driven_route) == 0:
+                print(self, "reached destination with no current leg assigned. Error?")
+            elif self.cl_driven_route[-1] != self.pos[1]:
+                self.cl_driven_route.append(self.pos[1])
+                self.cl_driven_route_times.append(simulation_time)
+            self.pos = self.routing_engine.return_node_position(self.pos[1])
+       
+        ## Get Driven Distance for stats
+        if len(self.cl_driven_route) > 1:
+            try:
+                _, driven_distance = self.routing_engine.return_route_infos(self.cl_driven_route, 0.0, 0.0)
+            except KeyError:
+                LOG.debug(f'reached_destination had a Keyerror')
                 driven_distance = 0
-
-            if len(self.assigned_route) == 0:
-                LOG.debug("no assigned route but moved -> unassignment?")
-            else:
-                target_pos = self.assigned_route[0].destination_pos
-                if self.pos != target_pos:
-                    LOG.debug("reached destination but not at target {}: pos {} target pos {}".format(self, self.pos, target_pos))
-                    r = self._compute_new_route(target_pos)
-                    if len(r) <= 2:
-                        LOG.debug("only one edge missed: if this is a turn, everything is fine! route: {}".format(r))
-                        self.pos = target_pos
-                        self.cl_driven_route.append(target_pos[0])
-                        self.cl_driven_route_times.append( self.cl_driven_route_times[-1] )
-                        self._route_update_needed = False
-                    elif self.routing_engine.return_route_infos(r, 0, 0)[0] < 0.1:
-                        LOG.debug("more edges but very short edges -> assume reached destination!")
-                        self.pos = target_pos
-                        for x in r[1:]:
-                            self.cl_driven_route.append(x)
-                            self.cl_driven_route_times.append( simulation_time )
-                        self._route_update_needed = False
-                    else:
-                        self.cl_remaining_route = r
-                        LOG.debug(f"vehicle reached_destination but not at Target") #No occurence
-                        return
-
-            self.cl_driven_distance += driven_distance
-            self.end_current_leg(simulation_time)
-            self.start_next_leg_first = True
+                if len(self.cl_driven_route) > 2:
+                    for i in range(2, len(self.cl_driven_route)):
+                        try:
+                            tt, dis = self.routing_engine.get_section_infos(self.cl_driven_route[i-1], self.cl_driven_route[i])
+                        except:
+                            dis = 0
+                        driven_distance += dis
+                        LOG.debug(f'driven_distance {driven_distance}')
         else:
-            LOG.error("vehicle reached destination without performing routing VRL!")
-            LOG.error("unassignment might be the reason?")
-            LOG.error(f"sim time {simulation_time} route with time {self.cl_driven_route} {self.cl_driven_route_times} | veh {self}")
-            raise NotImplementedError
+            driven_distance = 0
+
+        if len(self.assigned_route) == 0:
+            LOG.debug("no assigned route but moved -> unassignment?")
+            print(f" {self.vid} no assigned route but moved -> unassignment?")
+        else:
+            target_pos = self.assigned_route[0].destination_pos
+            if self.pos != target_pos:
+                LOG.debug("reached destination but not at target {}: pos {} target pos {}".format(self, self.pos, target_pos))
+                r = self._compute_new_route(target_pos)
+                if len(r) <= 2:
+                    LOG.debug("only one edge missed: if this is a turn, everything is fine! route: {}".format(r))
+                    self.pos = target_pos
+                    self.cl_driven_route.append(target_pos[0])
+                    if self.cl_driven_route_times:
+                        self.cl_driven_route_times.append(self.cl_driven_route_times[-1])
+                    else:
+                        self.cl_driven_route_times.append(0)
+                        print(f"cl_driven_route_times ERROR occurred: {self.cl_driven_route_times}: applying FIX with 0")
+                        LOG.warning(f"cl_driven_route_times ERROR occurred: {self.cl_driven_route_times}: applying FIX with 0 for {self}")
+                    self._route_update_needed = False
+                elif self.routing_engine.return_route_infos(r, 0, 0)[0] < 0.1:
+                    LOG.debug("more edges but very short edges -> assume reached destination!")
+                    self.pos = target_pos
+                    for x in r[1:]:
+                        self.cl_driven_route.append(x)
+                        self.cl_driven_route_times.append( simulation_time )
+                    self._route_update_needed = False
+                else:
+                    self.cl_remaining_route = r
+                    LOG.debug(f"vehicle reached_destination but not at Target") #No occurence
+                    return
+                
+        self.cl_driven_distance += driven_distance
+        self.end_current_leg(simulation_time)
+        self.start_next_leg_first = True
+       
+        if self.status not in G_DRIVING_STATUS:
+            LOG.warning("vehicle reached destination without performing routing VRL!")
+            LOG.warning("unassignment might be the reason?")
+            LOG.warning(f"sim time {simulation_time} route with time {self.cl_driven_route} {self.cl_driven_route_times} | veh {self} Route Update Needed? {self._route_update_needed}")
+
+        
+        
+class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
+    """ this class can be used for simulations where vehicle movements and boardings are controlled externally i.e. when coupling with
+    MATSim.
+    boarding processes are only registered, vehicles only move if their positions are actively updated
+    and driving legs are only ended if reaching a destination is externally triggered """
+    
+    def __init__(self, operator_id, vehicle_id, veh_attributes_dict, routing_engine, rq_db, op_output, record_route_flag, replay_flag):
+        super().__init__(operator_id, vehicle_id, veh_attributes_dict, routing_engine, rq_db, op_output, record_route_flag, replay_flag)
+        self._route_update_needed = False # set true if new route available or vehicle doesnt move on planned route
+        self._new_assignment_available = False # set true if new assignment available that has to be communicated to the vehicle controller
+        self._current_leg_id_counter = 0
+        
+    def __str__(self):
+        string = f"veh {self.vid} at pos {self.pos} with soc {self.soc} leg status {self.status} remaining time {self.cl_remaining_time} number remaining legs: {len(self.assigned_route)} ob : {[rq.get_rid_struct() for rq in self.pax]}"
+        string += "\n"
+        string += f"current route: {[str(x) for x in self.assigned_route]}"
+        return string
+        
+    def update_state(self, sim_time, veh_pos, rids_picked_up, rids_dropped_off, status: VRL_STATES,
+                             earliest_diverge_pos, earliest_diverge_time, finished_leg_ids, current_pick_up, current_drop_off):
+        """
+        :param sim_time: current simulation time
+        :param veh_pos: current vehicle position (tuple)
+        :param rids_picked_up: list requests that have been picked up since last update
+        :param rids_dropped_off: list requests that have been dropped off since last update
+        :param status: TODO
+        :param earliest_diverge_pos: first position where route is allowed to change
+        :param earliest_diverge_time: earliest time the route is allowed to change
+        :param finished_leg_ids: leg ids finished since last update
+        :param current_pick_up: list of requests that are currently being picked up
+        :param current_drop_off: list of requests are currently being dropped off
+        """
+        
+        def raise_error_msg():
+            LOG.error(f" -> error in state update! {self} | {veh_pos} | {rids_picked_up} | {rids_dropped_off} | {status} | {finished_leg_ids} | current pu {current_pick_up} do {current_drop_off}")
+            LOG.error(f"{[x for x in self.assigned_route]}")
+            raise EnvironmentError(f"Error in incoming state: {veh_pos} |{rids_picked_up} | {rids_dropped_off} | {status} | {finished_leg_ids} \n <-> \n {self} \n {[x.id for x in self.assigned_route]}")
+        
+        #LOG.info(f"update state veh {self}")
+        #LOG.info(f"new: veh pos {veh_pos} | picked up {rids_picked_up} | dropped off {rids_dropped_off} | status {status} | finished leg ids {finished_leg_ids} | current pick up {current_pick_up} | current drop off {current_drop_off}")
+        if self.start_next_leg_first:
+            self.start_next_leg(sim_time)
+            self.start_next_leg_first = False
+            LOG.info(f" -> remove start_next_leg_first flag")
+        
+        done_VRLs = []
+                    
+        if status in G_DRIVING_STATUS:
+            if self.status in G_DRIVING_STATUS:
+                self.update_vehicle_position(veh_pos, sim_time)
+            else:
+                if self.status != VRL_STATES.IDLE:
+                    done_VRL = self.end_current_leg(sim_time)[1]
+                    if type(done_VRL) == dict and len(done_VRL) == 0:
+                        pass
+                    else:
+                        done_VRLs.append(done_VRL)
+                LOG.debug(f" -> start next leg because driving again")
+                self.start_next_leg(sim_time)
+                if self.status not in G_DRIVING_STATUS:
+                    raise_error_msg()
+        elif status == VRL_STATES.IDLE:
+            LOG.debug(f" -> currently idle")
+            if self.status != VRL_STATES.IDLE:
+                done_VRL = self.end_current_leg(sim_time)[1]
+                if type(done_VRL) == dict and len(done_VRL) == 0:
+                    pass
+                else:
+                    done_VRLs.append(done_VRL)
+                
+                if len(self.assigned_route) > 0 and self.assigned_route[0].status == VRL_STATES.REPO_TARGET:
+                    self.start_next_leg(sim_time)
+                    done_VRL = self.end_current_leg(sim_time)[1]
+                    if type(done_VRL) == dict and len(done_VRL) == 0:
+                        pass
+                    else:
+                        done_VRLs.append(done_VRL)
+                        
+                if len(self.assigned_route) > 0:
+                    raise_error_msg()
+        else:
+            LOG.debug(f" -> currently boarding")
+            if self.status in G_DRIVING_STATUS:
+                self.update_vehicle_position(veh_pos, sim_time)
+                next_planned_pos = self.assigned_route[1].destination_pos
+                if next_planned_pos != veh_pos:
+                    LOG.warning(f"boarding/drop off but not at next planned pos? {self} | {veh_pos} | {next_planned_pos}")
+                done_VRL = self.end_current_leg(sim_time)[1]
+                if type(done_VRL) == dict and len(done_VRL) == 0:
+                    pass
+                else:
+                    done_VRLs.append(done_VRL)
+                    
+                if len(self.assigned_route) > 0 and self.assigned_route[0].status == VRL_STATES.REPO_TARGET:
+                    self.start_next_leg(sim_time)
+                    done_VRL = self.end_current_leg(sim_time)[1]
+                    if type(done_VRL) == dict and len(done_VRL) == 0:
+                        pass
+                    else:
+                        done_VRLs.append(done_VRL)
+                    
+                if len(self.assigned_route) > 0:
+                    LOG.debug(f" -> start next leg because not driving anymore")
+                    if self.pos != self.assigned_route[0].destination_pos:
+                        LOG.warning(f"boarding but not at planned pos? {veh_pos} <-> {self.assigned_route[0].destination_pos} | {self}")
+                        self.pos = self.assigned_route[0].destination_pos
+                    self.start_next_leg(sim_time)
+                    if (len(current_pick_up) != 0 or len(current_drop_off) != 0):
+                        LOG.debug(f"current boarding process! pu {current_pick_up} | do {current_drop_off}")
+                        LOG.debug(f"current leg: {self.assigned_route[0]}")
+                        if self.status != VRL_STATES.BOARDING:
+                            raise_error_msg()
+            elif self.status == VRL_STATES.BOARDING:
+                scheduled_pick_up = [rq.get_rid() for rq in self.assigned_route[0].rq_dict.get(1, [])]
+                scheduled_drop_off = [rq.get_rid() for rq in self.assigned_route[0].rq_dict.get(-1, [])]
+                if set(sorted(scheduled_pick_up)) != set(sorted(current_pick_up)) or set(sorted(scheduled_drop_off)) != set(sorted(current_drop_off)):
+                    problem_fixed = False
+                    if len(self.assigned_route) > 1 and self.assigned_route[1].status == VRL_STATES.BOARDING:
+                        next_scheduled_pick_up = [rq.get_rid() for rq in self.assigned_route[1].rq_dict.get(1, [])]
+                        next_scheduled_drop_off = [rq.get_rid() for rq in self.assigned_route[1].rq_dict.get(-1, [])]
+                        if (set(sorted(next_scheduled_pick_up)) == set(sorted(current_pick_up)) and set(sorted(next_scheduled_drop_off)) == set(sorted(current_drop_off))):
+                            LOG.debug(f" -> two boardings at same location: next boarding has started")
+                            done_VRL = self.end_current_leg(sim_time)[1]
+                            if type(done_VRL) == dict and len(done_VRL) == 0:
+                                pass
+                            else:
+                                done_VRLs.append(done_VRL)
+                            self.start_next_leg(sim_time)
+                            if self.status != VRL_STATES.BOARDING:
+                                raise_error_msg()
+                            problem_fixed = True
+                    if not problem_fixed:
+                        LOG.error(f"boarding/drop off but not matching planned requests? {self} | {veh_pos} | planned pu {scheduled_pick_up} do {scheduled_drop_off} | current pu {current_pick_up} do {current_drop_off}")
+                        raise_error_msg()
+            else:
+                self.start_next_leg(sim_time)
+                if self.status != VRL_STATES.BOARDING:
+                    LOG.warning(f"still not boarding after starting next leg? {self}")
+                    done_VRL = self.end_current_leg(sim_time)[1]
+                    if type(done_VRL) == dict and len(done_VRL) == 0:
+                        pass
+                    else:
+                        done_VRLs.append(done_VRL)
+                    if self.pos != self.assigned_route[0].destination_pos:
+                        LOG.warning(f"boarding but not at planned pos? (2) {veh_pos} <-> {self.assigned_route[0].destination_pos} | {self}")
+                        self.pos = self.assigned_route[0].destination_pos
+                    self.start_next_leg(sim_time)
+                    if self.status != VRL_STATES.BOARDING:
+                        raise_error_msg()
+                
+            if len(self.assigned_route) == 0 and (len(current_pick_up) != 0 or len(current_drop_off) != 0):
+                LOG.error(f"current boarding process but not route assigned! pu {current_pick_up} | do {current_drop_off}")
+                LOG.error(f"current leg: {self.assigned_route[0]}")
+                LOG.error(f"{self}")
+                raise_error_msg()
+        
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(f"new state: {self}")
+                    
+        return done_VRLs
+                
+    def assign_vehicle_plan(self, list_route_legs, sim_time, force_ignore_lock=False):
+        if self.assigned_route and len(list_route_legs) > 0:
+            if list_route_legs[0] != self.assigned_route[0]:
+                if list_route_legs[0].status not in G_DRIVING_STATUS and self.assigned_route[0].status in G_DRIVING_STATUS:
+                    driving_vrl = VehicleRouteLeg(self.assigned_route[0].status, list_route_legs[0].destination_pos, {}) # this vrl will be removed shortly after when the boarding process is triggered outside fleetpy
+                    list_route_legs = [driving_vrl] + list_route_legs[:]
+                    LOG.warning(f"for vid {self.vid}: add driving vrl {driving_vrl} to new assignment {list_route_legs}")
+        r = super().assign_vehicle_plan(list_route_legs, sim_time, force_ignore_lock=force_ignore_lock)
+        self._new_assignment_available = True
+        self.start_next_leg_first = False
+        for leg in self.assigned_route:
+            if leg.id is None:
+                leg.set_id(self._current_leg_id_counter)
+                self._current_leg_id_counter += 1
+        return r
+    
+    def get_new_assignment(self, sim_time):
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(f"get new assignment: {self}")
+        if not self._new_assignment_available:
+            return None
+        else:
+            assignment_list = []
+            for i, leg in enumerate(self.assigned_route):
+                if leg.status in G_DRIVING_STATUS:
+                    continue
+                if i == 0 and leg.status not in G_DRIVING_STATUS and leg.started: # skip currently ongoing stop tasks
+                    LOG.debug(f"skip current ongoing stop leg : {leg}")
+                    continue
+                assignment_list.append({
+                    "pos" : leg.destination_pos,
+                    "duration" : leg.duration,
+                    "earliest_start_time" : leg.earliest_start_time,
+                    "boarding_rids" : [rq.get_rid() for rq in leg.rq_dict.get(1, [])],
+                    "alighting_rids" : [rq.get_rid() for rq in leg.rq_dict.get(-1, [])],
+                    "id" : leg.id
+                })
+            self._new_assignment_available = False
+            return assignment_list
+        	

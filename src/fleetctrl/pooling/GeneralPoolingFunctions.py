@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Callable, Dict, List, Any, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.fleetctrl.pooling.batch.AlonsoMora.AlonsoMoraParallelization import ParallelizationManager
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.fleetctrl.planning.PlanRequest import PlanRequest

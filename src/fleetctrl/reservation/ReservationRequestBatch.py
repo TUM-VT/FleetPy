@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from src.fleetctrl.FleetControlBase import FleetControlBase
-from src.routing.NetworkBase import NetworkBase
+from src.routing.road.NetworkBase import NetworkBase
 from src.fleetctrl.planning.VehiclePlan import PlanStopBase
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.fleetctrl.reservation.misc.RequestGroup import RequestGroup, QuasiVehiclePlan, VehiclePlanSupportingPoint, rg_key

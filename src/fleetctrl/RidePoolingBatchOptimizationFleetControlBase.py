@@ -14,7 +14,7 @@ from src.fleetctrl.pooling.GeneralPoolingFunctions import get_assigned_rids_from
 from src.misc.globals import *
 
 if TYPE_CHECKING:
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssignmentAlgorithmBase
     from src.simulation.Vehicles import SimulationVehicle
     from src.infra.ChargingInfrastructure import OperatorChargingAndDepotInfrastructure, PublicChargingInfrastructureOperator
@@ -166,7 +166,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
             self.vid_finished_VRLs[vid] += list_finished_VRL
         except KeyError:
             self.vid_finished_VRLs[vid] = list_finished_VRL
-        LOG.debug(f"veh {veh_obj} | after status update: {self.veh_plans[vid]}")
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(f"veh {veh_obj} | after status update: {self.veh_plans[vid]}")
 
     def user_request(self, rq : RequestBase, sim_time : int):
         """This method is triggered for a new incoming request. It generally adds the rq to the database.
@@ -193,9 +194,7 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
                           boarding_time=self.const_bt)
         rid_struct = rq.get_rid_struct()
 
-        if prq.o_pos == prq.d_pos:
-            LOG.debug(f"automatic decline for rid {rid_struct}!")
-            self._create_rejection(prq, sim_time)
+        if not self._is_valid_request(sim_time, prq): # automatic rejection inside
             return
 
         self.new_requests[rid_struct] = 1
@@ -395,7 +394,8 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
         :param add_arg: set to True, if the vehicle plan is assigned internally by AM-assignment
         :type add_arg: not defined here
         """
-        LOG.debug(f"assign vehicle plan for {veh_obj} addarg {add_arg} : {vehicle_plan}")
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(f"assign vehicle plan for {veh_obj} addarg {add_arg} : {vehicle_plan}")
         super().assign_vehicle_plan(veh_obj, vehicle_plan, sim_time, force_assign=force_assign, assigned_charging_task=assigned_charging_task, add_arg=add_arg)
         if add_arg is None:
             veh_plan_without_rel = vehicle_plan.copy_and_remove_empty_planstops(veh_obj, sim_time, self.routing_engine)
@@ -524,5 +524,5 @@ class RidePoolingBatchOptimizationFleetControlBase(FleetControlBase):
                                    additional_parameters={"vid": assigned_vehicle_plan.vid})
             prq.set_service_offered(offer)  # has to be called
         else:
-            offer = self._create_rejection(prq, simulation_time)
+            offer = self._create_rejection(prq, simulation_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
         return offer

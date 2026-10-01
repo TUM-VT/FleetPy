@@ -5,6 +5,7 @@ import logging
 import os
 from copy import deepcopy
 from abc import abstractmethod, ABCMeta
+import typing as tp
 
 # additional module imports (> requirements)
 # ------------------------------------------
@@ -15,11 +16,15 @@ pd.options.mode.chained_assignment = None  # TODO # disables warning when overwr
 # src imports
 # -----------
 from src.misc.functions import PiecewiseContinuousLinearFunction
-from src.routing.NetworkBase import return_position_str
+from src.routing.road.NetworkBase import return_position_str
+if tp.TYPE_CHECKING:
+    from src.routing.road.NetworkBasic import NetworkBasic
+
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------
 from src.misc.globals import *
+
 
 LOG = logging.getLogger(__name__)
 
@@ -49,9 +54,10 @@ class RequestBase(metaclass=ABCMeta):
     """Base class for customer requests."""
     type = "RequestBase"
 
-    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+    def __init__(self, rq_row, routing_engine: 'NetworkBasic', simulation_time_step, scenario_parameters):
         # input
         self.rid = int(rq_row.get(G_RQ_ID, rq_row.name))  # request id is index of dataframe
+        self.subtrip_id: int = None
         self.sub_rid_struct = None
         self.is_parcel = False  # requests are usually persons
         self.rq_time = rq_row[G_RQ_TIME] - rq_row[G_RQ_TIME] % simulation_time_step
@@ -65,10 +71,8 @@ class RequestBase(metaclass=ABCMeta):
         self.max_trip_time = None
         self.nr_pax = rq_row.get(G_RQ_PAX, 1)   # TODO RPP: neue attribute für größe/menge/gewicht
         #
-        self.o_node = int(rq_row[G_RQ_ORIGIN])
-        self.o_pos = routing_engine.return_node_position(self.o_node)
-        self.d_node = int(rq_row[G_RQ_DESTINATION])
-        self.d_pos = routing_engine.return_node_position(self.d_node)
+        self.o_pos = routing_engine.return_position_from_str(rq_row[G_RQ_ORIGIN])
+        self.d_pos = routing_engine.return_position_from_str(rq_row[G_RQ_DESTINATION])
         # store miscellaneous custom values from demand file
         for param, value in rq_row.drop([G_RQ_TIME, G_RQ_ID, G_RQ_ORIGIN, G_RQ_DESTINATION]).items():
             setattr(self, str(param), value)
@@ -90,7 +94,7 @@ class RequestBase(metaclass=ABCMeta):
         self.direct_route_travel_time = None
         self.direct_route_travel_distance = None
         # 
-        self.modal_state = G_RQ_STATE_MONOMODAL # mono-modal trip by default 
+        self.modal_state = RQ_MODAL_STATE.MONOMODAL # mono-modal trip by default 
 
     def get_rid(self):
         return self.rid
@@ -108,10 +112,13 @@ class RequestBase(metaclass=ABCMeta):
         return self.d_pos
 
     def get_origin_node(self):
-        return self.o_node
+        return self.get_origin_pos()[0]
 
     def get_destination_node(self):
-        return self.d_node
+        return self.get_destination_pos()[0]
+    
+    def get_modal_state(self) -> RQ_MODAL_STATE:
+        return self.modal_state
 
     def return_offer(self, op_id):
         return self.offer.get(op_id)
@@ -131,9 +138,6 @@ class RequestBase(metaclass=ABCMeta):
         record_dict[G_RQ_PAX] = self.nr_pax
         record_dict[G_RQ_TIME] = self.rq_time
         record_dict[G_RQ_EPT] = self.earliest_start_time
-        # # node output
-        # record_dict[G_RQ_ORIGIN] = self.o_node
-        # record_dict[G_RQ_DESTINATION] = self.d_node
         # position output
         record_dict[G_RQ_ORIGIN] = return_position_str(self.o_pos)
         record_dict[G_RQ_DESTINATION] = return_position_str(self.d_pos)
@@ -213,17 +217,25 @@ class RequestBase(metaclass=ABCMeta):
         self.do_pos = do_pos
         self.t_egress = t_egress
 
-    def create_SubTripRequest(self, subtrip_id, mod_o_node=None, mod_d_node=None, mod_start_time=None, modal_state = None):
+    def create_SubTripRequest(
+            self, 
+            subtrip_id: int, 
+            leg_o_pos: tp.Optional[tuple] = None, 
+            leg_d_pos: tp.Optional[tuple] = None, 
+            leg_start_time: tp.Optional[int] = None, 
+            modal_state: tp.Optional[RQ_MODAL_STATE] = None,
+            routing_engine : tp.Optional['NetworkBasic'] = None,
+        ):
         """ this function creates subtriprequests (i.e. a customer sends multiple requests) based on a attributes of itself. different subtrip-customers
         can vary in start and target node, earlest start time and modal_state (monomodal, firstmile, lastmile, firstlastmile)
         :param subtrip_id: identifier of the subtrip (this is not the customer id!)
         :type subtrip_id: int
-        :param mod_o_node: new origin node index of subtrip
-        :type mod_o_node: int
-        :param mod_d_node: new destination node index of subtrip
-        :type mod_d_node: int
-        :param mod_start_time: new earliest start time of the trip
-        :type mod_start_time: int
+        :param leg_o_pos: new origin position of subtrip
+        :type leg_o_pos: (int, None, None) or (int, int, float)
+        :param leg_d_pos: new destination position of subtrip
+        :type leg_d_pos: (int, None, None) or (int, int, float)
+        :param leg_start_time: new earliest start time of the trip
+        :type leg_start_time: int
         :param modal_state: indicator of modality (indicator if monomodal, first, last or firstlast mile trip)
         :type modal_state: int in G_RQ_STATE_MONOMODAL, G_RQ_STATE_FIRSTMILE, G_RQ_STATE_LASTMILE, G_RQ_STATE_FIRSTLASTMILE (globals)
         :return: new traveler with specified attributes
@@ -232,17 +244,23 @@ class RequestBase(metaclass=ABCMeta):
         sub_rq_obj = deepcopy(self)
         old_rid = sub_rq_obj.get_rid()
         sub_rq_obj.sub_rid_struct = f"{old_rid}_{subtrip_id}"
-        if mod_o_node is not None:
-            sub_rq_obj.o_node = mod_o_node
-        if mod_d_node is not None:
-            sub_rq_obj.d_node = mod_d_node
-        if mod_start_time is not None:
-            sub_rq_obj.earliest_start_time = mod_start_time
+        sub_rq_obj.subtrip_id = subtrip_id
+        if leg_o_pos is not None:
+            sub_rq_obj.o_pos = leg_o_pos
+        if leg_d_pos is not None:
+            sub_rq_obj.d_pos = leg_d_pos
+        if leg_start_time is not None:
+            sub_rq_obj.earliest_start_time = leg_start_time
         if modal_state is not None:
             sub_rq_obj.modal_state = modal_state
+        # update travel times and distances
+        if routing_engine is not None:
+            _, tt, dis = routing_engine.return_travel_costs_1to1(sub_rq_obj.o_pos, sub_rq_obj.d_pos)
+            sub_rq_obj.direct_route_travel_distance = dis
+            sub_rq_obj.direct_route_travel_time = tt
         return sub_rq_obj
 
-    def set_direct_route_travel_infos(self, routing_engine):
+    def set_direct_route_travel_infos(self, routing_engine: 'NetworkBasic'):
         """ this function set the current direct route travel time and distance for the later output
         should be called in time, when the request enters the system
         :param routing_engine: network object
@@ -717,11 +735,190 @@ class SlaveRequest(RequestBase):
     def choose_offer(self, scenario_parameters, simulation_time):
         # method is not used
         raise AssertionError(f"Request class {self.type} cannot be used for choice decisions!")
+    
+    def set_chosen_offer(self, simulation_time):
+        """request selects the available offer (if any)
+        -> for MATSim coupling (travelers dont give feedback if they accepted an offer or not (they always do in MATSim but might choose differently in next iteration))"""
+        if len(self.offer) == 0:
+            return None
+        if len(self.offer) > 1:
+            raise NotImplementedError("More than one offer?")
+        op_id = list(self.offer.keys())[0]
+        if self.offer[op_id].service_declined():
+            return -1
+        else:
+            return op_id
 
     def user_boards_vehicle(self, simulation_time, op_id, vid, pu_pos, t_access):
         #LOG.info(f"user boards vehicle: {self.rid} | {self.sub_rid_struct} | {self.offer}")
         self.fare = self.offer[op_id].get(G_OFFER_FARE, 0)
         return super().user_boards_vehicle(simulation_time, op_id, vid, pu_pos, t_access)
+    
+# -------------------------------------------------------------------------------------------------------------------- #
+
+INPUT_PARAMETERS_BasicIntermodalRequest = {
+    "doc" :     """This request class is used for intermodal requests.
+    It is used to model requests that can be served by multiple operators for different modes.
+    """,
+    "inherit" : "RequestBase",
+    "input_parameters_mandatory": [],
+    "input_parameters_optional": [],
+    "mandatory_modules": [], 
+    "optional_modules": []
+}
+
+class BasicIntermodalRequest(RequestBase):
+    """This request class is used for intermodal requests.
+    It is used to model requests that can be served by one amod operator and one pt operator."""
+    type = "BasicIntermodalRequest"
+    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
+        # intermodal attributes
+        self.modal_state_int: int = rq_row.get(G_RQ_MODAL_STATE_VALUE, RQ_MODAL_STATE.MONOMODAL.value)  # mono-modal trip by default 
+        self.modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE(self.modal_state_int)
+        self.transfer_station_ids: tp.Optional[tp.List[str]] = self._load_transfer_station_ids(rq_row)
+        self.max_transfers: int = rq_row.get(G_RQ_MAX_TRANSFERS, 999)  # 999 means no limit
+        self.lastmile_max_wait_time: tp.Optional[int] = rq_row.get(G_IM_LM_WAIT_TIME, None)  # the customizable max waiting time for lastmile amod service
+        self.uncatchable_pt: bool = False  # flag for requests that missed their PT connection after FM leg
+        # PAYG (Plan-As-You-Go) specific attributes
+        self.payg_interrupted: bool = False  # flag for PAYG trips that were interrupted
+        self.payg_interrupt_state: tp.Optional[int] = None  # PAYG_TRIP_STATE value when interrupted
+        self.payg_interrupt_time: tp.Optional[int] = None  # simulation time when interrupted
+
+    def _load_transfer_station_ids(self, rq_row) -> tp.Optional[tp.List[str]]:
+        raw_transfer_station_ids = rq_row.get(G_RQ_TRANSFER_STATION_IDS, None)
+        if raw_transfer_station_ids is None or pd.isnull(raw_transfer_station_ids) or raw_transfer_station_ids == "":
+            return None
+        else:
+            return raw_transfer_station_ids.split(";")  # in FLM case, two transfer station ids are given
+    
+    def get_transfer_station_ids(self) -> tp.Optional[tp.List[str]]:
+        return self.transfer_station_ids
+
+    def get_max_transfers(self) -> int:
+        return self.max_transfers
+    
+    def get_lastmile_max_wait_time(self) -> tp.Optional[int]:
+        return self.lastmile_max_wait_time
+    
+    def set_uncatchable_pt(self, value: bool):
+        """Set the uncatchable_pt flag indicating the passenger missed their PT connection."""
+        self.uncatchable_pt = value
+
+    def is_uncatchable_pt(self) -> bool:
+        """Return whether this request missed its PT connection after FM leg."""
+        return self.uncatchable_pt
+    
+    def set_payg_interrupted(self, interrupted: bool, interrupt_state: tp.Optional[int] = None, interrupt_time: tp.Optional[int] = None):
+        """Set the PAYG interrupted flag and related information.
+
+        Args:
+            interrupted: Whether the trip was interrupted
+            interrupt_state: PAYG_TRIP_STATE value (e.g., -1 for NO_PT, -2 for NO_LM_AMOD)
+            interrupt_time: Simulation time when the interruption occurred
+        """
+        self.payg_interrupted = interrupted
+        self.payg_interrupt_state = interrupt_state
+        self.payg_interrupt_time = interrupt_time
+
+    def is_payg_interrupted(self) -> bool:
+        """Return whether this PAYG trip was interrupted."""
+        return self.payg_interrupted
+    
+    def record_data(self):
+        record_dict = {}
+        # input
+        record_dict[G_RQ_ID] = f"{self.rid}"
+        record_dict[G_RQ_SUB_TRIP_ID] = self.subtrip_id
+        record_dict[G_RQ_IS_PARENT_REQUEST] = self.sub_rid_struct is None
+        record_dict[G_RQ_TYPE] = self.type
+        record_dict[G_RQ_PAX] = self.nr_pax
+        record_dict[G_RQ_TIME] = self.rq_time
+        record_dict[G_RQ_EPT] = self.earliest_start_time
+        # node output
+        record_dict[G_RQ_ORIGIN] = return_position_str(self.o_pos)
+        record_dict[G_RQ_DESTINATION] = return_position_str(self.d_pos)
+        # position output
+        if self.pu_pos is None or self.pu_pos == self.o_pos:
+            record_dict[G_RQ_PUL] = ""
+        else:
+            record_dict[G_RQ_PUL] = return_position_str(self.pu_pos)
+        if self.do_pos is None or self.do_pos == self.d_pos:
+            record_dict[G_RQ_DOL] = ""
+        else:
+            record_dict[G_RQ_DOL] = return_position_str(self.do_pos)
+        if self.t_access is None:
+            record_dict[G_RQ_ACCESS] = ""
+        else:
+            record_dict[G_RQ_ACCESS] = self.t_access
+        if self.t_egress is None:
+            record_dict[G_RQ_EGRESS] = ""
+        else:
+            record_dict[G_RQ_EGRESS] = self.t_egress
+        if self.direct_route_travel_time is not None:
+            record_dict[G_RQ_DRT] = self.direct_route_travel_time
+        if self.direct_route_travel_distance is not None:
+            record_dict[G_RQ_DRD] = self.direct_route_travel_distance
+        # offers
+        all_offer_info = []
+        for op_id, operator_offer in self.offer.items():
+            all_offer_info.append(f"{op_id}:" + operator_offer.to_output_str())
+        record_dict[G_RQ_OFFERS] = "|".join(all_offer_info)
+        # decision-dependent
+        record_dict[G_RQ_LEAVE_TIME] = self.leave_system_time
+        record_dict[G_RQ_CHOSEN_OP_ID] = self.chosen_operator_id
+        record_dict[G_RQ_OP_ID] = self.service_opid
+        record_dict[G_RQ_VID] = self.service_vid
+        record_dict[G_RQ_PU] = self.pu_time
+        record_dict[G_RQ_DO] = self.do_time
+        record_dict[G_RQ_FARE] = self.fare
+        record_dict[G_RQ_MODAL_STATE_VALUE] = self.modal_state_int
+        record_dict[G_RQ_UNCATCHABLE_PT] = self.uncatchable_pt
+        # PAYG specific records
+        record_dict[G_RQ_PAYG_INTERRUPTED] = self.payg_interrupted
+        record_dict[G_RQ_PAYG_INTERRUPT_STATE] = self.payg_interrupt_state
+        record_dict[G_RQ_PAYG_INTERRUPT_TIME] = self.payg_interrupt_time
+        return self._add_record(record_dict)
+        
+    def choose_offer(self, scenario_parameters, simulation_time):
+        """This method returns the operator id of the chosen mode. If both a PT-only and an AMoD+PT offer is available, 
+        the AMoD+PT offer is always chosen. If only one offer is available, this offer is chosen. 
+        For intermodal offers, the operator id is a tuple: ((operator_id, sub_trip_id), ...)
+        0..n: MoD fleet provider
+        None: not decided yet
+        -1: decline all MoD
+        -2: PT operator
+        :param scenario_parameters: scenario parameter dictionary
+        :param simulation_time: current simulation time
+        :return: operator_id of chosen offer; or -1 if all MoD offers are declined; None if decision not defined yet
+        """
+        test_all_decline = super().choose_offer(scenario_parameters, simulation_time)
+        if test_all_decline is not None and test_all_decline < 0:
+            return -1
+        if len(self.offer) == 0:
+            return None
+        opts = [offer_id for offer_id, operator_offer in self.offer.items() if
+                operator_offer is not None and not operator_offer.service_declined()]
+        if len(opts) == 0:
+            return None
+        elif len(opts) == 1: # only one offer: pure amod, pt or amod+pt
+            self.fare = self.offer[opts[0]].get(G_OFFER_FARE, 0)
+            self.chosen_operator_id = opts[0]
+            # offer_id is a tuple: ((operator_id, sub_trip_id), ...)
+            return opts[0]
+        elif len(opts) == 2: # two offers: pure pt and amod+pt
+            # always choose amod+pt
+            for offer_id, operator_offer in self.offer.items():
+                op_id = operator_offer.operator_id
+                if op_id != -2:
+                    self.fare = operator_offer.get(G_OFFER_FARE, 0)
+                    self.chosen_operator_id = op_id
+                    # offer_id is a tuple: ((operator_id, sub_trip_id), ...)
+                    return offer_id
+        else:
+            LOG.error(f"not implemented {offer_str(self.offer)}")
+            raise NotImplementedError
+
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Parcel Requests #

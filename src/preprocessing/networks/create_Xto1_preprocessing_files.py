@@ -5,11 +5,11 @@ import time
 from multiprocessing import Pool
 fleet_sim_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
 try:
-    from src.routing.NetworkBasic import NetworkBasic as Network
+    from src.routing.road.NetworkBasic import NetworkBasic as Network
 except:
     #fleet_sim_path = r'C:\Users\ge37ser\Documents\Coding\TUM_VT_FleetSimulation\tum-vt-fleet-simulation'    #to be adopted
     os.sys.path.append(fleet_sim_path)
-    from src.routing.NetworkBasic import NetworkBasic as Network
+    from src.routing.road.NetworkBasic import NetworkBasic as Network
 
 """ this script is used to preprocess travel time tables for the routing_engine
         NetworkPartialPreprocessed.py

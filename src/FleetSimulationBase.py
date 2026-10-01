@@ -21,14 +21,15 @@ import numpy as np
 
 # src imports
 # -----------
-from src.misc.init_modules import load_fleet_control_module, load_routing_engine, load_broker_module
+from src.misc.init_modules import load_fleet_control_module, load_routing_engine, load_broker_module, load_pt_control_module
 from src.demand.demand import Demand, SlaveDemand
 from src.simulation.Vehicles import SimulationVehicle
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.broker.BrokerBase import BrokerBase
     from src.python_plots.plot_classes import PyPlot
+    from src.ptctrl.PTControlBase import PTControlBase  
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -172,8 +173,7 @@ class FleetSimulationBase:
         np.random.seed(self.scenario_parameters[G_RANDOM_SEED])
 
         # empty output directory
-        if not self.skip_output:
-            create_or_empty_dir(self.dir_names[G_DIR_OUTPUT])
+        self._clear_output_dir()
 
         # write scenario config file in output directory
         self.save_scenario_inputs()
@@ -251,21 +251,8 @@ class FleetSimulationBase:
                                               self.network_stat_f)
         # public transportation module
         LOG.info("Initialization of line-based public transportation...")
-        pt_type = self.scenario_parameters.get(G_PT_TYPE)
-        self.gtfs_data_dir = self.dir_names.get(G_DIR_PT)
-        if pt_type is None or self.gtfs_data_dir is None:
-            self.pt = None
-        elif pt_type == "PTMatrixCrowding":
-            pt_module = importlib.import_module("src.pubtrans.PtTTMatrixCrowding")
-            self.pt = pt_module.PublicTransportTravelTimeMatrixWithCrowding(self.gtfs_data_dir, self.pt_stat_f,
-                                                                            self.scenario_parameters,
-                                                                            self.routing_engine, self.zones)
-        elif pt_type == "PtCrowding":
-            pt_module = importlib.import_module("src.pubtrans.PtCrowding")
-            self.pt = pt_module.PublicTransportWithCrowding(self.gtfs_data_dir, self.pt_stat_f, self.scenario_parameters,
-                                                            self.routing_engine, self.zones)
-        else:
-            raise IOError(f"Public transport module {pt_type} not defined for current simulation environment.")
+        self.pt_operator: PTControlBase = None
+        self._load_pt_operator()
 
         # attribute for demand, charging and zone module
         self.demand = None
@@ -298,13 +285,18 @@ class FleetSimulationBase:
         # broker
         self.broker: 'BrokerBase' = None
         self._load_broker_module()
+        
+    def _clear_output_dir(self):
+        """ Empties the output directory if it already exists, otherwise creates it. """
+        if not self.skip_output:
+            create_or_empty_dir(self.dir_names[G_DIR_OUTPUT])
 
     def _load_demand_module(self):
         """ Loads some demand modules """
 
         # demand module
         LOG.info("Initialization of travelers...")
-        if self.scenario_parameters[G_SIM_ENV] != "MobiTopp":
+        if self.scenario_parameters[G_SIM_ENV] not in ["MobiTopp", "MATSim"]:
             self.demand = Demand(self.scenario_parameters, self.user_stat_f, self.routing_engine, self.zones)
             self.demand.load_demand_file(self.scenario_parameters[G_SIM_START_TIME],
                                          self.scenario_parameters[G_SIM_END_TIME], self.dir_names[G_DIR_DEMAND],
@@ -358,6 +350,22 @@ class FleetSimulationBase:
 
     def _load_fleetctr_vehicles(self):
         """ Loads the fleet controller and vehicles """
+        
+        veh_type_attributes = {}
+        def load_vehicle_attributes(vehicle_type):
+            if veh_type_attributes.get(vehicle_type) is None:
+                veh_data_f = os.path.join(self.dir_names[G_DIR_VEH], f"{vehicle_type}.csv")
+                veh_data = pd.read_csv(veh_data_f, header=None, index_col=0).squeeze("columns")
+                veh_type_attributes[vehicle_type] = {
+                    G_VTYPE_NAME: veh_data[G_VTYPE_NAME],
+                    G_VTYPE_MAX_PAX: int(veh_data[G_VTYPE_MAX_PAX]),
+                    G_VTYPE_MAX_PARCELS: int(veh_data.get(G_VTYPE_MAX_PARCELS, 0)),
+                    G_VTYPE_FIX_COST: float(veh_data[G_VTYPE_FIX_COST]),
+                    G_VTYPE_DIST_COST: float(veh_data[G_VTYPE_DIST_COST]),
+                    G_VTYPE_BATTERY_SIZE: float(veh_data[G_VTYPE_BATTERY_SIZE]),
+                    G_VTYPE_RANGE: float(veh_data[G_VTYPE_RANGE])
+                }
+            return veh_type_attributes[vehicle_type]
 
         # simulation vehicles and fleet control modules
         LOG.info("Initialization of MoD fleets...")
@@ -381,7 +389,7 @@ class FleetSimulationBase:
                 for veh_type, nr_veh in fleet_composition_dict.items():
                     for _ in range(nr_veh):
                         veh_type_list.append([op_id, vid, veh_type])
-                        tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+                        tmp_veh_obj = SimulationVehicle(op_id, vid, load_vehicle_attributes(veh_type),
                                                         self.routing_engine, self.demand.rq_db,
                                                         self.op_output[op_id], route_output_flag,
                                                         replay_flag)
@@ -402,7 +410,7 @@ class FleetSimulationBase:
                 init_vids = OpClass.return_vehicles_to_initialize()
 
                 for vid, veh_type in init_vids.items():
-                    tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+                    tmp_veh_obj = SimulationVehicle(op_id, vid, load_vehicle_attributes(veh_type),
                                                         self.routing_engine, self.demand.rq_db,
                                                         self.op_output[op_id], route_output_flag,
                                                         replay_flag)
@@ -422,7 +430,7 @@ class FleetSimulationBase:
                 init_vids = OpClass.return_vehicles_to_initialize()
 
                 for vid, veh_type in init_vids.items():
-                    tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+                    tmp_veh_obj = SimulationVehicle(op_id, vid, load_vehicle_attributes(veh_type),
                                                         self.routing_engine, self.demand.rq_db,
                                                         self.op_output[op_id], route_output_flag,
                                                         replay_flag)
@@ -437,7 +445,7 @@ class FleetSimulationBase:
                 init_vids = OpClass.return_vehicles_to_initialize()
                 list_vehicles = []
                 for vid, veh_type in init_vids.items():
-                    tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
+                    tmp_veh_obj = SimulationVehicle(op_id, vid, load_vehicle_attributes(veh_type),
                                                         self.routing_engine, self.demand.rq_db,
                                                         self.op_output[op_id], route_output_flag,
                                                         replay_flag)
@@ -449,24 +457,47 @@ class FleetSimulationBase:
             if self.operators[-1].repo is not None and self.operators[-1].repo.zone_system is not None:
                 self.operators[-1].repo.zone_system.register_demand_ref(self.demand)
         veh_type_f = os.path.join(self.dir_names[G_DIR_OUTPUT], "2_vehicle_types.csv")
-        veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
-        if not self.skip_output:
-            veh_type_df.to_csv(veh_type_f, index=False)
+        if len(veh_type_list) != 0:
+            veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
+            if not self.skip_output:
+                veh_type_df.to_csv(veh_type_f, index=False)
+        else:
+            LOG.warning("No vehicles initialized for simulation! Check fleet composition in scenario input file!")
         self.vehicle_update_order: tp.Dict[tp.Tuple[int, int], int] = {vid : 1 for vid in self.sim_vehicles.keys()}
 
     def _load_broker_module(self):
         """ Loads the broker """
- 
-        if self.scenario_parameters.get(G_BROKER_TYPE) is None:
-            LOG.info("No broker type specified, using default broker: BrokerBasic.")
-            op_broker_class_string = "BrokerBasic"
-            BrokerClass = load_broker_module(op_broker_class_string)
+
+        broker_type: str = self.scenario_parameters.get(G_BROKER_TYPE, None)
+        implemented_brokers = ["PTBroker", "PTBrokerEI", "PTBrokerPAYG"]
+        if broker_type is None:
+            prt_msg: str = "No broker type specified, using default BrokerBasic"
+            LOG.info(prt_msg)
+            BrokerClass = load_broker_module("BrokerBasic")
             self.broker = BrokerClass(self.n_op, self.operators)
+        elif broker_type in implemented_brokers:
+            prt_msg: str = f"Broker specified, using {broker_type}"
+            LOG.info(prt_msg)
+            if self.pt_operator is None:
+                raise ValueError("PT operator should be loaded before loading PTBroker.")
+            BrokerClass = load_broker_module(broker_type)
+            self.broker = BrokerClass(self.n_op, self.operators, self.pt_operator, self.demand, self.routing_engine, self.scenario_parameters)
         else:
-            LOG.info(f"Broker type specified: {self.scenario_parameters.get(G_BROKER_TYPE)}")
-            op_broker_class_string = self.scenario_parameters.get(G_BROKER_TYPE)
-            BrokerClass = load_broker_module(op_broker_class_string)
-            self.broker = BrokerClass(self.n_op, self.operators)
+            raise ValueError(f"Unknown broker type: {broker_type}!")
+        print('Broker: ' + prt_msg + '\n')
+
+    def _load_pt_operator(self):
+        """ Loads the public transport operator """
+
+        pt_operator_type = self.scenario_parameters.get(G_PT_OPERATOR_TYPE, None)
+        gtfs_data_dir = self.dir_names.get(G_DIR_GTFS)
+        pt_operator_id = self.scenario_parameters.get(G_PT_OPERATOR_ID, -2)
+        if pt_operator_type is None or gtfs_data_dir is None:
+            return
+        else:
+            LOG.info(f"Public transport operator type specified: {pt_operator_type}")
+            PTControlClass = load_pt_control_module(pt_operator_type)
+            self.pt_operator = PTControlClass(gtfs_data_dir, pt_operator_id)
 
     @staticmethod
     def get_directory_dict(scenario_parameters, list_operator_dicts):
@@ -491,40 +522,18 @@ class FleetSimulationBase:
     def evaluate(self):
         """Runs standard and simulation environment specific evaluations over simulation results."""
         output_dir = self.dir_names[G_DIR_OUTPUT]
-        # standard evaluation
-        from src.evaluation.standard import standard_evaluation
-        standard_evaluation(output_dir)
+        evaluation_method = self.scenario_parameters.get(G_EVAL_METHOD, 'standard_evaluation')
+        if evaluation_method == 'standard_evaluation':
+            # standard evaluation
+            from src.evaluation.standard import standard_evaluation
+            standard_evaluation(output_dir)
+        elif evaluation_method == 'intermodal_evaluation':
+            from src.evaluation.intermodal import intermodal_evaluation
+            intermodal_evaluation(output_dir)
+        else:
+            raise ValueError(f"Unknown evaluation method {evaluation_method} specified!")
         self.add_evaluate()
 
-    # def initialize_operators_and_vehicles(self): TODO I think this is depricated!
-    #     """ this function loads and initialzie all operator classes and its vehicle objects
-    #     and sets corresponding outputs"""
-    #     veh_type_list = []
-    #     route_output_flag = self.scenario_parameters.get(G_SIM_ROUTE_OUT_FLAG, True)
-    #     replay_flag = self.scenario_parameters.get(G_SIM_REPLAY_FLAG, False)
-    #     for op_id in range(self.n_op):
-    #         self.op_output[op_id] = []  # shared list among vehicles
-    #         operator_attributes = self.list_op_dicts[op_id]
-    #         operator_module_name = operator_attributes[G_OP_MODULE]
-    #         fleet_composition_dict = operator_attributes[G_OP_FLEET]
-    #         list_vehicles = []
-    #         vid = 0
-    #         for veh_type, nr_veh in fleet_composition_dict.items():
-    #             for _ in range(nr_veh):
-    #                 veh_type_list.append([op_id, vid, veh_type])
-    #                 tmp_veh_obj = SimulationVehicle(op_id, vid, self.dir_names[G_DIR_VEH], veh_type,
-    #                                                 self.routing_engine, self.demand.rq_db,
-    #                                                 self.op_output[op_id], route_output_flag,
-    #                                                 replay_flag)
-    #                 list_vehicles.append(tmp_veh_obj)
-    #                 self.sim_vehicles[(op_id, vid)] = tmp_veh_obj
-    #                 vid += 1
-    #         OpClass = load_fleet_control_module(operator_module_name)
-    #         self.operators.append(OpClass(op_id, operator_attributes, list_vehicles, self.routing_engine, self.zones,
-    #                                     self.scenario_parameters, self.dir_names, self.cdp))
-    #     veh_type_f = os.path.join(self.dir_names[G_DIR_OUTPUT], "2_vehicle_types.csv")
-    #     veh_type_df = pd.DataFrame(veh_type_list, columns=[G_V_OP_ID, G_V_VID, G_V_TYPE])
-    #     veh_type_df.to_csv(veh_type_f, index=False)
 
     def load_initial_state(self):
         """This method initializes the simulation vehicles. It can consider an initial state file. Moreover, an
@@ -641,9 +650,9 @@ class FleetSimulationBase:
                 # alternative 2: just break loop
                 LOG.warning(f"remaining assignments could not finish! Break Loop")
                 break
-        self.record_stats()
+        self.record_stats(force=True)
 
-    def record_stats(self, force=True):
+    def record_stats(self, force=False):
         """This method records the stats at the end of the simulation."""
         if self.skip_output:
             return
@@ -684,20 +693,20 @@ class FleetSimulationBase:
                 self.vehicle_update_order[opid_vid_tuple] = 0
             else:
                 self.vehicle_update_order[opid_vid_tuple] = 1
-            for rid, boarding_time_and_pos in boarding_requests.items():
+            for rid_struct, boarding_time_and_pos in boarding_requests.items():  # rid_struct is the actual key
                 boarding_time, boarding_pos = boarding_time_and_pos
-                LOG.debug(f"rid {rid} boarding at {boarding_time} at pos {boarding_pos}")
-                self.demand.record_boarding(rid, vid, op_id, boarding_time, pu_pos=boarding_pos)
-                self.broker.acknowledge_user_boarding(op_id, rid, vid, boarding_time)
-            for rid, alighting_start_time_and_pos in dict_start_alighting.items():
+                LOG.debug(f"rid {rid_struct} boarding at {boarding_time} at pos {boarding_pos}")
+                self.demand.record_boarding(rid_struct, vid, op_id, boarding_time, pu_pos=boarding_pos)
+                self.broker.acknowledge_user_boarding(op_id, rid_struct, vid, boarding_time)
+            for rid_struct, alighting_start_time_and_pos in dict_start_alighting.items():
                 # record user stats at beginning of alighting process
                 alighting_start_time, alighting_pos = alighting_start_time_and_pos
-                LOG.debug(f"rid {rid} deboarding at {alighting_start_time} at pos {alighting_pos}")
-                self.demand.record_alighting_start(rid, vid, op_id, alighting_start_time, do_pos=alighting_pos)
-            for rid, alighting_end_time in alighting_requests.items():
+                LOG.debug(f"rid {rid_struct} deboarding at {alighting_start_time} at pos {alighting_pos}")
+                self.demand.record_alighting_start(rid_struct, vid, op_id, alighting_start_time, do_pos=alighting_pos)
+            for rid_struct, alighting_end_time in alighting_requests.items():
                 # # record user stats at end of alighting process
-                self.demand.user_ends_alighting(rid, vid, op_id, alighting_end_time)
-                self.broker.acknowledge_user_alighting(op_id, rid, vid, alighting_end_time)
+                self.demand.user_ends_alighting(rid_struct, vid, op_id, alighting_end_time)
+                self.broker.acknowledge_user_alighting(op_id, rid_struct, vid, alighting_end_time)
             # send update to operator
             if len(boarding_requests) > 0 or len(dict_start_alighting) > 0:
                 self.broker.receive_status_update(op_id, vid, next_time, passed_VRL, True)

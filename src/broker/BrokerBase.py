@@ -65,14 +65,14 @@ class BrokerBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def collect_offers(self, rid: int) -> tp.Dict[int, 'RequestBase']:
+    def collect_offers(self, rid: int, sim_time: int = None) -> tp.Dict[int, 'RequestBase']:
         """This method collects the offers from the operators.
         The return value is a list of tuples, where each tuple contains the operator id, the offer, and the simulation time.
         """
         pass
 
     @abstractmethod
-    def inform_user_booking(self, rid: int, rq_obj: 'RequestBase', sim_time: int, chosen_operator: int) -> tp.List[tuple[int, 'RequestBase']]:
+    def inform_user_booking(self, rid: int, rq_obj: 'RequestBase', sim_time: int, chosen_operator: int) -> tp.List[tp.Tuple[int, 'RequestBase']]:
         """This method informs the broker that the user has booked a trip.
         """
         pass

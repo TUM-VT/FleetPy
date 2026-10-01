@@ -90,9 +90,7 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
                           boarding_time=self.const_bt)
         rid_struct = rq.get_rid_struct()
 
-        if prq.o_pos == prq.d_pos:
-            LOG.debug(f"automatic decline for rid {rid_struct}!")
-            self._create_rejection(prq, sim_time)
+        if not self._is_valid_request(sim_time, prq): # automatic rejection inside
             return
 
         self.new_requests[rid_struct] = 1
@@ -117,7 +115,7 @@ class PoolingIRSAssignmentBatchOptimization(RidePoolingBatchOptimizationFleetCon
                 LOG.debug(f"new offer for rid {rid_struct} : {offer}")
             else:
                 LOG.debug(f"rejection for rid {rid_struct}")
-                self._create_rejection(prq, sim_time)
+                self._create_rejection(prq, sim_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
                 
         if self.repo and not prq.get_reservation_flag():
             self.repo.register_user_request(prq, sim_time)

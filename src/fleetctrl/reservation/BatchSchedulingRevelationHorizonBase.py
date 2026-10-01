@@ -7,7 +7,7 @@ import time
 from src.simulation.Offers import TravellerOffer
 from src.fleetctrl.FleetControlBase import FleetControlBase
 from src.fleetctrl.pooling.immediate.insertion import simple_remove
-from src.routing.NetworkBase import NetworkBase
+from src.routing.road.NetworkBase import NetworkBase
 from src.fleetctrl.planning.VehiclePlan import PlanStopBase, RoutingTargetPlanStop
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.fleetctrl.reservation.RevelationHorizonBase import RevelationHorizonBase

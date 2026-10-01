@@ -14,7 +14,7 @@ from typing import List, Dict, Tuple, Optional
 from src.simulation.Legs import VehicleRouteLeg
 from src.simulation.Vehicles import SimulationVehicle
 from src.fleetctrl.planning.PlanRequest import PlanRequest
-from src.routing.NetworkBase import NetworkBase
+from src.routing.road.NetworkBase import NetworkBase
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -851,7 +851,8 @@ class VehiclePlan:
         :return: is_feasible returns True if all
         """
         # TODO # think about update of duration of VehicleChargeLegs
-        # LOG.debug(f"update tt an check plan {veh_obj} pax {veh_obj.pax} | at {sim_time} | pax info {self.pax_info}")
+        if logging.DEBUG >= LOG.getEffectiveLevel():
+            LOG.debug(f"update tt an check plan {veh_obj} pax {veh_obj.pax} | at {sim_time} | pax info {self.pax_info}")
         is_feasible = True
         if len(self.list_plan_stops) == 0:
             self.pax_info = {}

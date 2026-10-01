@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from src.fleetctrl.planning.VehiclePlan import VehiclePlan
     from src.fleetctrl.planning.PlanRequest import PlanRequest
     from src.simulation.Vehicles import SimulationVehicle
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
 
 LOG = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
     :rtype: function
     """
     func_key = vr_control_func_dict["func_key"]
-
+    
     # ---------------------------------------------------------------------------------------------------------------- #
     # control objective function definitions
     # --------------------------------------
@@ -585,8 +585,10 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
 
     else:
         raise IOError(f"Did not find valid request assignment control objective string."
-                      f" Please check the input parameter {G_OP_VR_CTRL_F}!")
-        
+                      f" Please check the input parameter {G_OP_VR_CTRL_F}!") 
+
+    return control_f   
+
     def embedded_control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
         """This function is the embedded objective function which is returned to the calling function.
 

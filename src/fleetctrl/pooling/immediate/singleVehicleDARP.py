@@ -6,7 +6,7 @@ from src.fleetctrl.FleetControlBase import FleetControlBase
 from src.fleetctrl.planning.VehiclePlan import BoardingPlanStop, PlanStop, VehiclePlan
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.simulation.Vehicles import SimulationVehicle
-from src.routing.NetworkBase import NetworkBase
+from src.routing.road.NetworkBase import NetworkBase
 from src.fleetctrl.pooling.immediate.insertion import simple_insert, simple_remove
 
 LOG = logging.getLogger(__name__)
