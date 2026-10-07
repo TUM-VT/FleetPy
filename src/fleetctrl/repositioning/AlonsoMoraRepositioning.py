@@ -86,6 +86,9 @@ class AlonsoMoraRepositioning(RepositioningBase):
                 vid_to_origin_to_tt[veh.vid] = {}
                 for rej_o in origin_to_counts.keys():
                     _, tt, _ = self.fleetctrl.routing_engine.return_travel_costs_1to1(veh.pos, (rej_o, None, None) )
+                    if tt is None or tt != tt or tt == float("inf"):
+                        LOG.debug(f"Operator {self.fleetctrl.op_id}: travel time from {veh.pos} to {rej_o} is None or inf -> skip repositioning")
+                        continue
                     vid_to_origin_to_tt[veh.vid][rej_o] = tt
             elif len(self.fleetctrl.veh_plans[veh.vid].list_plan_stops) == 1 and self.fleetctrl.veh_plans[veh.vid].list_plan_stops[-1].is_locked_end():
                 # reservation leg at end -> insert repo in between if far in future
@@ -95,6 +98,12 @@ class AlonsoMoraRepositioning(RepositioningBase):
                     for rej_o in origin_to_counts.keys():
                         _, o_tt_1, _ = self.fleetctrl.routing_engine.return_travel_costs_1to1(veh.pos, (rej_o, None, None) )
                         _, o_tt_2, _ = self.fleetctrl.routing_engine.return_travel_costs_1to1((rej_o, None, None), self.fleetctrl.veh_plans[veh.vid].list_plan_stops[-1].get_pos() )
+                        if o_tt_1 is None or o_tt_1 != o_tt_1 or o_tt_1 == float("inf"):
+                            LOG.debug(f"Operator {self.fleetctrl.op_id}: travel time from {veh.pos} to {rej_o} is None or inf -> skip repositioning")
+                            continue
+                        if o_tt_2 is None or o_tt_2 != o_tt_2 or o_tt_2 == float("inf"):
+                            LOG.debug(f"Operator {self.fleetctrl.op_id}: travel time from {rej_o} to {self.fleetctrl.veh_plans[veh.vid].list_plan_stops[-1].get_pos()} is None or inf -> skip repositioning")
+                            continue
                         if sim_time + o_tt_1 + o_tt_2 + self.min_reservation_buffer < est:  # check detour around repo target
                             try:
                                 vid_to_origin_to_tt[veh.vid][rej_o] = o_tt_1 + o_tt_2 - base_tt     # base_tt has to be driven anyway
