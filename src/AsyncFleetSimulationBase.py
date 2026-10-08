@@ -103,9 +103,9 @@ class AsyncFleetSimulationBase:
                     )
                     for stop in stops
                 ]
-                try:
+                try:    
                     veh_obj.assign_vehicle_plan(vrls, sim_time, force_ignore_lock=force)
-                except AssertionError as e:
+                except AssertionError as e: # TODO: we need a methodology here for vehicle to communicate to fleetcontrol that dispatch failed (i.e. out of sync)
                     LOG.warning(f"op_id {op_id} vid {vid}: dropped stale vehicle plan dispatch at "
                                 f"sim_time {sim_time} - vehicle's current leg is locked/already "
                                 f"started and moved on since this plan was computed ({e})")
