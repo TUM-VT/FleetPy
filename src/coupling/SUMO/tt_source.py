@@ -187,7 +187,7 @@ def tt_file_for(source_dir: Optional[str], sim_time, measured_path: str) -> Opti
 
 def write_source_stats(results_dir: str, source_dir: Optional[str],
                        bins_loaded: int, bins_missing: int,
-                       routing_engine=None) -> str:
+                       routing_engine=None, setup: Optional[dict] = None) -> str:
     """Record which travel times the run routed on, next to the bin files.
 
     Without this the arm a cell ran is only inferable from its scenario name --
@@ -215,5 +215,8 @@ def write_source_stats(results_dir: str, source_dir: Optional[str],
             stats["td_bins_without_layers"] = int(routing_engine.td_bins_without_layers)
             stats["td_layer_seconds"] = float(
                 getattr(routing_engine, "_layer_seconds", -1.0))
+        # The new routing setup (docs/17): its parameters and how often a
+        # driving vehicle was actually re-routed. Absent on legacy cells.
+        stats.update(setup or {})
         json.dump(stats, fh, indent=2)
     return path

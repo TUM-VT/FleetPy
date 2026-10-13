@@ -191,6 +191,11 @@ class SUMOFleetPyServer():
             self.fp_sim_env.dir_names.get(G_DIR_MAIN))
         self.g_tt_bins_loaded = 0
         self.g_tt_bins_missing = 0
+        # docs/17: after each table load, re-route vehicles already driving when the
+        # new path is at least this many seconds cheaper. Unset = never (legacy).
+        gain = self.fp_sim_env.scenario_parameters.get("sumo_enroute_min_gain")
+        self.g_enroute_min_gain = float(gain) if gain not in (None, "") else None
+        self.g_enroute_log = []  # (sim_time, op_id, vid, cost_old, cost_new)
         # Run unconditionally: a time-dependent engine with NO source directory
         # is the one misconfiguration that produces a complete, plausible cell
         # that routed statically from end to end, and the old guard skipped
@@ -428,6 +433,8 @@ class SUMOFleetPyServer():
                     else:
                         self.g_tt_bins_loaded += 1
                         self.fp_sim_env.routing_engine.load_tt_file(sim_time, ext_path=tt_file_path)
+                        if self.g_enroute_min_gain is not None:
+                            self._reroute_driving_vehicles(sim_time)
 
             # 6) collect the current positions of all fleet vehicles in SUMO
             vehicle_to_position_dict = self._get_current_vehicle_positions()
@@ -446,11 +453,34 @@ class SUMOFleetPyServer():
         LOG.info(f"travel times: {self.g_tt_bins_loaded} bins loaded, "
                  f"{self.g_tt_bins_missing} missing "
                  f"(source: {self.g_tt_source_dir or 'probe measurements'})")
+        setup = {}
+        res = self.fp_sim_env.scenario_parameters.get("network_cost_resolution")
+        if res not in (None, ""):
+            setup["network_cost_resolution"] = float(res)
+        if self.g_enroute_min_gain is not None:
+            setup["sumo_enroute_min_gain"] = self.g_enroute_min_gain
+            setup["enroute_reroutes"] = len(self.g_enroute_log)
+            pd.DataFrame(self.g_enroute_log,
+                         columns=["sim_time", "op_id", "vid", "cost_old", "cost_new"]).to_csv(
+                os.path.join(resultsPath, "EdgeTravelTimes", "enroute_reroutes.csv"), index=False)
         write_source_stats(resultsPath, self.g_tt_source_dir,
                            self.g_tt_bins_loaded, self.g_tt_bins_missing,
-                           routing_engine=self.fp_sim_env.routing_engine)
+                           routing_engine=self.fp_sim_env.routing_engine, setup=setup)
         self._post_sim_evaluation()
     
+    def _reroute_driving_vehicles(self, sim_time):
+        """Offer every driving vehicle the cheaper path the new table shows.
+
+        The new route is pushed to SUMO by `_update_routes_and_add_vehicles` on
+        the next step, through the same setRoute path a reassignment uses.
+        """
+        for (op_id, vid), veh in self.fp_sim_env.sim_vehicles.items():
+            if not hasattr(veh, "reroute_if_faster"):
+                continue
+            r = veh.reroute_if_faster(self.g_enroute_min_gain)
+            if r is not None:
+                self.g_enroute_log.append((sim_time, op_id, vid, r[0], r[1]))
+
     def _post_sim_evaluation(self):
         t_stop = time.time()
         time_elapsed = t_stop - t_start

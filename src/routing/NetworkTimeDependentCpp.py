@@ -36,6 +36,7 @@ What this does NOT change, and why
 
 Authors: extends the FleetPy modules of Roman Engelhardt and Florian Dandl.
 """
+import csv
 import glob
 import logging
 import os
@@ -103,6 +104,9 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
         self.td_bins_loaded = 0
         self.td_layers_loaded = 0
         self.td_bins_without_layers = 0
+        # The layers again, on the Python side, so a given path can be priced
+        # exactly as the C++ search prices it (`price_route`).
+        self._py_layers = {}
 
     def load_tt_file(self, scenario_time, ext_path=None):
         """Load the bin's base table, then every horizon exported beside it."""
@@ -112,6 +116,7 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
             # BEFORE delegating, so a load that raises cannot leave the router
             # pricing this bin with the last bin's forecast.
             self.cpp_router.setLayerSeconds(-1.0)
+            self._py_layers = {}
             super().load_tt_file(scenario_time, ext_path=ext_path)
             return
 
@@ -124,6 +129,7 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
         # horizon file would otherwise keep the previous bin's forecast beside
         # this bin's base value, and one route would mix two forecasts.
         self.cpp_router.clearAllLayers()
+        self._py_layers = {}
 
         loaded = 0
         for horizon in range(2, MAX_HORIZON + 1):
@@ -132,6 +138,10 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
                 continue
             # C++ layer 0 is the base table, so horizon h lives in layer h-1.
             self.cpp_router.updateEdgeTravelTimesLayer(path.encode(), horizon - 1)
+            with open(path, newline="") as fh:
+                self._py_layers[horizon - 1] = {
+                    (int(r["from_node"]), int(r["to_node"])): float(r["edge_tt"])
+                    for r in csv.DictReader(fh)}
             loaded += 1
 
         # the layers now describe intervals measured from this bin, so the
@@ -183,6 +193,31 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
                 and tt >= self._layer_seconds):
             return
         super()._add_to_database(o_node, d_node, cfv, tt, dis)
+
+    def price_route(self, route):
+        """Travel time along a given node list, priced as the layered search prices it.
+
+        Mirrors `Edge::getTravelTimeAt`: the elapsed time plus the query offset
+        selects the layer, an edge's last layer is held beyond it, and a layer
+        that does not list the edge falls back to the base table. Without this a
+        re-routing decision would compare a path priced by the layers with one
+        priced by horizon 1 alone.
+        """
+        ls = self.cpp_router.getLayerSeconds()
+        if ls <= 0 or not self._py_layers:
+            return super().price_route(route)
+        offset = self.cpp_router.getQueryOffset()
+        elapsed = 0.0
+        for u, v in zip(route[:-1], route[1:]):
+            tt = self.get_section_infos(u, v)[0]
+            have = [k for k, layer in self._py_layers.items() if (u, v) in layer]
+            if have:
+                k = int((elapsed + offset) / ls) if elapsed + offset > 0 else 0
+                k = min(k, max(have))
+                if k in have:
+                    tt = self._py_layers[k][(u, v)]
+            elapsed += tt
+        return self._q(elapsed)
 
     def update_network(self, simulation_time, update_state=True):
         """Move the layers' reading point with the simulation clock.

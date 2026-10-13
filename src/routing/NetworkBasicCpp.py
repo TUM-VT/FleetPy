@@ -45,7 +45,31 @@ class NetworkBasicCpp(NetworkBasic):
         :type network_dynamics_file_name: str
         """
         self.cpp_router = None
+        self.cost_resolution = None
         super().__init__(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
+
+    def set_cost_resolution(self, seconds):
+        """Round every travel time the C++ search returns to this many seconds.
+
+        Two searches that sum one path in a different order differ by ~1e-7 s.
+        That changes no path, but the fleet assigns on exact cost ties, so it
+        reassigned 57% of requests (docs/6b, 2026-08-20). Rounding makes such
+        costs identical; a real table difference still moves them.
+        """
+        self.cost_resolution = float(seconds) if seconds else None
+
+    def _q(self, tt):
+        r = self.cost_resolution
+        if r is None or not np.isfinite(tt):
+            return tt
+        return round(tt / r) * r
+
+    def price_route(self, route):
+        """Travel time along a given node list, under the table now loaded."""
+        tt = 0.0
+        for u, v in zip(route[:-1], route[1:]):
+            tt += self.get_section_infos(u, v)[0]
+        return self._q(tt)
 
     def loadNetwork(self, network_name_dir, network_dynamics_file_name=None, scenario_time=None):
         LOG.info("load c++ router!")
@@ -94,6 +118,7 @@ class NetworkBasicCpp(NetworkBasic):
         s = self.cpp_router.computeTravelCosts1To1(origin_node, destination_node)
         if self._current_tt_factor is not None:
             s = (s[0] * self._current_tt_factor, s[1])
+        s = (self._q(s[0]), s[1])
         if s[0] < -0.001:
             s = (float("inf"), float("inf"))
         res = (s[0] + origin_overhead[0] + destination_overhead[0], s[0] + origin_overhead[1] + destination_overhead[1], s[1] + origin_overhead[2] + destination_overhead[2])
@@ -149,6 +174,7 @@ class NetworkBasicCpp(NetworkBasic):
             for org_node, tt, dis in s:
                 if tt < -0.0001:
                     continue
+                tt = self._q(tt)
                 self._add_to_database(org_node, destination_node, tt, tt, dis)
                 tt += destination_overhead[1]
                 dis += destination_overhead[2]
@@ -213,6 +239,7 @@ class NetworkBasicCpp(NetworkBasic):
             for dest_node, tt, dis in s:
                 if tt < -0.0001:
                     continue
+                tt = self._q(tt)
                 self._add_to_database(origin_node, dest_node, tt, tt, dis)
                 tt += origin_overhead[1]
                 dis += origin_overhead[2]

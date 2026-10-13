@@ -103,6 +103,7 @@ class NetworkBasicWithStoreCpp(NetworkBasicCpp):
             s = self.cpp_router.computeTravelCosts1To1(origin_node, destination_node)
             if self._current_tt_factor is not None:
                 s = (s[0] * self._current_tt_factor, s[1])
+            s = (self._q(s[0]), s[1])
             if s[0] < -0.001:
                 s = (float("inf"), float("inf"))
             s = (s[0], s[0], s[1])

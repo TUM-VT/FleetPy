@@ -655,6 +655,34 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
             and can only end if reached_destination is called)"""
         return -1
 
+    def reroute_if_faster(self, min_gain_s):
+        """Swap the rest of the driving leg for a path at least `min_gain_s` cheaper.
+
+        A route is otherwise fixed when its leg starts, so a vehicle already
+        driving never sees a table loaded after that (docs/17). Only a vehicle
+        mid-edge is considered: both paths start at its next node, so the edge it
+        is on costs the same in either. Both are priced by the same router, so a
+        time-dependent arm compares them layer by layer. The threshold keeps
+        sub-second differences from moving a vehicle; those reroutes lost 36.5 s
+        each (docs/6b, 2026-08-20).
+        :return: (old cost, new cost) if rerouted, else None
+        """
+        if (self.status not in G_DRIVING_STATUS or not self.assigned_route
+                or self.pos[1] is None or len(self.cl_remaining_route) < 2):
+            return None
+        old = list(self.cl_remaining_route)
+        new = [int(x) for x in self.routing_engine.return_best_route_1to1(
+            (old[0], None, None), self.assigned_route[0].destination_pos)]
+        if not new or new == [int(x) for x in old]:
+            return None
+        c_old = self.routing_engine.price_route(old)
+        c_new = self.routing_engine.price_route(new)
+        if c_old - c_new < min_gain_s:
+            return None
+        self.cl_remaining_route = new
+        self._route_update_needed = True
+        return c_old, c_new
+
     def get_new_route(self):
         """ this function is used to return the current pos of the vehicle and the route that is needed to be driven in the SUMO simulation
         if something is return (i.e. a new driven vrl needs to be started) is indicated by the flag self.start_new_route_flag

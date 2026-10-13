@@ -20,6 +20,19 @@ INPUT_PARAMETERS_PoolingInsertionHeuristicOnly = {
     "optional_modules": []
 }
 
+def best_insertion(list_tuples, tie_break_by_vid=False):
+    """The (vid, plan, delta) to offer: lowest delta, and on a tie the lowest vid.
+
+    Without the tie-break an exact tie goes to whichever candidate the search
+    listed first, which is how a 1e-7 s difference between two routers moved
+    57% of assignments (docs/6b, 2026-08-20). Off by default, so every cell run
+    before the new setup reproduces as it was.
+    """
+    if tie_break_by_vid:
+        return min(list_tuples, key=lambda x: (x[2], x[0]))
+    return min(list_tuples, key=lambda x: x[2])
+
+
 class PoolingInsertionHeuristicOnly(FleetControlBase):
     """This class applies an Insertion Heuristic, in which new requests are inserted in the currently assigned
     vehicle plans and the insertion with the best control objective value is selected.
@@ -61,6 +74,8 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         # others # TODO # standardize IRS assignment memory?
         self.tmp_assignment = {}  # rid -> VehiclePlan
         self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_RQU)
+        # ties broken by vehicle id whenever costs are rounded (docs/17)
+        self._tie_break_by_vid = bool(scenario_parameters.get("network_cost_resolution"))
 
     def receive_status_update(self, vid, simulation_time, list_finished_VRL, force_update=True):
         """This method can be used to update plans and trigger processes whenever a simulation vehicle finished some
@@ -118,7 +133,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         else:
             list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
             if len(list_tuples) > 0:
-                (vid, vehplan, delta_cfv) = min(list_tuples, key=lambda x:x[2])
+                (vid, vehplan, delta_cfv) = best_insertion(list_tuples, self._tie_break_by_vid)
                 self.tmp_assignment[rid_struct] = vehplan
                 offer = self._create_user_offer(prq, sim_time, vehplan)
                 LOG.debug(f"new offer for rid {rid_struct} : {offer}")

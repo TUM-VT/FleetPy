@@ -243,6 +243,10 @@ class FleetSimulationBase:
         # TODO # check consistency of scenario inputs / another way to refactor add_init_data ?
         self.routing_engine: NetworkBase = load_routing_engine(network_type, self.dir_names[G_DIR_NETWORK],
                                                                network_dynamics_file_name=network_dynamics_file)
+        # docs/17: round routing costs so floating-point noise cannot reorder ties
+        cost_resolution = self.scenario_parameters.get("network_cost_resolution")
+        if cost_resolution and hasattr(self.routing_engine, "set_cost_resolution"):
+            self.routing_engine.set_cost_resolution(float(cost_resolution))
         if network_type == "NetworkDynamicNFDClusters":
             self.routing_engine.add_init_data(self.start_time, self.time_step,
                                               self.scenario_parameters[G_NW_DENSITY_T_BIN_SIZE],
