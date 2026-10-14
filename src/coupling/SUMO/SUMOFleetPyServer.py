@@ -21,6 +21,7 @@ from src.coupling.SUMO.sumocfg_utils import merge_additional_files
 from src.coupling.SUMO.tt_source import (
     coverage_error, layer_coverage_error, requested_bin_times, resolve_source_dir,
     tt_file_for, write_source_stats)
+from src.coupling.SUMO.insertion_guard import InsertionGuard, skip_blocked_edge
 from src.misc.init_modules import load_simulation_environment
 import src.misc.config as config
 from src.misc.globals import *
@@ -196,6 +197,12 @@ class SUMOFleetPyServer():
         gain = self.fp_sim_env.scenario_parameters.get("sumo_enroute_min_gain")
         self.g_enroute_min_gain = float(gain) if gain not in (None, "") else None
         self.g_enroute_log = []  # (sim_time, op_id, vid, cost_old, cost_new)
+        # A fleet vehicle waiting longer than this to be inserted skips its blocked
+        # first edge (insertion_guard.py); unset keeps the old behaviour, in which
+        # it can wait for the rest of the run.
+        self.g_insertion_guard = InsertionGuard.from_parameter(
+            self.fp_sim_env.scenario_parameters.get("sumo_insertion_max_wait"))
+        self.g_insertion_skips = []  # (sim_time, sumo_vid, blocked_edge, edges_left)
         # Run unconditionally: a time-dependent engine with NO source directory
         # is the one misconfiguration that produces a complete, plausible cell
         # that routed statically from end to end, and the old guard skipped
@@ -406,6 +413,10 @@ class SUMOFleetPyServer():
                         traci.vehicle.remove(veh_id)
                 raise e
 
+            # 3b) fleet vehicles stuck waiting for insertion skip the blocked edge
+            if self.g_insertion_guard is not None:
+                self._skip_blocked_insertions(sim_time, arrivedVehicles_internal)
+
             # 4) get current vehicle positions and update travel time statistics (if needed)
             if sim_time%1==0 and self.g_update_fleetsim_traveltimes==True:
                 sim_pos_dict,res_list = self._get_current_edge_tt(sim_time=sim_time,sim_pos_dict=sim_pos_dict,res_list=res_list)
@@ -457,6 +468,12 @@ class SUMOFleetPyServer():
         res = self.fp_sim_env.scenario_parameters.get("network_cost_resolution")
         if res not in (None, ""):
             setup["network_cost_resolution"] = float(res)
+        if self.g_insertion_guard is not None:
+            setup["sumo_insertion_max_wait"] = self.g_insertion_guard.max_wait_s
+            setup["insertion_skips"] = len(self.g_insertion_skips)
+            pd.DataFrame(self.g_insertion_skips,
+                         columns=["sim_time", "sumo_vid", "blocked_edge", "edges_left"]).to_csv(
+                os.path.join(resultsPath, "EdgeTravelTimes", "insertion_skips.csv"), index=False)
         if self.g_enroute_min_gain is not None:
             setup["sumo_enroute_min_gain"] = self.g_enroute_min_gain
             setup["enroute_reroutes"] = len(self.g_enroute_log)
@@ -480,6 +497,35 @@ class SUMOFleetPyServer():
             r = veh.reroute_if_faster(self.g_enroute_min_gain)
             if r is not None:
                 self.g_enroute_log.append((sim_time, op_id, vid, r[0], r[1]))
+
+    def _skip_blocked_insertions(self, sim_time, arrivedVehicles_internal):
+        """Move on every fleet vehicle that has waited too long to be inserted.
+
+        It is removed from SUMO's insertion queue and re-added under the same id
+        with the rest of its route, skipping the blocked first edge as a teleport
+        would; with nothing left it is handed to the arrival handling below.
+        """
+        for sumo_vid in self.g_insertion_guard.overdue(sim_time, traci.simulation.getPendingVehicles()):
+            fp_vid = self._sumo_v_id_to_fleetpy_v_id(sumo_vid)
+            veh_obj = self.fp_sim_env.sim_vehicles[fp_vid]
+            # FleetPy's current plan, not SUMO's stored route, which can be stale
+            planned = self._transform_route_fp_to_sumo(list(veh_obj.cl_remaining_route))
+            route = planned if planned else list(traci.vehicle.getRoute(sumo_vid))
+            rest = skip_blocked_edge(route)
+            traci.vehicle.remove(sumo_vid)
+            if rest is None:
+                dest = veh_obj.cl_remaining_route[-1] if len(veh_obj.cl_remaining_route) > 0 else veh_obj.pos[0]
+                arrivedVehicles_internal[sumo_vid] = dest
+            else:
+                route_name = f"Route_{sumo_vid}_{sim_time}_skip"
+                traci.route.add(route_name, rest)
+                traci.vehicle.addFull(vehID=sumo_vid, routeID=route_name,
+                                      typeID=self.fp_opvid_to_veh_type[fp_vid])
+            self.g_insertion_skips.append((sim_time, sumo_vid, route[0] if route else "",
+                                           len(rest) if rest else 0))
+            LOG.warning(f"INSERT-SKIP {sim_time} {sumo_vid} waited {self.g_insertion_guard.max_wait_s:g} s "
+                        f"to enter {route[0] if route else '?'}; "
+                        f"{'re-inserted on ' + rest[0] if rest else 'treated as arrived'}")
 
     def _post_sim_evaluation(self):
         t_stop = time.time()
@@ -563,13 +609,27 @@ class SUMOFleetPyServer():
                 # B) Vehicle is not in the simulation, but already loaded and waiting to be inserted (pending) --> no new route needed
                 elif (sumo_vid not in current_sumo_vehicle_ids_set) and (sumo_vid in traci.simulation.getPendingVehicles()): 
                     LOG.debug(f"{sumo_vid}/{self._sumo_v_id_to_fleetpy_v_id(sumo_vid)} has to wait to get inserted at Edge {traci.vehicle.getRoute(sumo_vid)[0]}") 
+                    # A new plan for a vehicle still waiting to be inserted used to be
+                    # dropped, so it entered SUMO on the old leg. setRoute is refused
+                    # before departure; remove and re-add under the same id instead.
+                    if list(traci.vehicle.getRoute(sumo_vid)) != list(sumoRoute):
+                        traci.vehicle.remove(sumo_vid)
+                        traci.vehicle.addFull(vehID=sumo_vid, routeID=route_name,
+                                              typeID=self.fp_opvid_to_veh_type[opid_vid_tuple])
+                        LOG.warning(f"PENDING-REROUTE {sim_time} {sumo_vid}: new plan before insertion, "
+                                    f"now enters on {sumoRoute[0]}")
                 
                 # C) Vehicle not in Simualtion: Try to Load Vehicle and insert it in the simulation    
                 else: 
                     if self.sumo_binary == "sumo":
                         try:
-                            traci.vehicle.addFull(vehID=sumo_vid, routeID=route_name, typeID=self.fp_opvid_to_veh_type[opid_vid_tuple])   
-                        except:
+                            traci.vehicle.addFull(vehID=sumo_vid, routeID=route_name, typeID=self.fp_opvid_to_veh_type[opid_vid_tuple])
+                        except Exception as e:
+                                LOG.warning(f'INSERT-FAIL {sim_time} {sumo_vid}: {e!r} | route {sumoRoute[:3]}... '
+                                            f'({len(sumoRoute)} edges) | loaded {sumo_vid in traci.simulation.getLoadedIDList()} '
+                                            f'| running {sumo_vid in current_sumo_vehicle_ids_set} '
+                                            f'| pending {sumo_vid in traci.simulation.getPendingVehicles()} '
+                                            f'| fp pos {veh_obj.pos} status {veh_obj.status}')
                                 LOG.debug(f'Vehicle {sumo_vid} could not be added')
                                 LOG.debug(traci.simulation.getLoadedIDList())
                                 LOG.debug(traci.simulation.getEndingTeleportIDList())
