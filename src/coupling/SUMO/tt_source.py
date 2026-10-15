@@ -185,6 +185,17 @@ def tt_file_for(source_dir: Optional[str], sim_time, measured_path: str) -> Opti
     return path if os.path.isfile(path) else None
 
 
+def run_log_path(results_dir: str, filename: str) -> str:
+    """Path of an end-of-run log beside the bin files, its directory created.
+
+    A static cell (no ``sumo_t_update``) never writes a measured bin, so nothing
+    else has created ``EdgeTravelTimes/`` by the time these logs are written.
+    """
+    out_dir = os.path.join(results_dir, "EdgeTravelTimes")
+    os.makedirs(out_dir, exist_ok=True)
+    return os.path.join(out_dir, filename)
+
+
 def write_source_stats(results_dir: str, source_dir: Optional[str],
                        bins_loaded: int, bins_missing: int,
                        routing_engine=None, setup: Optional[dict] = None) -> str:

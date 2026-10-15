@@ -20,7 +20,7 @@ from src.coupling.SUMO.SUMOcontrolledSim import SUMOcontrolledSim
 from src.coupling.SUMO.sumocfg_utils import merge_additional_files
 from src.coupling.SUMO.tt_source import (
     coverage_error, layer_coverage_error, requested_bin_times, resolve_source_dir,
-    tt_file_for, write_source_stats)
+    run_log_path, tt_file_for, write_source_stats)
 from src.coupling.SUMO.insertion_guard import InsertionGuard, skip_blocked_edge
 from src.misc.init_modules import load_simulation_environment
 import src.misc.config as config
@@ -473,13 +473,13 @@ class SUMOFleetPyServer():
             setup["insertion_skips"] = len(self.g_insertion_skips)
             pd.DataFrame(self.g_insertion_skips,
                          columns=["sim_time", "sumo_vid", "blocked_edge", "edges_left"]).to_csv(
-                os.path.join(resultsPath, "EdgeTravelTimes", "insertion_skips.csv"), index=False)
+                run_log_path(resultsPath, "insertion_skips.csv"), index=False)
         if self.g_enroute_min_gain is not None:
             setup["sumo_enroute_min_gain"] = self.g_enroute_min_gain
             setup["enroute_reroutes"] = len(self.g_enroute_log)
             pd.DataFrame(self.g_enroute_log,
                          columns=["sim_time", "op_id", "vid", "cost_old", "cost_new"]).to_csv(
-                os.path.join(resultsPath, "EdgeTravelTimes", "enroute_reroutes.csv"), index=False)
+                run_log_path(resultsPath, "enroute_reroutes.csv"), index=False)
         write_source_stats(resultsPath, self.g_tt_source_dir,
                            self.g_tt_bins_loaded, self.g_tt_bins_missing,
                            routing_engine=self.fp_sim_env.routing_engine, setup=setup)
