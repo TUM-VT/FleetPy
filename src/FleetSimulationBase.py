@@ -465,8 +465,11 @@ class FleetSimulationBase:
         else:
             LOG.info(f"Broker type specified: {self.scenario_parameters.get(G_BROKER_TYPE)}")
             op_broker_class_string = self.scenario_parameters.get(G_BROKER_TYPE)
+            from src.infra.Zoning import ZoneSystem
+            subsidy_zones = ZoneSystem(self.dir_names[G_DIR_DATA]+r"\zones\community_district\nyc_2026_mod", self.scenario_parameters, self.dir_names)
             BrokerClass = load_broker_module(op_broker_class_string)
-            self.broker = BrokerClass(self.n_op, self.operators)
+            subsidy_matrix_path = os.path.join(self.dir_names[G_DIR_DATA],"broker\pricing",self.scenario_parameters.get('subsidy_matrix', None))
+            self.broker = BrokerClass(self.n_op, self.operators,subsidy_zones,subsidy_matrix_path)
 
     @staticmethod
     def get_directory_dict(scenario_parameters, list_operator_dicts):
