@@ -252,6 +252,8 @@ std::vector<Journey> Raptor::findJourneys() {
   std::vector<Journey> journeys;
 
   initializeAlgorithm();
+  // The same source and target platform set does not require a PT round trip.
+  if (included_source_ids_ == included_target_ids_) return journeys;
 
   while (true) {
     // std::cout << std::endl << "Round " << k << std::endl;
@@ -306,6 +308,8 @@ std::optional<Journey> Raptor::findOptimalJourney() {
   int optimal_target_station_arrival_secs = std::numeric_limits<int>::max();
 
   initializeAlgorithm();
+  // Keep same-station queries from offering a vehicle loop back to their origin.
+  if (included_source_ids_ == included_target_ids_) return optimal_journey;
 
   while (true) {
     // std::cout << std::endl << "Round " << k << std::endl;
@@ -382,9 +386,7 @@ Raptor::accumulateRoutesServingStops() {
 
   // For each previously marked stop p
   for (const auto &marked_stop_id: prev_marked_stops) {
-    // If the stop is one of the included target stops, skip it
-    if (included_target_ids_.find(marked_stop_id) != included_target_ids_.end()) continue;
-              
+    // Target platforms can also be intermediate boarding stops.
     // For each route r serving p: Route key: (route_id, direction_id)
     for (const auto &route_key: stops_[marked_stop_id].getRouteKeys()) {
       routes_stops_set.insert({route_key, marked_stop_id});
@@ -546,7 +548,6 @@ void Raptor::handleFootpaths() {
   std::vector<std::size_t> walking_label_ids;
   walking_label_ids.reserve(marked_stops.size());
   for (const auto &stop_id : marked_stops) {
-    if (included_target_ids_.find(stop_id) != included_target_ids_.end()) continue;
     const auto label_id = getVehicleArrivalLabel(stop_id, k);
     if (label_id.has_value() && label_id != arrivals_.at(stop_id).at(k - 1).vehicle_label_id) {
       walking_label_ids.push_back(*label_id);
@@ -558,9 +559,9 @@ void Raptor::handleFootpaths() {
     const std::string stop_id = getLabel(walking_label_id).stop_id;
     const int p_arrival = getLabel(walking_label_id).arrival_seconds;
     for (const auto &[dest_id, duration]: stops_[stop_id].getFootpaths()) {
-      if (included_target_ids_.find(dest_id) != included_target_ids_.end()) continue;
       if (included_source_ids_.find(dest_id) != included_source_ids_.end()) continue;
 
+      // Walking to a target enables boarding there; only vehicle labels can finish.
       int new_arrival = checkedSeconds(static_cast<long long>(p_arrival) + duration);
       if (new_arrival < p_arrival) {
         throw std::logic_error("Invalid stop or time in journey label");
