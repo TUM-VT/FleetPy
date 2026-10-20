@@ -175,7 +175,7 @@ std::vector<Journey> Raptor::findJourneys() {
 }
 
 std::optional<Journey> Raptor::findOptimalJourney() {
-  Journey optimal_journey;
+  std::optional<Journey> optimal_journey = std::nullopt;
   int optimal_target_station_arrival_secs = std::numeric_limits<int>::max();
 
   initializeAlgorithm();

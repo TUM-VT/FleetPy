@@ -81,7 +81,7 @@ public:
   /**
    * @brief Finds the journey with the earliest arrival time.
    *
-   * @return A Journey object representing the journey with the earliest arrival time.
+   * @return The earliest valid journey, or std::nullopt if no valid journey is found.
    */
   std::optional<Journey> findOptimalJourney();
   
