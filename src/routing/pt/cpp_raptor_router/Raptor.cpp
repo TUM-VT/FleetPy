@@ -196,7 +196,7 @@ void Raptor::markStop(
   const std::size_t label_id = labels_.size();
   labels_.push_back({stop_id, arrival, parent_label_id, parent_trip_id,
                      departure_seconds, k, vehicle_legs});
-  Day day = arrival > MIDNIGHT ? Day::NextDay : Day::CurrentDay;
+  Day day = arrival >= MIDNIGHT ? Day::NextDay : Day::CurrentDay;
   setMinArrivalTime(stop_id, {arrival, parent_trip_id, parent_stop_id, day, label_id});
   marked_stops.insert(stop_id);
 }
@@ -577,7 +577,7 @@ Journey Raptor::reconstructJourney(
     }
     if (vehicle_leg) ++vehicle_legs;
 
-    Day day = label.arrival_seconds > MIDNIGHT ? Day::NextDay : Day::CurrentDay;
+    Day day = label.arrival_seconds >= MIDNIGHT ? Day::NextDay : Day::CurrentDay;
     journey.steps.push_back({label.trip_id, std::nullopt,
                              &stops_.at(parent.stop_id), &stops_.at(label.stop_id),
                              label.departure_seconds, day,
@@ -603,7 +603,7 @@ Journey Raptor::reconstructJourney(
   }
   journey.target_transfer_time = target_station_stop_transfer_time;
   journey.target_station_arrival_secs = checkedSeconds(static_cast<long long>(target_label.arrival_seconds) + journey.target_transfer_time);
-  journey.target_station_arrival_day = journey.target_station_arrival_secs > MIDNIGHT ? Day::NextDay : Day::CurrentDay;
+  journey.target_station_arrival_day = journey.target_station_arrival_secs >= MIDNIGHT ? Day::NextDay : Day::CurrentDay;
   journey.duration = checkedSeconds(static_cast<long long>(journey.target_station_arrival_secs) - journey.source_station_departure_secs);
   journey.trip_time = checkedSeconds(static_cast<long long>(target_label.arrival_seconds) - journey.steps.front().departure_secs);
   journey.num_transfers = vehicle_legs == 0 ? 0 : static_cast<int>(vehicle_legs - 1);
