@@ -498,22 +498,18 @@ bool Raptor::improvesArrivalTime(
 }
 
 void Raptor::handleFootpaths() {
-  // Copy the marked stops
-  auto current_marked_stops = marked_stops;
-  
-  // For each stop p that is marked by methods traverseTrip()
-  while (!current_marked_stops.empty()) {
-    auto it = current_marked_stops.begin();
-    std::string stop_id = *it;
-    current_marked_stops.erase(it);
-    
-    // Preserve the existing walking propagation rules.
-    if (isFootpath(arrivals_[stop_id][k - 1])) continue;
-    if (isFootpath(arrivals_[stop_id][k])) continue;
+  // Freeze vehicle arrivals before walking updates can replace other seeds.
+  std::vector<std::size_t> walking_label_ids;
+  walking_label_ids.reserve(marked_stops.size());
+  for (const auto &stop_id : marked_stops) {
     if (included_target_ids_.find(stop_id) != included_target_ids_.end()) continue;
+    const std::size_t label_id = getArrivalLabel(stop_id, k);
+    if (getLabel(label_id).trip_id.has_value()) walking_label_ids.push_back(label_id);
+  }
 
-    // Freeze both the ID and its time before any destination update.
-    const std::size_t walking_label_id = getArrivalLabel(stop_id, k);
+  for (const std::size_t walking_label_id : walking_label_ids) {
+    // Copy label fields before markStop can grow the immutable label pool.
+    const std::string stop_id = getLabel(walking_label_id).stop_id;
     const int p_arrival = getLabel(walking_label_id).arrival_seconds;
     for (const auto &[dest_id, duration]: stops_[stop_id].getFootpaths()) {
       if (included_target_ids_.find(dest_id) != included_target_ids_.end()) continue;
@@ -524,7 +520,7 @@ void Raptor::handleFootpaths() {
         markStop(dest_id, new_arrival, std::nullopt, walking_label_id, p_arrival);
       }
     }
-  } // end each marked stop p
+  }
 }
 
 bool Raptor::isFootpath(const StopInfo &stop_info) {
