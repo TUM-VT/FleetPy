@@ -68,7 +68,7 @@ cdef extern from "NetworkObjects/DataStructures.h":
 cdef extern from "NetworkObjects/GTFSObjects/GTFSObject.h":
     cdef cppclass GTFSObject:
         void setField(const string& field, const string& value)
-        string getField(const string& field) const
+        string getField(const string& field) except +
         const unordered_map[string, string]& getFields() const
         bool hasField(const string& field) const
 
@@ -98,12 +98,12 @@ cdef extern from "NetworkObjects/GTFSObjects/Trip.h":
 
 cdef extern from "Parser.h":
     cdef cppclass Parser:
-        Parser(string directory)
-        unordered_map[string, Agency] getAgencies()
-        unordered_map[string, Service] getServices()
-        unordered_map[string, Stop] getStops()
-        unordered_map[pair[string, string], Route, pair_hash] getRoutes()
-        unordered_map[string, Trip] getTrips()
+        Parser(string directory) except +
+        unordered_map[string, Agency] getAgencies() except +
+        unordered_map[string, Service] getServices() except +
+        unordered_map[string, Stop] getStops() except +
+        unordered_map[pair[string, string], Route, pair_hash] getRoutes() except +
+        unordered_map[string, Trip] getTrips() except +
 
 cdef extern from "Raptor.h":
     cdef cppclass Raptor:
@@ -112,10 +112,10 @@ cdef extern from "Raptor.h":
                const unordered_map[string, Service]& services_,
                const unordered_map[string, Stop]& stops,
                const unordered_map[pair[string, string], Route, pair_hash]& routes,
-               const unordered_map[string, Trip]& trips)
-        void setQuery(const Query& query)
-        vector[Journey] findJourneys()
-        optional[Journey] findOptimalJourney()
+               const unordered_map[string, Trip]& trips) except +
+        void setQuery(const Query& query) except +
+        vector[Journey] findJourneys() except +
+        optional[Journey] findOptimalJourney() except +
         @staticmethod
         void showJourney(const Journey& journey)
         const unordered_map[string, Stop]& getStops() const

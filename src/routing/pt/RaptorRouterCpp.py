@@ -6,6 +6,8 @@ import logging
 from datetime import datetime
 import ast
 import typing as tp
+from math import isfinite
+from numbers import Integral, Real
 import pandas as pd
 
 # additional module imports (> requirements)
@@ -64,15 +66,19 @@ class RaptorRouterCpp():
             "stations_fp.txt", 
             "transfers_fp.txt"
             ]
-        if not os.path.exists(gtfs_dir):
+        if not os.path.isdir(gtfs_dir):
             raise FileNotFoundError(f"The directory {gtfs_dir} does not exist.")
         for file in mandatory_files:
-            if not os.path.exists(os.path.join(gtfs_dir, file)):
+            if not os.path.isfile(os.path.join(gtfs_dir, file)):
                 raise FileNotFoundError(f"The file {file} does not exist in the directory {gtfs_dir}.")
 
         # initialize the pt router with the given gtfs data
         LOG.debug(f"Initializing the Raptor router (C++) with the given GTFS data in the directory: {gtfs_dir}")
-        self.pt_router = PyPTRouter(gtfs_dir)
+        try:
+            self.pt_router = PyPTRouter(gtfs_dir)
+        except Exception:
+            LOG.exception("Failed to initialize the PT router from %s", gtfs_dir)
+            raise
         LOG.debug("Raptor router (C++) initialized successfully.")
 
     def _load_stations_from_gtfs(self, gtfs_dir: str) -> pd.DataFrame:
@@ -92,7 +98,20 @@ class RaptorRouterCpp():
             'station_stop_transfer_times': 'str',
             'num_stops_included': 'int',
         }
-        return pd.read_csv(os.path.join(gtfs_dir, "stations_fp.txt"), dtype=dtypes)
+        path = os.path.join(gtfs_dir, "stations_fp.txt")
+        stations = pd.read_csv(path, dtype=dtypes)
+        required_columns = {
+            "station_id", "stops_included", "station_stop_transfer_times", "num_stops_included",
+        }
+        missing_columns = required_columns.difference(stations.columns)
+        if missing_columns:
+            raise ValueError(f"Missing columns in {path}: {sorted(missing_columns)}")
+        if not stations["station_id"].map(lambda value: isinstance(value, str) and bool(value.strip())).all():
+            raise ValueError(f"Station IDs in {path} must be non-empty strings")
+        duplicate_ids = stations.loc[stations["station_id"].duplicated(), "station_id"].tolist()
+        if duplicate_ids:
+            raise ValueError(f"Duplicate station IDs in {path}: {duplicate_ids}")
+        return stations
     
     def find_fastest_pt_journey_1to1(
         self,
@@ -133,33 +152,74 @@ class RaptorRouterCpp():
                 - 'to_stop_id' (str): ID of the end stop.
                 - ... (other step keys, check the C++ Raptor router documentation for more details).
         """
-        # get all included stops for the source and target station
-        included_sources = self._get_included_stops_and_transfer_times(source_station_id)
-        included_targets = self._get_included_stops_and_transfer_times(target_station_id)
-        
-        return self.pt_router.return_fastest_pt_journey_1to1(source_station_departure_datetime, included_sources, included_targets, max_transfers, detailed)
+        if not isinstance(source_station_departure_datetime, datetime):
+            raise TypeError("source_station_departure_datetime must be a datetime")
+        if isinstance(max_transfers, bool) or not isinstance(max_transfers, Real):
+            raise TypeError("max_transfers must be an integer-valued number")
+        if not isinstance(max_transfers, Integral) and (
+            not isfinite(max_transfers) or int(max_transfers) != max_transfers
+        ):
+            raise ValueError("max_transfers must be a finite integer-valued number")
+
+        try:
+            included_sources = self._get_included_stops_and_transfer_times(source_station_id)
+            included_targets = self._get_included_stops_and_transfer_times(target_station_id)
+            return self.pt_router.return_fastest_pt_journey_1to1(
+                source_station_departure_datetime, included_sources, included_targets,
+                int(max_transfers), detailed,
+            )
+        except Exception:
+            LOG.exception(
+                "PT query failed: source=%r, target=%r, departure=%s, max_transfers=%r",
+                source_station_id, target_station_id, source_station_departure_datetime, max_transfers,
+            )
+            raise
     
-    def _get_included_stops_and_transfer_times(self, station_id: str) -> tp.Tuple[tp.List[str], tp.List[int]]:
+    def _get_included_stops_and_transfer_times(self, station_id: str) -> tp.List[tp.Tuple[str, int]]:
         """This method returns the included stops and transfer times for a given station.
 
         Args:
             station_id (str): The id of the station.
         Returns:
-            tp.Tuple[tp.List[str], tp.List[int]]: The included stops and transfer times.
+            tp.List[tp.Tuple[str, int]]: Stop IDs paired with station-stop transfer times.
         """
+        if not isinstance(station_id, str):
+            raise TypeError("Station ID must be a string")
+        if not station_id.strip():
+            raise ValueError("Station ID must be a non-empty string")
         station_data = self.stations_fp_df[self.stations_fp_df["station_id"] == station_id]
         
         if station_data.empty:
             raise ValueError(f"Station ID {station_id} not found in the stations data")
             
-        included_ids_str = station_data["stops_included"].iloc[0]
-        included_ids_str = included_ids_str.replace(';', ',')
-        included_ids_list = ast.literal_eval(included_ids_str)
+        parsed = {}
+        for column in ("stops_included", "station_stop_transfer_times"):
+            raw_value = station_data[column].iloc[0]
+            try:
+                value = ast.literal_eval(raw_value.replace(';', ','))
+            except (AttributeError, TypeError, ValueError, SyntaxError) as exc:
+                raise ValueError(f"Invalid {column} for station {station_id}: expected a list") from exc
+            if not isinstance(value, list):
+                raise ValueError(f"Invalid {column} for station {station_id}: expected a list")
+            parsed[column] = value
 
-        transfer_times_str = station_data["station_stop_transfer_times"].iloc[0]
-        transfer_times_str = transfer_times_str.replace(';', ',')
-        transfer_times_list = ast.literal_eval(transfer_times_str)
-        return [(stop_id, int(transfer_time)) for stop_id, transfer_time in zip(included_ids_list, transfer_times_list)]
+        included_ids = parsed["stops_included"]
+        transfer_times = parsed["station_stop_transfer_times"]
+        if not included_ids or len(included_ids) != len(transfer_times):
+            raise ValueError(f"Station {station_id} must have non-empty stop and transfer-time lists of equal length")
+        if station_data["num_stops_included"].iloc[0] != len(included_ids):
+            raise ValueError(f"num_stops_included does not match the stop list for station {station_id}")
+        if any(not isinstance(stop_id, str) or not stop_id.strip() for stop_id in included_ids):
+            raise ValueError(f"Stop IDs for station {station_id} must be non-empty strings")
+        if len(set(included_ids)) != len(included_ids):
+            raise ValueError(f"Duplicate stop IDs for station {station_id}")
+        if any(
+            isinstance(time, bool) or not isinstance(time, Real)
+            or not 0 <= time <= 2147483647 or int(time) != time
+            for time in transfer_times
+        ):
+            raise ValueError(f"Transfer times for station {station_id} must be non-negative 32-bit integer values")
+        return [(stop_id, int(time)) for stop_id, time in zip(included_ids, transfer_times)]
 
 
 

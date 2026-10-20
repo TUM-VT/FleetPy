@@ -23,9 +23,12 @@ cdef class PyPTRouter:
 
         Notes:
             - This method is automatically called during object creation
-            - If raptor_ptr already exists, it will be deleted before creating a new instance
+            - Native resources are released if initialization fails
             - The input path will be converted to UTF-8 encoded C++ string
         """
+        self.raptor_ptr = NULL
+        cdef Parser* parser = NULL
+
         # Convert Python string to C++ string
         cdef string cpp_directory = input_directory.encode('utf-8')
 
@@ -36,20 +39,18 @@ cdef class PyPTRouter:
         cdef unordered_map[pair[string, string], Route, pair_hash] routes
         cdef unordered_map[string, Stop] stops
 
-        # Process directory
-        cdef Parser* parser = new Parser(cpp_directory)
-        
-        agencies = parser.getAgencies()
-        services = parser.getServices()
-        trips = parser.getTrips()
-        routes = parser.getRoutes()
-        stops = parser.getStops()
-
-        del parser
-
-        # Clean up existing instance if any
-        if self.raptor_ptr != NULL:
-            del self.raptor_ptr
+        # Always release the parser, including failed container copies.
+        try:
+            parser = new Parser(cpp_directory)
+            agencies = parser.getAgencies()
+            services = parser.getServices()
+            trips = parser.getTrips()
+            routes = parser.getRoutes()
+            stops = parser.getStops()
+        finally:
+            if parser != NULL:
+                del parser
+                parser = NULL
             
         # Create new RAPTOR instance with data
         self.raptor_ptr = new Raptor(agencies, services, stops, routes, trips)
@@ -67,6 +68,7 @@ cdef class PyPTRouter:
         """
         if self.raptor_ptr != NULL:
             del self.raptor_ptr
+            self.raptor_ptr = NULL
 
     def construct_query(
         self,
