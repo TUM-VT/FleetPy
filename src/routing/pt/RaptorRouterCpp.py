@@ -180,6 +180,10 @@ class RaptorRouterCpp():
     def _get_included_stops_and_transfer_times(self, station_id: str) -> tp.List[tp.Tuple[str, int]]:
         """This method returns the included stops and transfer times for a given station.
 
+        The mapping DataFrame is read-only during operation. Assigning a replacement
+        DataFrame, including after a reload, invalidates cached successful lookups.
+        Each call returns its own list; cached stop/transfer pairs are immutable.
+
         Args:
             station_id (str): The id of the station.
         Returns:
@@ -189,7 +193,15 @@ class RaptorRouterCpp():
             raise TypeError("Station ID must be a string")
         if not station_id.strip():
             raise ValueError("Station ID must be a non-empty string")
-        station_data = self.stations_fp_df[self.stations_fp_df["station_id"] == station_id]
+        stations = self.stations_fp_df
+        cache_state = getattr(self, "_station_stop_cache", None)
+        if cache_state is None or cache_state[0] is not stations:
+            cache_state = (stations, {})
+            self._station_stop_cache = cache_state
+        cache = cache_state[1]
+        if station_id in cache:
+            return list(cache[station_id])
+        station_data = stations[stations["station_id"] == station_id]
         
         if station_data.empty:
             raise ValueError(f"Station ID {station_id} not found in the stations data")
@@ -221,7 +233,9 @@ class RaptorRouterCpp():
             for time in transfer_times
         ):
             raise ValueError(f"Transfer times for station {station_id} must be non-negative 32-bit integer values")
-        return [(stop_id, int(time)) for stop_id, time in zip(included_ids, transfer_times)]
+        included_stops = tuple((stop_id, int(time)) for stop_id, time in zip(included_ids, transfer_times))
+        cache[station_id] = included_stops
+        return list(included_stops)
 
 
 

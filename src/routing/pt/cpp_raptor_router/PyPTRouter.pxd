@@ -36,6 +36,7 @@ cdef extern from "NetworkObjects/DataStructures.h":
         Date date
         Time departure_time
         int max_transfers
+        int departure_microseconds
     
     cdef struct StopInfo:
         optional[int] arrival_seconds

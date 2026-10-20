@@ -98,12 +98,35 @@ public:
 
 private:
 
+  struct TripOccurrence {
+    std::string trip_id;
+    int service_day_offset;
+    std::size_t boarding_stop_index;
+    long long departure_seconds;
+  };
+
+  struct ActiveServiceDay {
+    int service_day_offset;
+    std::unordered_set<std::string> active_service_ids;
+  };
+
+  struct ServiceWindow {
+    Date query_date;
+    int lookback_days;
+    int lookahead_days;
+    std::vector<ActiveServiceDay> days;
+  };
+
   std::unordered_map<std::string, Agency> agencies_; ///< Map of agency IDs to Agency objects.
   std::unordered_map<std::string, Service> services_; ///< Map of service IDs to Service objects.
   std::unordered_map<std::string, Stop> stops_; ///< Map of stop IDs to Stop objects.
   std::unordered_map<std::pair<std::string, std::string>, Route, pair_hash> routes_; ///< Map of route keys to Route objects.
   std::unordered_map<std::string, Trip> trips_; ///< Map of trip IDs to Trip objects.
-  int current_date_int_; ///< The current date as an integer.
+  int service_lookback_days_{}; ///< Derived from the largest static stop departure time.
+  std::optional<ServiceWindow> service_window_{}; ///< Fully prepared service dates for one query-date window.
+  std::unordered_map<std::pair<std::string, std::string>,
+                     std::unordered_map<std::string, std::vector<TripOccurrence>>, pair_hash>
+    occurrence_cache_; ///< Complete sorted candidates for each route-stop in the prepared window.
 
   Query query_; ///< The current query for the RAPTOR algorithm.
   int max_transfers_; ///< Non-negative maximum transfers; N permits N + 1 vehicle legs.
@@ -120,6 +143,9 @@ private:
    */
   void initializeAlgorithm();
 
+  /** @brief Returns the first integer second not earlier than the query time. */
+  int queryDepartureSeconds() const;
+
   // TODO: Remove this function
   /**
    * @brief Sets the minimum arrival time for a given stop.
@@ -134,12 +160,8 @@ private:
   const JourneyLabel &getLabel(std::size_t label_id) const;
   std::size_t getArrivalLabel(const std::string &stop_id, std::size_t round) const;
 
-  /**
-   * @brief Fills the active trips for a given day.
-   *
-   * @param[in] day The day for which trips are being filled.
-   */
-  void fillActiveTrips(Day day);
+  /** @brief Prepares the complete service-date window before publishing it. */
+  void prepareServiceWindow();
 
   /**
    * @brief Appends current-round labels initialized from the previous round.
@@ -169,13 +191,15 @@ private:
   );
 
   /**
-   * @brief Finds the earliest trip for a given stop and route.
+   * @brief Returns cached active trip occurrences for a stop and route.
    *
    * @param[in] pi_stop_id The ID of the stop.
    * @param[in] route_key The key consisting of route and direction.
-   * @return An optional pair of trip ID and day if found.
+   * @return Complete candidates sorted by normalized departure, without assuming FIFO trips.
+   * The reference remains valid until a different service-date window is published.
+   * Readiness and target bounds are applied by the caller and are never cached.
    */
-  std::optional<std::pair<std::string, Day>> findEarliestTrip(
+  const std::vector<TripOccurrence> &findBoardableOccurrences(
     const std::string &pi_stop_id, 
     const std::pair<std::string, std::string> &route_key
   );
@@ -189,7 +213,7 @@ private:
    */
   bool isValidTrip(
     const std::string &p_stop_id,
-    const int &departure_seconds
+    long long departure_seconds
   );
 
   /**
@@ -204,14 +228,12 @@ private:
   /**
    * @brief Traverses a specific trip.
    *
-   * @param[in] et_id The trip ID.
-   * @param[in] et_day The day of travel.
-   * @param[in] p_stop_id The stop ID for the trip.
+   * @param[in] occurrence The service date and exact boarding index of the trip.
+   * @param[in] boarding_label_id The frozen preceding-round path used to board.
    */
   void traverseTrip(
-    const std::string &et_id, 
-    const Day &et_day, 
-    const std::string &p_stop_id
+    const TripOccurrence &occurrence,
+    std::size_t boarding_label_id
   );
 
   /**

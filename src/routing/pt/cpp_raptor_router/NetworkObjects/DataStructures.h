@@ -40,6 +40,7 @@ struct Query {
   Date date;               ///< Date of the journey (year, month, day).
   Time departure_time;     ///< Desired departure time at the source station (in seconds from midnight).
   int max_transfers{999};  ///< Non-negative maximum transfers; 0 allows direct trips only.
+  int departure_microseconds{0}; ///< Fractional readiness within departure_time's second, from 0 to 999999.
 };
 
 /**

@@ -14,6 +14,8 @@
  */
 
 #include "Utils.h"
+#include <limits>
+#include <stdexcept>
 
 std::string Utils::secondsToTime(std::optional<int> seconds) {
 
@@ -112,16 +114,75 @@ bool Utils::dateWithinRange(const Date &date, const std::string &start_date, con
 }
 
 Date Utils::addOneDay(Date date) {
-  std::tm time_info = {};
-  time_info.tm_year = date.year - 1900;
-  time_info.tm_mon = date.month - 1;
-  time_info.tm_mday = date.day + 1; // Add one day
-  int date_weekday = (time_info.tm_wday == 0) ? 6 : time_info.tm_wday - 1;  // 0-6, 0 = Monday, 6 = Sunday
+  if (date.year < 1 || date.month < 1 || date.month > 12 ||
+      date.weekday < 0 || date.weekday > 6) {
+    throw std::invalid_argument("Invalid calendar date or weekday");
+  }
+  const int month_days = daysInMonth(date.year, date.month);
+  if (date.day < 1 || date.day > month_days) {
+    throw std::invalid_argument("Invalid day in calendar date");
+  }
 
-  std::mktime(&time_info); // Normalize the date
-  Date new_date = {time_info.tm_year + 1900, time_info.tm_mon + 1, time_info.tm_mday, date_weekday};
+  // Advance a Gregorian calendar date without consulting the host time zone.
+  date.weekday = (date.weekday + 1) % 7;
+  if (date.day < month_days) {
+    ++date.day;
+  } else {
+    date.day = 1;
+    if (date.month < 12) {
+      ++date.month;
+    } else {
+      if (date.year == std::numeric_limits<int>::max()) {
+        throw std::overflow_error("Calendar year exceeds the supported integer range");
+      }
+      date.month = 1;
+      ++date.year;
+    }
+  }
+  return date;
+}
 
-  return new_date;  // Get the next day
+Date Utils::addDays(Date date, int days) {
+  if (date.year < 1 || date.month < 1 || date.month > 12 ||
+      date.weekday < 0 || date.weekday > 6) {
+    throw std::invalid_argument("Invalid calendar date or weekday");
+  }
+  if (date.day < 1 || date.day > daysInMonth(date.year, date.month)) {
+    throw std::invalid_argument("Invalid day in calendar date");
+  }
+  if (days == 0) return date;
+
+  // Count from 0001-01-01 with wide arithmetic, including the year upper bound.
+  const auto days_before_year = [](long long year) {
+    const long long previous = year - 1;
+    return 365 * previous + previous / 4 - previous / 100 + previous / 400;
+  };
+  long long ordinal = days_before_year(date.year) + date.day - 1;
+  for (int month = 1; month < date.month; ++month) {
+    ordinal += daysInMonth(date.year, month);
+  }
+  ordinal += days;
+  const long long max_year = std::numeric_limits<int>::max();
+  if (ordinal < 0 || ordinal >= days_before_year(max_year + 1)) {
+    throw std::overflow_error("Calendar year exceeds the supported positive integer range");
+  }
+
+  // Binary search avoids work proportional to a potentially large signed offset.
+  long long first = 1, last = max_year;
+  while (first < last) {
+    const long long middle = first + (last - first + 1) / 2;
+    if (days_before_year(middle) <= ordinal) first = middle;
+    else last = middle - 1;
+  }
+  const int year = static_cast<int>(first);
+  long long day_of_year = ordinal - days_before_year(year);
+  int month = 1;
+  while (day_of_year >= daysInMonth(year, month)) {
+    day_of_year -= daysInMonth(year, month);
+    ++month;
+  }
+  return {year, month, static_cast<int>(day_of_year) + 1,
+          (date.weekday + days % 7 + 7) % 7};
 }
 
 std::string Utils::dayToString(Day day) {

@@ -143,12 +143,24 @@ public:
   /**
    * @brief Adds one day to a given date.
    *
-   * This method increments the given date by one day.
+   * Uses Gregorian calendar arithmetic independently of the host time zone.
+   * The input weekday must match the date, with Monday represented by 0.
    *
    * @param[in] date The date to which one day should be added.
    * @return The resulting date after adding one day.
+   * @throws std::invalid_argument If the date or weekday is outside its valid range.
+   * @throws std::overflow_error If the next year cannot be represented as an int.
    */
   static Date addOneDay(Date date);
+
+  /**
+   * @brief Shifts a Gregorian date by a signed number of days, independently of time zones.
+   *
+   * The provided weekday must match the date. Years must remain in the positive int range.
+   * @throws std::invalid_argument If the input date or weekday is outside its valid range.
+   * @throws std::overflow_error If the resulting year cannot be represented as a positive int.
+   */
+  static Date addDays(Date date, int days);
 
   /**
    * @brief Converts a Day enum to a string representation.

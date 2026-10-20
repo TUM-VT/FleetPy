@@ -97,6 +97,7 @@ cdef class PyPTRouter:
         cdef int hours = source_station_departure_datetime.hour
         cdef int minutes = source_station_departure_datetime.minute
         cdef int seconds = source_station_departure_datetime.second
+        cdef int microseconds = source_station_departure_datetime.microsecond
         
         # Create date, time objects for C++
         cdef Date date = Date(year, month, day, weekday)
@@ -121,7 +122,7 @@ cdef class PyPTRouter:
             else:
                 raise TypeError(f"Expected (string, int) tuple, got {type(inc_tgt)}")
 
-        return Query(src_vec, tgt_vec, date, departure_time, max_transfers)
+        return Query(src_vec, tgt_vec, date, departure_time, max_transfers, microseconds)
 
     def return_pt_journeys_1to1(
         self,
@@ -164,7 +165,9 @@ cdef class PyPTRouter:
         # Convert all journeys to Python list of dictionaries
         journeys_list = []
         for i in range(journeys.size()):
-            journey_dict = self._convert_journey_to_dict(journeys[i], detailed)
+            journey_dict = self._convert_journey_to_dict(
+                journeys[i], detailed, source_station_departure_datetime.microsecond,
+            )
             journeys_list.append(journey_dict)
         
         return journeys_list
@@ -208,11 +211,13 @@ cdef class PyPTRouter:
         cdef Journey journey = journey_opt.value()
         
         # Convert journey to Python dictionary
-        journey_dict = self._convert_journey_to_dict(journey, detailed)
+        journey_dict = self._convert_journey_to_dict(
+            journey, detailed, source_station_departure_datetime.microsecond,
+        )
         
         return journey_dict
 
-    cdef _convert_journey_to_dict(self, Journey journey, bool detailed):
+    cdef _convert_journey_to_dict(self, Journey journey, bool detailed, int departure_microseconds):
         """Convert a Journey object to a Python dictionary
         
         This method takes a C++ Journey object and converts it to a Python dictionary
@@ -245,6 +250,15 @@ cdef class PyPTRouter:
             # Journey steps
             "steps": []
         }
+
+        # Integer timetable events are searched at ceil(readiness), without
+        # changing the query date. Restore only the elapsed time before them.
+        if departure_microseconds:
+            adjustment = (1000000 - departure_microseconds) / 1000000.0
+            journey_dict["source_station_departure_time"] -= adjustment
+            journey_dict["source_station_departure_day"] = "current_day"
+            journey_dict["source_waiting_time"] += adjustment
+            journey_dict["duration"] += adjustment
 
         if not detailed:
             return journey_dict

@@ -26,6 +26,7 @@
 # -----------------------------
 import logging
 from datetime import datetime, timedelta
+from math import floor
 import typing as tp
 import pandas as pd
 # additional module imports (> requirements)
@@ -496,10 +497,17 @@ class PTBrokerBasic(BrokerBasic):
             sim_start_date = str(int(sim_start_date))
         self.sim_start_datetime = datetime.strptime(sim_start_date, "%Y%m%d")
 
-    def _get_current_datetime(self, sim_time_in_seconds: int) -> datetime:
-        """This method returns the current datetime based on the simulation time in seconds.
+    def _get_current_datetime(self, sim_time_in_seconds: float) -> datetime:
+        """Represent readiness without moving it to another integer-second interval.
+
+        Datetime has microsecond precision. Keep a positive fraction positive so
+        the router's integer-second ceiling cannot admit an already departed trip.
+        The caller restores the original float after the query.
         """
-        return self.sim_start_datetime + timedelta(seconds=int(sim_time_in_seconds))
+        whole_seconds = floor(sim_time_in_seconds)
+        fraction = sim_time_in_seconds - whole_seconds
+        microseconds = min(999999, max(1, floor(fraction * 1000000))) if fraction else 0
+        return self.sim_start_datetime + timedelta(seconds=whole_seconds, microseconds=microseconds)
 
     def _load_street_station_transfers_from_gtfs(self, gtfs_dir: str) -> pd.DataFrame:
         """This method loads the FleetPy-specific street station transfers file.
@@ -517,7 +525,7 @@ class PTBrokerBasic(BrokerBasic):
         return pd.read_csv(os.path.join(gtfs_dir, "street_station_transfers_fp.txt"), dtype=dtypes)
     
     def _query_street_node_pt_travel_costs_1to1(
-        self, o_node: int, d_node: int, est: int, 
+        self, o_node: int, d_node: int, est: float,
         max_transfers: int = 999, detailed: bool = False
     ) -> tp.Optional[tp.Tuple[int, int, int, int, tp.Dict[str, tp.Any]]]:
         """This method queries the pt travel costs between two street nodes at a given datetime.
@@ -526,7 +534,7 @@ class PTBrokerBasic(BrokerBasic):
         Args:
             o_node (int): The origin street node id.
             d_node (int): The destination street node id.
-            est (int): The earliest start time of the request at the origin street node in seconds.
+            est (float): The earliest start time of the request at the origin street node in seconds.
             max_transfers (int): Non-negative maximum PT transfers; 0 permits direct journeys only. Defaults to 999.
             detailed (bool): Whether to return detailed journey information. Defaults to False.
         Returns:
@@ -535,12 +543,15 @@ class PTBrokerBasic(BrokerBasic):
                 (source_pt_station_id, t_source_walking, target_pt_station_id, t_target_walking, pt_journey_plan_dict)
                 if a public transport journey plan is found.
                 Returns None if no public transport journey plan is available.
+                Journey and step timestamps use the simulation time axis. The router's
+                day metadata remains relative to the query date. Readiness, waiting,
+                and total duration retain the original float precision.
         """
         # find pt transfer stations
         source_pt_station_id, t_source_walk = self._find_transfer_info(o_node, "street2pt")
         target_pt_station_id, t_target_walk = self._find_transfer_info(d_node, "street2pt")
 
-        source_station_departure_seconds: int = est + t_source_walk
+        source_station_departure_seconds = est + t_source_walk
         source_station_departure_datetime: datetime = self._get_current_datetime(source_station_departure_seconds)
         LOG.debug(f"Query PT travel costs: {o_node} -> {d_node} (stations: {source_pt_station_id} -> {target_pt_station_id}) at {est} (station departure: {source_station_departure_datetime})")
         pt_journey_plan_dict: tp.Union[tp.Dict[str, tp.Any], None] = self.pt_operator.return_fastest_pt_journey_1to1(
@@ -550,11 +561,40 @@ class PTBrokerBasic(BrokerBasic):
                                                                                                                     )
         if pt_journey_plan_dict is None:
             return None
-        else:
-            return source_pt_station_id, t_source_walk, target_pt_station_id, t_target_walk, pt_journey_plan_dict
+
+        # The router counts seconds from the actual query date's midnight.
+        # Street-to-station walking can move that date into the next simulation day.
+        query_day_offset = (
+            source_station_departure_datetime.date() - self.sim_start_datetime.date()
+        ).days * 86400
+        pt_journey_plan_dict = dict(pt_journey_plan_dict)
+        for field in (G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME, G_PT_OFFER_TARGET_STATION_ARRIVAL_TIME):
+            pt_journey_plan_dict[field] += query_day_offset
+        pt_journey_plan_dict[G_PT_OFFER_STEPS] = [
+            {
+                **step,
+                "departure_time": step["departure_time"] + query_day_offset,
+                "arrival_time": step["arrival_time"] + query_day_offset,
+            }
+            for step in pt_journey_plan_dict[G_PT_OFFER_STEPS]
+        ]
+        # Compare fractions within one second instead of subtracting large global
+        # timestamps, which would lose the sub-microsecond correction.
+        readiness_error = source_station_departure_datetime.microsecond / 1000000 - (
+            source_station_departure_seconds - floor(source_station_departure_seconds)
+        )
+        pt_journey_plan_dict[G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME] = source_station_departure_seconds
+        if readiness_error:
+            pt_journey_plan_dict[G_PT_OFFER_SOURCE_WAITING_TIME] += readiness_error
+            pt_journey_plan_dict[G_PT_OFFER_DURATION] += readiness_error
+        return source_pt_station_id, t_source_walk, target_pt_station_id, t_target_walk, pt_journey_plan_dict
         
     def _find_transfer_info(self, node_id: tp.Union[int, str], direction: str) -> tp.Tuple[str, int]:
         """This method finds the transfer possibility between pt station and street node.
+
+        The mapping DataFrame is read-only during operation. Assigning a replacement
+        DataFrame, including after a reload, invalidates cached successful lookups.
+        First lookups retain the DataFrame's row and minimum-tie ordering.
 
         Args:
             node_id (tp.Union[int, str]): The street node id.
@@ -563,18 +603,33 @@ class PTBrokerBasic(BrokerBasic):
             tp.Tuple[str, int]: The transfer node id and the walking time.
         """
         if self.transfer_search_method == "closest":  # closest station or street node
+            if direction == "street2pt":
+                street_node_id = int(node_id)
+                cache_key = (direction, street_node_id)
+            elif direction == "pt2street":
+                pt_station_id = str(node_id)
+                cache_key = (direction, pt_station_id)
+            else:
+                raise ValueError(f"Invalid direction: {direction}. Must be 'pt2street' or 'street2pt'.")
+            transfers = self.street_station_transfers_fp_df
+            cache_state = getattr(self, "_street_station_cache", None)
+            if cache_state is None or cache_state[0] is not transfers:
+                cache_state = (transfers, {})
+                self._street_station_cache = cache_state
+            cache = cache_state[1]
+            if cache_key in cache:
+                return cache[cache_key]
+
             if direction == "street2pt":  # find closest pt station from street node
-                street_node_id: int = int(node_id)
                 # TODO: allow multiple closest stations?
-                street_station_transfer = self.street_station_transfers_fp_df[self.street_station_transfers_fp_df["node_id"] == street_node_id]
+                street_station_transfer = transfers[transfers["node_id"] == street_node_id]
                 if street_station_transfer.empty:
                     raise ValueError(f"Street node id {street_node_id} not found in the street station transfers file")
                 closest_station_id: str = street_station_transfer["closest_station_id"].iloc[0]
                 walking_time: int = street_station_transfer["street_station_transfer_time"].iloc[0]
-                return closest_station_id, walking_time
+                result = closest_station_id, walking_time
             elif direction == "pt2street":  # find closest street node from pt station
-                pt_station_id: str = str(node_id)
-                street_station_transfers = self.street_station_transfers_fp_df[self.street_station_transfers_fp_df["closest_station_id"] == pt_station_id]
+                street_station_transfers = transfers[transfers["closest_station_id"] == pt_station_id]
                 if street_station_transfers.empty:
                     raise ValueError(f"PT station id {pt_station_id} not found in the street station transfers file")
                 # find the record with the minimum street_station_transfer_time
@@ -582,9 +637,12 @@ class PTBrokerBasic(BrokerBasic):
                 min_transfer = street_station_transfers.loc[street_station_transfers["street_station_transfer_time"].idxmin()]
                 closest_street_node_id: int = min_transfer["node_id"]
                 walking_time: int = min_transfer["street_station_transfer_time"]
-                return closest_street_node_id, walking_time
-            else:
-                raise ValueError(f"Invalid direction: {direction}. Must be 'pt2street' or 'street2pt'.")
+                result = closest_street_node_id, walking_time
+            # Non-unique DataFrame indices can return Series from .loc. Preserve
+            # that existing behavior without sharing mutable results in the cache.
+            if all(pd.api.types.is_scalar(value) for value in result):
+                cache[cache_key] = result
+            return result
         else:
             LOG.debug(f"PTBrokerTPCS: Transfer search method '{self.transfer_search_method}' not implemented. Using 'closest' instead.")
             raise NotImplementedError(f"PTBrokerTPCS: Transfer search method '{self.transfer_search_method}' not implemented.")

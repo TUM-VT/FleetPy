@@ -16,6 +16,7 @@
 #include "Raptor.h"
 #include <limits>
 #include <stdexcept>
+#include <tuple>
 
 namespace {
 int checkedSeconds(long long seconds) {
@@ -33,11 +34,21 @@ Raptor::Raptor(const std::unordered_map<std::string, Agency> &agencies,
                const std::unordered_map<std::string, Trip> &trips)
         : agencies_(agencies), services_(services), stops_(stops), routes_(routes), trips_(trips) {
   k = 1;
+  int max_departure_seconds = 0;
+  for (const auto &[trip_id, trip] : trips_) {
+    for (const auto &record : trip.getStopTimeRecords()) {
+      max_departure_seconds = std::max(max_departure_seconds, record.departure_seconds);
+    }
+  }
+  service_lookback_days_ = max_departure_seconds / MIDNIGHT;
 }
 
 void Raptor::setQuery(const Query &query) {
   if (query.max_transfers < 0) {
     throw std::invalid_argument("max_transfers must be non-negative");
+  }
+  if (query.departure_microseconds < 0 || query.departure_microseconds > 999999) {
+    throw std::invalid_argument("departure_microseconds must be between 0 and 999999");
   }
   query_ = query;
 
@@ -81,7 +92,7 @@ void Raptor::initializeAlgorithm() {
 
   // Initialize the round 0
   k = 0;
-  int departure_time = Utils::timeToSeconds(query_.departure_time);
+  int departure_time = queryDepartureSeconds();
   // Mark all included source stops that are in included_source_ids_
   for (const auto &source : query_.included_sources) {
     if (included_source_ids_.find(source.first) == included_source_ids_.end()) continue;
@@ -94,9 +105,53 @@ void Raptor::initializeAlgorithm() {
 
   advanceRound(); // k=1
 
-  // Fill active trips for current and next day
-  fillActiveTrips(Day::CurrentDay);
-  fillActiveTrips(Day::NextDay);
+  prepareServiceWindow();
+}
+
+int Raptor::queryDepartureSeconds() const {
+  return checkedSeconds(static_cast<long long>(Utils::timeToSeconds(query_.departure_time)) +
+                        (query_.departure_microseconds > 0 ? 1 : 0));
+}
+
+void Raptor::prepareServiceWindow() {
+  constexpr int lookahead_days = 1;
+  const auto &date = query_.date;
+  if (service_window_.has_value() &&
+      service_window_->query_date.year == date.year &&
+      service_window_->query_date.month == date.month &&
+      service_window_->query_date.day == date.day &&
+      service_window_->query_date.weekday == date.weekday &&
+      service_window_->lookback_days == service_lookback_days_ &&
+      service_window_->lookahead_days == lookahead_days) {
+    return;
+  }
+
+  // Keep an old complete window intact if preparing any new service date fails.
+  ServiceWindow prepared{date, service_lookback_days_, lookahead_days, {}};
+  Date service_date = Utils::addDays(date, 0);
+  int first_offset = 0;
+  while (first_offset > -service_lookback_days_) {
+    if (service_date.year == 1 && service_date.month == 1 && service_date.day == 1) break;
+    service_date = Utils::addDays(service_date, -1);
+    --first_offset;
+  }
+
+  std::unordered_set<std::string> required_service_ids;
+  for (const auto &[trip_id, trip] : trips_) {
+    required_service_ids.insert(trip.getField("service_id"));
+  }
+  for (int offset = first_offset; offset <= lookahead_days; ++offset) {
+    ActiveServiceDay active_day{offset, {}};
+    for (const auto &service_id : required_service_ids) {
+      if (services_.at(service_id).isActive(service_date)) {
+        active_day.active_service_ids.insert(service_id);
+      }
+    }
+    prepared.days.push_back(std::move(active_day));
+    if (offset < lookahead_days) service_date = Utils::addDays(service_date, 1);
+  }
+  service_window_ = std::move(prepared);
+  occurrence_cache_.clear();
 }
 
 void Raptor::markStop(
@@ -170,28 +225,6 @@ std::size_t Raptor::getArrivalLabel(const std::string &stop_id, std::size_t roun
     throw std::logic_error("Arrival slot and journey label do not match");
   }
   return *arrival.label_id;
-}
-
-void Raptor::fillActiveTrips(Day day) {
-  Date target_date = (day == Day::CurrentDay) ? query_.date : Utils::addOneDay(query_.date);
-  int target_date_int = Utils::dateToInt(target_date);
-
-  // Check if the active_trips_by_day_ map already has the trips for the target date
-  if (current_date_int_ == target_date_int) {
-    return;
-  }
-
-  // Iterates over all trips
-  for (auto &[trip_id, trip]: trips_) {
-    // Get service calendar for the trip
-    const Service &service = services_.at(trip.getField("service_id"));
-
-    if (service.isActive(target_date)) {
-      trip.setActive(day, true);
-    } else {
-      trip.setActive(day, false);
-    }
-  }
 }
 
 std::vector<Journey> Raptor::findJourneys() {
@@ -342,62 +375,68 @@ void Raptor::traverseRoutes(
     auto route_stop = routes_stops_set.begin();
     const auto &[route_key, p_stop_id] = *route_stop;
 
-    auto et = findEarliestTrip(p_stop_id, route_key);
-    if (et.has_value()) {
-      traverseTrip(et->first, et->second, p_stop_id);
+    const std::size_t boarding_label_id = getArrivalLabel(p_stop_id, k - 1);
+    const auto &occurrences = findBoardableOccurrences(p_stop_id, route_key);
+    const int readiness = getLabel(boarding_label_id).arrival_seconds;
+    auto occurrence = std::lower_bound(occurrences.begin(), occurrences.end(), readiness,
+      [](const auto &candidate, int ready) { return candidate.departure_seconds < ready; });
+    for (; occurrence != occurrences.end(); ++occurrence) {
+      // Departures increase while target bounds only tighten within this round.
+      if (!isValidTrip(p_stop_id, occurrence->departure_seconds)) break;
+      traverseTrip(*occurrence, boarding_label_id);
     }
       
     routes_stops_set.erase(route_stop);
   }
 }
 
-std::optional<std::pair<std::string, Day>> Raptor::findEarliestTrip(
+const std::vector<Raptor::TripOccurrence> &Raptor::findBoardableOccurrences(
   const std::string &p_stop_id, 
   const std::pair<std::string, std::string> &route_key
 ) {
-  // Get all trips of the route
+  if (!service_window_.has_value()) {
+    throw std::logic_error("Service-date window has not been prepared");
+  }
+  const auto cached_route = occurrence_cache_.find(route_key);
+  if (cached_route != occurrence_cache_.end()) {
+    const auto cached_stop = cached_route->second.find(p_stop_id);
+    if (cached_stop != cached_route->second.end()) return cached_stop->second;
+  }
   const auto& route = routes_.at(route_key);
-  const auto& trips = route.getTripsIds();
-
-  // Get earliest trip on current day
-  for (const auto& trip_id: trips) {
-    if (trips_[trip_id].isActive(Day::CurrentDay)) {
-      // Get departure time of the trip at p_stop_id
-      const auto& stop_time_record = trips_[trip_id].getStopTimeRecord(p_stop_id);
-      if (!stop_time_record) continue;
-      const int& departure_seconds = stop_time_record->departure_seconds;
-      if (isValidTrip(p_stop_id, departure_seconds))
-        return std::make_pair(trip_id, Day::CurrentDay);
+  std::vector<TripOccurrence> occurrences;
+  for (const auto &trip_id : route.getTripsIds()) {
+    const auto &trip = trips_.at(trip_id);
+    const auto service_id = trip.getField("service_id");
+    const auto &records = trip.getStopTimeRecords();
+    for (const auto &day : service_window_->days) {
+      if (day.active_service_ids.find(service_id) == day.active_service_ids.end()) continue;
+      const long long day_offset = static_cast<long long>(day.service_day_offset) * MIDNIGHT;
+      for (std::size_t index = 0; index < records.size(); ++index) {
+        if (records[index].stop_id != p_stop_id || index + 1 == records.size()) continue;
+        const long long departure = static_cast<long long>(records[index].departure_seconds) + day_offset;
+        occurrences.push_back({trip_id, day.service_day_offset, index, departure});
+      }
     }
   }
-
-  // Get earliest trip on next day
-  for (const auto& trip_id: trips) {
-    if (trips_[trip_id].isActive(Day::NextDay)) {
-      // Get departure time of the trip at p_stop_id
-      const auto& stop_time_record = trips_[trip_id].getStopTimeRecord(p_stop_id);
-      if (!stop_time_record) continue;
-      const int& departure_seconds = stop_time_record->departure_seconds + MIDNIGHT;
-      if (isValidTrip(p_stop_id, departure_seconds))
-        return std::make_pair(trip_id, Day::NextDay);
-    }
-  }
-
-  return std::nullopt;
+  std::sort(occurrences.begin(), occurrences.end(), [](const auto &a, const auto &b) {
+    return std::tie(a.departure_seconds, a.trip_id, a.service_day_offset, a.boarding_stop_index) <
+           std::tie(b.departure_seconds, b.trip_id, b.service_day_offset, b.boarding_stop_index);
+  });
+  return occurrence_cache_[route_key].emplace(p_stop_id, std::move(occurrences)).first->second;
 }
 
 bool Raptor::isValidTrip(
   const std::string &p_stop_id,
-  const int &departure_seconds
+  long long departure_seconds
 ) {
-  std::optional<int> stop_prev_arrival_seconds = arrivals_[p_stop_id][k - 1].arrival_seconds;
+  const auto stop_prev_arrival_seconds = arrivals_.at(p_stop_id).at(k - 1).arrival_seconds;
 
-  if (earlier(departure_seconds, stop_prev_arrival_seconds)) return false;
+  if (stop_prev_arrival_seconds.has_value() && departure_seconds < *stop_prev_arrival_seconds) return false;
 
   // Check if the target stop's arrival time is earlier than the departure time
   for (const auto &target_id : included_target_ids_) {
-    std::optional<int> target_arrival_seconds = arrivals_[target_id][k].arrival_seconds;
-    if (earlier(departure_seconds, target_arrival_seconds))
+    const auto target_arrival_seconds = arrivals_.at(target_id).at(k).arrival_seconds;
+    if (!target_arrival_seconds.has_value() || departure_seconds < *target_arrival_seconds)
       return true;
   }
 
@@ -405,32 +444,31 @@ bool Raptor::isValidTrip(
 }
 
 void Raptor::traverseTrip(
-  const std::string &et_id, 
-  const Day &et_day, 
-  const std::string &p_stop_id
+  const TripOccurrence &occurrence,
+  std::size_t boarding_label_id
 ) {
-  Trip et = trips_[et_id];
-  const std::size_t boarding_label_id = getArrivalLabel(p_stop_id, k - 1);
-  const auto *boarding_record = et.getStopTimeRecord(p_stop_id);
-  if (boarding_record == nullptr) {
-    throw std::logic_error("Boarding stop is missing from the chosen trip");
+  const auto &records = trips_.at(occurrence.trip_id).getStopTimeRecords();
+  const std::string boarding_stop = getLabel(boarding_label_id).stop_id;
+  const int boarding_arrival = getLabel(boarding_label_id).arrival_seconds;
+  const long long day_offset = static_cast<long long>(occurrence.service_day_offset) * MIDNIGHT;
+  if (occurrence.boarding_stop_index >= records.size() ||
+      records[occurrence.boarding_stop_index].stop_id != boarding_stop ||
+      static_cast<long long>(records[occurrence.boarding_stop_index].departure_seconds) + day_offset != occurrence.departure_seconds) {
+    throw std::logic_error("Trip occurrence does not match its frozen boarding stop");
   }
-  const int day_offset = et_day == Day::CurrentDay ? 0 : MIDNIGHT;
-  const int departure_seconds = checkedSeconds(static_cast<long long>(boarding_record->departure_seconds) + day_offset);
-
-  // Find all stop time records of the trip after p_stop_id
-  const auto& stop_time_records = et.getStopTimeRecordsAfter(p_stop_id);
+  const int departure_seconds = checkedSeconds(occurrence.departure_seconds);
+  if (departure_seconds < boarding_arrival) {
+    throw std::logic_error("Trip occurrence departs before its boarding label");
+  }
 
   // Traverse remaining stops on the trip to update arrival times
-  for (const auto& stop_time_record: stop_time_records) {
-    const auto& next_stop_arrival_seconds = stop_time_record.arrival_seconds;
-
-    // Access arrival seconds at next_stop_id for trip et_id, according to the day
-    int arr_secs = checkedSeconds(static_cast<long long>(next_stop_arrival_seconds) + day_offset);
+  for (std::size_t index = occurrence.boarding_stop_index + 1; index < records.size(); ++index) {
+    const auto &record = records[index];
+    int arr_secs = checkedSeconds(static_cast<long long>(record.arrival_seconds) + day_offset);
 
     // If arrival time can be improved, update Tk(pj) using et
-    if (improvesArrivalTime(arr_secs, stop_time_record.stop_id))
-      markStop(stop_time_record.stop_id, arr_secs, et_id, boarding_label_id, departure_seconds);
+    if (improvesArrivalTime(arr_secs, record.stop_id))
+      markStop(record.stop_id, arr_secs, occurrence.trip_id, boarding_label_id, departure_seconds);
   }
 }
 
@@ -556,8 +594,8 @@ Journey Raptor::reconstructJourney(
   if (journey.steps.empty()) return journey;
 
   const auto &source_label = getLabel(current_label_id);
-  journey.source_station_departure_secs = Utils::timeToSeconds(query_.departure_time);
-  journey.source_station_departure_day = Day::CurrentDay;
+  journey.source_station_departure_secs = queryDepartureSeconds();
+  journey.source_station_departure_day = journey.source_station_departure_secs >= MIDNIGHT ? Day::NextDay : Day::CurrentDay;
   journey.source_transfer_time = checkedSeconds(static_cast<long long>(source_label.arrival_seconds) - journey.source_station_departure_secs);
   journey.source_waiting_time = checkedSeconds(static_cast<long long>(journey.steps.front().departure_secs) - source_label.arrival_seconds);
   if (journey.source_transfer_time < 0 || journey.source_waiting_time < 0 || target_station_stop_transfer_time < 0) {

@@ -15,6 +15,20 @@ EMISSION_CPG = 145 * 100 / 1000**2
 ENERGY_EMISSIONS = 112 # g/kWh from https://www.swm.de/dam/swm/dokumente/geschaeftskunden/broschuere-strom-erdgas-gk.pdf
 PV_G_CO2_KM = 130 # g/km from https://www.ris-muenchen.de/RII/RII/DOK/ANTRAG/2337762.pdf with 60:38 benzin vs diesel
 
+def _get_numeric_offer_parameter(offer_str, parameter):
+    """Read a finite offer value, retaining decimal and scientific notation."""
+    if not isinstance(offer_str, str):
+        return np.nan
+    match = re.search(r'(?:^|[;:|])' + re.escape(parameter) + r':([^;|]*)', offer_str)
+    if match is None:
+        return np.nan
+    try:
+        value = float(match.group(1))
+    except ValueError:
+        return np.nan
+    return value if np.isfinite(value) else np.nan
+
+
 def calculate_pt_wait_time(fm_amod_row, pt_row):
     """Calculate PT wait time for a given request based on its sub-trips.
     Defines wait time as: (PT Pick-up - AMoD Drop-off) - Required Transfer Time + Station Waiting Time. (Note: PT Pick-up refers to the source station departure time).
@@ -23,12 +37,13 @@ def calculate_pt_wait_time(fm_amod_row, pt_row):
     pt_pickup_time = pt_row.get(G_RQ_PU, np.nan)
     
     pt_offer_str = pt_row.get(G_RQ_OFFERS, None)
-    if pt_offer_str is not None and not pd.isna(pt_offer_str):
-        pt_station_wait_time = int(re.search(r't_wait:(\d+)', pt_offer_str).group(1))
-        source_walking_time = int(re.search(r'source_walking_time:(\d+)', pt_offer_str).group(1))
-        pt_wait_time = (pt_pickup_time - amod_dropoff_time) - source_walking_time + pt_station_wait_time
-        return max(pt_wait_time, 0)
-    return np.nan
+    pt_station_wait_time = _get_numeric_offer_parameter(pt_offer_str, G_OFFER_WAIT)
+    source_walking_time = _get_numeric_offer_parameter(pt_offer_str, G_PT_OFFER_SOURCE_WALKING_TIME)
+    try:
+        pt_wait_time = float(pt_pickup_time) - float(amod_dropoff_time) - source_walking_time + pt_station_wait_time
+    except (TypeError, ValueError):
+        return np.nan
+    return max(pt_wait_time, 0) if np.isfinite(pt_wait_time) else np.nan
 
 def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_end_time=None, print_comments=False):
     """
@@ -174,10 +189,10 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
 
                     # Wait time for PT leg
                     pt_offer_str = lm_pt_row.get(G_RQ_OFFERS, None)
-                    lm_pt_wait = int(re.search(r't_wait:(\d+)', pt_offer_str).group(1))
+                    lm_pt_wait = _get_numeric_offer_parameter(pt_offer_str, G_OFFER_WAIT)
 
                     # Wait time for LM AMoD (waiting for AMoD)
-                    lm_pt_target_walking_time = int(re.search(r'target_walking_time:(\d+)', pt_offer_str).group(1))
+                    lm_pt_target_walking_time = _get_numeric_offer_parameter(pt_offer_str, G_PT_OFFER_TARGET_WALKING_TIME)
                     lm_amod_wait = lm_amod_row.get(G_RQ_PU, 0) - lm_pt_row.get(G_RQ_DO, 0) - lm_pt_target_walking_time
 
                     total_wait_time = lm_pt_wait + lm_amod_wait
@@ -228,7 +243,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                     flm_amod_0_wait = flm_amod_0_row.get(G_RQ_PU, 0) - flm_amod_0_row.get(G_RQ_TIME, 0)
                     flm_pt_wait = calculate_pt_wait_time(flm_amod_0_row, flm_pt_row)
                     flm_pt_offer_str = flm_pt_row.get(G_RQ_OFFERS, None)
-                    flm_pt_target_walking_time = int(re.search(r'target_walking_time:(\d+)', flm_pt_offer_str).group(1))
+                    flm_pt_target_walking_time = _get_numeric_offer_parameter(flm_pt_offer_str, G_PT_OFFER_TARGET_WALKING_TIME)
                     # Wait time for FLM_AMOD_1 (waiting for AMoD): LM AMoD pickup - PT drop-off - target walking time
                     flm_amod_1_wait = flm_amod_1_row.get(G_RQ_PU, 0) - flm_pt_row.get(G_RQ_DO, 0) - flm_pt_target_walking_time
 
