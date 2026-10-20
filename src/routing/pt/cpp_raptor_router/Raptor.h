@@ -117,6 +117,13 @@ private:
     std::vector<ActiveServiceDay> days;
   };
 
+  struct RoundArrival {
+    StopInfo boarding; ///< Earliest legal arrival available for the next vehicle.
+    std::optional<std::size_t> vehicle_label_id; ///< Earliest vehicle arrival eligible for walking or finishing.
+  };
+
+  enum class ArrivalKind { NonVehicle, Vehicle };
+
   std::unordered_map<std::string, Agency> agencies_; ///< Map of agency IDs to Agency objects.
   std::unordered_map<std::string, Service> services_; ///< Map of service IDs to Service objects.
   std::unordered_map<std::string, Stop> stops_; ///< Map of stop IDs to Stop objects.
@@ -132,7 +139,7 @@ private:
   int max_transfers_; ///< Non-negative maximum transfers; N permits N + 1 vehicle legs.
   std::unordered_set<std::string> included_source_ids_; ///< Set of included source stop IDs.
   std::unordered_set<std::string> included_target_ids_; ///< Set of included target stop IDs.
-  std::unordered_map<std::string, std::vector<StopInfo>> arrivals_; ///< Map of stop IDs to vectors of StopInfo for each k.
+  std::unordered_map<std::string, std::vector<RoundArrival>> arrivals_; ///< Boarding and vehicle arrivals for each stop and round.
   std::vector<JourneyLabel> labels_; ///< Append-only path labels for the current query; references use IDs.
   std::unordered_set<std::string> prev_marked_stops; ///< Set of previously marked stops.
   std::unordered_set<std::string> marked_stops; ///< Set of currently marked stops.
@@ -159,6 +166,7 @@ private:
 
   const JourneyLabel &getLabel(std::size_t label_id) const;
   std::size_t getArrivalLabel(const std::string &stop_id, std::size_t round) const;
+  std::optional<std::size_t> getVehicleArrivalLabel(const std::string &stop_id, std::size_t round) const;
 
   /** @brief Prepares the complete service-date window before publishing it. */
   void prepareServiceWindow();
@@ -250,12 +258,13 @@ private:
    *
    * @param[in] arrival The arrival time.
    * @param[in] dest_id The destination stop ID.
-   * @return True if the arrival time improves, false otherwise.
+   * @param[in] kind Whether the candidate ends with a vehicle edge.
+   * @return True if the relevant arrival improves a useful search state.
    */
-  bool improvesArrivalTime(int arrival, const std::string &dest_id);
+  bool improvesArrivalTime(int arrival, const std::string &dest_id, ArrivalKind kind);
 
   /**
-   * @brief Appends an immutable path label and updates the current-round arrival.
+   * @brief Appends an improving immutable label and updates its current-round arrival channels.
    *
    * @param[in] stop_id The ID of the stop.
    * @param[in] arrival The arrival time at the stop.
@@ -294,11 +303,13 @@ private:
    * @brief Reconstructs the journey from a given stop.
    *
    * @param[in] target_id The ID of the target stop for the journey.
+   * @param[in] target_label_id The exact vehicle label selected at the target.
    * @param[in] station_stop_transfer_time The target station stop transfer time for the journey.
    * @return A Journey object representing the reconstructed journey.
    */
   Journey reconstructJourney(
     const std::string &target_id,
+    std::size_t target_label_id,
     const int station_stop_transfer_time
   );
 };

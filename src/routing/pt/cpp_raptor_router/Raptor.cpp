@@ -84,10 +84,10 @@ void Raptor::initializeAlgorithm() {
   marked_stops.clear();
 
   // Allocate round 0 only; later rounds are appended when searched.
-  StopInfo default_info{};
+  RoundArrival default_info{};
   arrivals_.reserve(stops_.size());
   for (const auto &[stop_id, stop]: stops_) {
-    arrivals_.emplace(stop_id, std::vector<StopInfo>(1, default_info));
+    arrivals_.emplace(stop_id, std::vector<RoundArrival>(1, default_info));
   }
 
   // Initialize the round 0
@@ -98,9 +98,7 @@ void Raptor::initializeAlgorithm() {
     if (included_source_ids_.find(source.first) == included_source_ids_.end()) continue;
     int station_stop_transfer_time = source.second;
     int arrival_time = checkedSeconds(static_cast<long long>(departure_time) + station_stop_transfer_time);
-    if (earlier(arrival_time, arrivals_.at(source.first)[0].arrival_seconds)) {
-      markStop(source.first, arrival_time, std::nullopt, std::nullopt, arrival_time);
-    }
+    markStop(source.first, arrival_time, std::nullopt, std::nullopt, arrival_time);
   }
 
   advanceRound(); // k=1
@@ -167,6 +165,9 @@ void Raptor::markStop(
   if (stops_.find(stop_id) == stops_.end() || arrival < departure_seconds) {
     throw std::logic_error("Invalid stop or time in journey label");
   }
+  const ArrivalKind kind = parent_trip_id.has_value() ? ArrivalKind::Vehicle : ArrivalKind::NonVehicle;
+  if (!improvesArrivalTime(arrival, stop_id, kind)) return;
+  const bool improves_boarding = earlier(arrival, arrivals_.at(stop_id).at(k).boarding.arrival_seconds);
   if (parent_label_id.has_value()) {
     const auto &parent = getLabel(*parent_label_id);
     if (parent.round > k || parent.vehicle_legs > parent.round ||
@@ -197,7 +198,12 @@ void Raptor::markStop(
   labels_.push_back({stop_id, arrival, parent_label_id, parent_trip_id,
                      departure_seconds, k, vehicle_legs});
   Day day = arrival >= MIDNIGHT ? Day::NextDay : Day::CurrentDay;
-  setMinArrivalTime(stop_id, {arrival, parent_trip_id, parent_stop_id, day, label_id});
+  if (improves_boarding) {
+    setMinArrivalTime(stop_id, {arrival, parent_trip_id, parent_stop_id, day, label_id});
+  }
+  if (parent_trip_id.has_value()) {
+    arrivals_.at(stop_id).at(k).vehicle_label_id = label_id;
+  }
   marked_stops.insert(stop_id);
 }
 
@@ -205,7 +211,7 @@ void Raptor::setMinArrivalTime(
   const std::string &stop_id, 
   StopInfo stop_info
   ) {
-  arrivals_.at(stop_id).at(k) = std::move(stop_info);
+  arrivals_.at(stop_id).at(k).boarding = std::move(stop_info);
 }
 
 const JourneyLabel &Raptor::getLabel(std::size_t label_id) const {
@@ -216,7 +222,7 @@ const JourneyLabel &Raptor::getLabel(std::size_t label_id) const {
 }
 
 std::size_t Raptor::getArrivalLabel(const std::string &stop_id, std::size_t round) const {
-  const auto &arrival = arrivals_.at(stop_id).at(round);
+  const auto &arrival = arrivals_.at(stop_id).at(round).boarding;
   if (!arrival.label_id.has_value() || !arrival.arrival_seconds.has_value()) {
     throw std::logic_error("Reachable stop has no journey label");
   }
@@ -225,6 +231,20 @@ std::size_t Raptor::getArrivalLabel(const std::string &stop_id, std::size_t roun
     throw std::logic_error("Arrival slot and journey label do not match");
   }
   return *arrival.label_id;
+}
+
+std::optional<std::size_t> Raptor::getVehicleArrivalLabel(const std::string &stop_id, std::size_t round) const {
+  const auto &arrival = arrivals_.at(stop_id).at(round);
+  if (!arrival.vehicle_label_id.has_value()) return std::nullopt;
+  const auto &label = getLabel(*arrival.vehicle_label_id);
+  if (label.stop_id != stop_id || !label.trip_id.has_value() || label.round > round ||
+      label.vehicle_legs == 0 || label.vehicle_legs > round ||
+      label.vehicle_legs > static_cast<std::size_t>(max_transfers_) + 1 ||
+      !arrival.boarding.arrival_seconds.has_value() ||
+      label.arrival_seconds < *arrival.boarding.arrival_seconds) {
+    throw std::logic_error("Vehicle arrival slot and journey label do not match");
+  }
+  return arrival.vehicle_label_id;
 }
 
 std::vector<Journey> Raptor::findJourneys() {
@@ -259,8 +279,10 @@ std::vector<Journey> Raptor::findJourneys() {
     
     // Check if any included target stop has been improved
     for (const auto& [target_id, station_stop_transfer_time] : query_.included_targets) {
-      if (marked_stops.find(target_id) != marked_stops.end()) {
-        Journey journey = reconstructJourney(target_id, station_stop_transfer_time);
+      const auto target_label_id = getVehicleArrivalLabel(target_id, k);
+      if (target_label_id.has_value() &&
+          target_label_id != arrivals_.at(target_id).at(k - 1).vehicle_label_id) {
+        Journey journey = reconstructJourney(target_id, *target_label_id, station_stop_transfer_time);
         
         if (isValidJourney(journey)) {
           journeys.push_back(journey);
@@ -310,11 +332,14 @@ std::optional<Journey> Raptor::findOptimalJourney() {
     if (marked_stops.empty()) break;   
     
     for (const auto& [target_id, target_station_stop_transfer_time] : query_.included_targets) {
-      if (marked_stops.find(target_id) != marked_stops.end()) {
-        int target_station_arrival_secs = arrivals_[target_id][k].arrival_seconds.value() + target_station_stop_transfer_time;
+      const auto target_label_id = getVehicleArrivalLabel(target_id, k);
+      if (target_label_id.has_value() &&
+          target_label_id != arrivals_.at(target_id).at(k - 1).vehicle_label_id) {
+        int target_station_arrival_secs = checkedSeconds(
+          static_cast<long long>(getLabel(*target_label_id).arrival_seconds) + target_station_stop_transfer_time);
         // TODO: add more criteria for optimality if needed, such as number of transfers, walking time, etc.
         if (target_station_arrival_secs < optimal_target_station_arrival_secs) {
-          Journey possible_journey = reconstructJourney(target_id, target_station_stop_transfer_time);
+          Journey possible_journey = reconstructJourney(target_id, *target_label_id, target_station_stop_transfer_time);
           if (isValidJourney(possible_journey)) {
             optimal_target_station_arrival_secs = target_station_arrival_secs;
             optimal_journey = possible_journey;
@@ -339,7 +364,7 @@ void Raptor::setUpperBound() {
     if (stop_arrivals.size() != k) {
       throw std::logic_error("Arrival labels do not match the RAPTOR round");
     }
-    StopInfo previous_round = stop_arrivals.back();
+    RoundArrival previous_round = stop_arrivals.back();
     stop_arrivals.push_back(std::move(previous_round));
   }
 }
@@ -374,6 +399,15 @@ void Raptor::traverseRoutes(
   while (!routes_stops_set.empty()) {
     auto route_stop = routes_stops_set.begin();
     const auto &[route_key, p_stop_id] = *route_stop;
+
+    // Keep route-set iteration order, but do not rescan an unchanged prefix.
+    // Vehicle-only improvements already propagated walking in their own round.
+    if (k > 1 &&
+        arrivals_.at(p_stop_id).at(k - 1).boarding.label_id ==
+        arrivals_.at(p_stop_id).at(k - 2).boarding.label_id) {
+      routes_stops_set.erase(route_stop);
+      continue;
+    }
 
     const std::size_t boarding_label_id = getArrivalLabel(p_stop_id, k - 1);
     const auto &occurrences = findBoardableOccurrences(p_stop_id, route_key);
@@ -429,14 +463,14 @@ bool Raptor::isValidTrip(
   const std::string &p_stop_id,
   long long departure_seconds
 ) {
-  const auto stop_prev_arrival_seconds = arrivals_.at(p_stop_id).at(k - 1).arrival_seconds;
+  const auto stop_prev_arrival_seconds = arrivals_.at(p_stop_id).at(k - 1).boarding.arrival_seconds;
 
   if (stop_prev_arrival_seconds.has_value() && departure_seconds < *stop_prev_arrival_seconds) return false;
 
   // Check if the target stop's arrival time is earlier than the departure time
   for (const auto &target_id : included_target_ids_) {
-    const auto target_arrival_seconds = arrivals_.at(target_id).at(k).arrival_seconds;
-    if (!target_arrival_seconds.has_value() || departure_seconds < *target_arrival_seconds)
+    const auto target_label_id = arrivals_.at(target_id).at(k).vehicle_label_id;
+    if (!target_label_id.has_value() || departure_seconds < getLabel(*target_label_id).arrival_seconds)
       return true;
   }
 
@@ -466,9 +500,13 @@ void Raptor::traverseTrip(
     const auto &record = records[index];
     int arr_secs = checkedSeconds(static_cast<long long>(record.arrival_seconds) + day_offset);
 
-    // If arrival time can be improved, update Tk(pj) using et
-    if (improvesArrivalTime(arr_secs, record.stop_id))
+    if (arr_secs < departure_seconds) {
+      throw std::logic_error("Invalid stop or time in journey label");
+    }
+    // Filter before converting the trip ID to an optional string for markStop.
+    if (improvesArrivalTime(arr_secs, record.stop_id, ArrivalKind::Vehicle)) {
       markStop(record.stop_id, arr_secs, occurrence.trip_id, boarding_label_id, departure_seconds);
+    }
   }
 }
 
@@ -482,15 +520,21 @@ bool Raptor::earlier(
 
 bool Raptor::improvesArrivalTime(
   int arrival, 
-  const std::string &dest_id
+  const std::string &dest_id,
+  ArrivalKind kind
 ) {
-  // Check if the arrival time at the destination stop can be improved
-  if (!earlier(arrival, arrivals_[dest_id][k].arrival_seconds))
+  const auto &current = arrivals_.at(dest_id).at(k);
+  if (kind == ArrivalKind::Vehicle) {
+    if (current.vehicle_label_id.has_value() &&
+        arrival >= getLabel(*current.vehicle_label_id).arrival_seconds) return false;
+  } else if (!earlier(arrival, current.boarding.arrival_seconds)) {
     return false;
-  
-  // Check if the arrival time at any included target stop can be improved
+  }
+
+  // Only a vehicle arrival is a valid terminal bound under the endpoint policy.
   for (const auto &target_id : included_target_ids_) {
-    if (earlier(arrival, arrivals_[target_id][k].arrival_seconds))
+    const auto target_label_id = arrivals_.at(target_id).at(k).vehicle_label_id;
+    if (!target_label_id.has_value() || arrival < getLabel(*target_label_id).arrival_seconds)
       return true;
   }
   // If no improvement was found for any target, return false
@@ -503,8 +547,10 @@ void Raptor::handleFootpaths() {
   walking_label_ids.reserve(marked_stops.size());
   for (const auto &stop_id : marked_stops) {
     if (included_target_ids_.find(stop_id) != included_target_ids_.end()) continue;
-    const std::size_t label_id = getArrivalLabel(stop_id, k);
-    if (getLabel(label_id).trip_id.has_value()) walking_label_ids.push_back(label_id);
+    const auto label_id = getVehicleArrivalLabel(stop_id, k);
+    if (label_id.has_value() && label_id != arrivals_.at(stop_id).at(k - 1).vehicle_label_id) {
+      walking_label_ids.push_back(*label_id);
+    }
   }
 
   for (const std::size_t walking_label_id : walking_label_ids) {
@@ -516,7 +562,10 @@ void Raptor::handleFootpaths() {
       if (included_source_ids_.find(dest_id) != included_source_ids_.end()) continue;
 
       int new_arrival = checkedSeconds(static_cast<long long>(p_arrival) + duration);
-      if (improvesArrivalTime(new_arrival, dest_id)) {
+      if (new_arrival < p_arrival) {
+        throw std::logic_error("Invalid stop or time in journey label");
+      }
+      if (improvesArrivalTime(new_arrival, dest_id, ArrivalKind::NonVehicle)) {
         markStop(dest_id, new_arrival, std::nullopt, walking_label_id, p_arrival);
       }
     }
@@ -529,11 +578,14 @@ bool Raptor::isFootpath(const StopInfo &stop_info) {
 
 Journey Raptor::reconstructJourney(
   const std::string &target_id,
+  std::size_t target_label_id,
   const int target_station_stop_transfer_time
 ) {
   Journey journey{};
-  const std::size_t target_label_id = getArrivalLabel(target_id, k);
   const auto &target_label = getLabel(target_label_id);
+  if (target_label.stop_id != target_id || !target_label.trip_id.has_value()) {
+    throw std::logic_error("Journey must end at the selected target vehicle label");
+  }
   const std::size_t max_vehicle_legs = static_cast<std::size_t>(max_transfers_) + 1;
   std::size_t current_label_id = target_label_id;
   std::size_t vehicle_legs = 0;
