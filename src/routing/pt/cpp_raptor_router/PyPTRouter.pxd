@@ -5,6 +5,7 @@ from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport pair
 from libcpp.optional cimport optional
 from libcpp cimport bool
+from libc.stddef cimport size_t
 
 cdef extern from "DateTime.h":
     cdef enum class Day:
@@ -41,6 +42,7 @@ cdef extern from "NetworkObjects/DataStructures.h":
         optional[string] parent_trip_id
         optional[string] parent_stop_id
         optional[Day] day
+        optional[size_t] label_id
     
     cdef struct JourneyStep:
         optional[string] trip_id

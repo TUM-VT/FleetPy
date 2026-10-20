@@ -17,6 +17,15 @@
 #include <limits>
 #include <stdexcept>
 
+namespace {
+int checkedSeconds(long long seconds) {
+  if (seconds < std::numeric_limits<int>::min() || seconds > std::numeric_limits<int>::max()) {
+    throw std::overflow_error("Journey time exceeds the supported integer range");
+  }
+  return static_cast<int>(seconds);
+}
+}
+
 Raptor::Raptor(const std::unordered_map<std::string, Agency> &agencies,
                const std::unordered_map<std::string, Service> &services,
                const std::unordered_map<std::string, Stop> &stops,
@@ -59,11 +68,12 @@ void Raptor::setQuery(const Query &query) {
 void Raptor::initializeAlgorithm() {
   // Initialize data structures
   arrivals_.clear();
+  labels_.clear();
   prev_marked_stops.clear();
   marked_stops.clear();
 
   // Allocate round 0 only; later rounds are appended when searched.
-  StopInfo default_info = {std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+  StopInfo default_info{};
   arrivals_.reserve(stops_.size());
   for (const auto &[stop_id, stop]: stops_) {
     arrivals_.emplace(stop_id, std::vector<StopInfo>(1, default_info));
@@ -76,8 +86,10 @@ void Raptor::initializeAlgorithm() {
   for (const auto &source : query_.included_sources) {
     if (included_source_ids_.find(source.first) == included_source_ids_.end()) continue;
     int station_stop_transfer_time = source.second;
-    int arrival_time = departure_time + station_stop_transfer_time;
-    markStop(source.first, arrival_time, std::nullopt, std::nullopt);
+    int arrival_time = checkedSeconds(static_cast<long long>(departure_time) + station_stop_transfer_time);
+    if (earlier(arrival_time, arrivals_.at(source.first)[0].arrival_seconds)) {
+      markStop(source.first, arrival_time, std::nullopt, std::nullopt, arrival_time);
+    }
   }
 
   advanceRound(); // k=1
@@ -91,10 +103,46 @@ void Raptor::markStop(
   const std::string &stop_id, 
   int arrival,
   const std::optional<std::string> &parent_trip_id,
-  const std::optional<std::string> &parent_stop_id
+  const std::optional<std::size_t> &parent_label_id,
+  int departure_seconds
 ) {
+  std::optional<std::string> parent_stop_id;
+  std::size_t vehicle_legs = 0;
+  const std::size_t max_vehicle_legs = static_cast<std::size_t>(max_transfers_) + 1;
+  if (stops_.find(stop_id) == stops_.end() || arrival < departure_seconds) {
+    throw std::logic_error("Invalid stop or time in journey label");
+  }
+  if (parent_label_id.has_value()) {
+    const auto &parent = getLabel(*parent_label_id);
+    if (parent.round > k || parent.vehicle_legs > parent.round ||
+        parent.vehicle_legs > max_vehicle_legs || departure_seconds < parent.arrival_seconds) {
+      throw std::logic_error("Journey label has an inconsistent predecessor");
+    }
+    parent_stop_id = parent.stop_id;
+    vehicle_legs = parent.vehicle_legs;
+    if (parent_trip_id.has_value()) {
+      if (k == 0 || parent.round >= k) {
+        throw std::logic_error("Vehicle predecessor must come from a previous round");
+      }
+      ++vehicle_legs;
+    } else if (departure_seconds != parent.arrival_seconds ||
+               (parent.parent_label_id.has_value() && !parent.trip_id.has_value())) {
+      throw std::logic_error("Walking predecessor does not match the frozen arrival");
+    }
+  } else if (k != 0 || parent_trip_id.has_value() || departure_seconds != arrival ||
+             included_source_ids_.find(stop_id) == included_source_ids_.end()) {
+    throw std::logic_error("Journey root must be an included source in round zero");
+  }
+  if (vehicle_legs > k || vehicle_legs > max_vehicle_legs) {
+    throw std::logic_error("Journey label exceeds the vehicle-leg limit");
+  }
+
+  // Copy all predecessor data before push_back can reallocate the label pool.
+  const std::size_t label_id = labels_.size();
+  labels_.push_back({stop_id, arrival, parent_label_id, parent_trip_id,
+                     departure_seconds, k, vehicle_legs});
   Day day = arrival > MIDNIGHT ? Day::NextDay : Day::CurrentDay;
-  setMinArrivalTime(stop_id, {arrival, parent_trip_id, parent_stop_id, day});
+  setMinArrivalTime(stop_id, {arrival, parent_trip_id, parent_stop_id, day, label_id});
   marked_stops.insert(stop_id);
 }
 
@@ -102,7 +150,26 @@ void Raptor::setMinArrivalTime(
   const std::string &stop_id, 
   StopInfo stop_info
   ) {
-  arrivals_[stop_id][k] = std::move(stop_info);  // Only keep one stop info per stop per round
+  arrivals_.at(stop_id).at(k) = std::move(stop_info);
+}
+
+const JourneyLabel &Raptor::getLabel(std::size_t label_id) const {
+  if (label_id >= labels_.size()) {
+    throw std::logic_error("Invalid journey label ID");
+  }
+  return labels_[label_id];
+}
+
+std::size_t Raptor::getArrivalLabel(const std::string &stop_id, std::size_t round) const {
+  const auto &arrival = arrivals_.at(stop_id).at(round);
+  if (!arrival.label_id.has_value() || !arrival.arrival_seconds.has_value()) {
+    throw std::logic_error("Reachable stop has no journey label");
+  }
+  const auto &label = getLabel(*arrival.label_id);
+  if (label.stop_id != stop_id || label.arrival_seconds != *arrival.arrival_seconds || label.round > round) {
+    throw std::logic_error("Arrival slot and journey label do not match");
+  }
+  return *arrival.label_id;
 }
 
 void Raptor::fillActiveTrips(Day day) {
@@ -275,21 +342,10 @@ void Raptor::traverseRoutes(
     auto route_stop = routes_stops_set.begin();
     const auto &[route_key, p_stop_id] = *route_stop;
 
-      try {
-        auto et = findEarliestTrip(p_stop_id, route_key);
-
-        if (et.has_value()) {
-          try {
-            std::string et_id = et.value().first;
-            Day et_day = et.value().second;
-            traverseTrip(et_id, et_day, p_stop_id);
-          } catch (const std::exception& e) {
-            std::cerr << "Exception while processing trip: " << e.what() << std::endl;
-          }
-        }
-      } catch (const std::exception& e) {
-        std::cerr << "Exception in findEarliestTrip for stop " << p_stop_id << " and route " << route_key.first << ": " << e.what() << std::endl;
-      }
+    auto et = findEarliestTrip(p_stop_id, route_key);
+    if (et.has_value()) {
+      traverseTrip(et->first, et->second, p_stop_id);
+    }
       
     routes_stops_set.erase(route_stop);
   }
@@ -354,6 +410,13 @@ void Raptor::traverseTrip(
   const std::string &p_stop_id
 ) {
   Trip et = trips_[et_id];
+  const std::size_t boarding_label_id = getArrivalLabel(p_stop_id, k - 1);
+  const auto *boarding_record = et.getStopTimeRecord(p_stop_id);
+  if (boarding_record == nullptr) {
+    throw std::logic_error("Boarding stop is missing from the chosen trip");
+  }
+  const int day_offset = et_day == Day::CurrentDay ? 0 : MIDNIGHT;
+  const int departure_seconds = checkedSeconds(static_cast<long long>(boarding_record->departure_seconds) + day_offset);
 
   // Find all stop time records of the trip after p_stop_id
   const auto& stop_time_records = et.getStopTimeRecordsAfter(p_stop_id);
@@ -363,12 +426,11 @@ void Raptor::traverseTrip(
     const auto& next_stop_arrival_seconds = stop_time_record.arrival_seconds;
 
     // Access arrival seconds at next_stop_id for trip et_id, according to the day
-    int arr_secs = et_day == Day::CurrentDay ? next_stop_arrival_seconds
-                                            : next_stop_arrival_seconds + MIDNIGHT;
+    int arr_secs = checkedSeconds(static_cast<long long>(next_stop_arrival_seconds) + day_offset);
 
     // If arrival time can be improved, update Tk(pj) using et
     if (improvesArrivalTime(arr_secs, stop_time_record.stop_id))
-      markStop(stop_time_record.stop_id, arr_secs, et_id, p_stop_id);
+      markStop(stop_time_record.stop_id, arr_secs, et_id, boarding_label_id, departure_seconds);
   }
 }
 
@@ -407,34 +469,22 @@ void Raptor::handleFootpaths() {
     std::string stop_id = *it;
     current_marked_stops.erase(it);
     
-    try {
-      // If parent step in the previous round is a footpath, skip it to avoid chaining footpaths
-      if (isFootpath(arrivals_[stop_id][k - 1])) continue;
-      
-      // If parent step in the current round is from a footpath, skip it to avoid chaining footpaths
-      if (isFootpath(arrivals_[stop_id][k])) continue;
-      
-      // If the stop is one of the included target stops, skip it
-      if (included_target_ids_.find(stop_id) != included_target_ids_.end()) continue;
+    // Preserve the existing walking propagation rules.
+    if (isFootpath(arrivals_[stop_id][k - 1])) continue;
+    if (isFootpath(arrivals_[stop_id][k])) continue;
+    if (included_target_ids_.find(stop_id) != included_target_ids_.end()) continue;
 
-      // Get the arrival time at the marked stop in this round
-      int p_arrival = arrivals_[stop_id][k].arrival_seconds.value();
+    // Freeze both the ID and its time before any destination update.
+    const std::size_t walking_label_id = getArrivalLabel(stop_id, k);
+    const int p_arrival = getLabel(walking_label_id).arrival_seconds;
+    for (const auto &[dest_id, duration]: stops_[stop_id].getFootpaths()) {
+      if (included_target_ids_.find(dest_id) != included_target_ids_.end()) continue;
+      if (included_source_ids_.find(dest_id) != included_source_ids_.end()) continue;
 
-      // For each footpath (p, p')
-      for (const auto &[dest_id, duration]: stops_[stop_id].getFootpaths()) {
-        // DRT Constraint: Skip if destination is a target stop (prevents walking last leg)
-        if (included_target_ids_.find(dest_id) != included_target_ids_.end()) continue;
-
-        // DRT Constraint: Skip if destination is a source stop (prevents walking first leg)
-        if (included_source_ids_.find(dest_id) != included_source_ids_.end()) continue;
-
-        int new_arrival = p_arrival + duration;
-        if (improvesArrivalTime(new_arrival, dest_id)) {
-          markStop(dest_id, new_arrival, std::nullopt, stop_id);
-        }
-      } // end each footpath (p, p')
-    } catch (const std::exception& e) {
-      std::cerr << "Exception in handleFootpaths for stop " << stop_id << ": " << e.what() << std::endl;
+      int new_arrival = checkedSeconds(static_cast<long long>(p_arrival) + duration);
+      if (improvesArrivalTime(new_arrival, dest_id)) {
+        markStop(dest_id, new_arrival, std::nullopt, walking_label_id, p_arrival);
+      }
     }
   } // end each marked stop p
 }
@@ -446,118 +496,79 @@ bool Raptor::isFootpath(const StopInfo &stop_info) {
 Journey Raptor::reconstructJourney(
   const std::string &target_id,
   const int target_station_stop_transfer_time
-  ) {
-  Journey journey;
-  std::string current_stop_id = target_id;
+) {
+  Journey journey{};
+  const std::size_t target_label_id = getArrivalLabel(target_id, k);
+  const auto &target_label = getLabel(target_label_id);
+  const std::size_t max_vehicle_legs = static_cast<std::size_t>(max_transfers_) + 1;
+  std::size_t current_label_id = target_label_id;
+  std::size_t vehicle_legs = 0;
 
-  try {
-    while (true) {
-      const std::optional<std::string> parent_trip_id_opt = arrivals_[current_stop_id][k].parent_trip_id;
-      // TODO: add agency info into journey step
-      const std::optional<std::string> parent_agency_name_opt = std::nullopt;
-
-      const std::optional<std::string> parent_stop_id_opt = arrivals_[current_stop_id][k].parent_stop_id;
-
-      if (!parent_stop_id_opt.has_value()) break;  // No parent stop means it is a source stop
-      const std::string &parent_stop_id = parent_stop_id_opt.value();
-
-      int departure_seconds, duration, arrival_seconds;
-      if (!parent_trip_id_opt.has_value()) { // Walking leg
-        arrival_seconds = arrivals_[current_stop_id][k].arrival_seconds.value();
-        
-        const auto& footpaths = stops_[parent_stop_id].getFootpaths();
-        if (footpaths.find(current_stop_id) != footpaths.end()) {
-             duration = footpaths.at(current_stop_id);
-        } else {
-             duration = 0; // Should not happen
-        }
-        departure_seconds = arrival_seconds - duration;
-      } else { // PT leg
-        const std::string &parent_trip_id = parent_trip_id_opt.value();
-        
-        std::string route_id = trips_[parent_trip_id].getField("route_id");
-
-        bool found_route = false;
-        for (const auto &[key, route]: routes_) {
-          if (key.first == route_id) {
-            found_route = true;
-            break;
-          }
-        }
-
-        if (!found_route) {
-          break;
-        }
-
-        // Get departure time of the trip at parent_stop_id
-        const auto& stop_time_record = trips_[parent_trip_id].getStopTimeRecord(parent_stop_id);
-        departure_seconds = stop_time_record->departure_seconds;
-        
-        arrival_seconds = arrivals_[current_stop_id][k].arrival_seconds.value();
-        duration = arrival_seconds - departure_seconds;
+  // IDs decrease along the chain, even when a valid journey revisits a stop.
+  while (true) {
+    const auto &label = getLabel(current_label_id);
+    if (label.round > k || label.vehicle_legs > label.round ||
+        label.vehicle_legs > max_vehicle_legs) {
+      throw std::logic_error("Journey label has an invalid round or vehicle count");
+    }
+    if (!label.parent_label_id.has_value()) {
+      if (label.round != 0 || label.vehicle_legs != 0 || label.trip_id.has_value() ||
+          included_source_ids_.find(label.stop_id) == included_source_ids_.end()) {
+        throw std::logic_error("Journey chain does not end at an included source");
       }
-
-      Day day = arrival_seconds > MIDNIGHT ? Day::NextDay : Day::CurrentDay;
-      JourneyStep step = {parent_trip_id_opt, parent_agency_name_opt, &stops_[parent_stop_id], &stops_[current_stop_id],
-                          departure_seconds, day, duration, arrival_seconds};
-
-      journey.steps.push_back(step);
-
-      // Update to the previous stop boarded
-      current_stop_id = parent_stop_id;
+      break;
     }
-
-    // Reverse the journey to obtain the correct sequence
-    std::reverse(journey.steps.begin(), journey.steps.end());
-
-    // If no steps are found, return an empty journey
-    if (journey.steps.empty()) {
-      return journey;
+    if (*label.parent_label_id >= current_label_id) {
+      throw std::logic_error("Journey predecessor IDs must decrease");
     }
-
-    // Set journey departure time and day
-    journey.source_station_departure_secs = Utils::timeToSeconds(query_.departure_time);
-    journey.source_station_departure_day = Day::CurrentDay;
-
-    // Set journey arrival time and day
-    journey.target_station_arrival_secs = journey.steps.back().arrival_secs + target_station_stop_transfer_time;
-    // Update arrival day based on arrival seconds
-    if (journey.target_station_arrival_secs > MIDNIGHT) {
-      journey.target_station_arrival_day = Day::NextDay;
-    } else {
-      journey.target_station_arrival_day = Day::CurrentDay;
+    const auto &parent = getLabel(*label.parent_label_id);
+    if (parent.round > label.round || parent.vehicle_legs > parent.round ||
+        parent.vehicle_legs > max_vehicle_legs ||
+        label.departure_seconds < parent.arrival_seconds ||
+        label.arrival_seconds < label.departure_seconds) {
+      throw std::logic_error("Journey predecessor has inconsistent times or rounds");
     }
-    // Set journey duration, source transfer time, waiting time, trip time and transfer numbers
-    journey.duration = journey.target_station_arrival_secs - journey.source_station_departure_secs;
-    
-    // Get station stop transfer time from Query
-    journey.source_transfer_time = 0;
-    Stop src_stop = *journey.steps.front().src_stop;
-    for (const auto &source : query_.included_sources) {
-      if (source.first == src_stop.getField("stop_id")) {
-        journey.source_transfer_time = source.second;
-        break;
-      }
+    const bool vehicle_leg = label.trip_id.has_value();
+    if ((vehicle_leg && parent.round >= label.round) ||
+        label.vehicle_legs != parent.vehicle_legs + (vehicle_leg ? 1 : 0)) {
+      throw std::logic_error("Journey edge has an inconsistent vehicle count");
     }
-
-    journey.target_transfer_time = target_station_stop_transfer_time;
-
-    journey.source_waiting_time = journey.steps.front().departure_secs - journey.source_station_departure_secs - journey.source_transfer_time;
-    if (journey.source_waiting_time < 0) journey.source_waiting_time = 0;
-
-    journey.trip_time = journey.duration - journey.source_waiting_time - journey.target_transfer_time - journey.source_transfer_time;
-
-    int vehicle_legs = 0;
-    for (const auto& step : journey.steps) {
-        if (step.trip_id.has_value() && step.trip_id.value() != "walking") {
-            vehicle_legs++;
-        }
+    if (!vehicle_leg && (label.departure_seconds != parent.arrival_seconds ||
+                        (parent.parent_label_id.has_value() && !parent.trip_id.has_value()))) {
+      throw std::logic_error("Journey walking edge has an inconsistent predecessor");
     }
-    journey.num_transfers = (vehicle_legs > 0) ? (vehicle_legs - 1) : 0;
-  } catch (const std::exception& e) {
-    std::cerr << "Exception in reconstructJourney: " << e.what() << std::endl;
+    if (vehicle_leg) ++vehicle_legs;
+
+    Day day = label.arrival_seconds > MIDNIGHT ? Day::NextDay : Day::CurrentDay;
+    journey.steps.push_back({label.trip_id, std::nullopt,
+                             &stops_.at(parent.stop_id), &stops_.at(label.stop_id),
+                             label.departure_seconds, day,
+                             checkedSeconds(static_cast<long long>(label.arrival_seconds) - label.departure_seconds),
+                             label.arrival_seconds});
+    current_label_id = *label.parent_label_id;
   }
 
+  if (vehicle_legs != target_label.vehicle_legs || vehicle_legs > k ||
+      vehicle_legs > max_vehicle_legs) {
+    throw std::logic_error("Reconstructed journey exceeds its vehicle-leg budget");
+  }
+  std::reverse(journey.steps.begin(), journey.steps.end());
+  if (journey.steps.empty()) return journey;
+
+  const auto &source_label = getLabel(current_label_id);
+  journey.source_station_departure_secs = Utils::timeToSeconds(query_.departure_time);
+  journey.source_station_departure_day = Day::CurrentDay;
+  journey.source_transfer_time = checkedSeconds(static_cast<long long>(source_label.arrival_seconds) - journey.source_station_departure_secs);
+  journey.source_waiting_time = checkedSeconds(static_cast<long long>(journey.steps.front().departure_secs) - source_label.arrival_seconds);
+  if (journey.source_transfer_time < 0 || journey.source_waiting_time < 0 || target_station_stop_transfer_time < 0) {
+    throw std::logic_error("Journey access, waiting, and egress times must be non-negative");
+  }
+  journey.target_transfer_time = target_station_stop_transfer_time;
+  journey.target_station_arrival_secs = checkedSeconds(static_cast<long long>(target_label.arrival_seconds) + journey.target_transfer_time);
+  journey.target_station_arrival_day = journey.target_station_arrival_secs > MIDNIGHT ? Day::NextDay : Day::CurrentDay;
+  journey.duration = checkedSeconds(static_cast<long long>(journey.target_station_arrival_secs) - journey.source_station_departure_secs);
+  journey.trip_time = checkedSeconds(static_cast<long long>(target_label.arrival_seconds) - journey.steps.front().departure_secs);
+  journey.num_transfers = vehicle_legs == 0 ? 0 : static_cast<int>(vehicle_legs - 1);
   return journey;
 }
 

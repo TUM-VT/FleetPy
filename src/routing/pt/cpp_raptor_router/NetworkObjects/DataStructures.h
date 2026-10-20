@@ -16,6 +16,7 @@
 #ifndef DATASTRUCTURES_H
 #define DATASTRUCTURES_H
 
+#include <cstddef>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -54,6 +55,20 @@ struct StopInfo {
   std::optional<std::string> parent_trip_id;   ///< ID of the parent trip, or `std::nullopt` for footpaths.
   std::optional<std::string> parent_stop_id;   ///< ID of the parent stop, or `std::nullopt` for first stops.
   std::optional<Day> day;                      ///< Day of arrival, or `std::nullopt` if unreachable.
+  std::optional<std::size_t> label_id;         ///< Stable ID of the immutable path used for this arrival.
+};
+
+/**
+ * @brief Immutable path record, appended once and addressed by its pool index.
+ */
+struct JourneyLabel {
+  std::string stop_id;
+  int arrival_seconds;
+  std::optional<std::size_t> parent_label_id;
+  std::optional<std::string> trip_id;
+  int departure_seconds;
+  std::size_t round;
+  std::size_t vehicle_legs;
 };
 
 /**

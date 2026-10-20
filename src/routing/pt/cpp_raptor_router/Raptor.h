@@ -110,6 +110,7 @@ private:
   std::unordered_set<std::string> included_source_ids_; ///< Set of included source stop IDs.
   std::unordered_set<std::string> included_target_ids_; ///< Set of included target stop IDs.
   std::unordered_map<std::string, std::vector<StopInfo>> arrivals_; ///< Map of stop IDs to vectors of StopInfo for each k.
+  std::vector<JourneyLabel> labels_; ///< Append-only path labels for the current query; references use IDs.
   std::unordered_set<std::string> prev_marked_stops; ///< Set of previously marked stops.
   std::unordered_set<std::string> marked_stops; ///< Set of currently marked stops.
   std::size_t k{}; ///< The current round, equal to the maximum vehicle legs searched.
@@ -129,6 +130,9 @@ private:
    * @deprecated This function is deprecated and will be removed in the future.
    */
   void setMinArrivalTime(const std::string &stop_id, StopInfo stop_info);
+
+  const JourneyLabel &getLabel(std::size_t label_id) const;
+  std::size_t getArrivalLabel(const std::string &stop_id, std::size_t round) const;
 
   /**
    * @brief Fills the active trips for a given day.
@@ -229,18 +233,20 @@ private:
   bool improvesArrivalTime(int arrival, const std::string &dest_id);
 
   /**
-   * @brief Marks a stop with the arrival time, parent trip, and parent stop.
+   * @brief Appends an immutable path label and updates the current-round arrival.
    *
    * @param[in] stop_id The ID of the stop.
    * @param[in] arrival The arrival time at the stop.
    * @param[in] parent_trip_id The ID of the parent trip.
-   * @param[in] parent_stop_id The ID of the parent stop.
+   * @param[in] parent_label_id The exact path used to reach the boarding/walking stop.
+   * @param[in] departure_seconds Departure time on the query day's absolute time axis.
    */
   void markStop(
     const std::string &stop_id, 
     int arrival,
     const std::optional<std::string> &parent_trip_id, 
-    const std::optional<std::string> &parent_stop_id
+    const std::optional<std::size_t> &parent_label_id,
+    int departure_seconds
   );
 
   // TODO: Remove this function
