@@ -17,6 +17,39 @@
  */
 
 #include "Parser.h"
+#include <algorithm>
+#include <filesystem>
+#include <limits>
+#include <stdexcept>
+
+namespace {
+std::vector<std::string> readRequiredHeader(
+  std::istream &file, const std::vector<std::string> &required, const std::string &filename
+) {
+  std::string line;
+  if (!std::getline(file, line)) throw std::invalid_argument(filename + ": missing header");
+  Utils::clean(line);
+  if (line.empty()) throw std::invalid_argument(filename + ": empty header");
+  auto fields = Utils::split(line, ',');
+  for (const auto &field : required) {
+    if (std::count(fields.begin(), fields.end(), field) != 1) {
+      throw std::invalid_argument(filename + ": expected exactly one '" + field + "' column");
+    }
+  }
+  return fields;
+}
+
+template <typename ParseValue>
+int parseField(const GTFSObject &row, const std::string &field, const std::string &context, ParseValue parse) {
+  try {
+    return parse(row.getField(field));
+  } catch (const std::invalid_argument &error) {
+    throw std::invalid_argument(context + ": " + field + ": " + error.what());
+  } catch (const std::overflow_error &error) {
+    throw std::overflow_error(context + ": " + field + ": " + error.what());
+  }
+}
+}
 
 Parser::Parser(std::string directory) : inputDirectory(std::move(directory)) {
   // // Record the start time
@@ -98,69 +131,81 @@ void Parser::parseServices() {
   if (!file.is_open())
     throw std::runtime_error("Could not open calendar_fp.txt");
 
+  std::vector<std::string> required = {"service_id", "start_date", "end_date"};
+  for (int i = 0; i < 7; ++i) required.emplace_back(weekdays_names[i]);
+  auto fields = readRequiredHeader(file, required, "calendar_fp.txt");
   std::string line;
-  std::getline(file, line);
-  Utils::clean(line);
-  std::vector<std::string> fields = Utils::split(line, ',');
+  std::size_t line_number = 1;
 
   while (std::getline(file, line)) {
+    ++line_number;
     Utils::clean(line);
 
     if (line.empty()) continue;
 
     std::vector<std::string> tokens = Utils::split(line, ',');
 
-    if (tokens.size() != fields.size())
-      throw std::runtime_error("Mismatched number of tokens and fields");
-
-    Service service;
-
-    for (size_t i = 0; i < fields.size(); ++i)
-      service.setField(fields[i], tokens[i]);
-
-    // Register active_weekdays: 0-6, 0 = monday, 6 = sunday
-    for (int i = 0; i < 7; ++i) {
-      std::string weekdays_name = weekdays_names[i];
-      if (service.getField(weekdays_name) == "1") {
-        service.addActiveWeekday(i);
+    try {
+      if (tokens.size() != fields.size()) throw std::invalid_argument("Mismatched number of tokens and fields");
+      Service service;
+      for (size_t i = 0; i < fields.size(); ++i) service.setField(fields[i], tokens[i]);
+      const std::string service_id = service.getField("service_id");
+      if (service_id.find_first_not_of(" \t\r\n") == std::string::npos) {
+        throw std::invalid_argument("Empty service_id");
       }
-    }
+      const int start = parseField(service, "start_date", "service '" + service_id + "'", Utils::parseServiceDate);
+      const int end = parseField(service, "end_date", "service '" + service_id + "'", Utils::parseServiceDate);
+      if (start > end) throw std::invalid_argument("start_date is after end_date for service '" + service_id + "'");
 
-    services_[service.getField("service_id")] = service;
+      // Validate weekly rows even when all weekdays are inactive.
+      for (int i = 0; i < 7; ++i) {
+        const std::string weekday = weekdays_names[i];
+        const std::string active = service.getField(weekday);
+        if (active != "0" && active != "1") throw std::invalid_argument("Expected 0 or 1 for '" + weekday + "'");
+        if (active == "1") service.addActiveWeekday(i);
+      }
+      if (!services_.emplace(service_id, std::move(service)).second) {
+        throw std::invalid_argument("Duplicate service_id '" + service_id + "'");
+      }
+    } catch (const std::invalid_argument &error) {
+      throw std::invalid_argument("calendar_fp.txt line " + std::to_string(line_number) + ": " + error.what());
+    }
   }
 
-  // 2. Parse calendar_dates.txt
-  std::ifstream dates_file(inputDirectory + "/calendar_dates_fp.txt");
-  if (!dates_file.is_open())
-    // This file is an optional file, so we don't throw an error if it's not found
+  // 2. Parse the optional calendar_dates_fp.txt, including new service IDs.
+  const std::string dates_path = inputDirectory + "/calendar_dates_fp.txt";
+  std::ifstream dates_file(dates_path);
+  if (!dates_file.is_open()) {
+    if (std::filesystem::exists(dates_path)) throw std::runtime_error("Could not open calendar_dates_fp.txt");
     return;
+  }
 
-  std::getline(dates_file, line);
-  Utils::clean(line);
-  fields = Utils::split(line, ',');
+  fields = readRequiredHeader(dates_file, {"service_id", "date", "exception_type"}, "calendar_dates_fp.txt");
+  line_number = 1;
 
   while (std::getline(dates_file, line)) {
+    ++line_number;
     Utils::clean(line);
 
     if (line.empty()) continue;
 
     std::vector<std::string> tokens = Utils::split(line, ',');
 
-    if (tokens.size() != fields.size())
-      throw std::runtime_error("Mismatched number of tokens and fields");
+    try {
+      if (tokens.size() != fields.size()) throw std::invalid_argument("Mismatched number of tokens and fields");
+      GTFSObject calendar_date;
+      for (size_t i = 0; i < fields.size(); ++i) calendar_date.setField(fields[i], tokens[i]);
+      const std::string service_id = calendar_date.getField("service_id");
+      if (service_id.find_first_not_of(" \t\r\n") == std::string::npos) throw std::invalid_argument("Empty service_id");
+      const int date = parseField(calendar_date, "date", "service '" + service_id + "'", Utils::parseServiceDate);
+      const std::string type = calendar_date.getField("exception_type");
+      if (type != "1" && type != "2") throw std::invalid_argument("Expected exception_type 1 or 2");
 
-    GTFSObject calendar_date;
-
-    for (size_t i = 0; i < fields.size(); ++i)
-      calendar_date.setField(fields[i], tokens[i]);
-
-    std::string service_id = calendar_date.getField("service_id");
-
-    if (services_.find(service_id) != services_.end()) {
-      int date = std::stoi(calendar_date.getField("date"));
-      int type = std::stoi(calendar_date.getField("exception_type"));
-
-      services_[service_id].addExceptionDate(date, type);
+      auto [service, inserted] = services_.try_emplace(service_id);
+      if (inserted) service->second.setField("service_id", service_id);
+      service->second.addExceptionDate(date, type == "1" ? 1 : 2);
+    } catch (const std::invalid_argument &error) {
+      throw std::invalid_argument("calendar_dates_fp.txt line " + std::to_string(line_number) + ": " + error.what());
     }
   }
 }
@@ -170,20 +215,23 @@ void Parser::parseStopTimes() {
   if (!file.is_open())
     throw std::runtime_error("Could not open stop_times_fp.txt");
 
+  auto fields = readRequiredHeader(file, {"trip_id", "stop_id", "stop_sequence", "arrival_time", "departure_time"},
+                                   "stop_times_fp.txt");
   std::string line;
-  std::getline(file, line);
-  Utils::clean(line);
-  std::vector<std::string> fields = Utils::split(line, ',');
+  std::size_t line_number = 1;
 
   while (std::getline(file, line)) {
+    ++line_number;
     Utils::clean(line);
 
     if (line.empty()) continue;
 
     std::vector<std::string> tokens = Utils::split(line, ',');
 
-    if (tokens.size() != fields.size())
-      throw std::runtime_error("Mismatched number of tokens and fields");
+    const std::string context = "stop_times_fp.txt line " + std::to_string(line_number);
+    if (tokens.size() != fields.size()) {
+      throw std::invalid_argument(context + ": Mismatched number of tokens and fields");
+    }
 
     GTFSObject stop_time;
 
@@ -192,12 +240,17 @@ void Parser::parseStopTimes() {
 
     std::string trip_id = stop_time.getField("trip_id");
     std::string stop_id = stop_time.getField("stop_id");
-    int stop_sequence = std::stoi(stop_time.getField("stop_sequence"));
+    const std::string record_context = context + ": trip '" + trip_id + "', stop '" + stop_id + "'";
+    int stop_sequence = parseField(stop_time, "stop_sequence", record_context, Utils::parseNonNegativeInt);
     // Convert arrival_time and departure_time to seconds
     // If the departure_time is on the next day, add 24 hours to it
-    int arrival_seconds = Utils::timeToSeconds(stop_time.getField("arrival_time"));
-    int departure_seconds = Utils::timeToSeconds(stop_time.getField("departure_time"));
+    const auto parse_time = [](const std::string &value) { return Utils::timeToSeconds(value); };
+    int arrival_seconds = parseField(stop_time, "arrival_time", record_context, parse_time);
+    int departure_seconds = parseField(stop_time, "departure_time", record_context, parse_time);
     if (departure_seconds < arrival_seconds) {
+      if (departure_seconds > std::numeric_limits<int>::max() - MIDNIGHT) {
+        throw std::overflow_error(record_context + ": departure_time exceeds the supported range after midnight adjustment");
+      }
       departure_seconds += MIDNIGHT;
     }
 
@@ -342,29 +395,32 @@ void Parser::parseTransfers() {
   if (!file.is_open())
     throw std::runtime_error("Could not open transfers_fp.txt");
 
+  auto fields = readRequiredHeader(file, {"from_stop_id", "to_stop_id", "min_transfer_time"}, "transfers_fp.txt");
   std::string line;
-  std::getline(file, line);
-  Utils::clean(line);
-  std::vector<std::string> fields = Utils::split(line, ',');
+  std::size_t line_number = 1;
 
   while (std::getline(file, line)) {
+    ++line_number;
     Utils::clean(line);
 
     if (line.empty()) continue;
 
     std::vector<std::string> tokens = Utils::split(line, ',');  
 
-    if (tokens.size() != fields.size())
-      throw std::runtime_error("Mismatched number of tokens and fields");
+    const std::string context = "transfers_fp.txt line " + std::to_string(line_number);
+    if (tokens.size() != fields.size()) {
+      throw std::invalid_argument(context + ": Mismatched number of tokens and fields");
+    }
 
     GTFSObject transfer;
     for (size_t i = 0; i < fields.size(); ++i)
       transfer.setField(fields[i], tokens[i]);
 
-    int min_transfer_time = static_cast<int>(std::stof(transfer.getField("min_transfer_time")));
-
     std::string from_stop_id = transfer.getField("from_stop_id");
     std::string to_stop_id = transfer.getField("to_stop_id");
+    int min_transfer_time = parseField(transfer, "min_transfer_time",
+                                      context + ": from stop '" + from_stop_id + "', to stop '" + to_stop_id + "'",
+                                      Utils::parseNonNegativeInt);
 
     if (stops_.find(from_stop_id) != stops_.end() && 
         stops_.find(to_stop_id) != stops_.end()) {
@@ -375,7 +431,15 @@ void Parser::parseTransfers() {
 
 void Parser::associateData() {
   // 0. Check data effectiveness of all data structures
-
+  for (const auto &[trip_id, trip] : trips_) {
+    if (!trip.hasField("service_id") || trip.getField("service_id").find_first_not_of(" \t\r\n") == std::string::npos) {
+      throw std::invalid_argument("trips_fp.txt: trip '" + trip_id + "' has no service_id");
+    }
+    const std::string service_id = trip.getField("service_id");
+    if (services_.find(service_id) == services_.end()) {
+      throw std::invalid_argument("trips_fp.txt: trip '" + trip_id + "' references undefined service_id '" + service_id + "'");
+    }
+  }
 
   // 1. Sort trip time records in stop_times_
   for (auto &[key, trip]: trips_) {

@@ -52,8 +52,11 @@ public:
    *
    * This method converts a time string (e.g., "12:30:00") to the total number of seconds.
    *
-   * @param[in] timeStr A time string in the "HH:MM:SS" format.
+   * Hours may exceed 23 for trips continuing after the service day.
+   * @param[in] timeStr A time string in the "H:MM:SS" format, with one or more hour digits.
    * @return The total time in seconds.
+   * @throws std::invalid_argument If the syntax or minute/second range is invalid.
+   * @throws std::overflow_error If the total seconds cannot be represented as an int.
    */
   static int timeToSeconds(const std::string &timeStr);
 
@@ -66,6 +69,19 @@ public:
    * @return The total time in seconds.
    */
   static int timeToSeconds(const Time &time);
+
+  /**
+   * @brief Parses a nonempty string of ASCII digits as a nonnegative int.
+   * @throws std::invalid_argument If any character is not an ASCII digit.
+   * @throws std::overflow_error If the value cannot be represented as an int.
+   */
+  static int parseNonNegativeInt(const std::string &value);
+
+  /**
+   * @brief Parses an exact YYYYMMDD Gregorian service date with a positive year.
+   * @throws std::invalid_argument If the format or calendar date is invalid.
+   */
+  static int parseServiceDate(const std::string &value);
 
   /**
    * @brief Converts a date to an integer format (YYYYMMDD).

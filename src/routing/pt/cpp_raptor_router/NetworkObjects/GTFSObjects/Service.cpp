@@ -17,8 +17,6 @@
 
 bool Service::isActive(Date date) const {
     int date_int = Utils::dateToInt(date);
-    int start_date = std::stoi(getField("start_date"));
-    int end_date = std::stoi(getField("end_date"));
 
     if (included_dates.find(date_int) != included_dates.end()) {
         return true;
@@ -28,6 +26,13 @@ bool Service::isActive(Date date) const {
         return false;
     }
 
+    // Services defined only by exceptions have no weekly calendar or date range.
+    if (active_weekdays.empty()) {
+        return false;
+    }
+
+    int start_date = std::stoi(getField("start_date"));
+    int end_date = std::stoi(getField("end_date"));
     if (date_int < start_date || date_int > end_date) {
         return false;
     }
@@ -40,6 +45,12 @@ void Service::addActiveWeekday(int weekday) {
 }
 
 void Service::addExceptionDate(int date_int, int type) {
+    if (type != 1 && type != 2) {
+        throw std::invalid_argument("Service exception_type must be 1 or 2");
+    }
+    if (included_dates.find(date_int) != included_dates.end() || excluded_dates.find(date_int) != excluded_dates.end()) {
+        throw std::invalid_argument("Duplicate service exception for date " + std::to_string(date_int));
+    }
     if (type == 1) {
         included_dates.insert(date_int);
     } else if (type == 2) {

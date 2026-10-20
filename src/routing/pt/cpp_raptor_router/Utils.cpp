@@ -35,21 +35,59 @@ std::string Utils::secondsToTime(std::optional<int> seconds) {
 }
 
 int Utils::timeToSeconds(const std::string &timeStr) {
-  int hours, minutes, seconds;
-  char colon;
-
-  std::istringstream iss(timeStr);
-  iss >> hours >> colon >> minutes >> colon >> seconds;
-
-  return hours * 3600 + minutes * 60 + seconds;
+  const auto colon = timeStr.find(':');
+  if (colon == std::string::npos || colon == 0 || timeStr.size() - colon != 6 ||
+      timeStr[colon + 3] != ':') {
+    throw std::invalid_argument("Expected H:MM:SS with nonnegative hours, got '" + timeStr + "'");
+  }
+  return timeToSeconds(Time{parseNonNegativeInt(timeStr.substr(0, colon)),
+                            parseNonNegativeInt(timeStr.substr(colon + 1, 2)),
+                            parseNonNegativeInt(timeStr.substr(colon + 4, 2))});
 }
 
 int Utils::timeToSeconds(const Time &time) {
-  return time.hours * 3600 + time.minutes * 60 + time.seconds;
+  if (time.hours < 0 || time.minutes < 0 || time.minutes > 59 || time.seconds < 0 || time.seconds > 59) {
+    throw std::invalid_argument("Time requires nonnegative hours and minutes/seconds in 0..59");
+  }
+  const long long seconds = static_cast<long long>(time.hours) * 3600 + time.minutes * 60 + time.seconds;
+  if (seconds > std::numeric_limits<int>::max()) {
+    throw std::overflow_error("Time in seconds exceeds the supported integer range");
+  }
+  return static_cast<int>(seconds);
+}
+
+int Utils::parseNonNegativeInt(const std::string &value) {
+  if (!isNumber(value)) {
+    throw std::invalid_argument("Expected a nonnegative integer, got '" + value + "'");
+  }
+  int result = 0;
+  for (const char digit : value) {
+    if (result > (std::numeric_limits<int>::max() - (digit - '0')) / 10) {
+      throw std::overflow_error("Integer exceeds the supported range: '" + value + "'");
+    }
+    result = result * 10 + (digit - '0');
+  }
+  return result;
+}
+
+int Utils::parseServiceDate(const std::string &value) {
+  if (value.size() != 8 || !isNumber(value)) {
+    throw std::invalid_argument("Expected a YYYYMMDD service date, got '" + value + "'");
+  }
+  return dateToInt(Date{parseNonNegativeInt(value.substr(0, 4)),
+                        parseNonNegativeInt(value.substr(4, 2)),
+                        parseNonNegativeInt(value.substr(6, 2))});
 }
 
 int Utils::dateToInt(const Date &date) {
-  return date.year * 10000 + date.month * 100 + date.day;
+  if (date.day < 1 || date.day > daysInMonth(date.year, date.month)) {
+    throw std::invalid_argument("Invalid day in calendar date");
+  }
+  const long long value = static_cast<long long>(date.year) * 10000 + date.month * 100 + date.day;
+  if (value > std::numeric_limits<int>::max()) {
+    throw std::overflow_error("Calendar date exceeds the supported integer range");
+  }
+  return static_cast<int>(value);
 }
 
 std::vector<std::string> Utils::split(const std::string &str, char delimiter) {
@@ -61,7 +99,7 @@ std::vector<std::string> Utils::split(const std::string &str, char delimiter) {
     tokens.push_back(token);
   }
 
-  if (str.back() == delimiter) {
+  if (!str.empty() && str.back() == delimiter) {
     tokens.emplace_back("");  // Add empty token if the last character is the delimiter
   }
 
@@ -81,10 +119,13 @@ void Utils::clean(std::string &input) {
 
 
 bool Utils::isNumber(const std::string &str) {
-  return !str.empty() && std::all_of(str.begin(), str.end(), [](char c) { return std::isdigit(c); });
+  return !str.empty() && std::all_of(str.begin(), str.end(), [](char c) { return c >= '0' && c <= '9'; });
 }
 
 int Utils::daysInMonth(int year, int month) {
+  if (year < 1 || month < 1 || month > 12) {
+    throw std::invalid_argument("Invalid calendar year or month");
+  }
   static const int daysInMonths[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
   if (month == 2 && ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0))) {
     return 29; // February in a leap year
@@ -93,24 +134,11 @@ int Utils::daysInMonth(int year, int month) {
 }
 
 bool Utils::dateWithinRange(const Date &date, const std::string &start_date, const std::string &end_date) {
-  // Convert strings YYYYMMDD to Date objects
-  Date start = {std::stoi(start_date.substr(0, 4)), std::stoi(start_date.substr(4, 2)),
-                std::stoi(start_date.substr(6, 2))};
-  Date end = {std::stoi(end_date.substr(0, 4)), std::stoi(end_date.substr(4, 2)), std::stoi(end_date.substr(6, 2))};
-
-  // Check if the date is earlier than the start date
-  if ((date.year < start.year)
-      || (date.year == start.year && date.month < start.month)
-      || (date.year == start.year && date.month == start.month && date.day < start.day))
-    return false;
-
-  // Check if the date is later than the end date
-  if ((date.year > end.year)
-      || (date.year == end.year && date.month > end.month)
-      || (date.year == end.year && date.month == end.month && date.day > end.day))
-    return false;
-
-  return true;
+  const int start = parseServiceDate(start_date);
+  const int end = parseServiceDate(end_date);
+  if (start > end) throw std::invalid_argument("start_date is after end_date");
+  const int value = dateToInt(date);
+  return start <= value && value <= end;
 }
 
 Date Utils::addOneDay(Date date) {
