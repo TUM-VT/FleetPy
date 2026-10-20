@@ -38,7 +38,7 @@ struct Query {
   std::vector<std::pair<std::string, int>> included_targets;   ///< Stops in the target station with its station_stop_transfer_time (in seconds).
   Date date;               ///< Date of the journey (year, month, day).
   Time departure_time;     ///< Desired departure time at the source station (in seconds from midnight).
-  int max_transfers;  ///< Maximum number of transfers.
+  int max_transfers{999};  ///< Non-negative maximum transfers; 0 allows direct trips only.
 };
 
 /**

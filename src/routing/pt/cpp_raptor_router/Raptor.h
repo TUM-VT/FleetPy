@@ -21,6 +21,7 @@
 #ifndef RAPTOR_RAPTOR_H
 #define RAPTOR_RAPTOR_H
 
+#include <cstddef>
 #include <iostream>
 #include <vector>
 #include <iomanip>  // for setw
@@ -105,13 +106,13 @@ private:
   int current_date_int_; ///< The current date as an integer.
 
   Query query_; ///< The current query for the RAPTOR algorithm.
-  int max_transfers_; ///< The maximum number of transfers allowed in a journey.
+  int max_transfers_; ///< Non-negative maximum transfers; N permits N + 1 vehicle legs.
   std::unordered_set<std::string> included_source_ids_; ///< Set of included source stop IDs.
   std::unordered_set<std::string> included_target_ids_; ///< Set of included target stop IDs.
   std::unordered_map<std::string, std::vector<StopInfo>> arrivals_; ///< Map of stop IDs to vectors of StopInfo for each k.
   std::unordered_set<std::string> prev_marked_stops; ///< Set of previously marked stops.
   std::unordered_set<std::string> marked_stops; ///< Set of currently marked stops.
-  int k{}; ///< The current round of the algorithm.
+  std::size_t k{}; ///< The current round, equal to the maximum vehicle legs searched.
 
   /**
    * @brief Initializes the algorithm by setting required parameters.
@@ -137,9 +138,14 @@ private:
   void fillActiveTrips(Day day);
 
   /**
-   * @brief Sets the upper bound for the search, based on previous round.
+   * @brief Appends current-round labels initialized from the previous round.
    */
   void setUpperBound();
+
+  /**
+   * @brief Advances the round index without overflowing its size type.
+   */
+  void advanceRound();
 
   /**
    * @brief Accumulates routes serving each stop.

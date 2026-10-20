@@ -5,6 +5,8 @@ import logging
 import os
 from copy import deepcopy
 from abc import abstractmethod, ABCMeta
+from math import isfinite
+from numbers import Integral, Real
 import typing as tp
 
 # additional module imports (> requirements)
@@ -777,7 +779,16 @@ class BasicIntermodalRequest(RequestBase):
         self.modal_state_int: int = rq_row.get(G_RQ_MODAL_STATE_VALUE, RQ_MODAL_STATE.MONOMODAL.value)  # mono-modal trip by default 
         self.modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE(self.modal_state_int)
         self.transfer_station_ids: tp.Optional[tp.List[str]] = self._load_transfer_station_ids(rq_row)
-        self.max_transfers: int = rq_row.get(G_RQ_MAX_TRANSFERS, 999)  # 999 means no limit
+        max_transfers = rq_row.get(G_RQ_MAX_TRANSFERS, 999)
+        if isinstance(max_transfers, bool) or not isinstance(max_transfers, Real):
+            raise TypeError("max_transfers must be an integer-valued number")
+        if not isinstance(max_transfers, Integral) and (
+            not isfinite(max_transfers) or int(max_transfers) != max_transfers
+        ):
+            raise ValueError("max_transfers must be a finite integer-valued number")
+        if not 0 <= max_transfers <= 2147483647:
+            raise ValueError(f"max_transfers for request {self.rid} must be between 0 and 2147483647; got {max_transfers!r}")
+        self.max_transfers: int = int(max_transfers)  # Zero allows direct PT journeys only; default 999 is a high finite limit.
         self.lastmile_max_wait_time: tp.Optional[int] = rq_row.get(G_IM_LM_WAIT_TIME, None)  # the customizable max waiting time for lastmile amod service
         self.uncatchable_pt: bool = False  # flag for requests that missed their PT connection after FM leg
         # PAYG (Plan-As-You-Go) specific attributes

@@ -527,7 +527,7 @@ class PTBrokerBasic(BrokerBasic):
             o_node (int): The origin street node id.
             d_node (int): The destination street node id.
             est (int): The earliest start time of the request at the origin street node in seconds.
-            max_transfers (int): The maximum number of transfers allowed in the journey, 999 for no limit.
+            max_transfers (int): Non-negative maximum PT transfers; 0 permits direct journeys only. Defaults to 999.
             detailed (bool): Whether to return detailed journey information. Defaults to False.
         Returns:
             tp.Optional[tp.Tuple[int, int, int, int, tp.Dict[str, tp.Any]]]:

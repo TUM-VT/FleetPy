@@ -66,7 +66,7 @@ class PTControlBasic(PTControlBase):
             source_station_id (str): id of the source station.
             target_station_id (str): id of the target station.
             source_station_departure_datetime (datetime): departure datetime from source station.
-            max_transfers (int, optional): maximum number of transfers allowed. Defaults to 999 (no limit).
+            max_transfers (int, optional): Non-negative maximum PT transfers; 0 permits direct journeys only. Defaults to 999.
             detailed (bool, optional): whether to return a detailed journey plan. Defaults to False.
         Returns:
             tp.Union[tp.Dict[str, tp.Any], None]: The pt journey plan dictionary or None if no journey is found.

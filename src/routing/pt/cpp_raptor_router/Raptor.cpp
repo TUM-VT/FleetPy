@@ -14,6 +14,8 @@
  */
 
 #include "Raptor.h"
+#include <limits>
+#include <stdexcept>
 
 Raptor::Raptor(const std::unordered_map<std::string, Agency> &agencies,
                const std::unordered_map<std::string, Service> &services,
@@ -25,9 +27,12 @@ Raptor::Raptor(const std::unordered_map<std::string, Agency> &agencies,
 }
 
 void Raptor::setQuery(const Query &query) {
+  if (query.max_transfers < 0) {
+    throw std::invalid_argument("max_transfers must be non-negative");
+  }
   query_ = query;
 
-  max_transfers_ = (query_.max_transfers < 0) ? std::numeric_limits<int>::max() : query_.max_transfers;
+  max_transfers_ = query_.max_transfers;
   
   included_source_ids_.clear();
   included_target_ids_.clear();
@@ -57,11 +62,11 @@ void Raptor::initializeAlgorithm() {
   prev_marked_stops.clear();
   marked_stops.clear();
 
-  // Initialize arrival times for all stops for each k
+  // Allocate round 0 only; later rounds are appended when searched.
   StopInfo default_info = {std::nullopt, std::nullopt, std::nullopt, std::nullopt};
   arrivals_.reserve(stops_.size());
   for (const auto &[stop_id, stop]: stops_) {
-    arrivals_.emplace(stop_id, std::vector<StopInfo>(max_transfers_+2, default_info));  // +2 for k=0 and k=max_transfers_+1
+    arrivals_.emplace(stop_id, std::vector<StopInfo>(1, default_info));
   }
 
   // Initialize the round 0
@@ -75,7 +80,7 @@ void Raptor::initializeAlgorithm() {
     markStop(source.first, arrival_time, std::nullopt, std::nullopt);
   }
 
-  k++; // k=1
+  advanceRound(); // k=1
 
   // Fill active trips for current and next day
   fillActiveTrips(Day::CurrentDay);
@@ -164,12 +169,12 @@ std::vector<Journey> Raptor::findJourneys() {
     }
 
     // Check if the maximum number of transfers is reached
-    if (k > max_transfers_) {
+    if (k > static_cast<std::size_t>(max_transfers_)) {
       // std::cout << "Reached maximum number of transfers (" << max_transfers_ << "). Stopping searching." << std::endl;
       break;
     }
 
-    k++;
+    advanceRound();
   }
   return journeys;
 }
@@ -219,19 +224,31 @@ std::optional<Journey> Raptor::findOptimalJourney() {
     }
 
     // Check if the maximum number of transfers is reached
-    if (k > max_transfers_) {
+    if (k > static_cast<std::size_t>(max_transfers_)) {
       // std::cout << "Reached maximum number of transfers (" << max_transfers_ << "). Stopping searching." << std::endl;
       break;
     }
 
-    k++;
+    advanceRound();
   }
   return optimal_journey;
 }
 
 void Raptor::setUpperBound() {
-  for (const auto &[stop_id, stop]: stops_)
-    setMinArrivalTime(stop_id, arrivals_[stop_id][k - 1]);
+  for (auto &[stop_id, stop_arrivals]: arrivals_) {
+    if (stop_arrivals.size() != k) {
+      throw std::logic_error("Arrival labels do not match the RAPTOR round");
+    }
+    StopInfo previous_round = stop_arrivals.back();
+    stop_arrivals.push_back(std::move(previous_round));
+  }
+}
+
+void Raptor::advanceRound() {
+  if (k == std::numeric_limits<std::size_t>::max()) {
+    throw std::length_error("RAPTOR round index exceeds the supported range");
+  }
+  ++k;
 }
 
 std::unordered_set<std::pair<std::pair<std::string, std::string>, std::string>, nested_pair_hash> 

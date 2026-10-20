@@ -73,7 +73,7 @@ cdef class PyPTRouter:
     def construct_query(
         self,
         source_station_departure_datetime,
-        list included_sources, list included_targets, int max_transfers=-1,
+        list included_sources, list included_targets, int max_transfers=999,
     ):
         """Construct query information.
 
@@ -81,11 +81,14 @@ cdef class PyPTRouter:
             source_station_departure_datetime (datetime): Departure datetime at the source station
             included_sources (list): List of source stop IDs and their station stop transfer times
             included_targets (list): List of target stop IDs and their station stop transfer times
-            max_transfers (int): Maximum number of transfers allowed
+            max_transfers (int): Non-negative maximum transfers; 0 permits direct journeys only. Defaults to 999.
 
         Returns:
             query (Query)
         """
+        if max_transfers < 0:
+            raise ValueError("max_transfers must be non-negative")
+
         # Calculate day of week using Python's datetime
         cdef int year = source_station_departure_datetime.year
         cdef int month = source_station_departure_datetime.month
@@ -123,7 +126,7 @@ cdef class PyPTRouter:
     def return_pt_journeys_1to1(
         self,
         source_station_departure_datetime,
-        list included_sources, list included_targets, int max_transfers=-1,
+        list included_sources, list included_targets, int max_transfers=999,
         bool detailed=False,
     ):
         """Find the best public transport journey from source to target
@@ -135,7 +138,7 @@ cdef class PyPTRouter:
             source_station_departure_datetime (datetime): Departure datetime at the source station
             included_sources (list): List of source stop IDs and their station stop transfer times
             included_targets (list): List of target stop IDs and their station stop transfer times
-            max_transfers (int): Maximum number of transfers allowed (-1 for unlimited)
+            max_transfers (int): Non-negative maximum transfers; 0 permits direct journeys only. Defaults to 999.
             detailed (bool): Whether to return the detailed journey plan.
 
         Returns:
@@ -169,7 +172,7 @@ cdef class PyPTRouter:
     def return_fastest_pt_journey_1to1(
         self,
         source_station_departure_datetime,
-        list included_sources, list included_targets, int max_transfers=-1,
+        list included_sources, list included_targets, int max_transfers=999,
         bool detailed=False,
     ):
         """Find the fastest public transport journey from source station to target station
@@ -178,7 +181,7 @@ cdef class PyPTRouter:
             source_station_departure_datetime (datetime): Departure datetime at the source station
             included_sources (list): List of source stop IDs and their station stop transfer times
             included_targets (list): List of target stop IDs and their station stop transfer times
-            max_transfers (int): Maximum number of transfers allowed (-1 for unlimited)
+            max_transfers (int): Non-negative maximum transfers; 0 permits direct journeys only. Defaults to 999.
             detailed (bool): Whether to return the detailed journey plan.
 
         Returns:

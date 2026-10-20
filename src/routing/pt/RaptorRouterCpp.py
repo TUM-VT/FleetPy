@@ -128,7 +128,7 @@ class RaptorRouterCpp():
             source_station_id (str): The id of the source station.
             target_station_id (str): The id of the target station.
             source_station_departure_datetime (datetime): The departure datetime at the source station.
-            max_transfers (int): The maximum number of transfers allowed in the journey, 999 for no limit.
+            max_transfers (int): Non-negative maximum PT transfers; 0 permits direct journeys only. Defaults to 999.
             detailed (bool): Whether to return the detailed journey plan.
         Returns:
             tp.Union[tp.Dict[str, tp.Any], None]: The fastest PT journey plan or None if no journey is found.
@@ -160,6 +160,8 @@ class RaptorRouterCpp():
             not isfinite(max_transfers) or int(max_transfers) != max_transfers
         ):
             raise ValueError("max_transfers must be a finite integer-valued number")
+        if not 0 <= max_transfers <= 2147483647:
+            raise ValueError("max_transfers must be between 0 and 2147483647")
 
         try:
             included_sources = self._get_included_stops_and_transfer_times(source_station_id)
