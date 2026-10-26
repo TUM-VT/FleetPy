@@ -25,6 +25,7 @@
 # standard distribution imports
 # -----------------------------
 import logging
+from copy import deepcopy
 from datetime import datetime, timedelta
 from math import floor
 import typing as tp
@@ -97,8 +98,12 @@ class PTBrokerBasic(BrokerBasic):
         self.pt_operator_id: int = self.pt_operator.pt_operator_id
         self.scenario_parameters: dict = scenario_parameters
         
-        # set whether to always query pure PT offers
-        self.always_query_pt: bool = self.scenario_parameters.get(G_BROKER_ALWAYS_QUERY_PT, False)
+        self._amod_proposals = {}
+        self._pt_requests = {}
+        self._candidate_build_records = {}
+        self._candidates = {}
+        self._selected_candidates = {}
+        self._confirmed_amod = {}
         
         # set simulation start date for Raptor routing
         self.sim_start_datetime: datetime = None
@@ -117,204 +122,234 @@ class PTBrokerBasic(BrokerBasic):
                 raise FileNotFoundError("PTBroker: street_station_transfers_fp.txt file not found in the GTFS directory, which is required for finding closest transfer stations!")
 
 
-    def inform_request(self, rid: int, rq_obj: 'RequestBase', sim_time: int):
-        """This method informs the broker that a new request has been made. 
-        Based on the request modal state, the broker will create the appropriate sub-requests 
-        and inform the operators.
-
-        Args:
-            rid (int): parent request id
-            rq_obj (RequestBase): request object
-            sim_time (int): simulation time
-        """
-        parent_modal_state: RQ_MODAL_STATE = rq_obj.get_modal_state()
-        LOG.debug(f"inform request: {rid} at sim time {sim_time} with modal state {parent_modal_state}; query pure PT offer: {self.always_query_pt}")
-
-        if self.always_query_pt:
-            # 1. query the PT operator for the pure PT travel costs
-            _ = self._inform_pt_sub_request(rq_obj, RQ_SUB_TRIP_ID.PT.value, rq_obj.get_origin_node(), rq_obj.get_destination_node(), rq_obj.earliest_start_time, parent_modal_state)
-        
-        # 2.1 pure AMoD request or PT request
-        if parent_modal_state == RQ_MODAL_STATE.MONOMODAL or parent_modal_state == RQ_MODAL_STATE.PT:
-            self._process_inform_monomodal_request(rid, rq_obj, sim_time, parent_modal_state)
-        
-        # 2.2 AMoD as firstmile request
-        elif parent_modal_state == RQ_MODAL_STATE.FIRSTMILE:
-            self._process_inform_firstmile_request(rid, rq_obj, sim_time, parent_modal_state)
-        
-        # 2.3 AMoD as lastmile request
-        elif parent_modal_state == RQ_MODAL_STATE.LASTMILE:
-            self._process_inform_lastmile_request(rid, rq_obj, sim_time, parent_modal_state)
-        
-        # 2.4 AMoD as firstlastmile request
-        elif parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
-            self._process_inform_firstlastmile_request(rid, rq_obj, sim_time, parent_modal_state)
-        
-        else:
-            raise ValueError(f"Invalid modal state: {parent_modal_state}")
-        
-    def collect_offers(self, rid: int, sim_time: int) -> tp.Dict[int, 'TravellerOffer']:
-        """This method collects the offers from the operators.
-
-        Args:
-            rid (int): parent request id
-            sim_time (int): simulation time
-        Returns:
-            tp.Dict[int, TravellerOffer]: a dictionary of offers from the operators
-        """
-        # get parent request modal state
-        parent_rq_obj: RequestBase = self.demand[rid]
-        parent_modal_state: RQ_MODAL_STATE = parent_rq_obj.get_modal_state()
-        offers: tp.Dict[int, TravellerOffer] = {}
-        LOG.debug(f"Collecting offers for request {rid} with modal state {parent_modal_state}")
-
-        # 1. collect PT offers for multimodal requests
-        if parent_modal_state.value > RQ_MODAL_STATE.MONOMODAL.value or self.always_query_pt:
-            pt_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.PT.value}"
-            pt_offer = self.pt_operator.get_current_offer(pt_rid_struct)
-            LOG.debug(f"pt offer {pt_offer}")
-            
-            if pt_offer is not None and not pt_offer.service_declined():
-                offers[self.pt_operator_id] = pt_offer
-                # register the pt offer in the sub-request
-                self.demand[pt_rid_struct].receive_offer(self.pt_operator_id, pt_offer, None)
-
-        # 2.1 collect AMoD offers for MONOMODAL and PT requests
-        if parent_modal_state == RQ_MODAL_STATE.MONOMODAL or parent_modal_state == RQ_MODAL_STATE.PT:
-            offers = self._process_collect_monomodal_offers(rid, parent_modal_state, offers)
-
-        # 2.2 collect AMoD offers for FIRSTMILE requests
-        elif parent_modal_state == RQ_MODAL_STATE.FIRSTMILE:
-            offers = self._process_collect_firstmile_offers(rid, parent_rq_obj, parent_modal_state, offers)
-
-        # 2.3 collect AMoD offers for LASTMILE requests
-        elif parent_modal_state == RQ_MODAL_STATE.LASTMILE:
-            offers = self._process_collect_lastmile_offers(rid, parent_modal_state, offers)
-
-        # 2.4 collect AMoD offers for FIRSTLASTMILE requests
-        elif parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
-            offers = self._process_collect_firstlastmile_offers(rid, parent_rq_obj, parent_modal_state, offers, sim_time)
-        
-        else:
-            raise ValueError(f"Invalid modal state: {parent_modal_state}")
-
-        return offers
-    
-    def inform_user_booking(self, rid: int, rq_obj: 'RequestBase', sim_time: int, chosen_operator: tp.Union[int, tuple]) -> tp.List[tuple[int, 'RequestBase']]:
-        """This method informs the broker that the user has booked a trip.
-        """
-        amod_confirmed_rids = []
-        parent_modal_state: RQ_MODAL_STATE = rq_obj.get_modal_state()
-
-        # 1. Pure PT offer has been selected
-        if chosen_operator == self.pt_operator_id:
-            amod_confirmed_rids.append((rid, rq_obj))
-
-            # inform all AMoD operators that the request is cancelled
-            self.inform_user_leaving_system(rid, sim_time)
-
-            # inform PT operator that the request is confirmed
-            pt_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.PT.value}"
-            pt_sub_rq_obj: BasicIntermodalRequest = self.demand[pt_rid_struct]
-            self.pt_operator.user_confirms_booking(pt_sub_rq_obj, None)   
-        # 2. AMoD involved offer has been selected
-        else:
-            # non-intermodal offer has been selected
-            if parent_modal_state == RQ_MODAL_STATE.MONOMODAL or parent_modal_state == RQ_MODAL_STATE.PT:
-                for i, operator in enumerate(self.amod_operators):
-                    if i != chosen_operator:  # Non-intermodal requests: the chosen operator has the data type int
-                        operator.user_cancels_request(rid, sim_time)
-                    else:
-                        operator.user_confirms_booking(rid, sim_time)
-                        amod_confirmed_rids.append((rid, rq_obj))
-            # intermodal offer has been selected
-            elif parent_modal_state.value > RQ_MODAL_STATE.MONOMODAL.value and parent_modal_state.value < RQ_MODAL_STATE.PT.value:
-                # chosen_operator has the data type tuple: ((operator_id, sub_trip_id), ...)
-                for operator_id, sub_trip_id in chosen_operator:
-                    if operator_id == self.pt_operator_id:
-                        # inform the pt operator that the request is confirmed
-                        pt_rid_struct: str = f"{rid}_{sub_trip_id}"
-                        pt_sub_rq_obj: BasicIntermodalRequest = self.demand[pt_rid_struct]
-
-                        if parent_modal_state == RQ_MODAL_STATE.LASTMILE:
-                            previous_amod_operator_id = None  # no previous amod operator
-                        else:  # firstmile or firstlastmile
-                            previous_amod_operator_id: int = chosen_operator[0][0]  # the first amod operator
-                        self.pt_operator.user_confirms_booking(pt_sub_rq_obj, previous_amod_operator_id)
-                    else:
-                        # inform the amod operator that the request is confirmed
-                        amod_rid_struct: str = f"{rid}_{sub_trip_id}"
-                        for i, operator in enumerate(self.amod_operators):
-                            if i != operator_id: 
-                                operator.user_cancels_request(amod_rid_struct, sim_time)
-                            else:
-                                operator.user_confirms_booking(amod_rid_struct, sim_time)
-                amod_confirmed_rids.append((rid, rq_obj))
-            else:
-                raise ValueError(f"Invalid modal state: {parent_modal_state}")
-        return amod_confirmed_rids   
-    
-    def inform_user_leaving_system(self, rid: int, sim_time: int):
-        """This method informs the broker that the user is leaving the system.
-        """
-        rq_obj: RequestBase = self.demand[rid]
-        parent_modal_state: RQ_MODAL_STATE = rq_obj.get_modal_state()
-        
-        if parent_modal_state == RQ_MODAL_STATE.MONOMODAL or parent_modal_state == RQ_MODAL_STATE.PT:
-            for _, operator in enumerate(self.amod_operators):
-                operator.user_cancels_request(rid, sim_time)
-        
-        elif parent_modal_state == RQ_MODAL_STATE.FIRSTMILE:
-            fm_amod_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.FM_AMOD.value}"
-            for _, operator in enumerate(self.amod_operators):
-                operator.user_cancels_request(fm_amod_rid_struct, sim_time)
-        
-        elif parent_modal_state == RQ_MODAL_STATE.LASTMILE:
-            lm_amod_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.LM_AMOD.value}"
-            for _, operator in enumerate(self.amod_operators):
-                try:
-                    operator.user_cancels_request(lm_amod_rid_struct, sim_time)
-                except KeyError:
-                    # LM AMoD sub-request may not be created if no PT offer is available
-                    LOG.info(f"LM AMoD sub-request {lm_amod_rid_struct} not found when user leaves system, possibly no PT offer available so the LM sub-request was not created.")
-        
-        elif parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
-            flm_amod_rid_struct_0: str = f"{rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_0.value}"
-            flm_amod_rid_struct_1: str = f"{rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}"
-            for _, operator in enumerate(self.amod_operators):
-                operator.user_cancels_request(flm_amod_rid_struct_0, sim_time)
-                try:
-                    operator.user_cancels_request(flm_amod_rid_struct_1, sim_time)
-                except KeyError:
-                    # LM AMoD sub-request may not be created if no PT offer is available
-                    LOG.info(f"LM AMoD sub-request {flm_amod_rid_struct_1} not found when user leaves system, possibly no FM or PT offer available so the LM sub-request was not created.")
-
-        else:
-            raise ValueError(f"Invalid modal state: {parent_modal_state}")
-        
-    def inform_waiting_request_cancellations(self, chosen_operator: int, rid: int, sim_time: int):
-        """This method informs the operators that the waiting requests have been cancelled.
-        """
-        rq_obj: RequestBase = self.demand[rid]
-        parent_modal_state: RQ_MODAL_STATE = rq_obj.get_modal_state()
-
-        if chosen_operator == self.pt_operator_id:
+    def inform_request(self, rid, rq_obj, sim_time):
+        """Query only the modes explicitly requested by this parent."""
+        if rid in self._selected_candidates:
             return
-        
-        if parent_modal_state == RQ_MODAL_STATE.MONOMODAL or parent_modal_state == RQ_MODAL_STATE.PT:
-            self.amod_operators[chosen_operator].user_cancels_request(rid, sim_time)
-        
-        elif parent_modal_state.value > RQ_MODAL_STATE.MONOMODAL.value and parent_modal_state.value < RQ_MODAL_STATE.PT.value:
-            for operator_id, sub_trip_id in chosen_operator:
-                if operator_id == self.pt_operator_id:
+        if rid in self._amod_proposals or rid in self._pt_requests:
+            self._cleanup_proposals(rid, sim_time)
+        self._amod_proposals[rid] = {}
+        self._pt_requests[rid] = {}
+        self._candidate_build_records[rid] = {}
+        self._candidates[rid] = {}
+        rq_obj.offer.clear()
+        rq_obj.candidate_modes.clear()
+        rq_obj.candidate_complete.clear()
+        rq_obj.candidate_durations.clear()
+        modes = rq_obj.get_query_modes()
+        # Validate station references before creating any operator proposal.
+        for mode in modes:
+            for station in rq_obj.get_transfer_station_ids_for_mode(mode):
+                self._find_transfer_info(station, "pt2street")
+        handlers = {
+            RQ_MODAL_STATE.MONOMODAL: self._process_inform_monomodal_request,
+            RQ_MODAL_STATE.FIRSTMILE: self._process_inform_firstmile_request,
+            RQ_MODAL_STATE.LASTMILE: self._process_inform_lastmile_request,
+            RQ_MODAL_STATE.FIRSTLASTMILE: self._process_inform_firstlastmile_request,
+        }
+        for mode in modes:
+            if mode == RQ_MODAL_STATE.PT:
+                self._inform_pt_sub_request(
+                    rq_obj, RQ_SUB_TRIP_ID.PT.value, rq_obj.get_origin_node(),
+                    rq_obj.get_destination_node(), rq_obj.earliest_start_time, mode,
+                )
+            else:
+                handlers[mode](rid, rq_obj, sim_time, mode)
+
+    def _is_complete_candidate(self, mode):
+        return True
+
+    def collect_offers(self, rid, sim_time):
+        parent = self.demand[rid]
+        result = {}
+        for mode in parent.get_query_modes():
+            raw = {}
+            if mode == RQ_MODAL_STATE.PT:
+                offer = self.pt_operator.get_current_offer(f"{rid}_{RQ_SUB_TRIP_ID.PT.value}")
+                if offer is not None and not offer.service_declined():
+                    raw[self.pt_operator_id] = offer
+            elif mode == RQ_MODAL_STATE.MONOMODAL:
+                raw = self._process_collect_monomodal_offers(rid, mode, raw)
+            elif mode == RQ_MODAL_STATE.FIRSTMILE:
+                raw = self._process_collect_firstmile_offers(rid, parent, mode, raw)
+            elif mode == RQ_MODAL_STATE.LASTMILE:
+                raw = self._process_collect_lastmile_offers(rid, mode, raw)
+            elif mode == RQ_MODAL_STATE.FIRSTLASTMILE:
+                raw = self._process_collect_firstlastmile_offers(rid, parent, mode, raw, sim_time)
+            for original_key, offer in raw.items():
+                if offer is None or offer.service_declined():
                     continue
-                amod_rid_struct: str = f"{rid}_{sub_trip_id}"
-                operator_id = int(operator_id)
-                self.amod_operators[operator_id].user_cancels_request(amod_rid_struct, sim_time)
-        
+                key = original_key if parent.get_query_modes() == (RQ_MODAL_STATE.MONOMODAL,) else (mode.value, original_key)
+                candidate = self._candidate_build_records[rid].get((mode, original_key))
+                if candidate is None:
+                    candidate = self._build_candidate(rid, mode, original_key, offer)
+                self._candidates[rid][key] = candidate
+                parent.register_candidate(key, mode, candidate['is_complete'], candidate['expected_duration'])
+                result[key] = offer
+        return result
+
+    def _build_candidate(self, rid, mode, original_key, offer):
+        complete = self._is_complete_candidate(mode)
+        if isinstance(offer, IntermodalOffer):
+            sub_offers = offer.get_sub_trip_offers()
+        elif mode == RQ_MODAL_STATE.MONOMODAL:
+            sub_offers = {RQ_SUB_TRIP_ID.AMOD.value: offer}
+        elif mode == RQ_MODAL_STATE.PT:
+            sub_offers = {RQ_SUB_TRIP_ID.PT.value: offer}
         else:
-            raise ValueError(f"Invalid modal state: {parent_modal_state}")
-        
+            first_leg = {RQ_MODAL_STATE.FIRSTMILE: RQ_SUB_TRIP_ID.FM_AMOD,
+                         RQ_MODAL_STATE.LASTMILE: RQ_SUB_TRIP_ID.LM_PT,
+                         RQ_MODAL_STATE.FIRSTLASTMILE: RQ_SUB_TRIP_ID.FLM_AMOD_0}[mode]
+            sub_offers = {first_leg.value: offer}
+        firstmile_op = None
+        for leg in (RQ_SUB_TRIP_ID.FM_AMOD.value, RQ_SUB_TRIP_ID.FLM_AMOD_0.value):
+            if leg in sub_offers:
+                firstmile_op = sub_offers[leg].operator_id
+        children, amod, pt = {}, [], []
+        for leg, sub_offer in sub_offers.items():
+            child_id = rid if leg == RQ_SUB_TRIP_ID.AMOD.value else f"{rid}_{leg}"
+            if sub_offer.operator_id == self.pt_operator_id:
+                pt_key = (child_id, firstmile_op)
+                child = deepcopy(self._pt_requests[rid][pt_key])
+                pt.append(pt_key)
+            else:
+                binding = (sub_offer.operator_id, child_id)
+                child = deepcopy(self._amod_proposals[rid][binding])
+                amod.append(binding)
+            if child_id != rid:
+                child.offer = {sub_offer.operator_id: sub_offer}
+                children[child_id] = child
+        expected = None
+        if complete:
+            if mode == RQ_MODAL_STATE.MONOMODAL:
+                expected = offer.get(G_OFFER_WAIT) + offer.get(G_OFFER_DRIVE)
+            elif mode in (RQ_MODAL_STATE.PT, RQ_MODAL_STATE.FIRSTMILE):
+                pt_offer = next(sub for sub in sub_offers.values() if sub.operator_id == self.pt_operator_id)
+                expected = pt_offer.destination_node_arrival_time - self.demand[rid].rq_time
+            else:
+                last_leg = RQ_SUB_TRIP_ID.LM_AMOD.value if mode == RQ_MODAL_STATE.LASTMILE else RQ_SUB_TRIP_ID.FLM_AMOD_1.value
+                last_offer = sub_offers[last_leg]
+                last_child = children[f"{rid}_{last_leg}"]
+                expected = last_child.rq_time + last_offer.get(G_OFFER_WAIT) + last_offer.get(G_OFFER_DRIVE) - self.demand[rid].rq_time
+        return dict(mode=mode, offer=offer, original_key=original_key,
+                    child_requests=children, proposal_bindings=tuple(amod),
+                    pt_bindings=tuple(pt), is_complete=complete, expected_duration=expected)
+
+    def resolve_selected_candidate(self, rid, chosen_key):
+        try:
+            return self._candidates[rid][chosen_key]
+        except KeyError as exc:
+            raise ValueError(f"Unknown PTBroker candidate {chosen_key!r} for request {rid}") from exc
+
+    def prepare_candidate_booking(self, rid, rq_obj, sim_time, chosen_key):
+        candidate = self.resolve_selected_candidate(rid, chosen_key)
+        if candidate['offer'].service_declined():
+            raise ValueError(f"Cannot confirm declined candidate {chosen_key!r}")
+        if rid in self._selected_candidates:
+            raise ValueError(f"Request {rid} already has an accepted candidate")
+        for pt_key in candidate['pt_bindings']:
+            pt_offer = self.pt_operator.get_current_offer(*pt_key)
+            if pt_offer is None or pt_offer.service_declined():
+                raise ValueError(f"Missing feasible PT proposal {pt_key!r}")
+        self._cleanup_proposals(rid, sim_time, candidate)
+        for child_id, child in candidate['child_requests'].items():
+            child.selected_mode = candidate['mode']
+            child.selected_candidate_id = chosen_key
+            child.chosen_operator_id = next(iter(child.offer))
+            child.fare = next(iter(child.offer.values())).get(G_OFFER_FARE, 0)
+            self.demand.rq_db[child_id] = child
+        rq_obj.selected_mode = candidate['mode']
+        rq_obj.selected_candidate_id = chosen_key
+        rq_obj.chosen_operator_id = chosen_key
+        rq_obj.modal_state = candidate['mode']
+        rq_obj.modal_state_int = candidate['mode'].value
+        rq_obj.fare = candidate['offer'].get(G_OFFER_FARE, 0)
+        self._selected_candidates[rid] = candidate
+        self._candidates[rid] = {chosen_key: candidate}
+        self._candidate_build_records.pop(rid, None)
+        return candidate
+
+    def _confirm_amod_binding(self, rid, op_id, request_id, sim_time):
+        self.amod_operators[op_id].user_confirms_booking(request_id, sim_time)
+        self._confirmed_amod.setdefault(rid, set()).add((op_id, request_id))
+
+    def _cancel_amod_binding(self, rid, op_id, request_id, sim_time):
+        proposals = self._amod_proposals.get(rid, {})
+        if (op_id, request_id) in proposals:
+            self.amod_operators[op_id].user_cancels_request(request_id, sim_time)
+            del proposals[(op_id, request_id)]
+
+    def _cancel_pt_binding(self, rid, child_id, firstmile_op, sim_time):
+        requests = self._pt_requests.get(rid, {})
+        if (child_id, firstmile_op) in requests:
+            self.pt_operator.user_cancels_request(child_id, sim_time, firstmile_op)
+            del requests[(child_id, firstmile_op)]
+
+    def _bind_amod_child(self, rid, op_id, request_id, offer):
+        child = deepcopy(self._amod_proposals[rid][(op_id, request_id)])
+        parent = self.demand[rid]
+        child.offer = {op_id: offer}
+        child.selected_mode = parent.selected_mode
+        child.selected_candidate_id = parent.selected_candidate_id
+        child.chosen_operator_id = op_id
+        child.fare = offer.get(G_OFFER_FARE, 0)
+        self.demand.rq_db[request_id] = child
+        return child
+
+    def confirm_candidate_pt(self, candidate):
+        for child_id, firstmile_op in candidate['pt_bindings']:
+            child = self.demand[child_id]
+            self.pt_operator.user_confirms_booking(child, firstmile_op)
+
+    def inform_user_booking(self, rid, rq_obj, sim_time, chosen_operator):
+        candidate = self.prepare_candidate_booking(rid, rq_obj, sim_time, chosen_operator)
+        for op_id, request_id in candidate['proposal_bindings']:
+            self._confirm_amod_binding(rid, op_id, request_id, sim_time)
+        self.confirm_candidate_pt(candidate)
+        for operator in self.amod_operators:
+            if hasattr(operator, 'flm_excluded_vid'):
+                operator.flm_excluded_vid.pop(rid, None)
+        return [(rid, rq_obj)]
+
+    def _cleanup_proposals(self, rid, sim_time, selected=None):
+        keep_amod = set(selected['proposal_bindings']) if selected else set()
+        keep_pt = set(selected['pt_bindings']) if selected else set()
+        keep_children = set(selected['child_requests']) if selected else set()
+        proposals = self._amod_proposals.get(rid, {})
+        for binding in list(proposals):
+            if binding not in keep_amod:
+                op_id, request_id = binding
+                self._cancel_amod_binding(rid, op_id, request_id, sim_time)
+        pt_requests = self._pt_requests.get(rid, {})
+        for binding in list(pt_requests):
+            if binding not in keep_pt:
+                self._cancel_pt_binding(rid, binding[0], binding[1], sim_time)
+        for child_id in list(self.demand.rq_db):
+            if isinstance(child_id, str) and child_id.startswith(f"{rid}_") and child_id not in keep_children:
+                del self.demand.rq_db[child_id]
+        if selected is None or selected['mode'] != RQ_MODAL_STATE.FIRSTLASTMILE:
+            for operator in self.amod_operators:
+                if hasattr(operator, 'flm_excluded_vid'):
+                    operator.flm_excluded_vid.pop(rid, None)
+
+    def inform_user_leaving_system(self, rid, sim_time):
+        self._cleanup_proposals(rid, sim_time)
+        self._amod_proposals.pop(rid, None)
+        self._pt_requests.pop(rid, None)
+        self._candidate_build_records.pop(rid, None)
+        self._candidates.pop(rid, None)
+        self._selected_candidates.pop(rid, None)
+        self._confirmed_amod.pop(rid, None)
+
+    def inform_waiting_request_cancellations(self, chosen_operator, rid, sim_time):
+        self.inform_user_leaving_system(rid, sim_time)
+
+    def acknowledge_user_alighting(self, op_id, rid, vid, alighting_time):
+        super().acknowledge_user_alighting(op_id, rid, vid, alighting_time)
+        parent_rid = int(str(rid).rsplit("_", 1)[0])
+        self._amod_proposals.get(parent_rid, {}).pop((op_id, rid), None)
+        self._confirmed_amod.get(parent_rid, set()).discard((op_id, rid))
+
     def _process_inform_monomodal_request(self, rid: int, rq_obj: 'RequestBase', sim_time: int, parent_modal_state: RQ_MODAL_STATE,):
         """This method processes the new monomodal request.
 
@@ -327,6 +362,7 @@ class PTBrokerBasic(BrokerBasic):
         for op_id in range(self.n_amod_op):
             LOG.debug(f"AMoD Request {rid} with modal state {parent_modal_state}: To operator {op_id} ...")
             self.amod_operators[op_id].user_request(rq_obj, sim_time)
+            self._amod_proposals[rid][(op_id, rid)] = rq_obj
 
     def _process_inform_firstmile_request(self, rid: int, rq_obj: 'BasicIntermodalRequest', sim_time: int, parent_modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE.FIRSTMILE):
         """This method processes the new firstmile request. 
@@ -364,26 +400,34 @@ class PTBrokerBasic(BrokerBasic):
         """
         pass        
 
+    def _create_sub_request(self, rq_obj, sub_trip_id, leg_o_node, leg_d_node, leg_start_time, mode):
+        child = self.demand.create_sub_requests(
+            rq_obj, sub_trip_id, (leg_o_node, None, None), (leg_d_node, None, None), leg_start_time, mode,
+        )
+        child.offer = {}
+        child.chosen_operator_id = None
+        child.selected_candidate_id = None
+        child.selected_mode = None
+        child.modal_state = mode
+        child.modal_state_int = mode.value
+        child.candidate_modes = {}
+        child.candidate_complete = {}
+        child.candidate_durations = {}
+        child.pu_time = child.do_time = child.service_opid = child.service_vid = None
+        child.pu_pos = child.do_pos = child.leave_system_time = None
+        child.t_access = child.t_egress = child.fare = None
+        child.payg_interrupted = False
+        child.uncatchable_pt = False
+        return child
+
     def _inform_amod_sub_request(
-        self, rq_obj: 'RequestBase', sub_trip_id: int, leg_o_node: int, leg_d_node: int, leg_start_time: int,
-        parent_modal_state: RQ_MODAL_STATE, op_id: int, sim_time: int
+        self, rq_obj, sub_trip_id, leg_o_node, leg_d_node, leg_start_time,
+        parent_modal_state, op_id, sim_time, max_wait_time=None,
     ):
-        """
-        This method informs the AMoD operators that a new sub-request has been made.
+        child = self._create_sub_request(rq_obj, sub_trip_id, leg_o_node, leg_d_node, leg_start_time, parent_modal_state)
+        self.amod_operators[op_id].user_request(child, sim_time, max_wait_time=max_wait_time)
+        self._amod_proposals.setdefault(rq_obj.get_rid(), {})[(op_id, child.get_rid_struct())] = child
 
-        Args:
-            rq_obj ('RequestBase'): the parent request object
-            sub_trip_id (int): the sub-trip id
-            leg_o_node (int): the origin node of the sub-request
-            leg_d_node (int): the destination node of the sub-request
-            leg_start_time (int): the start time of the sub-request
-            parent_modal_state (RQ_MODAL_STATE): the parent modal state
-        """
-        amod_sub_rq_obj: RequestBase = self.demand.create_sub_requests(rq_obj, sub_trip_id, (leg_o_node, None, None), (leg_d_node, None, None), leg_start_time, parent_modal_state)
-        LOG.debug(f"AMoD sub-request {amod_sub_rq_obj.get_rid_struct()} with modal state {parent_modal_state}: To operator {op_id} ...")
-
-        self.amod_operators[op_id].user_request(amod_sub_rq_obj, sim_time)
-        
     def _inform_pt_sub_request(
         self, rq_obj: 'RequestBase', sub_trip_id: int, leg_o_node: int, leg_d_node: int, leg_start_time: int,
         parent_modal_state: RQ_MODAL_STATE, firstmile_amod_operator_id: int = None
@@ -404,7 +448,8 @@ class PTBrokerBasic(BrokerBasic):
                 the pt arrival time of the sub-request at the destination street node 
                 or None if the pt travel costs are not available
         """
-        pt_sub_rq_obj: RequestBase = self.demand.create_sub_requests(rq_obj, sub_trip_id, (leg_o_node, None, None), (leg_d_node, None, None), leg_start_time, parent_modal_state)
+        pt_sub_rq_obj: RequestBase = self._create_sub_request(rq_obj, sub_trip_id, leg_o_node, leg_d_node, leg_start_time, parent_modal_state)
+        self._pt_requests.setdefault(rq_obj.get_rid(), {})[(pt_sub_rq_obj.get_rid_struct(), firstmile_amod_operator_id)] = pt_sub_rq_obj
         LOG.debug(f"PT sub-request {pt_sub_rq_obj.get_rid_struct()} with modal state {parent_modal_state}: To PT operator {self.pt_operator_id} ...")
         
         costs_info = self._query_street_node_pt_travel_costs_1to1(
@@ -650,4 +695,7 @@ class PTBrokerBasic(BrokerBasic):
     def _create_intermodal_offer(self, rid: int, sub_trip_offers: tp.Dict[int, 'TravellerOffer'], rq_modal_state: RQ_MODAL_STATE) -> 'IntermodalOffer':
         """This method merges the amod and pt offers into an intermodal offer.
         """
-        return IntermodalOffer(rid, sub_trip_offers, rq_modal_state)
+        offer = IntermodalOffer(rid, sub_trip_offers, rq_modal_state)
+        candidate = self._build_candidate(rid, rq_modal_state, offer.operator_id, offer)
+        self._candidate_build_records[rid][(rq_modal_state, offer.operator_id)] = candidate
+        return offer

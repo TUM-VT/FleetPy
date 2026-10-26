@@ -75,7 +75,6 @@ G_TOLL_COST_SCALE = "toll_cost_scale"
 G_BROKER_TYPE = "broker_type"
 G_BROKER_TRANSFER_SEARCH_METHOD = "broker_transfer_search_method"  # method for finding transfer stations: "closest" or "best_overall"
 G_BROKER_MAAS_DETOUR_TIME_FACTOR = "broker_maas_detour_time_factor"  # factor to estimate detour time for MaaS intermodal trips (default: 1.0)
-G_BROKER_ALWAYS_QUERY_PT = "broker_always_query_pt"  # if true, pure PT offers are always queried as a backup option
 
 # public transport specific attributes
 G_PT_TYPE = "pt_type"
@@ -498,6 +497,9 @@ G_RQ_RID_STRUCT = "rid_struct"
 G_RQ_IS_PARENT_REQUEST = "is_parent_request"
 G_RQ_MODAL_STATE = "modal_state"
 G_RQ_MODAL_STATE_VALUE = "modal_state_value"
+G_RQ_QUERY_MODES = "query_modes"
+G_RQ_SELECTED_MODE = "selected_mode"
+G_RQ_SELECTED_CANDIDATE_ID = "selected_candidate_id"
 G_RQ_TRANSFER_STATION_IDS = "transfer_station_ids"
 G_RQ_MAX_TRANSFERS = "max_transfers"
 G_RQ_SUB_TRIP_ID = "sub_trip_id"
@@ -514,14 +516,12 @@ class RQ_MODAL_STATE(Enum):
     LASTMILE: amod last mile and pt first mile
     FIRSTLASTMILE: amod first and last miles, pt in between
     PT: only pt is used
-    ALL_OPTIONS: all options are used
     """
     MONOMODAL: int = 0
     FIRSTMILE: int = 1
     LASTMILE: int = 2
     FIRSTLASTMILE: int = 3
     PT: int = 4
-    ALL_OPTIONS: int = 5
 
 class RQ_SUB_TRIP_ID(Enum):
     """ This enum is used to identify different sub-trip ids of a traveler request.

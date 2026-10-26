@@ -770,15 +770,27 @@ INPUT_PARAMETERS_BasicIntermodalRequest = {
 }
 
 class BasicIntermodalRequest(RequestBase):
-    """This request class is used for intermodal requests.
-    It is used to model requests that can be served by one amod operator and one pt operator."""
+    """Query requested journey modes and choose one registered travel candidate."""
     type = "BasicIntermodalRequest"
     def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
         super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
-        # intermodal attributes
-        self.modal_state_int: int = rq_row.get(G_RQ_MODAL_STATE_VALUE, RQ_MODAL_STATE.MONOMODAL.value)  # mono-modal trip by default 
-        self.modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE(self.modal_state_int)
-        self.transfer_station_ids: tp.Optional[tp.List[str]] = self._load_transfer_station_ids(rq_row)
+        legacy_mode = rq_row.get(G_RQ_MODAL_STATE_VALUE)
+        if not self._is_missing_input(legacy_mode):
+            raise ValueError(
+                f"Request {self.rid}: {G_RQ_MODAL_STATE_VALUE} is no longer a demand input; "
+                f"migrate it to {G_RQ_QUERY_MODES} and four-slot {G_RQ_TRANSFER_STATION_IDS}"
+            )
+        self.query_modes: tp.Tuple[RQ_MODAL_STATE, ...] = self._load_query_modes(rq_row)
+        self.modal_state: RQ_MODAL_STATE = (
+            self.query_modes[0] if len(self.query_modes) == 1 else RQ_MODAL_STATE.MONOMODAL
+        )
+        self.modal_state_int: int = self.modal_state.value
+        self.selected_mode: tp.Optional[RQ_MODAL_STATE] = None
+        self.selected_candidate_id: tp.Optional[tp.Hashable] = None
+        self.candidate_modes: tp.Dict[tp.Hashable, RQ_MODAL_STATE] = {}
+        self.candidate_complete: tp.Dict[tp.Hashable, bool] = {}
+        self.candidate_durations: tp.Dict[tp.Hashable, tp.Optional[float]] = {}
+        self.transfer_station_ids: tp.List[tp.Optional[str]] = self._load_transfer_station_ids(rq_row)
         max_transfers = rq_row.get(G_RQ_MAX_TRANSFERS, 999)
         if isinstance(max_transfers, bool) or not isinstance(max_transfers, Real):
             raise TypeError("max_transfers must be an integer-valued number")
@@ -796,15 +808,124 @@ class BasicIntermodalRequest(RequestBase):
         self.payg_interrupt_state: tp.Optional[int] = None  # PAYG_TRIP_STATE value when interrupted
         self.payg_interrupt_time: tp.Optional[int] = None  # simulation time when interrupted
 
-    def _load_transfer_station_ids(self, rq_row) -> tp.Optional[tp.List[str]]:
-        raw_transfer_station_ids = rq_row.get(G_RQ_TRANSFER_STATION_IDS, None)
-        if raw_transfer_station_ids is None or pd.isnull(raw_transfer_station_ids) or raw_transfer_station_ids == "":
-            return None
+    @staticmethod
+    def _is_missing_input(value) -> bool:
+        """Recognize an omitted CSV scalar without treating an explicit list as missing."""
+        if value is None or isinstance(value, str) and not value.strip():
+            return True
+        if not pd.api.types.is_scalar(value):
+            return False
+        return bool(pd.isna(value))
+
+    @staticmethod
+    def _parse_query_mode(value) -> RQ_MODAL_STATE:
+        """Parse a full symbolic mode name or an integer code in 0..4."""
+        if isinstance(value, RQ_MODAL_STATE):
+            return value
+        if isinstance(value, str):
+            token = value.strip()
+            if token in RQ_MODAL_STATE.__members__:
+                return RQ_MODAL_STATE[token]
+            if token in {str(mode.value) for mode in RQ_MODAL_STATE}:
+                return RQ_MODAL_STATE(int(token))
+        elif not isinstance(value, (bool, np.bool_)) and isinstance(value, Real):
+            if isfinite(value) and int(value) == value:
+                try:
+                    return RQ_MODAL_STATE(int(value))
+                except ValueError:
+                    pass
+        raise ValueError(f"Invalid query mode {value!r}; use full mode names or integer codes 0..4")
+
+    def _load_query_modes(self, rq_row) -> tp.Tuple[RQ_MODAL_STATE, ...]:
+        raw_modes = rq_row.get(G_RQ_QUERY_MODES)
+        if self._is_missing_input(raw_modes):
+            return (RQ_MODAL_STATE.MONOMODAL,)
+        if isinstance(raw_modes, str):
+            tokens = raw_modes.split(";")
+        elif isinstance(raw_modes, (list, tuple)):
+            tokens = raw_modes
         else:
-            return raw_transfer_station_ids.split(";")  # in FLM case, two transfer station ids are given
-    
-    def get_transfer_station_ids(self) -> tp.Optional[tp.List[str]]:
-        return self.transfer_station_ids
+            tokens = [raw_modes]
+        if not tokens:
+            raise ValueError(f"Request {self.rid}: {G_RQ_QUERY_MODES} must contain at least one mode")
+        modes = {self._parse_query_mode(token) for token in tokens}
+        return tuple(mode for mode in RQ_MODAL_STATE if mode in modes)
+
+    def _load_transfer_station_ids(self, rq_row) -> tp.List[tp.Optional[str]]:
+        raw_stations = rq_row.get(G_RQ_TRANSFER_STATION_IDS)
+        if self._is_missing_input(raw_stations):
+            stations = [None] * 4
+        else:
+            if isinstance(raw_stations, str):
+                tokens = raw_stations.split(";")
+            elif isinstance(raw_stations, (list, tuple)):
+                tokens = raw_stations
+            else:
+                raise ValueError(f"Request {self.rid}: {G_RQ_TRANSFER_STATION_IDS} must have four slots")
+            if len(tokens) != 4:
+                raise ValueError(
+                    f"Request {self.rid}: {G_RQ_TRANSFER_STATION_IDS} must contain four slots "
+                    "[FM boarding;LM alighting;FLM boarding;FLM alighting]"
+                )
+            stations = []
+            for station in tokens:
+                if self._is_missing_input(station):
+                    stations.append(None)
+                elif isinstance(station, str) and station.strip() != "-1":
+                    stations.append(station.strip())
+                else:
+                    raise ValueError(f"Request {self.rid}: invalid transfer station {station!r}")
+        required_slots = {
+            RQ_MODAL_STATE.FIRSTMILE: (0,),
+            RQ_MODAL_STATE.LASTMILE: (1,),
+            RQ_MODAL_STATE.FIRSTLASTMILE: (2, 3),
+        }
+        for mode in self.query_modes:
+            for slot in required_slots.get(mode, ()):
+                if stations[slot] is None:
+                    raise ValueError(
+                        f"Request {self.rid}: {mode.name} requires transfer station slot {slot + 1} "
+                        "in [FM boarding;LM alighting;FLM boarding;FLM alighting]"
+                    )
+        return stations
+
+    def get_query_modes(self) -> tp.Tuple[RQ_MODAL_STATE, ...]:
+        return self.query_modes
+
+    def get_transfer_station_ids(self) -> tp.List[tp.Optional[str]]:
+        return list(self.transfer_station_ids)
+
+    def get_transfer_station_ids_for_mode(self, mode: RQ_MODAL_STATE) -> tp.List[str]:
+        """Return only the transfer stations belonging to the requested journey mode."""
+        mode = self._parse_query_mode(mode)
+        if mode == RQ_MODAL_STATE.FIRSTMILE:
+            return [self.transfer_station_ids[0]]
+        if mode == RQ_MODAL_STATE.LASTMILE:
+            return [self.transfer_station_ids[1]]
+        if mode == RQ_MODAL_STATE.FIRSTLASTMILE:
+            return self.transfer_station_ids[2:4]
+        return []
+
+    def register_candidate(
+        self, candidate_id, mode: RQ_MODAL_STATE, is_complete: bool = True,
+        expected_duration: tp.Optional[float] = None,
+    ):
+        """Associate a stable choice key with a queried mode and journey completeness."""
+        mode = self._parse_query_mode(mode)
+        if mode not in self.query_modes:
+            raise ValueError(f"Candidate {candidate_id!r} uses unqueried mode {mode.name}")
+        if not isinstance(is_complete, bool):
+            raise TypeError("Candidate completeness must be a bool")
+        if expected_duration is not None and (
+            isinstance(expected_duration, (bool, np.bool_)) or not isinstance(expected_duration, Real)
+            or not isfinite(expected_duration) or expected_duration < 0
+        ):
+            raise ValueError(f"Candidate {candidate_id!r} needs a finite non-negative expected duration")
+        if candidate_id in self.candidate_modes and self.candidate_modes[candidate_id] != mode:
+            raise ValueError(f"Candidate {candidate_id!r} is already registered for another mode")
+        self.candidate_modes[candidate_id] = mode
+        self.candidate_complete[candidate_id] = is_complete
+        self.candidate_durations[candidate_id] = expected_duration
 
     def get_max_transfers(self) -> int:
         return self.max_transfers
@@ -883,7 +1004,10 @@ class BasicIntermodalRequest(RequestBase):
         record_dict[G_RQ_PU] = self.pu_time
         record_dict[G_RQ_DO] = self.do_time
         record_dict[G_RQ_FARE] = self.fare
-        record_dict[G_RQ_MODAL_STATE_VALUE] = self.modal_state_int
+        record_dict[G_RQ_QUERY_MODES] = ";".join(mode.name for mode in self.query_modes)
+        record_dict[G_RQ_SELECTED_MODE] = None if self.selected_mode is None else self.selected_mode.value
+        record_dict[G_RQ_SELECTED_CANDIDATE_ID] = self.selected_candidate_id
+        record_dict[G_RQ_MODAL_STATE_VALUE] = self.modal_state.value
         record_dict[G_RQ_UNCATCHABLE_PT] = self.uncatchable_pt
         # PAYG specific records
         record_dict[G_RQ_PAYG_INTERRUPTED] = self.payg_interrupted
@@ -891,44 +1015,55 @@ class BasicIntermodalRequest(RequestBase):
         record_dict[G_RQ_PAYG_INTERRUPT_TIME] = self.payg_interrupt_time
         return self._add_record(record_dict)
         
+    def score_candidate(self, candidate_id, offer, scenario_parameters, simulation_time):
+        """Rank complete journeys by offered total time; subclasses can supply a choice policy."""
+        expected_duration = self.candidate_durations.get(candidate_id)
+        if expected_duration is not None:
+            return expected_duration
+        durations = (offer.get(G_OFFER_WAIT), offer.get(G_OFFER_DRIVE))
+        if any(
+            isinstance(duration, (bool, np.bool_)) or not isinstance(duration, Real)
+            or not isfinite(duration) or duration < 0
+            for duration in durations
+        ):
+            raise ValueError(f"Candidate {candidate_id!r} needs finite non-negative wait and drive times")
+        return sum(durations)
+
     def choose_offer(self, scenario_parameters, simulation_time):
-        """This method returns the operator id of the chosen mode. If both a PT-only and an AMoD+PT offer is available, 
-        the AMoD+PT offer is always chosen. If only one offer is available, this offer is chosen. 
-        For intermodal offers, the operator id is a tuple: ((operator_id, sub_trip_id), ...)
-        0..n: MoD fleet provider
-        None: not decided yet
-        -1: decline all MoD
-        -2: PT operator
-        :param scenario_parameters: scenario parameter dictionary
-        :param simulation_time: current simulation time
-        :return: operator_id of chosen offer; or -1 if all MoD offers are declined; None if decision not defined yet
-        """
-        test_all_decline = super().choose_offer(scenario_parameters, simulation_time)
-        if test_all_decline is not None and test_all_decline < 0:
-            return -1
-        if len(self.offer) == 0:
+        """Return the selected candidate key, keeping query intent separate from execution mode."""
+        options = [
+            (candidate_id, offer) for candidate_id, offer in self.offer.items()
+            if offer is not None and not offer.service_declined()
+        ]
+        if not options:
+            if self.offer and all(offer is not None and offer.service_declined() for offer in self.offer.values()):
+                return -1
             return None
-        opts = [offer_id for offer_id, operator_offer in self.offer.items() if
-                operator_offer is not None and not operator_offer.service_declined()]
-        if len(opts) == 0:
-            return None
-        elif len(opts) == 1: # only one offer: pure amod, pt or amod+pt
-            self.fare = self.offer[opts[0]].get(G_OFFER_FARE, 0)
-            self.chosen_operator_id = opts[0]
-            # offer_id is a tuple: ((operator_id, sub_trip_id), ...)
-            return opts[0]
-        elif len(opts) == 2: # two offers: pure pt and amod+pt
-            # always choose amod+pt
-            for offer_id, operator_offer in self.offer.items():
-                op_id = operator_offer.operator_id
-                if op_id != -2:
-                    self.fare = operator_offer.get(G_OFFER_FARE, 0)
-                    self.chosen_operator_id = op_id
-                    # offer_id is a tuple: ((operator_id, sub_trip_id), ...)
-                    return offer_id
-        else:
-            LOG.error(f"not implemented {offer_str(self.offer)}")
-            raise NotImplementedError
+        for candidate_id, _ in options:
+            if candidate_id not in self.candidate_modes:
+                if len(self.query_modes) != 1:
+                    raise ValueError(f"Candidate {candidate_id!r} has no registered query mode")
+                self.register_candidate(candidate_id, self.query_modes[0])
+        if (
+            len(self.query_modes) > 1
+            and any(not self.candidate_complete[candidate_id] for candidate_id, _ in options)
+            and type(self).score_candidate is BasicIntermodalRequest.score_candidate
+        ):
+            raise ValueError(
+                "Choosing across query_modes with partial PAYG journeys requires a custom "
+                "score_candidate policy; first-leg times cannot be compared with complete journeys"
+            )
+        candidate_id, offer = min(
+            options,
+            key=lambda option: self.score_candidate(option[0], option[1], scenario_parameters, simulation_time),
+        )
+        self.selected_candidate_id = candidate_id
+        self.selected_mode = self.candidate_modes[candidate_id]
+        self.modal_state = self.selected_mode
+        self.modal_state_int = self.selected_mode.value
+        self.chosen_operator_id = candidate_id
+        self.fare = offer.get(G_OFFER_FARE, 0)
+        return candidate_id
 
 
 # -------------------------------------------------------------------------------------------------------------------- #

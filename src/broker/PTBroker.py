@@ -91,16 +91,14 @@ class PTBroker(PTBrokerBasic):
         parent_modal_state: RQ_MODAL_STATE, op_id: int, sim_time: int
     ):
         """Overrides PTBrokerBasic to support customizable max_wait_time for last-mile AMoD pickups."""
-        amod_sub_rq_obj: 'RequestBase' = self.demand.create_sub_requests(rq_obj, sub_trip_id, (leg_o_node, None, None), (leg_d_node, None, None), leg_start_time, parent_modal_state)
-        LOG.debug(f"AMoD sub-request {amod_sub_rq_obj.get_rid_struct()} with modal state {parent_modal_state}: To operator {op_id} ...")
-
-        # get customizable wait time for last mile AMoD pickups
-        if parent_modal_state == RQ_MODAL_STATE.LASTMILE or (parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE and sub_trip_id == RQ_SUB_TRIP_ID.FLM_AMOD_1.value):
-            max_wait_time: tp.Optional[int] = rq_obj.get_lastmile_max_wait_time()
+        if parent_modal_state == RQ_MODAL_STATE.LASTMILE or sub_trip_id == RQ_SUB_TRIP_ID.FLM_AMOD_1.value:
+            max_wait_time = rq_obj.get_lastmile_max_wait_time()
         else:
-            max_wait_time: tp.Optional[int] = None
-
-        self.amod_operators[op_id].user_request(amod_sub_rq_obj, sim_time, max_wait_time=max_wait_time)
+            max_wait_time = None
+        super()._inform_amod_sub_request(
+            rq_obj, sub_trip_id, leg_o_node, leg_d_node, leg_start_time,
+            parent_modal_state, op_id, sim_time, max_wait_time=max_wait_time,
+        )
 
     def _process_inform_firstmile_request(self, rid: int, rq_obj: 'BasicIntermodalRequest', sim_time: int, parent_modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE.FIRSTMILE):
         """This method processes the new firstmile request. 
@@ -113,7 +111,7 @@ class PTBroker(PTBrokerBasic):
             parent_modal_state (RQ_MODAL_STATE): the parent modal state
         """
         # get the transfer station id and its closest pt station
-        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
         transfer_street_node, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
 
         # create sub-request for AMoD
@@ -131,7 +129,7 @@ class PTBroker(PTBrokerBasic):
             parent_modal_state (RQ_MODAL_STATE): the parent modal state
         """
         # get the transfer station id and its closest pt station
-        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
         transfer_street_node, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
         # create sub-request for PT
         lm_pt_arrival: tp.Optional[int] = self._inform_pt_sub_request(rq_obj, RQ_SUB_TRIP_ID.LM_PT.value, rq_obj.get_origin_node(), transfer_street_node, rq_obj.earliest_start_time, parent_modal_state)
@@ -154,7 +152,7 @@ class PTBroker(PTBrokerBasic):
             parent_modal_state (RQ_MODAL_STATE): the parent modal state
         """
         # get the transfer station ids and their closest pt stations
-        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
         transfer_street_node_0, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
         
         # create FM sub-request for AMoD
@@ -185,7 +183,7 @@ class PTBroker(PTBrokerBasic):
             self.demand[fm_amod_rid_struct].receive_offer(amod_op_id, fm_amod_offer, None)
 
             # create PT sub-request and inform PT operator
-            transfer_station_ids: tp.List[str] = parent_rq_obj.get_transfer_station_ids()
+            transfer_station_ids: tp.List[str] = parent_rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
             transfer_street_node, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
             # determine the earliest start time of the PT sub-request based on the FM AMoD offer
             fm_est_pt_mod: int = self._determine_est_pt_mod(parent_rq_obj,amod_op_id, fm_amod_offer)
@@ -283,7 +281,7 @@ class PTBroker(PTBrokerBasic):
 
             # create PT sub-request and inform PT operator
             # get the transfer station ids and their closest pt stations
-            transfer_station_ids: tp.List[str] = parent_rq_obj.get_transfer_station_ids()
+            transfer_station_ids: tp.List[str] = parent_rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
             transfer_street_node_0, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
             transfer_street_node_1, _ = self._find_transfer_info(transfer_station_ids[1], "pt2street")
             # determine the earliest start time of the PT sub-request based on the FM AMoD offer

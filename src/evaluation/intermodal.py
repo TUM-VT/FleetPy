@@ -45,7 +45,126 @@ def calculate_pt_wait_time(fm_amod_row, pt_row):
         return np.nan
     return max(pt_wait_time, 0) if np.isfinite(pt_wait_time) else np.nan
 
-def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_end_time=None, print_comments=False):
+
+def _parse_execution_mode(value):
+    """Read a selected mode without turning a missing decision into MONOMODAL."""
+    if isinstance(value, RQ_MODAL_STATE):
+        return value.value if value.value in range(RQ_MODAL_STATE.PT.value + 1) else None
+    if isinstance(value, str):
+        value = value.strip()
+        if value in RQ_MODAL_STATE.__members__:
+            return _parse_execution_mode(RQ_MODAL_STATE[value])
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(number) or not number.is_integer():
+        return None
+    return int(number) if int(number) in range(RQ_MODAL_STATE.PT.value + 1) else None
+
+
+def _execution_mode(row):
+    """Only legacy output without selected_mode falls back to modal_state_value."""
+    field = G_RQ_SELECTED_MODE if G_RQ_SELECTED_MODE in row else G_RQ_MODAL_STATE_VALUE
+    return _parse_execution_mode(row.get(field))
+
+
+def _finite_number(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return np.nan
+    return number if np.isfinite(number) else np.nan
+
+
+def _is_true(value):
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "1")
+    return bool(value) if pd.notna(value) else False
+
+
+def _has_journey_failure(row):
+    return any(_is_true(row.get(field, False)) for field in
+               (G_RQ_UNCATCHABLE_PT, G_RQ_PAYG_INTERRUPTED))
+
+
+def _completion_horizon(output_dir, evaluation_end_time, completion_end_time):
+    """Use the simulation/observation horizon to exclude prefilled future PT ends."""
+    limits = [evaluation_end_time, completion_end_time]
+    if completion_end_time is None and os.path.isfile(os.path.join(output_dir, G_SC_INP_F)):
+        scenario_parameters, _, _ = load_scenario_inputs(output_dir)
+        limits.append(scenario_parameters.get(G_SIM_END_TIME))
+    finite_limits = [_finite_number(value) for value in limits]
+    finite_limits = [value for value in finite_limits if np.isfinite(value)]
+    return min(finite_limits) if finite_limits else None
+
+
+def _leg_is_complete(row, completion_end_time):
+    if row is None:
+        return False
+    pickup = _finite_number(row.get(G_RQ_PU))
+    dropoff = _finite_number(row.get(G_RQ_DO))
+    if not np.isfinite(pickup) or not np.isfinite(dropoff) or dropoff < pickup:
+        return False
+    egress = _finite_number(row.get(G_RQ_EGRESS, 0))
+    egress = egress if np.isfinite(egress) else 0
+    return egress >= 0 and (completion_end_time is None or dropoff + egress <= completion_end_time)
+
+
+def _selected_legs(parent_row, sub_trips, modal_state):
+    """Resolve only the mandatory legs of the accepted itinerary."""
+    required_ids = {
+        RQ_MODAL_STATE.MONOMODAL.value: (None,),
+        RQ_MODAL_STATE.FIRSTMILE.value: (RQ_SUB_TRIP_ID.FM_AMOD.value, RQ_SUB_TRIP_ID.FM_PT.value),
+        RQ_MODAL_STATE.LASTMILE.value: (RQ_SUB_TRIP_ID.LM_PT.value, RQ_SUB_TRIP_ID.LM_AMOD.value),
+        RQ_MODAL_STATE.FIRSTLASTMILE.value: (
+            RQ_SUB_TRIP_ID.FLM_AMOD_0.value, RQ_SUB_TRIP_ID.FLM_PT.value, RQ_SUB_TRIP_ID.FLM_AMOD_1.value),
+        RQ_MODAL_STATE.PT.value: (RQ_SUB_TRIP_ID.PT.value,),
+    }.get(modal_state, ())
+    selected_candidate = parent_row.get(G_RQ_SELECTED_CANDIDATE_ID)
+    rows = {}
+    for sub_trip_id in required_ids:
+        if sub_trip_id is None:
+            rows[sub_trip_id] = parent_row
+            continue
+        matches = sub_trips[sub_trips[G_RQ_SUB_TRIP_ID] == sub_trip_id]
+        if pd.notna(selected_candidate) and G_RQ_SELECTED_CANDIDATE_ID in matches.columns:
+            candidate_ids = matches[G_RQ_SELECTED_CANDIDATE_ID]
+            matches = matches[candidate_ids.isna() | (candidate_ids == selected_candidate)]
+        rows[sub_trip_id] = matches.iloc[0] if len(matches) == 1 else None
+    return rows
+
+
+def _connections_are_feasible(modal_state, legs):
+    """Check recorded transfers when the legacy offer fields are available."""
+    fm_ids = {
+        RQ_MODAL_STATE.FIRSTMILE.value: (RQ_SUB_TRIP_ID.FM_AMOD.value, RQ_SUB_TRIP_ID.FM_PT.value),
+        RQ_MODAL_STATE.FIRSTLASTMILE.value: (RQ_SUB_TRIP_ID.FLM_AMOD_0.value, RQ_SUB_TRIP_ID.FLM_PT.value),
+    }.get(modal_state)
+    if fm_ids:
+        fm, pt = (legs.get(sub_trip_id) for sub_trip_id in fm_ids)
+        if fm is not None and pt is not None:
+            walking = _get_numeric_offer_parameter(pt.get(G_RQ_OFFERS), G_PT_OFFER_SOURCE_WALKING_TIME)
+            waiting = _get_numeric_offer_parameter(pt.get(G_RQ_OFFERS), G_OFFER_WAIT)
+            latest_origin = _finite_number(pt.get(G_RQ_PU)) + waiting - walking
+            if np.isfinite(latest_origin) and _finite_number(fm.get(G_RQ_DO)) > latest_origin:
+                return False
+    lm_ids = {
+        RQ_MODAL_STATE.LASTMILE.value: (RQ_SUB_TRIP_ID.LM_PT.value, RQ_SUB_TRIP_ID.LM_AMOD.value),
+        RQ_MODAL_STATE.FIRSTLASTMILE.value: (RQ_SUB_TRIP_ID.FLM_PT.value, RQ_SUB_TRIP_ID.FLM_AMOD_1.value),
+    }.get(modal_state)
+    if lm_ids:
+        pt, lm = (legs.get(sub_trip_id) for sub_trip_id in lm_ids)
+        if pt is not None and lm is not None:
+            walking = _get_numeric_offer_parameter(pt.get(G_RQ_OFFERS), G_PT_OFFER_TARGET_WALKING_TIME)
+            ready = _finite_number(pt.get(G_RQ_DO)) + walking
+            if np.isfinite(ready) and _finite_number(lm.get(G_RQ_PU)) < ready:
+                return False
+    return True
+
+
+def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_end_time=None,
+                             print_comments=False, completion_end_time=None):
     """
     Pre-processing step: Aggregate sub-trips into parent requests.
 
@@ -59,6 +178,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
     :param evaluation_start_time: start time filter
     :param evaluation_end_time: end time filter
     :param print_comments: print status messages
+    :param completion_end_time: observation horizon for completed legs; defaults to config end_time when available
     :return: parent_df - DataFrame with aggregated parent request data
     """
     if print_comments:
@@ -67,6 +187,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
     # Read original user stats
     user_stats_file = os.path.join(output_dir, "1_user-stats.csv")
     df = pd.read_csv(user_stats_file)
+    completion_end_time = _completion_horizon(output_dir, evaluation_end_time, completion_end_time)
 
     # Apply time filters
     if evaluation_start_time is not None:
@@ -86,13 +207,15 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
 
     for parent_idx, parent_row in parent_df.iterrows():
         request_id = parent_row[G_RQ_ID]
-        modal_state = parent_row.get(G_RQ_MODAL_STATE_VALUE, np.nan)
+        modal_state = _execution_mode(parent_row)
 
         # Get all sub-trips for this request
         sub_trips = subtrip_df[subtrip_df[G_RQ_ID] == request_id]
 
         # Create aggregated parent row
         parent_agg = parent_row.to_dict()
+        parent_agg[G_RQ_MODAL_STATE_VALUE] = modal_state if modal_state is not None else np.nan
+        selected_legs = _selected_legs(parent_row, sub_trips, modal_state)
 
         # Determine if request is served
         # For MONOMODAL (0), parent itself determines if served
@@ -124,14 +247,23 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                 amod_travel_time = total_travel_time
                 amod_direct_distance = parent_row.get(G_RQ_DRD, 0)
 
+        elif modal_state == RQ_MODAL_STATE.PT.value:
+            pt_row = selected_legs.get(RQ_SUB_TRIP_ID.PT.value)
+            is_served = _leg_is_complete(pt_row, completion_end_time)
+            if is_served:
+                total_fare = pt_row.get(G_RQ_FARE, np.nan)
+                total_wait_time = _get_numeric_offer_parameter(pt_row.get(G_RQ_OFFERS), G_OFFER_WAIT)
+                total_travel_time = pt_row.get(G_RQ_DO) - pt_row.get(G_RQ_PU)
+                leg_info['pt_pu'] = pt_row.get(G_RQ_PU)
+                leg_info['pt_do'] = pt_row.get(G_RQ_DO)
+                leg_info['pt_wait'] = total_wait_time
+
         elif modal_state == RQ_MODAL_STATE.FIRSTMILE.value:
             # FM: Need FM_AMOD (1) and FM_PT (2)
-            fm_amod = sub_trips[sub_trips[G_RQ_SUB_TRIP_ID] == RQ_SUB_TRIP_ID.FM_AMOD.value]
-            fm_pt = sub_trips[sub_trips[G_RQ_SUB_TRIP_ID] == RQ_SUB_TRIP_ID.FM_PT.value]
+            fm_amod_row = selected_legs.get(RQ_SUB_TRIP_ID.FM_AMOD.value)
+            fm_pt_row = selected_legs.get(RQ_SUB_TRIP_ID.FM_PT.value)
 
-            if len(fm_amod) > 0 and len(fm_pt) > 0:
-                fm_amod_row = fm_amod.iloc[0]
-                fm_pt_row = fm_pt.iloc[0]
+            if fm_amod_row is not None and fm_pt_row is not None:
 
                 # Both legs must be served
                 fm_amod_served = not pd.isna(fm_amod_row.get(G_RQ_PU))
@@ -173,12 +305,10 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
 
         elif modal_state == RQ_MODAL_STATE.LASTMILE.value:
             # LM: Need LM_PT (3) and LM_AMOD (4)
-            lm_pt = sub_trips[sub_trips[G_RQ_SUB_TRIP_ID] == RQ_SUB_TRIP_ID.LM_PT.value]
-            lm_amod = sub_trips[sub_trips[G_RQ_SUB_TRIP_ID] == RQ_SUB_TRIP_ID.LM_AMOD.value]
+            lm_pt_row = selected_legs.get(RQ_SUB_TRIP_ID.LM_PT.value)
+            lm_amod_row = selected_legs.get(RQ_SUB_TRIP_ID.LM_AMOD.value)
 
-            if len(lm_pt) > 0 and len(lm_amod) > 0:
-                lm_pt_row = lm_pt.iloc[0]
-                lm_amod_row = lm_amod.iloc[0]
+            if lm_pt_row is not None and lm_amod_row is not None:
 
                 lm_pt_served = not pd.isna(lm_pt_row.get(G_RQ_PU))
                 lm_amod_served = not pd.isna(lm_amod_row.get(G_RQ_PU))
@@ -220,14 +350,11 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
 
         elif modal_state == RQ_MODAL_STATE.FIRSTLASTMILE.value:
             # FLM: Need FLM_AMOD_0 (5), FLM_PT (6), FLM_AMOD_1 (7)
-            flm_amod_0 = sub_trips[sub_trips[G_RQ_SUB_TRIP_ID] == RQ_SUB_TRIP_ID.FLM_AMOD_0.value]
-            flm_pt = sub_trips[sub_trips[G_RQ_SUB_TRIP_ID] == RQ_SUB_TRIP_ID.FLM_PT.value]
-            flm_amod_1 = sub_trips[sub_trips[G_RQ_SUB_TRIP_ID] == RQ_SUB_TRIP_ID.FLM_AMOD_1.value]
+            flm_amod_0_row = selected_legs.get(RQ_SUB_TRIP_ID.FLM_AMOD_0.value)
+            flm_pt_row = selected_legs.get(RQ_SUB_TRIP_ID.FLM_PT.value)
+            flm_amod_1_row = selected_legs.get(RQ_SUB_TRIP_ID.FLM_AMOD_1.value)
 
-            if len(flm_amod_0) > 0 and len(flm_pt) > 0 and len(flm_amod_1) > 0:
-                flm_amod_0_row = flm_amod_0.iloc[0]
-                flm_pt_row = flm_pt.iloc[0]
-                flm_amod_1_row = flm_amod_1.iloc[0]
+            if flm_amod_0_row is not None and flm_pt_row is not None and flm_amod_1_row is not None:
 
                 flm_amod_0_served = not pd.isna(flm_amod_0_row.get(G_RQ_PU))
                 flm_pt_served = not pd.isna(flm_pt_row.get(G_RQ_PU))
@@ -277,6 +404,29 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                     leg_info['flm_amod_1_travel_time'] = flm_amod_1_travel_time
                     leg_info['flm_amod_1_direct_distance'] = flm_amod_1_row.get(G_RQ_DRD, 0)
 
+        amod_ids = {
+            RQ_MODAL_STATE.MONOMODAL.value: (None,),
+            RQ_MODAL_STATE.FIRSTMILE.value: (RQ_SUB_TRIP_ID.FM_AMOD.value,),
+            RQ_MODAL_STATE.LASTMILE.value: (RQ_SUB_TRIP_ID.LM_AMOD.value,),
+            RQ_MODAL_STATE.FIRSTLASTMILE.value: (RQ_SUB_TRIP_ID.FLM_AMOD_0.value, RQ_SUB_TRIP_ID.FLM_AMOD_1.value),
+        }.get(modal_state, ())
+        completed_amod_legs = [selected_legs.get(sub_trip_id) for sub_trip_id in amod_ids
+                               if _leg_is_complete(selected_legs.get(sub_trip_id), completion_end_time)]
+        parent_agg['amod_required_legs'] = len(amod_ids)
+        parent_agg['amod_completed_legs'] = len(completed_amod_legs)
+        for leg in completed_amod_legs:
+            operator_id = _finite_number(leg.get(G_RQ_OP_ID))
+            if np.isfinite(operator_id) and operator_id >= 0 and operator_id.is_integer():
+                field = f'amod_op{int(operator_id)}_completed_legs'
+                parent_agg[field] = parent_agg.get(field, 0) + 1
+
+        # PT bookings prefill times: completion needs the selected legs, horizon and failure checks.
+        is_served = bool(is_served and selected_legs and
+                         all(_leg_is_complete(row, completion_end_time) for row in selected_legs.values()) and
+                         not _has_journey_failure(parent_row) and
+                         not any(_has_journey_failure(row) for row in selected_legs.values() if row is not None) and
+                         _connections_are_feasible(modal_state, selected_legs))
+
         # Update parent aggregation with computed values
         parent_agg['is_served'] = is_served
         parent_agg['total_fare'] = total_fare if is_served else np.nan
@@ -284,10 +434,11 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
         parent_agg['total_travel_time'] = total_travel_time if is_served else np.nan
 
         # AMoD-only metrics (excluding PT segments for comparability with standard evaluation)
-        parent_agg['amod_fare'] = amod_fare if is_served else np.nan
-        parent_agg['amod_wait_time'] = amod_wait_time if is_served else np.nan
-        parent_agg['amod_travel_time'] = amod_travel_time if is_served else np.nan
-        parent_agg['amod_direct_distance'] = amod_direct_distance if is_served else np.nan
+        has_completed_amod_journey = is_served and bool(amod_ids)
+        parent_agg['amod_fare'] = amod_fare if has_completed_amod_journey else np.nan
+        parent_agg['amod_wait_time'] = amod_wait_time if has_completed_amod_journey else np.nan
+        parent_agg['amod_travel_time'] = amod_travel_time if has_completed_amod_journey else np.nan
+        parent_agg['amod_direct_distance'] = amod_direct_distance if has_completed_amod_journey else np.nan
 
         # Add leg info as columns
         for key, val in leg_info.items():
@@ -311,9 +462,9 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
 
 def categorize_modal_state(modal_state_value):
     """Categorize request based on modal state value."""
-    if pd.isna(modal_state_value):
+    modal_state_value = _parse_execution_mode(modal_state_value)
+    if modal_state_value is None:
         return 'Unknown'
-    modal_state_value = int(modal_state_value)
     if modal_state_value == RQ_MODAL_STATE.MONOMODAL.value:
         return 'DRT_only'
     elif modal_state_value == RQ_MODAL_STATE.FIRSTMILE.value:
@@ -354,28 +505,35 @@ def calculate_payg_metrics(parent_user_stats, is_payg_scenario=False, print_comm
         return {}
 
     # Filter to intermodal requests only (FM, LM, FLM) - these are the ones that can be interrupted
-    intermodal_mask = parent_user_stats[G_RQ_MODAL_STATE_VALUE].isin([
+    execution_modes = parent_user_stats.apply(_execution_mode, axis=1)
+    intermodal_mask = execution_modes.isin([
         RQ_MODAL_STATE.FIRSTMILE.value,
         RQ_MODAL_STATE.LASTMILE.value,
         RQ_MODAL_STATE.FIRSTLASTMILE.value
     ])
     intermodal_df = parent_user_stats[intermodal_mask].copy()
+    intermodal_df[G_RQ_MODAL_STATE_VALUE] = execution_modes[intermodal_mask]
 
     total_intermodal = len(intermodal_df)
     if total_intermodal == 0:
         return {}
 
     # Count interrupted requests
-    interrupted_df = intermodal_df[intermodal_df[G_RQ_PAYG_INTERRUPTED] == True]
+    interrupted_mask = intermodal_df[G_RQ_PAYG_INTERRUPTED].map(_is_true)
+    interrupted_df = intermodal_df[interrupted_mask]
     interrupted_count = len(interrupted_df)
-    completed_count = total_intermodal - interrupted_count
+    completed_mask = intermodal_df.get('is_served', pd.Series(False, index=intermodal_df.index)).map(_is_true)
+    completed_count = int((completed_mask & ~interrupted_mask).sum())
+    incomplete_count = total_intermodal - interrupted_count - completed_count
 
     # Overall rates
     payg_stats['payg_total_intermodal_requests'] = total_intermodal
     payg_stats['payg_completed_count'] = completed_count
     payg_stats['payg_interrupted_count'] = interrupted_count
+    payg_stats['payg_incomplete_count'] = incomplete_count
     payg_stats['payg_completion_rate [%]'] = completed_count / total_intermodal * 100
     payg_stats['payg_interrupt_rate [%]'] = interrupted_count / total_intermodal * 100
+    payg_stats['payg_incomplete_rate [%]'] = incomplete_count / total_intermodal * 100
 
     # Breakdown by interrupt state
     if G_RQ_PAYG_INTERRUPT_STATE in interrupted_df.columns:
@@ -459,7 +617,9 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
         print("="*80)
 
     # Step 1: Create parent user stats
-    parent_user_stats = create_parent_user_stats(output_dir, evaluation_start_time, evaluation_end_time, print_comments)
+    parent_user_stats = create_parent_user_stats(
+        output_dir, evaluation_start_time, evaluation_end_time, print_comments,
+        completion_end_time=scenario_parameters.get(G_SIM_END_TIME))
 
     # Add passenger column if needed
     if G_RQ_PAX not in parent_user_stats.columns:
@@ -479,6 +639,8 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
     total_served = len(served_requests)
     total_pax = parent_user_stats[G_RQ_PAX].sum()
     total_served_pax = served_requests[G_RQ_PAX].sum()
+    amod_required_legs = int(parent_user_stats['amod_required_legs'].sum())
+    amod_completed_legs = int(parent_user_stats['amod_completed_legs'].sum())
 
     # Category breakdown
     category_counts = served_requests.groupby('modal_category').size()
@@ -625,6 +787,10 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
         'modal split rq': service_rate_overall / 100,
         'Service_Rate [%]': service_rate_overall,
         'Service_Rate_Pax [%]': service_rate_pax,
+        'DRT_required_legs': amod_required_legs,
+        'DRT_completed_legs': amod_completed_legs,
+        'DRT_leg_service_rate [%]': (amod_completed_legs / amod_required_legs * 100
+                                   if amod_required_legs else np.nan),
 
         # Category breakdown
         'DRT_only_count': service_rates.get('DRT_only_count', 0),
@@ -731,8 +897,11 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
             vehicle_revenue_hours = (rev_df["VRL_end_sim_end_time"].sum() - rev_df["VRL_start_sim_end_time"].sum()) / 3600.0
 
             # Rides per vehicle revenue hours (new)
-            rides_per_veh_rev_hours = total_served_pax / vehicle_revenue_hours if vehicle_revenue_hours > 0 else 0
-            rides_per_veh_rev_hours_rq = total_served / vehicle_revenue_hours if vehicle_revenue_hours > 0 else 0
+            op_completed_legs = parent_user_stats.get(
+                f'amod_op{op_id}_completed_legs', pd.Series(0, index=parent_user_stats.index)).fillna(0)
+            op_completed_pax = (op_completed_legs * parent_user_stats[G_RQ_PAX]).sum()
+            rides_per_veh_rev_hours = op_completed_pax / vehicle_revenue_hours if vehicle_revenue_hours > 0 else 0
+            rides_per_veh_rev_hours_rq = op_completed_legs.sum() / vehicle_revenue_hours if vehicle_revenue_hours > 0 else 0
 
             # Shared rides and customer in-vehicle distance (new)
             op_shared_rides = shared_rides(op_vehicle_df)

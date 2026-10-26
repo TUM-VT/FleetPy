@@ -95,7 +95,7 @@ class PTBrokerEI(PTBrokerBasic):
             parent_modal_state (RQ_MODAL_STATE): the parent modal state
         """
         # get the transfer station id and its closest pt station
-        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
         transfer_street_node, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
 
         # Make the estimation first, then based on the estimation, create sub-requests
@@ -122,7 +122,7 @@ class PTBrokerEI(PTBrokerBasic):
             parent_modal_state (RQ_MODAL_STATE): the parent modal state
         """
         # get the transfer station id and its closest pt station
-        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
         transfer_street_node, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
         # create sub-request for PT
         lm_pt_arrival: tp.Optional[int] = self._inform_pt_sub_request(rq_obj, RQ_SUB_TRIP_ID.LM_PT.value, rq_obj.get_origin_node(), transfer_street_node, rq_obj.earliest_start_time, parent_modal_state)
@@ -144,7 +144,7 @@ class PTBrokerEI(PTBrokerBasic):
             parent_modal_state (RQ_MODAL_STATE): the parent modal state
         """
         # get the transfer station ids and their closest pt stations
-        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
         transfer_street_node_0, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
         transfer_street_node_1, _ = self._find_transfer_info(transfer_station_ids[1], "pt2street")
         
@@ -164,7 +164,7 @@ class PTBrokerEI(PTBrokerBasic):
 
             # create sub-request for the same AMoD operator
             if flm_pt_arrival is None:
-                raise ValueError(f"PT offer is not available for sub_request {rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}, skipping to the next AMoD operator.")
+                continue
             else:
                 # last mile AMoD sub-request
                 self._inform_amod_sub_request(rq_obj, RQ_SUB_TRIP_ID.FLM_AMOD_1.value, transfer_street_node_1, rq_obj.get_destination_node(), flm_pt_arrival, parent_modal_state, op_id, sim_time)
@@ -404,32 +404,14 @@ class PTBrokerEI(PTBrokerBasic):
         parent_rq_obj.set_uncatchable_pt(True)
         LOG.info(f"Request {parent_rid} marked as uncatchable_pt")
 
-        # Cancel subsequent sub-requests based on modal state
+        # Cancel only actual bindings, keeping the common proposal ledger in sync.
         if parent_modal_state == RQ_MODAL_STATE.FIRSTMILE:
-            # For FM: cancel PT sub-request
             pt_rid_struct = f"{parent_rid}_{RQ_SUB_TRIP_ID.FM_PT.value}"
-            try:
-                self.pt_operator.user_cancels_request(pt_rid_struct, sim_time, amod_op_id)
-                LOG.info(f"Cancelled PT sub-request {pt_rid_struct} due to uncatchable PT")
-            except (KeyError, AttributeError) as e:
-                LOG.debug(f"Could not cancel PT sub-request {pt_rid_struct}: {e}")
-
+            self._cancel_pt_binding(parent_rid, pt_rid_struct, amod_op_id, sim_time)
         elif parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
-            # For FLM: cancel PT and last-mile AMoD sub-requests
             pt_rid_struct = f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}"
-            lm_amod_rid_struct = f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}"
-
-            # Cancel PT sub-request
-            try:
-                self.pt_operator.user_cancels_request(pt_rid_struct, sim_time, amod_op_id)
-                LOG.info(f"Cancelled PT sub-request {pt_rid_struct} due to uncatchable PT")
-            except (KeyError, AttributeError) as e:
-                LOG.debug(f"Could not cancel PT sub-request {pt_rid_struct}: {e}")
-
-            # Cancel last-mile AMoD sub-request
-            for op in self.amod_operators:
-                try:
-                    op.user_cancels_request(lm_amod_rid_struct, sim_time)
-                    LOG.info(f"Cancelled LM AMoD sub-request {lm_amod_rid_struct} due to uncatchable PT")
-                except KeyError:
-                    LOG.debug(f"LM AMoD sub-request {lm_amod_rid_struct} not found for operator, may not exist")
+            self._cancel_pt_binding(parent_rid, pt_rid_struct, amod_op_id, sim_time)
+            lm_id = f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}"
+            for op_id, request_id in list(self._amod_proposals.get(parent_rid, {})):
+                if request_id == lm_id:
+                    self._cancel_amod_binding(parent_rid, op_id, request_id, sim_time)

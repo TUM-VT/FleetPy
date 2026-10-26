@@ -81,6 +81,15 @@ class PTBrokerPAYG(PTBrokerBasic):
         # Used to trigger LM_AMOD requests when PT arrives
         self.pending_pt_arrivals: tp.Dict[int, tp.Tuple[int, int]] = {}
 
+        # Proposal failures belong to one queried mode, not to the executed trip.
+        self.payg_candidate_failures: tp.Dict[tp.Tuple[int, RQ_MODAL_STATE], PAYG_TRIP_STATE] = {}
+
+        # ImmediateDecisionsSimulation reports every vehicle, including idle ones.
+        self._vehicle_status_time = None
+        self._updated_vehicles = set()
+        self._expected_vehicles = set()
+        self._pending_update_time = None
+
     # ============================================================================================================== #
     # Request Processing Methods
     # ============================================================================================================== #
@@ -93,7 +102,7 @@ class PTBrokerPAYG(PTBrokerBasic):
         PT will be queried after FM_AMOD alighting.
         """
         # Get transfer station
-        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
         transfer_street_node, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
 
         # Create FM_AMOD sub-request for each operator
@@ -104,8 +113,6 @@ class PTBrokerPAYG(PTBrokerBasic):
                 rq_obj.earliest_start_time, parent_modal_state, op_id, sim_time
             )
 
-        # Initialize PAYG state
-        self.payg_trip_states[rid] = PAYG_TRIP_STATE.PENDING
         LOG.debug(f"PAYG FM request {rid}: Created FM_AMOD sub-request, PT will be queried after alighting")
 
     def _process_inform_lastmile_request(
@@ -115,7 +122,7 @@ class PTBrokerPAYG(PTBrokerBasic):
         """Process LM request: Query PT first. LM_AMOD will be scheduled after user confirms booking.
         """
         # Get transfer station
-        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
         transfer_street_node, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
 
         # Query PT immediately
@@ -126,13 +133,11 @@ class PTBrokerPAYG(PTBrokerBasic):
         )
 
         if lm_pt_arrival is not None:
-            # PT offer available - state will be updated when user confirms booking
-            self.payg_trip_states[rid] = PAYG_TRIP_STATE.PENDING
+            self.payg_candidate_failures.pop((rid, parent_modal_state), None)
             LOG.debug(f"PAYG LM request {rid}: PT offer available, waiting for user booking confirmation")
         else:
-            # No PT available - mark as interrupted
-            self._mark_trip_interrupted(rid, PAYG_TRIP_STATE.INTERRUPTED_NO_PT, sim_time)
-            LOG.info(f"PAYG LM request {rid}: No PT available, trip interrupted")
+            self.payg_candidate_failures[(rid, parent_modal_state)] = PAYG_TRIP_STATE.INTERRUPTED_NO_PT
+            LOG.info(f"PAYG LM request {rid}: No PT available for this candidate")
 
     def _process_inform_firstlastmile_request(
         self, rid: int, rq_obj: 'BasicIntermodalRequest', sim_time: int,
@@ -142,7 +147,7 @@ class PTBrokerPAYG(PTBrokerBasic):
         PT and LM_AMOD will be created after respective alighting events.
         """
         # Get first transfer station
-        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
         transfer_street_node_0, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
 
         # Create FLM_AMOD_0 sub-request for each operator
@@ -153,21 +158,45 @@ class PTBrokerPAYG(PTBrokerBasic):
                 rq_obj.earliest_start_time, parent_modal_state, op_id, sim_time
             )
 
-        # Initialize PAYG state
-        self.payg_trip_states[rid] = PAYG_TRIP_STATE.PENDING
         LOG.debug(f"PAYG FLM request {rid}: Created FLM_AMOD_0 sub-request, PT will be queried after alighting")
+
+    def _is_complete_candidate(self, mode: RQ_MODAL_STATE) -> bool:
+        """PAYG intermodal candidates quote only the first executable leg."""
+        return mode in (RQ_MODAL_STATE.MONOMODAL, RQ_MODAL_STATE.PT)
 
     # ============================================================================================================== #
     # Offer Collection Methods
     # ============================================================================================================== #
 
-    def collect_offers(self, rid: int, sim_time: int) -> tp.Dict[int, 'TravellerOffer']:
-        """Collect offers, processing any pending PT arrivals first."""
-        # Process pending PT arrivals before collecting offers
+    def time_trigger(self, sim_time: int):
+        """Advance selected PAYG trips even when no new traveler requests arrive."""
         self._process_pending_pt_arrivals(sim_time)
 
-        # Call parent implementation
-        return super().collect_offers(rid, sim_time)
+    def receive_status_update(self, op_id, vid, sim_time, passed_VRL, force_update_plan):
+        """Advance PT arrivals after the supported simulation updates the whole fleet.
+
+        This callback runs before the simulation's network update. It therefore
+        preserves the current static-network PAYG use case, not an after-network
+        clock hook for arbitrary simulation environments.
+        """
+        super().receive_status_update(op_id, vid, sim_time, passed_VRL, force_update_plan)
+        if self._pending_update_time is not None and sim_time <= self._pending_update_time:
+            return
+        if self._vehicle_status_time != sim_time:
+            self._vehicle_status_time = sim_time
+            self._updated_vehicles = set()
+            self._expected_vehicles = {
+                (operator_id, vehicle.vid)
+                for operator_id, operator in enumerate(self.amod_operators)
+                for vehicle in operator.sim_vehicles
+            }
+        self._updated_vehicles.add((op_id, vid))
+        if self._expected_vehicles and self._expected_vehicles <= self._updated_vehicles:
+            self._pending_update_time = sim_time
+            # Fleet-state callbacks also run while draining remaining assignments.
+            end_time = self.scenario_parameters.get(G_SIM_END_TIME)
+            if end_time is None or sim_time < end_time:
+                self.time_trigger(sim_time)
 
     def _process_collect_firstmile_offers(
         self, rid: int, parent_rq_obj: 'BasicIntermodalRequest', parent_modal_state: RQ_MODAL_STATE,
@@ -226,81 +255,35 @@ class PTBrokerPAYG(PTBrokerBasic):
     # Booking Methods
     # ============================================================================================================== #
 
-    def inform_user_booking(self, rid: int, rq_obj: 'RequestBase', sim_time: int, chosen_operator: tp.Union[int, tuple]) -> tp.List[tuple[int, 'RequestBase']]:
-        """Handle user booking for PAYG mode."""
-        amod_confirmed_rids = []
-        parent_modal_state: RQ_MODAL_STATE = rq_obj.get_modal_state()
+    def inform_user_booking(
+        self, rid: int, rq_obj: 'RequestBase', sim_time: int, chosen_operator: tp.Hashable
+    ) -> tp.List[tuple[int, 'RequestBase']]:
+        """Book the actual legs of the selected candidate, then activate PAYG."""
+        candidate = self.prepare_candidate_booking(rid, rq_obj, sim_time, chosen_operator)
+        mode: RQ_MODAL_STATE = candidate["mode"]
 
-        # Check if this is a pure PT offer selection (not LM PT offer in PAYG mode)
-        # For LM requests in PAYG, chosen_operator == pt_operator_id means LM_PT offer, not pure PT
-        if chosen_operator == self.pt_operator_id and parent_modal_state != RQ_MODAL_STATE.LASTMILE:
-            amod_confirmed_rids.append((rid, rq_obj))
-            # inform all AMoD operators that the request is cancelled
-            self.inform_user_leaving_system(rid, sim_time)
-            pt_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.PT.value}"
-            pt_sub_rq_obj = self.demand[pt_rid_struct]
-            self.pt_operator.user_confirms_booking(pt_sub_rq_obj, None)
-            return amod_confirmed_rids
+        for op_id, request_id in candidate["proposal_bindings"]:
+            self._confirm_amod_binding(rid, op_id, request_id, sim_time)
+        self.confirm_candidate_pt(candidate)
 
-        # PAYG mode: Handle single-leg bookings for FM/FLM
-        if parent_modal_state == RQ_MODAL_STATE.MONOMODAL or parent_modal_state == RQ_MODAL_STATE.PT:
-            # Standard monomodal handling
-            for i, operator in enumerate(self.amod_operators):
-                if i != chosen_operator:
-                    operator.user_cancels_request(rid, sim_time)
-                else:
-                    operator.user_confirms_booking(rid, sim_time)
-                    amod_confirmed_rids.append((rid, rq_obj))
+        for failure_key in [key for key in self.payg_candidate_failures if key[0] == rid]:
+            del self.payg_candidate_failures[failure_key]
 
-        elif parent_modal_state == RQ_MODAL_STATE.FIRSTMILE:
-            # PAYG FM: Book only FM_AMOD, PT will be queried later
-            fm_amod_rid_struct = f"{rid}_{RQ_SUB_TRIP_ID.FM_AMOD.value}"
-            for i, operator in enumerate(self.amod_operators):
-                if i != chosen_operator:
-                    operator.user_cancels_request(fm_amod_rid_struct, sim_time)
-                else:
-                    operator.user_confirms_booking(fm_amod_rid_struct, sim_time)
+        if mode in (RQ_MODAL_STATE.FIRSTMILE, RQ_MODAL_STATE.FIRSTLASTMILE):
+            # Only the first AMoD leg exists; its realized alighting triggers PT.
             self.payg_trip_states[rid] = PAYG_TRIP_STATE.FM_AMOD_BOOKED
-            amod_confirmed_rids.append((rid, rq_obj))
-            LOG.debug(f"PAYG FM booking {rid}: FM_AMOD booked with operator {chosen_operator}")
-
-        elif parent_modal_state == RQ_MODAL_STATE.LASTMILE:
-            # PAYG LM: Book PT, schedule LM_AMOD request for after PT arrival
-            lm_pt_rid_struct = f"{rid}_{RQ_SUB_TRIP_ID.LM_PT.value}"
-            lm_pt_sub_rq_obj = self.demand[lm_pt_rid_struct]
-            self.pt_operator.user_confirms_booking(lm_pt_sub_rq_obj, None)
-
-            # Get PT offer to retrieve arrival time and transfer node
-            lm_pt_offer: 'PTOffer' = self.pt_operator.get_current_offer(lm_pt_rid_struct)
-            if lm_pt_offer is not None and not lm_pt_offer.service_declined():
-                pt_arrival_time = lm_pt_offer.destination_node_arrival_time
-                # Get transfer street node from request
-                transfer_station_ids = rq_obj.get_transfer_station_ids()
-                transfer_street_node, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
-                # Schedule LM_AMOD request for PT arrival
-                self.pending_pt_arrivals[rid] = (pt_arrival_time, transfer_street_node)
-                LOG.debug(f"PAYG LM booking {rid}: PT booked, LM_AMOD scheduled at {pt_arrival_time}")
-
+        elif mode == RQ_MODAL_STATE.LASTMILE:
+            transfer_station_ids = rq_obj.get_transfer_station_ids_for_mode(mode)
+            transfer_street_node, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
+            self.pending_pt_arrivals[rid] = (
+                candidate["offer"].destination_node_arrival_time, transfer_street_node
+            )
             self.payg_trip_states[rid] = PAYG_TRIP_STATE.PT_BOOKED
-            amod_confirmed_rids.append((rid, rq_obj))
-            LOG.debug(f"PAYG LM booking {rid}: PT booked")
+        elif mode not in (RQ_MODAL_STATE.MONOMODAL, RQ_MODAL_STATE.PT):
+            raise ValueError(f"Invalid selected PAYG mode: {mode}")
 
-        elif parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
-            # PAYG FLM: Book only FLM_AMOD_0, PT and LM will be handled later
-            flm_amod_rid_struct_0 = f"{rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_0.value}"
-            for i, operator in enumerate(self.amod_operators):
-                if i != chosen_operator:
-                    operator.user_cancels_request(flm_amod_rid_struct_0, sim_time)
-                else:
-                    operator.user_confirms_booking(flm_amod_rid_struct_0, sim_time)
-            self.payg_trip_states[rid] = PAYG_TRIP_STATE.FM_AMOD_BOOKED
-            amod_confirmed_rids.append((rid, rq_obj))
-            LOG.debug(f"PAYG FLM booking {rid}: FLM_AMOD_0 booked with operator {chosen_operator}")
-
-        else:
-            raise ValueError(f"Invalid modal state: {parent_modal_state}")
-
-        return amod_confirmed_rids
+        # A pure PT candidate has no pending LM leg even if LM was also queried.
+        return [(rid, rq_obj)]
 
     # ============================================================================================================== #
     # Alighting Event Handlers
@@ -325,7 +308,7 @@ class PTBrokerPAYG(PTBrokerBasic):
 
         # Get alighting node from parent request's transfer station info
         # (sub-request is already deleted from rq_db by user_ends_alighting)
-        transfer_station_ids: tp.List[str] = parent_rq_obj.get_transfer_station_ids()
+        transfer_station_ids: tp.List[str] = parent_rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
 
         # FM_AMOD alighting -> Query PT
         if sub_trip_id == RQ_SUB_TRIP_ID.FM_AMOD.value:
@@ -367,17 +350,9 @@ class PTBrokerPAYG(PTBrokerBasic):
             LOG.info(f"PAYG FM {rid}: No PT available after alighting, trip interrupted")
             return
 
-        # Get PT offer and record it on sub-request
         pt_rid_struct = f"{rid}_{RQ_SUB_TRIP_ID.FM_PT.value}"
-        pt_sub_rq_obj = self.demand[pt_rid_struct]
-        # Clear inherited AMOD offers from deepcopy of parent request
-        pt_sub_rq_obj.offer = {}
-        pt_offer = self.pt_operator.get_current_offer(pt_rid_struct, amod_op_id)
-        if pt_offer is not None:
-            pt_sub_rq_obj.receive_offer(self.pt_operator_id, pt_offer, None)
-
         # Auto-confirm PT booking (user is already at the station)
-        self.pt_operator.user_confirms_booking(pt_sub_rq_obj, amod_op_id)
+        self._confirm_realized_pt_leg(rid, pt_rid_struct, amod_op_id)
 
         self.payg_trip_states[rid] = PAYG_TRIP_STATE.PT_BOOKED
         LOG.info(f"PAYG FM {rid}: PT booked after alighting, arrival at {pt_arrival}")
@@ -390,7 +365,7 @@ class PTBrokerPAYG(PTBrokerBasic):
         LOG.debug(f"PAYG FLM_AMOD_0 alighting: rid={rid}, time={alighting_time}, node={alighting_node}")
 
         # Get transfer stations
-        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids()
+        transfer_station_ids: tp.List[str] = rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
 
         # Get second transfer station for PT destination
         transfer_street_node_1, _ = self._find_transfer_info(transfer_station_ids[1], "pt2street")
@@ -408,22 +383,31 @@ class PTBrokerPAYG(PTBrokerBasic):
             LOG.info(f"PAYG FLM {rid}: No PT available after FM alighting, trip interrupted")
             return
 
-        # Get PT offer and record it on sub-request
         pt_rid_struct = f"{rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}"
-        pt_sub_rq_obj = self.demand[pt_rid_struct]
-        # Clear inherited AMOD offers from deepcopy of parent request
-        pt_sub_rq_obj.offer = {}
-        pt_offer = self.pt_operator.get_current_offer(pt_rid_struct, amod_op_id)
-        if pt_offer is not None:
-            pt_sub_rq_obj.receive_offer(self.pt_operator_id, pt_offer, None)
-
         # Auto-confirm PT booking
-        self.pt_operator.user_confirms_booking(pt_sub_rq_obj, amod_op_id)
+        self._confirm_realized_pt_leg(rid, pt_rid_struct, amod_op_id)
 
         # Schedule LM_AMOD request for PT arrival
         self.pending_pt_arrivals[rid] = (pt_arrival, transfer_street_node_1)
         self.payg_trip_states[rid] = PAYG_TRIP_STATE.PT_BOOKED
         LOG.info(f"PAYG FLM {rid}: PT booked, LM_AMOD will be requested at {pt_arrival}")
+
+    def _confirm_realized_pt_leg(self, rid: int, child_id: str, firstmile_op: int):
+        """Attach a newly queried PT leg to the already selected PAYG journey."""
+        parent = self.demand[rid]
+        child = self.demand[child_id]
+        offer = self.pt_operator.get_current_offer(child_id, firstmile_op)
+        if offer is None or offer.service_declined():
+            raise ValueError(f"Missing feasible realized PT leg {child_id!r}")
+        mode = parent.get_modal_state()
+        child.selected_mode = mode
+        child.selected_candidate_id = parent.selected_candidate_id
+        child.modal_state = mode
+        child.modal_state_int = mode.value
+        child.offer = {self.pt_operator_id: offer}
+        child.chosen_operator_id = self.pt_operator_id
+        child.fare = offer.get(G_OFFER_FARE, 0)
+        self.pt_operator.user_confirms_booking(child, firstmile_op)
 
     # ============================================================================================================== #
     # PT Arrival Processing
@@ -436,15 +420,21 @@ class PTBrokerPAYG(PTBrokerBasic):
         for rid, (pt_arrival_time, alighting_node) in self.pending_pt_arrivals.items():
             if sim_time >= pt_arrival_time:
                 # PT has arrived, request LM_AMOD
-                self._handle_pt_alighting(rid, pt_arrival_time, alighting_node)
+                self._handle_pt_alighting(rid, pt_arrival_time, alighting_node, processing_time=sim_time)
                 completed_arrivals.append(rid)
 
         # Remove processed arrivals
         for rid in completed_arrivals:
             del self.pending_pt_arrivals[rid]
 
-    def _handle_pt_alighting(self, rid: int, alighting_time: int, alighting_node: int):
-        """Handle PT alighting: Request LM_AMOD in real-time."""
+    def _handle_pt_alighting(
+        self, rid: int, alighting_time: float, alighting_node: int,
+        processing_time: tp.Optional[float] = None,
+    ):
+        """Keep passenger readiness at arrival, but notify operators at the current step."""
+        processing_time = alighting_time if processing_time is None else processing_time
+        if processing_time < alighting_time:
+            raise ValueError("PAYG cannot process a PT arrival before the passenger arrives")
         LOG.debug(f"PAYG PT alighting: rid={rid}, time={alighting_time}")
 
         parent_rq_obj: 'BasicIntermodalRequest' = self.demand[rid]
@@ -464,7 +454,7 @@ class PTBrokerPAYG(PTBrokerBasic):
             self._inform_amod_sub_request(
                 parent_rq_obj, lm_sub_trip_id,
                 alighting_node, parent_rq_obj.get_destination_node(),
-                alighting_time, parent_modal_state, op_id, alighting_time
+                alighting_time, parent_modal_state, op_id, processing_time
             )
 
         # Get offers and select best one
@@ -481,18 +471,24 @@ class PTBrokerPAYG(PTBrokerBasic):
                     best_op_id = amod_op_id
 
         if best_offer is None:
+            for op_id in range(self.n_amod_op):
+                self._cancel_amod_binding(rid, op_id, lm_amod_rid_struct, processing_time)
             # No AMoD available
-            self._mark_trip_interrupted(rid, PAYG_TRIP_STATE.INTERRUPTED_NO_LM_AMOD, alighting_time)
+            self._mark_trip_interrupted(rid, PAYG_TRIP_STATE.INTERRUPTED_NO_LM_AMOD, processing_time)
             LOG.info(f"PAYG {rid}: No LM_AMOD available after PT alighting, trip interrupted")
             return
 
         # Auto-confirm best LM_AMOD offer
+        self._bind_amod_child(rid, best_op_id, lm_amod_rid_struct, best_offer)
         for op_id in range(self.n_amod_op):
             if op_id != best_op_id:
-                self.amod_operators[op_id].user_cancels_request(lm_amod_rid_struct, alighting_time)
+                self._cancel_amod_binding(rid, op_id, lm_amod_rid_struct, processing_time)
             else:
-                self.amod_operators[op_id].user_confirms_booking(lm_amod_rid_struct, alighting_time)
-                self.demand[lm_amod_rid_struct].receive_offer(op_id, best_offer, None)
+                self._confirm_amod_binding(rid, op_id, lm_amod_rid_struct, processing_time)
+
+        for operator in self.amod_operators:
+            if hasattr(operator, 'flm_excluded_vid'):
+                operator.flm_excluded_vid.pop(rid, None)
 
         self.payg_trip_states[rid] = PAYG_TRIP_STATE.LM_AMOD_BOOKED
         LOG.info(f"PAYG {rid}: LM_AMOD booked with operator {best_op_id}, wait time {best_offer.offered_waiting_time}s")
@@ -526,6 +522,8 @@ class PTBrokerPAYG(PTBrokerBasic):
         # Remove from pending PT arrivals if present
         if rid in self.pending_pt_arrivals:
             del self.pending_pt_arrivals[rid]
+        for failure_key in [key for key in self.payg_candidate_failures if key[0] == rid]:
+            del self.payg_candidate_failures[failure_key]
 
         # Call parent implementation
         super().inform_user_leaving_system(rid, sim_time)
