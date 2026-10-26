@@ -407,10 +407,10 @@ class PTBrokerEI(PTBrokerBasic):
         # Cancel only actual bindings, keeping the common proposal ledger in sync.
         if parent_modal_state == RQ_MODAL_STATE.FIRSTMILE:
             pt_rid_struct = f"{parent_rid}_{RQ_SUB_TRIP_ID.FM_PT.value}"
-            self._cancel_pt_binding(parent_rid, pt_rid_struct, amod_op_id, sim_time)
+            self._cancel_pt_binding(parent_rid, pt_rid_struct, amod_op_id, sim_time, missed_connection=True)
         elif parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
             pt_rid_struct = f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}"
-            self._cancel_pt_binding(parent_rid, pt_rid_struct, amod_op_id, sim_time)
+            self._cancel_pt_binding(parent_rid, pt_rid_struct, amod_op_id, sim_time, missed_connection=True)
             lm_id = f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}"
             for op_id, request_id in list(self._amod_proposals.get(parent_rid, {})):
                 if request_id == lm_id:

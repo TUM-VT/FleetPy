@@ -803,6 +803,9 @@ class BasicIntermodalRequest(RequestBase):
         self.max_transfers: int = int(max_transfers)  # Zero allows direct PT journeys only; default 999 is a high finite limit.
         self.lastmile_max_wait_time: tp.Optional[int] = rq_row.get(G_IM_LM_WAIT_TIME, None)  # the customizable max waiting time for lastmile amod service
         self.uncatchable_pt: bool = False  # flag for requests that missed their PT connection after FM leg
+        self.pt_leg_state: tp.Optional[PT_LEG_STATE] = None
+        self.pt_cancel_time: tp.Optional[float] = None
+        self.pt_cancel_reason: tp.Optional[str] = None
         # PAYG (Plan-As-You-Go) specific attributes
         self.payg_interrupted: bool = False  # flag for PAYG trips that were interrupted
         self.payg_interrupt_state: tp.Optional[int] = None  # PAYG_TRIP_STATE value when interrupted
@@ -1009,6 +1012,9 @@ class BasicIntermodalRequest(RequestBase):
         record_dict[G_RQ_SELECTED_CANDIDATE_ID] = self.selected_candidate_id
         record_dict[G_RQ_MODAL_STATE_VALUE] = self.modal_state.value
         record_dict[G_RQ_UNCATCHABLE_PT] = self.uncatchable_pt
+        record_dict[G_RQ_PT_LEG_STATE] = None if self.pt_leg_state is None else self.pt_leg_state.value
+        record_dict[G_RQ_PT_CANCEL_TIME] = self.pt_cancel_time
+        record_dict[G_RQ_PT_CANCEL_REASON] = self.pt_cancel_reason
         # PAYG specific records
         record_dict[G_RQ_PAYG_INTERRUPTED] = self.payg_interrupted
         record_dict[G_RQ_PAYG_INTERRUPT_STATE] = self.payg_interrupt_state

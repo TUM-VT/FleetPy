@@ -279,11 +279,23 @@ class PTBrokerBasic(BrokerBasic):
             self.amod_operators[op_id].user_cancels_request(request_id, sim_time)
             del proposals[(op_id, request_id)]
 
-    def _cancel_pt_binding(self, rid, child_id, firstmile_op, sim_time):
+    def _cancel_pt_binding(self, rid, child_id, firstmile_op, sim_time, *, missed_connection=False):
         requests = self._pt_requests.get(rid, {})
         if (child_id, firstmile_op) in requests:
-            self.pt_operator.user_cancels_request(child_id, sim_time, firstmile_op)
+            if missed_connection:
+                cancelled = self.pt_operator.user_cancels_request(
+                    child_id, sim_time, firstmile_op, missed_connection=True,
+                )
+            else:
+                cancelled = self.pt_operator.user_cancels_request(child_id, sim_time, firstmile_op)
+            if cancelled is False:
+                child = self.demand.rq_db.get(child_id)
+                state = getattr(child, 'pt_leg_state', None)
+                if state == PT_LEG_STATE.BOOKED or self.pt_operator.get_current_offer(child_id, firstmile_op) is not None:
+                    return False
             del requests[(child_id, firstmile_op)]
+            return True
+        return False
 
     def _bind_amod_child(self, rid, op_id, request_id, offer):
         child = deepcopy(self._amod_proposals[rid][(op_id, request_id)])
@@ -315,6 +327,11 @@ class PTBrokerBasic(BrokerBasic):
         keep_amod = set(selected['proposal_bindings']) if selected else set()
         keep_pt = set(selected['pt_bindings']) if selected else set()
         keep_children = set(selected['child_requests']) if selected else set()
+        keep_children.update(
+            child_id for child_id, child in self.demand.rq_db.items()
+            if isinstance(child_id, str) and child_id.startswith(f"{rid}_")
+            and getattr(child, 'pt_leg_state', None) is not None
+        )
         proposals = self._amod_proposals.get(rid, {})
         for binding in list(proposals):
             if binding not in keep_amod:
@@ -324,6 +341,10 @@ class PTBrokerBasic(BrokerBasic):
         for binding in list(pt_requests):
             if binding not in keep_pt:
                 self._cancel_pt_binding(rid, binding[0], binding[1], sim_time)
+                child = self.demand.rq_db.get(binding[0])
+                if child is not None and getattr(child, 'pt_leg_state', None) is not None:
+                    # Keep accepted/cancelled PT execution rows for output and audit.
+                    keep_children.add(binding[0])
         for child_id in list(self.demand.rq_db):
             if isinstance(child_id, str) and child_id.startswith(f"{rid}_") and child_id not in keep_children:
                 del self.demand.rq_db[child_id]
@@ -334,15 +355,19 @@ class PTBrokerBasic(BrokerBasic):
 
     def inform_user_leaving_system(self, rid, sim_time):
         self._cleanup_proposals(rid, sim_time)
+        if self._pt_requests.get(rid):
+            # A refused cancellation must not discard its active execution binding.
+            return False
         self._amod_proposals.pop(rid, None)
         self._pt_requests.pop(rid, None)
         self._candidate_build_records.pop(rid, None)
         self._candidates.pop(rid, None)
         self._selected_candidates.pop(rid, None)
         self._confirmed_amod.pop(rid, None)
+        return True
 
     def inform_waiting_request_cancellations(self, chosen_operator, rid, sim_time):
-        self.inform_user_leaving_system(rid, sim_time)
+        return self.inform_user_leaving_system(rid, sim_time)
 
     def acknowledge_user_alighting(self, op_id, rid, vid, alighting_time):
         super().acknowledge_user_alighting(op_id, rid, vid, alighting_time)
@@ -418,6 +443,9 @@ class PTBrokerBasic(BrokerBasic):
         child.t_access = child.t_egress = child.fare = None
         child.payg_interrupted = False
         child.uncatchable_pt = False
+        child.pt_leg_state = None
+        child.pt_cancel_time = None
+        child.pt_cancel_reason = None
         return child
 
     def _inform_amod_sub_request(

@@ -504,6 +504,9 @@ G_RQ_TRANSFER_STATION_IDS = "transfer_station_ids"
 G_RQ_MAX_TRANSFERS = "max_transfers"
 G_RQ_SUB_TRIP_ID = "sub_trip_id"
 G_RQ_UNCATCHABLE_PT = "uncatchable_pt"  # flag for requests that missed their PT connection after FM leg
+G_RQ_PT_LEG_STATE = "pt_leg_state"
+G_RQ_PT_CANCEL_TIME = "pt_cancel_time"
+G_RQ_PT_CANCEL_REASON = "pt_cancel_reason"
 # PAYG (Plan-As-You-Go) specific
 G_RQ_PAYG_INTERRUPTED = "payg_interrupted"  # flag for PAYG trips that were interrupted
 G_RQ_PAYG_INTERRUPT_STATE = "payg_interrupt_state"  # PAYG_TRIP_STATE value when interrupted
@@ -535,6 +538,12 @@ class RQ_SUB_TRIP_ID(Enum):
     FLM_PT: int = 6
     FLM_AMOD_1: int = 7
     PT: int = 8
+
+class PT_LEG_STATE(Enum):
+    """State of a statically booked PT leg; future service records are provisional."""
+    BOOKED = "booked"
+    CANCELLED = "cancelled"
+    MISSED = "missed"
 
 class PAYG_TRIP_STATE(Enum):
     """PAYG trip state tracking"""

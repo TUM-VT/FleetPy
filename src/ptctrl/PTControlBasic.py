@@ -6,6 +6,8 @@ import logging
 from datetime import datetime
 import ast
 import typing as tp
+from math import isfinite
+from numbers import Real
 import pandas as pd
 
 # additional module imports (> requirements)
@@ -45,6 +47,7 @@ class PTControlBasic(PTControlBase):
         self.gtfs_dir: str = gtfs_dir
         self.pt_operator_id: int = pt_operator_id
         self.pt_offer_db: tp.Dict[str, 'PTOffer'] = {}  # rid_struct -> PTOffer
+        self._booked_pt_requests = {}  # (rid_struct, firstmile operator) -> (execution request, first departure)
         self.pt_router: RaptorRouterCpp = self._load_pt_router()
         LOG.info("PT operator initialized successfully.")
 
@@ -156,6 +159,26 @@ class PTControlBasic(PTControlBase):
         """
         pt_rid_struct: str = pt_sub_rq_obj.get_rid_struct()
         pt_offer: 'PTOffer' = self.get_current_offer(pt_rid_struct, firstmile_amod_operator_id)
+        if pt_offer is None or pt_offer.service_declined():
+            raise ValueError(f"No feasible PT offer to confirm for {pt_rid_struct}")
+        offer_key = (pt_rid_struct, firstmile_amod_operator_id)
+        first_departure = (
+            pt_offer.get(G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME)
+            + pt_offer.get(G_PT_OFFER_SOURCE_TRANSFER_TIME)
+            + pt_offer.get(G_OFFER_WAIT)
+        )
+        if not isinstance(first_departure, Real) or not isfinite(first_departure):
+            raise ValueError(f"Invalid first PT departure for {pt_rid_struct}")
+        # Accepted execution bindings are separate from replaceable proposal records.
+        if not hasattr(self, '_booked_pt_requests'):
+            self._booked_pt_requests = {}
+        existing = self._booked_pt_requests.get(offer_key)
+        if existing is not None:
+            if existing[0] is pt_sub_rq_obj and pt_sub_rq_obj.pt_leg_state == PT_LEG_STATE.BOOKED:
+                return
+            raise ValueError(f"PT request {pt_rid_struct} already has an accepted execution binding")
+        if any(key[0] == pt_rid_struct for key in self._booked_pt_requests):
+            raise ValueError(f"PT request {pt_rid_struct} is already accepted for another candidate")
         pt_sub_rq_obj.user_boards_vehicle(
             simulation_time = pt_offer.get(G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME, None),
             op_id = self.pt_operator_id,
@@ -168,26 +191,56 @@ class PTControlBasic(PTControlBase):
             do_pos = None,
             t_egress = pt_offer.get(G_PT_OFFER_TARGET_WALKING_TIME, None),
         )
+        pt_sub_rq_obj.pt_leg_state = PT_LEG_STATE.BOOKED
+        pt_sub_rq_obj.pt_cancel_time = None
+        pt_sub_rq_obj.pt_cancel_reason = None
+        self._booked_pt_requests[offer_key] = (pt_sub_rq_obj, first_departure)
 
     def user_cancels_request(
         self,
         rid_struct: str,
         sim_time: int,
-        firstmile_amod_operator_id: int = None
+        firstmile_amod_operator_id: int = None,
+        *, missed_connection: bool = False,
     ):
-        """This method is used to cancel a pt request. This removes the offer from the database.
+        """Remove a proposal, or retract a booked PT leg that was not boarded.
 
         Args:
             rid_struct (str): The sub-request id struct of the journey.
             sim_time (int): The simulation time when the cancellation occurs.
             firstmile_amod_operator_id (int, optional): The operator id of the firstmile amod operator. Defaults to None.
+            missed_connection (bool): The caller has established that the passenger never boarded.
+
+        Returns:
+            bool: Whether a proposal or unperformed booking was cancelled. Ordinary
+                cancellation at or after the accepted first departure is refused.
         """
+        if not isinstance(missed_connection, bool):
+            raise TypeError("missed_connection must be a bool")
+        if isinstance(sim_time, bool) or not isinstance(sim_time, Real) or not isfinite(sim_time):
+            raise ValueError("PT cancellation time must be a finite number")
         offer_key = (rid_struct, firstmile_amod_operator_id)
-        if offer_key in self.pt_offer_db:
-            del self.pt_offer_db[offer_key]
-            LOG.debug(f"PT request {rid_struct} cancelled at time {sim_time}")
-        else:
-            LOG.debug(f"PT request {rid_struct} not found in offer database, may have been cancelled already")
+        booking = getattr(self, '_booked_pt_requests', {}).get(offer_key)
+        if booking is not None:
+            child, first_departure = booking
+            if child.pt_leg_state != PT_LEG_STATE.BOOKED or (
+                not missed_connection and sim_time >= first_departure
+            ):
+                LOG.debug("Refusing to retract PT service that may already have started: %s", rid_struct)
+                return False
+            # The offer remains on the execution request as its original plan.
+            # These fields were prefilled by booking, not actual vehicle events.
+            for attribute in (
+                'pu_time', 'do_time', 'service_opid', 'service_vid', 'pu_pos', 'do_pos',
+                't_access', 't_egress', 'fare',
+            ):
+                setattr(child, attribute, None)
+            child.pt_leg_state = PT_LEG_STATE.MISSED if missed_connection else PT_LEG_STATE.CANCELLED
+            child.pt_cancel_time = sim_time
+            child.pt_cancel_reason = 'missed_connection' if missed_connection else 'cancelled_before_boarding'
+            del self._booked_pt_requests[offer_key]
+        removed = self.pt_offer_db.pop(offer_key, None)
+        return booking is not None or removed is not None
         
     def _update_gtfs_data(self):
         """This method will update the gtfs data of the pt router to reflect any changes in the pt network or schedule.

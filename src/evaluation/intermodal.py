@@ -83,9 +83,18 @@ def _is_true(value):
     return bool(value) if pd.notna(value) else False
 
 
+def _pt_leg_failed(row):
+    """Terminal PT cancellation states override any prefilled service times."""
+    state = row.get(G_RQ_PT_LEG_STATE)
+    if isinstance(state, PT_LEG_STATE):
+        state = state.value
+    return isinstance(state, str) and state in (
+        PT_LEG_STATE.CANCELLED.value, PT_LEG_STATE.MISSED.value)
+
+
 def _has_journey_failure(row):
-    return any(_is_true(row.get(field, False)) for field in
-               (G_RQ_UNCATCHABLE_PT, G_RQ_PAYG_INTERRUPTED))
+    return _pt_leg_failed(row) or any(_is_true(row.get(field, False)) for field in
+                                    (G_RQ_UNCATCHABLE_PT, G_RQ_PAYG_INTERRUPTED))
 
 
 def _completion_horizon(output_dir, evaluation_end_time, completion_end_time):
@@ -100,7 +109,7 @@ def _completion_horizon(output_dir, evaluation_end_time, completion_end_time):
 
 
 def _leg_is_complete(row, completion_end_time):
-    if row is None:
+    if row is None or _pt_leg_failed(row):
         return False
     pickup = _finite_number(row.get(G_RQ_PU))
     dropoff = _finite_number(row.get(G_RQ_DO))
