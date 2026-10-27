@@ -53,9 +53,12 @@ class SimulationVehicleStruct():
             self.set_locked_vehplan(assigned_veh_plan, sim_time, routing_engine)
             
         else:
+            # an empty stand-in (e.g. to price a reservation) carries nobody and has no route, so it is
+            # idle whatever the vehicle it was copied from is doing
+            self.status = VRL_STATES.IDLE
             self.pax = []
             self.cl_start_time = sim_time
-            
+
             self.locked_planstops = VehiclePlan(self, sim_time, routing_engine, [])
             self.assigned_route = []
 
