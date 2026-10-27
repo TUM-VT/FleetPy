@@ -340,6 +340,33 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
             # LOG.debug(f" -> obj eval: sum_dist {sum_dist} * distance_cost {distance_cost} + sum_user_times {sum_user_times} * traveler_vot {traveler_vot} - assignment_reward {assignment_reward}")
             return sum_dist * distance_cost + sum_user_times * traveler_vot - assignment_reward
 
+    elif func_key == "distance_and_user_times_man_with_reservation_lateness":
+        # the reservation objective above, with a reserved passenger's lateness against the wanted
+        # pickup counting rlw seconds of travel time per second (vaas reservation check, 2026-10-27);
+        # a request counts as reserved when made at least RESERVED_LEAD_S before its wanted pickup,
+        # since the reservation flag is cleared when the rolling horizon reveals it
+        RESERVED_LEAD_S = 60
+        base_f = return_pooling_objective_function(dict(vr_control_func_dict, func_key="distance_and_user_times_man_with_reservation"))
+        extra_late_weight = (float(vr_control_func_dict.get("rlw", 1)) - 1) * vr_control_func_dict["vot"]
+
+        def control_f(simulation_time:float, veh_obj:SimulationVehicle, veh_plan:VehiclePlan, rq_dict:Dict[Any,PlanRequest], routing_engine:NetworkBase)->float:
+            """The reservation objective plus (rlw - 1) * vot per second a reserved pickup is late.
+
+            :param simulation_time: current simulation time
+            :param veh_obj: simulation vehicle object
+            :param veh_plan: vehicle plan in question
+            :param rq_dict: rq -> Plan request dictionary
+            :param routing_engine: for routing queries
+            :return: objective function value
+            """
+            late = 0.0
+            for rid, boarding_info_list in veh_plan.pax_info.items():
+                prq = rq_dict[rid]
+                ept = prq.get_o_stop_info()[1]
+                if ept - prq.rq_time >= RESERVED_LEAD_S:
+                    late += max(0.0, boarding_info_list[0] - ept)
+            return base_f(simulation_time, veh_obj, veh_plan, rq_dict, routing_engine) + extra_late_weight * late
+
     elif func_key == "distance_and_user_times_man_SoD":
         traveler_vot = vr_control_func_dict["vot"]
         distance_cost = vr_control_func_dict["dc"]
