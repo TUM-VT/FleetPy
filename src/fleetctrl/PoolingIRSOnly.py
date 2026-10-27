@@ -229,6 +229,17 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         """
         LOG.debug(f"activate {rid} for global optimisation at time {sim_time}!")
         self.rq_dict[rid].set_reservation_flag(False)
+        # a reservation that is on no vehicle yet (RollingHorizonNoGuarantee places none at the
+        # request) is inserted now, into the vehicle the objective prefers at the reveal; without a
+        # feasible vehicle it stays unserved
+        if self.rid_to_assigned_vid.get(rid) is None:
+            prq = self.rq_dict[rid]
+            list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True)
+            if len(list_tuples) > 0:
+                (vid, vehplan, _) = best_insertion(list_tuples, self._tie_break_by_vid)
+                self.assign_vehicle_plan(self.sim_vehicles[vid], vehplan, sim_time)
+            else:
+                LOG.info(f"revealed reservation {rid} found no feasible vehicle at {sim_time}")
 
     def _call_time_trigger_request_batch(self, simulation_time):
         """This method can be used to perform time-triggered proccesses, e.g. the optimization of the current
