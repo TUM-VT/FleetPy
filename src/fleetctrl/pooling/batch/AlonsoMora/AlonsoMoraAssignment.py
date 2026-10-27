@@ -229,6 +229,10 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
         # if self.veh_tree_build_timeout is not None:
         #     self._set_init_solution_insertion()
        # # LOG.debug(f"check for untracked boardings")
+        # v2rbs built here from the fleet control's current plan already carry the legs the vehicle
+        # finished since the last optimisation; _updateVehicleDataBase must not apply them again
+        # (with one-second time steps a passenger can be offered a vehicle and board in between)
+        self._v2rb_from_current_plan = {}
         for vid in self.untracked_boarding_detected.keys():
             ## LOG.debug(f"untracked boarding for vid {vid}")
             assigned_key = self.current_assignments[vid]
@@ -238,6 +242,7 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                 LOG.debug(f"externally assigned plan: {assigned_plan}")
                 assigned_v2rb = V2RB(self.routing_engine, self.active_requests, sim_time, assigned_key, self.veh_objs[vid], self.std_bt, self.add_bt, self.objective_function, orig_veh_plans=[assigned_plan])
                 self._addRtvKey(assigned_key, assigned_v2rb)
+                self._v2rb_from_current_plan[assigned_key] = 1
         # LOG.info("build V2RBs")
         ## LOG.debug(f"old v2rbs {self.rtv_costs}")
         self._computeV2RBdatabase()
@@ -1342,7 +1347,8 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                     continue
 
                 v2rb_obj = self.rtv_obj[rtv_key]
-                v2rb_obj.updateAndCheckFeasibility(self.routing_engine, self.objective_function, veh_obj, self.active_requests, self.sim_time, list_passed_VRLs = list_passed_VRLs, is_assigned = is_assigned)
+                passed = [] if rtv_key in getattr(self, "_v2rb_from_current_plan", {}) else list_passed_VRLs
+                v2rb_obj.updateAndCheckFeasibility(self.routing_engine, self.objective_function, veh_obj, self.active_requests, self.sim_time, list_passed_VRLs = passed, is_assigned = is_assigned)
                 if not v2rb_obj.isFeasible():
                     to_del_keys[rtv_key] = 1
                 else:
