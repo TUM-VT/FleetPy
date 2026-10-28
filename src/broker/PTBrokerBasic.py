@@ -493,7 +493,6 @@ class PTBrokerBasic(BrokerBasic):
 
         self.pt_operator.create_and_record_pt_offer_db(
                                                     rid_struct = pt_rid_struct,
-                                                    operator_id = self.pt_operator_id,
                                                     source_station_id = source_pt_station_id,
                                                     target_station_id = target_pt_station_id,
                                                     source_walking_time = t_source_walk,

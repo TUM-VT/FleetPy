@@ -1,14 +1,11 @@
 # -------------------------------------------------------------------------------------------------------------------- #
 # standard distribution imports
 # -----------------------------
-import os
 import logging
 from datetime import datetime
-import ast
 import typing as tp
 from math import isfinite
 from numbers import Real
-import pandas as pd
 
 # additional module imports (> requirements)
 # ------------------------------------------
@@ -43,11 +40,15 @@ INPUT_PARAMETERS_PTControlBasic = {
 class PTControlBasic(PTControlBase):
     def __init__(self, gtfs_dir: str, pt_operator_id: int = -2):
         super().__init__()
-
+        if (isinstance(pt_operator_id, bool) or not isinstance(pt_operator_id, Real)
+                or not isfinite(pt_operator_id) or int(pt_operator_id) != pt_operator_id
+                or pt_operator_id >= -1):
+            raise ValueError("PT operator ID must be an integer below -1")
         self.gtfs_dir: str = gtfs_dir
-        self.pt_operator_id: int = pt_operator_id
-        self.pt_offer_db: tp.Dict[str, 'PTOffer'] = {}  # rid_struct -> PTOffer
-        self._booked_pt_requests = {}  # (rid_struct, firstmile operator) -> (execution request, first departure)
+        self.pt_operator_id: int = int(pt_operator_id)
+        self.pt_offer_db: tp.Dict[tp.Tuple[str, tp.Optional[int]], tp.Union[PTOffer, Rejection]] = {}
+        # rid_struct -> (firstmile operator, execution request, first departure)
+        self._booked_pt_requests: tp.Dict[str, tp.Tuple[tp.Optional[int], 'BasicIntermodalRequest', float]] = {}
         self.pt_router: RaptorRouterCpp = self._load_pt_router()
         LOG.info("PT operator initialized successfully.")
 
@@ -68,7 +69,7 @@ class PTControlBasic(PTControlBase):
         Args:
             source_station_id (str): id of the source station.
             target_station_id (str): id of the target station.
-            source_station_departure_datetime (datetime): departure datetime from source station.
+            source_station_departure_datetime (datetime): readiness datetime at the source station.
             max_transfers (int, optional): Non-negative maximum PT transfers; 0 permits direct journeys only. Defaults to 999.
             detailed (bool, optional): whether to return a detailed journey plan. Defaults to False.
         Returns:
@@ -85,43 +86,42 @@ class PTControlBasic(PTControlBase):
     
     def create_and_record_pt_offer_db(
         self,
-        rid_struct: str, operator_id: int,
-        source_station_id: str, target_station_id: str,
-        source_walking_time: int,target_walking_time: int,
+        rid_struct: str,
+        source_station_id: tp.Optional[str], target_station_id: tp.Optional[str],
+        source_walking_time: tp.Optional[float], target_walking_time: tp.Optional[float],
         pt_journey_plan_dict: tp.Union[tp.Dict[str, tp.Any], None],
-        firstmile_amod_operator_id: int = None,
-    ):
+        firstmile_amod_operator_id: tp.Optional[int] = None,
+    ) -> None:
         """This method will create a PTOffer for the pt request and record it in the pt offer database.
 
         Args:
             rid_struct (str): sub-request id struct of the journey.
-            operator_id (int): id of PT operator (-2).
             source_station_id (str): id of the source station.
             target_station_id (str): id of the target station.
-            source_walking_time (int): walking time [s] from origin street node to source station.
-            target_walking_time (int): walking time [s] from target station to destination street node.
+            source_walking_time (float): walking time [s] from origin street node to source station.
+            target_walking_time (float): walking time [s] from target station to destination street node.
             pt_journey_plan_dict (tp.Union[tp.Dict[str, tp.Any], None]): The pt journey plan dictionary or None if no journey is found.
             firstmile_amod_operator_id (int, optional): The operator id of the firstmile amod operator. Defaults to None.
         """
         if pt_journey_plan_dict is None:
-            self.pt_offer_db[(rid_struct, firstmile_amod_operator_id)] = Rejection(rid_struct, operator_id)
+            self.pt_offer_db[(rid_struct, firstmile_amod_operator_id)] = Rejection(rid_struct, self.pt_operator_id)
         else:
             fare: int = self._compute_fare()
             # old offer will always be overwritten
             self.pt_offer_db[(rid_struct, firstmile_amod_operator_id)] = PTOffer(
-                traveler_id = rid_struct, operator_id = operator_id,
+                traveler_id = rid_struct, operator_id = self.pt_operator_id,
                 source_station_id = source_station_id, target_station_id = target_station_id,
-                source_walking_time = source_walking_time, source_station_departure_time = pt_journey_plan_dict.get(G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME, None),
-                source_transfer_time = pt_journey_plan_dict.get(G_PT_OFFER_SOURCE_TRANSFER_TIME, None),
-                waiting_time = pt_journey_plan_dict.get(G_PT_OFFER_SOURCE_WAITING_TIME, None),
-                trip_time = pt_journey_plan_dict.get(G_PT_OFFER_TRIP_TIME, None),
+                source_walking_time = source_walking_time, source_station_departure_time = pt_journey_plan_dict[G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME],
+                source_transfer_time = pt_journey_plan_dict[G_PT_OFFER_SOURCE_TRANSFER_TIME],
+                waiting_time = pt_journey_plan_dict[G_PT_OFFER_SOURCE_WAITING_TIME],
+                trip_time = pt_journey_plan_dict[G_PT_OFFER_TRIP_TIME],
                 fare = fare,
-                target_transfer_time = pt_journey_plan_dict.get(G_PT_OFFER_TARGET_TRANSFER_TIME, None), 
-                target_station_arrival_time = pt_journey_plan_dict.get(G_PT_OFFER_TARGET_STATION_ARRIVAL_TIME, None), 
+                target_transfer_time = pt_journey_plan_dict[G_PT_OFFER_TARGET_TRANSFER_TIME],
+                target_station_arrival_time = pt_journey_plan_dict[G_PT_OFFER_TARGET_STATION_ARRIVAL_TIME],
                 target_walking_time = target_walking_time,
-                num_transfers = pt_journey_plan_dict.get(G_PT_OFFER_NUM_TRANSFERS, None), 
-                pt_journey_duration = pt_journey_plan_dict.get(G_PT_OFFER_DURATION, None), 
-                detailed_journey_plan = pt_journey_plan_dict.get(G_PT_OFFER_STEPS, None),
+                num_transfers = pt_journey_plan_dict[G_PT_OFFER_NUM_TRANSFERS],
+                pt_journey_duration = pt_journey_plan_dict[G_PT_OFFER_DURATION],
+                detailed_journey_plan = pt_journey_plan_dict[G_PT_OFFER_STEPS],
             )
 
     def _compute_fare(self) -> int:
@@ -134,23 +134,23 @@ class PTControlBasic(PTControlBase):
     def get_current_offer(
         self, 
         rid_struct: str,
-        firstmile_amod_operator_id: int = None,
-    ) -> tp.Optional[PTOffer]:
+        firstmile_amod_operator_id: tp.Optional[int] = None,
+    ) -> tp.Union[PTOffer, Rejection, None]:
         """This method will return the current offer for the pt request.
 
         Args:
             rid_struct (str): The sub-request id struct of the journey.
             firstmile_amod_operator_id (int, optional): The operator id of the firstmile amod operator. Defaults to None.
         Returns:
-            tp.Optional[PTOffer]: The current offer for the pt request.
+            tp.Union[PTOffer, Rejection, None]: The current offer, rejection, or no queried record.
         """
         return self.pt_offer_db.get((rid_struct, firstmile_amod_operator_id), None)
     
     def user_confirms_booking(
         self,
         pt_sub_rq_obj: 'BasicIntermodalRequest',
-        firstmile_amod_operator_id: int = None
-    ):
+        firstmile_amod_operator_id: tp.Optional[int] = None
+    ) -> None:
         """This method is used to confirm a customer booking. This can trigger some database processes.
 
         Args:
@@ -158,10 +158,18 @@ class PTControlBasic(PTControlBase):
             firstmile_amod_operator_id (int): the id of the firstmile amod operator, only used for FM and FLM requests
         """
         pt_rid_struct: str = pt_sub_rq_obj.get_rid_struct()
-        pt_offer: 'PTOffer' = self.get_current_offer(pt_rid_struct, firstmile_amod_operator_id)
+        # Accepted execution bindings are separate from replaceable proposal records.
+        existing = self._booked_pt_requests.get(pt_rid_struct)
+        if existing is not None:
+            accepted_operator, accepted_child, _ = existing
+            if accepted_operator != firstmile_amod_operator_id:
+                raise ValueError(f"PT request {pt_rid_struct} is already accepted for another candidate")
+            if accepted_child is pt_sub_rq_obj and pt_sub_rq_obj.pt_leg_state == PT_LEG_STATE.BOOKED:
+                return
+            raise ValueError(f"PT request {pt_rid_struct} already has an accepted execution binding")
+        pt_offer = self.get_current_offer(pt_rid_struct, firstmile_amod_operator_id)
         if pt_offer is None or pt_offer.service_declined():
             raise ValueError(f"No feasible PT offer to confirm for {pt_rid_struct}")
-        offer_key = (pt_rid_struct, firstmile_amod_operator_id)
         first_departure = (
             pt_offer.get(G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME)
             + pt_offer.get(G_PT_OFFER_SOURCE_TRANSFER_TIME)
@@ -169,14 +177,6 @@ class PTControlBasic(PTControlBase):
         )
         if not isinstance(first_departure, Real) or not isfinite(first_departure):
             raise ValueError(f"Invalid first PT departure for {pt_rid_struct}")
-        # Accepted execution bindings are separate from replaceable proposal records.
-        existing = self._booked_pt_requests.get(offer_key)
-        if existing is not None:
-            if existing[0] is pt_sub_rq_obj and pt_sub_rq_obj.pt_leg_state == PT_LEG_STATE.BOOKED:
-                return
-            raise ValueError(f"PT request {pt_rid_struct} already has an accepted execution binding")
-        if any(key[0] == pt_rid_struct for key in self._booked_pt_requests):
-            raise ValueError(f"PT request {pt_rid_struct} is already accepted for another candidate")
         pt_sub_rq_obj.user_boards_vehicle(
             simulation_time = pt_offer.get(G_PT_OFFER_SOURCE_STATION_DEPARTURE_TIME, None),
             op_id = self.pt_operator_id,
@@ -192,20 +192,20 @@ class PTControlBasic(PTControlBase):
         pt_sub_rq_obj.pt_leg_state = PT_LEG_STATE.BOOKED
         pt_sub_rq_obj.pt_cancel_time = None
         pt_sub_rq_obj.pt_cancel_reason = None
-        self._booked_pt_requests[offer_key] = (pt_sub_rq_obj, first_departure)
+        self._booked_pt_requests[pt_rid_struct] = (firstmile_amod_operator_id, pt_sub_rq_obj, first_departure)
 
     def user_cancels_request(
         self,
         rid_struct: str,
-        sim_time: int,
-        firstmile_amod_operator_id: int = None,
+        sim_time: float,
+        firstmile_amod_operator_id: tp.Optional[int] = None,
         *, missed_connection: bool = False,
     ) -> bool:
         """Remove a proposal, or retract a booked PT leg that was not boarded.
 
         Args:
             rid_struct (str): The sub-request id struct of the journey.
-            sim_time (int): The simulation time when the cancellation occurs.
+            sim_time (float): The simulation time [s] when the cancellation occurs.
             firstmile_amod_operator_id (int, optional): The operator id of the firstmile amod operator. Defaults to None.
             missed_connection (bool): The caller has established that the passenger never boarded.
 
@@ -219,9 +219,9 @@ class PTControlBasic(PTControlBase):
         if isinstance(sim_time, bool) or not isinstance(sim_time, Real) or not isfinite(sim_time):
             raise ValueError("PT cancellation time must be a finite number")
         offer_key = (rid_struct, firstmile_amod_operator_id)
-        booking = self._booked_pt_requests.get(offer_key)
-        if booking is not None:
-            child, first_departure = booking
+        booking = self._booked_pt_requests.get(rid_struct)
+        if booking is not None and booking[0] == firstmile_amod_operator_id:
+            _, child, first_departure = booking
             if child.pt_leg_state != PT_LEG_STATE.BOOKED or (
                 not missed_connection and sim_time >= first_departure
             ):
@@ -237,11 +237,11 @@ class PTControlBasic(PTControlBase):
             child.pt_leg_state = PT_LEG_STATE.MISSED if missed_connection else PT_LEG_STATE.CANCELLED
             child.pt_cancel_time = sim_time
             child.pt_cancel_reason = 'missed_connection' if missed_connection else 'cancelled_before_boarding'
-            del self._booked_pt_requests[offer_key]
+            del self._booked_pt_requests[rid_struct]
         self.pt_offer_db.pop(offer_key, None)
         return True
         
-    def _update_gtfs_data(self):
+    def _update_gtfs_data(self) -> None:
         """This method will update the gtfs data of the pt router to reflect any changes in the pt network or schedule.
 
         For the basic implementation, this method does nothing.
