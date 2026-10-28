@@ -303,6 +303,12 @@ class PTBrokerPAYG(PTBrokerBasic):
         parent_rid = int(parts[0])
         sub_trip_id = int(parts[1])
 
+        # Draining final AMoD assignments must not activate a new PT leg.
+        end_time = self.scenario_parameters.get(G_SIM_END_TIME)
+        if (end_time is not None and alighting_time >= end_time
+                and sub_trip_id in (RQ_SUB_TRIP_ID.FM_AMOD.value, RQ_SUB_TRIP_ID.FLM_AMOD_0.value)):
+            return
+
         parent_rq_obj: 'BasicIntermodalRequest' = self.demand[parent_rid]
         parent_modal_state: RQ_MODAL_STATE = parent_rq_obj.get_modal_state()
 
