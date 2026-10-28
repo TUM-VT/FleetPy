@@ -326,6 +326,7 @@ G_SUMO_IGNORE_JUNCTION_BLOCKER = "sumo_ignore-junction-blocker"
 G_SUMO_TIME_TO_TELEPORT = "sumo_time-to-teleport"
 G_SUMO_TIME_TO_TELEPORT_HIGHWAYS = "sumo_time-to-teleport.highways"
 G_SUMO_EAGER_INSERT = "sumo_eager-insert"
+G_SUMO_LOAD_STATE = "sumo_load-state"  # SUMO state file to start from (warm start), saved at start_time by a run from the morning (scripts/routing/save_sumo_states.py in the vaas repo); "{seed}" takes random_seed; relative paths are read from the FleetPy root. Unset = SUMO starts on an empty network
 G_SUMO_EDGE_DATA_INTERVAL = "sumo_edgeData.interval"
 G_SUMO_EDGE_DATA_WITH_INTERNAL = "sumo_edgeData.withInternal"
 G_SUMO_EDGE_DATA_EXCLUDE_EMPTY = "sumo_edgeData.excludeEmpty"

@@ -17,7 +17,7 @@ import time
 import numpy as np
 import pathlib
 from src.coupling.SUMO.SUMOcontrolledSim import SUMOcontrolledSim
-from src.coupling.SUMO.sumocfg_utils import merge_additional_files
+from src.coupling.SUMO.sumocfg_utils import merge_additional_files, sumo_options, load_state_args
 from src.coupling.SUMO.tt_source import (
     coverage_error, layer_coverage_error, requested_bin_times, resolve_source_dir,
     run_log_path, tt_file_for, write_source_stats)
@@ -267,36 +267,27 @@ class SUMOFleetPyServer():
   
 
         sumoCmd = [self.sumo_binary, "-c", self.sumo_config_path ,
-                "--collision.action","warn",
                 "--begin",str(self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME)),
                  # SUMO's -a REPLACES the sumocfg's <additional-files> rather
                  # than extending it, so passing EdgeDataCfgPath alone would
                  # silently drop the scenario's traffic-light programs, WAUT
                  # switching and public transport. Merge them back in.
                  "-a",merge_additional_files(self.sumo_config_path, EdgeDataCfgPath),
-                "--step-length","1",
                 "--tripinfo-output",TripInfoPath,
                 "--vehroute-output",vehRoutePath,
                 "--vehroute-output.exit-times","--vehroute-output.incomplete","--vehroute-output.write-unfinished","--vehroute-output.route-length",
                 "--collision-output",collisionPath,
                 "--statistic-output",statisticsPath,
-                "--start", 
-                "--seed", str(self.fp_sim_env.scenario_parameters[G_RANDOM_SEED]),
-                "--no-warnings",str(True),
-                "--route-steps", str(self.fp_sim_env.scenario_parameters.get(G_SUMO_ROUTE_STEPS, 200)),
-                "--no-internal-links", str(self.fp_sim_env.scenario_parameters.get(G_SUMO_NO_INTERNAL_LINKS, False)),
-                "--ignore-junction-blocker", str(self.fp_sim_env.scenario_parameters.get(G_SUMO_IGNORE_JUNCTION_BLOCKER, -1)),
-                "--time-to-teleport", str(self.fp_sim_env.scenario_parameters.get(G_SUMO_TIME_TO_TELEPORT, 300)),
-                "--time-to-teleport.highways", str(self.fp_sim_env.scenario_parameters.get(G_SUMO_TIME_TO_TELEPORT_HIGHWAYS, 0)),
-                "--eager-insert", str(self.fp_sim_env.scenario_parameters.get(G_SUMO_EAGER_INSERT, False)),
-                # Event-overlay cells block lanes mid-run. Edge 29119849#1
-                # carries PT routes, so a blockage can leave a bus with no path
-                # to its fixed stop, and SUMO treats that as fatal: the whole
-                # co-simulation aborts partway through. This downgrades it to a
-                # warning and drops the un-routable vehicle. Harmless on the
-                # no-event cells, which have no un-routable vehicles to drop.
-                "--ignore-route-errors", str(True),
+                "--start",
                 ]
+        # options shared with the run that saves a warm-start state (sumocfg_utils)
+        params = self.fp_sim_env.scenario_parameters
+        sumoCmd += sumo_options(params, params[G_RANDOM_SEED])
+        # docs/17 2026-10-28: start from SUMO's state at the start time, saved by a run
+        # from the morning, instead of an empty network; unset = the empty start
+        sumoCmd += load_state_args(params.get(G_SUMO_LOAD_STATE), params[G_RANDOM_SEED],
+                                   params.get(G_SIM_START_TIME), self.sumo_config_path,
+                                   self.fp_sim_env.dir_names.get(G_DIR_MAIN))
      
         traci.start(sumoCmd)
         print(f"SUMO-Simulation Initialized at t={self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME)}")
