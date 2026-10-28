@@ -774,17 +774,10 @@ class BasicIntermodalRequest(RequestBase):
     type = "BasicIntermodalRequest"
     def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
         super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
-        legacy_mode = rq_row.get(G_RQ_MODAL_STATE_VALUE)
-        if not self._is_missing_input(legacy_mode):
-            raise ValueError(
-                f"Request {self.rid}: {G_RQ_MODAL_STATE_VALUE} is no longer a demand input; "
-                f"migrate it to {G_RQ_QUERY_MODES} and four-slot {G_RQ_TRANSFER_STATION_IDS}"
-            )
         self.query_modes: tp.Tuple[RQ_MODAL_STATE, ...] = self._load_query_modes(rq_row)
         self.modal_state: RQ_MODAL_STATE = (
             self.query_modes[0] if len(self.query_modes) == 1 else RQ_MODAL_STATE.MONOMODAL
         )
-        self.modal_state_int: int = self.modal_state.value
         self.selected_mode: tp.Optional[RQ_MODAL_STATE] = None
         self.selected_candidate_id: tp.Optional[tp.Hashable] = None
         self.candidate_modes: tp.Dict[tp.Hashable, RQ_MODAL_STATE] = {}
@@ -894,9 +887,6 @@ class BasicIntermodalRequest(RequestBase):
 
     def get_query_modes(self) -> tp.Tuple[RQ_MODAL_STATE, ...]:
         return self.query_modes
-
-    def get_transfer_station_ids(self) -> tp.List[tp.Optional[str]]:
-        return list(self.transfer_station_ids)
 
     def get_transfer_station_ids_for_mode(self, mode: RQ_MODAL_STATE) -> tp.List[str]:
         """Return only the transfer stations belonging to the requested journey mode."""
@@ -1010,7 +1000,6 @@ class BasicIntermodalRequest(RequestBase):
         record_dict[G_RQ_QUERY_MODES] = ";".join(mode.name for mode in self.query_modes)
         record_dict[G_RQ_SELECTED_MODE] = None if self.selected_mode is None else self.selected_mode.value
         record_dict[G_RQ_SELECTED_CANDIDATE_ID] = self.selected_candidate_id
-        record_dict[G_RQ_MODAL_STATE_VALUE] = self.modal_state.value
         record_dict[G_RQ_UNCATCHABLE_PT] = self.uncatchable_pt
         record_dict[G_RQ_PT_LEG_STATE] = None if self.pt_leg_state is None else self.pt_leg_state.value
         record_dict[G_RQ_PT_CANCEL_TIME] = self.pt_cancel_time
@@ -1047,11 +1036,9 @@ class BasicIntermodalRequest(RequestBase):
             return None
         for candidate_id, _ in options:
             if candidate_id not in self.candidate_modes:
-                if len(self.query_modes) != 1:
-                    raise ValueError(f"Candidate {candidate_id!r} has no registered query mode")
-                self.register_candidate(candidate_id, self.query_modes[0])
+                raise ValueError(f"Candidate {candidate_id!r} has no registered query mode")
         if (
-            len(self.query_modes) > 1
+            len({self.candidate_modes[candidate_id] for candidate_id, _ in options}) > 1
             and any(not self.candidate_complete[candidate_id] for candidate_id, _ in options)
             and type(self).score_candidate is BasicIntermodalRequest.score_candidate
         ):
@@ -1066,7 +1053,6 @@ class BasicIntermodalRequest(RequestBase):
         self.selected_candidate_id = candidate_id
         self.selected_mode = self.candidate_modes[candidate_id]
         self.modal_state = self.selected_mode
-        self.modal_state_int = self.selected_mode.value
         self.chosen_operator_id = candidate_id
         self.fare = offer.get(G_OFFER_FARE, 0)
         return candidate_id

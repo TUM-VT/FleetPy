@@ -4,6 +4,7 @@ import glob
 import numpy as np
 import pandas as pd
 import re
+from numbers import Real
 
 MAIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(MAIN_DIR)
@@ -47,26 +48,17 @@ def calculate_pt_wait_time(fm_amod_row, pt_row):
 
 
 def _parse_execution_mode(value):
-    """Read a selected mode without turning a missing decision into MONOMODAL."""
-    if isinstance(value, RQ_MODAL_STATE):
-        return value.value if value.value in range(RQ_MODAL_STATE.PT.value + 1) else None
-    if isinstance(value, str):
-        value = value.strip()
-        if value in RQ_MODAL_STATE.__members__:
-            return _parse_execution_mode(RQ_MODAL_STATE[value])
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
+    """Read a numeric selected mode; an empty decision remains unselected."""
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
         return None
+    number = float(value)
     if not np.isfinite(number) or not number.is_integer():
         return None
     return int(number) if int(number) in range(RQ_MODAL_STATE.PT.value + 1) else None
 
 
 def _execution_mode(row):
-    """Only legacy output without selected_mode falls back to modal_state_value."""
-    field = G_RQ_SELECTED_MODE if G_RQ_SELECTED_MODE in row else G_RQ_MODAL_STATE_VALUE
-    return _parse_execution_mode(row.get(field))
+    return _parse_execution_mode(row[G_RQ_SELECTED_MODE])
 
 
 def _finite_number(value):
@@ -85,15 +77,13 @@ def _is_true(value):
 
 def _pt_leg_failed(row):
     """Terminal PT cancellation states override any prefilled service times."""
-    state = row.get(G_RQ_PT_LEG_STATE)
-    if isinstance(state, PT_LEG_STATE):
-        state = state.value
+    state = row[G_RQ_PT_LEG_STATE]
     return isinstance(state, str) and state in (
         PT_LEG_STATE.CANCELLED.value, PT_LEG_STATE.MISSED.value)
 
 
 def _has_journey_failure(row):
-    return _pt_leg_failed(row) or any(_is_true(row.get(field, False)) for field in
+    return _pt_leg_failed(row) or any(_is_true(row[field]) for field in
                                     (G_RQ_UNCATCHABLE_PT, G_RQ_PAYG_INTERRUPTED))
 
 
@@ -111,11 +101,11 @@ def _completion_horizon(output_dir, evaluation_end_time, completion_end_time):
 def _leg_is_complete(row, completion_end_time):
     if row is None or _pt_leg_failed(row):
         return False
-    pickup = _finite_number(row.get(G_RQ_PU))
-    dropoff = _finite_number(row.get(G_RQ_DO))
+    pickup = _finite_number(row[G_RQ_PU])
+    dropoff = _finite_number(row[G_RQ_DO])
     if not np.isfinite(pickup) or not np.isfinite(dropoff) or dropoff < pickup:
         return False
-    egress = _finite_number(row.get(G_RQ_EGRESS, 0))
+    egress = _finite_number(row[G_RQ_EGRESS])
     egress = egress if np.isfinite(egress) else 0
     return egress >= 0 and (completion_end_time is None or dropoff + egress <= completion_end_time)
 
@@ -130,45 +120,47 @@ def _selected_legs(parent_row, sub_trips, modal_state):
             RQ_SUB_TRIP_ID.FLM_AMOD_0.value, RQ_SUB_TRIP_ID.FLM_PT.value, RQ_SUB_TRIP_ID.FLM_AMOD_1.value),
         RQ_MODAL_STATE.PT.value: (RQ_SUB_TRIP_ID.PT.value,),
     }.get(modal_state, ())
-    selected_candidate = parent_row.get(G_RQ_SELECTED_CANDIDATE_ID)
+    selected_candidate = parent_row[G_RQ_SELECTED_CANDIDATE_ID]
     rows = {}
     for sub_trip_id in required_ids:
         if sub_trip_id is None:
             rows[sub_trip_id] = parent_row
             continue
         matches = sub_trips[sub_trips[G_RQ_SUB_TRIP_ID] == sub_trip_id]
-        if pd.notna(selected_candidate) and G_RQ_SELECTED_CANDIDATE_ID in matches.columns:
-            candidate_ids = matches[G_RQ_SELECTED_CANDIDATE_ID]
-            matches = matches[candidate_ids.isna() | (candidate_ids == selected_candidate)]
+        matches = matches[matches[G_RQ_SELECTED_CANDIDATE_ID] == selected_candidate]
         rows[sub_trip_id] = matches.iloc[0] if len(matches) == 1 else None
     return rows
 
 
 def _connections_are_feasible(modal_state, legs):
-    """Check recorded transfers when the legacy offer fields are available."""
+    """Require finite PT transfer times for the accepted connecting legs."""
     fm_ids = {
         RQ_MODAL_STATE.FIRSTMILE.value: (RQ_SUB_TRIP_ID.FM_AMOD.value, RQ_SUB_TRIP_ID.FM_PT.value),
         RQ_MODAL_STATE.FIRSTLASTMILE.value: (RQ_SUB_TRIP_ID.FLM_AMOD_0.value, RQ_SUB_TRIP_ID.FLM_PT.value),
     }.get(modal_state)
     if fm_ids:
         fm, pt = (legs.get(sub_trip_id) for sub_trip_id in fm_ids)
-        if fm is not None and pt is not None:
-            walking = _get_numeric_offer_parameter(pt.get(G_RQ_OFFERS), G_PT_OFFER_SOURCE_WALKING_TIME)
-            waiting = _get_numeric_offer_parameter(pt.get(G_RQ_OFFERS), G_OFFER_WAIT)
-            latest_origin = _finite_number(pt.get(G_RQ_PU)) + waiting - walking
-            if np.isfinite(latest_origin) and _finite_number(fm.get(G_RQ_DO)) > latest_origin:
-                return False
+        if fm is None or pt is None:
+            return False
+        walking = _get_numeric_offer_parameter(pt[G_RQ_OFFERS], G_PT_OFFER_SOURCE_WALKING_TIME)
+        waiting = _get_numeric_offer_parameter(pt[G_RQ_OFFERS], G_OFFER_WAIT)
+        latest_origin = _finite_number(pt[G_RQ_PU]) + waiting - walking
+        fm_dropoff = _finite_number(fm[G_RQ_DO])
+        if not np.isfinite(latest_origin) or not np.isfinite(fm_dropoff) or fm_dropoff > latest_origin:
+            return False
     lm_ids = {
         RQ_MODAL_STATE.LASTMILE.value: (RQ_SUB_TRIP_ID.LM_PT.value, RQ_SUB_TRIP_ID.LM_AMOD.value),
         RQ_MODAL_STATE.FIRSTLASTMILE.value: (RQ_SUB_TRIP_ID.FLM_PT.value, RQ_SUB_TRIP_ID.FLM_AMOD_1.value),
     }.get(modal_state)
     if lm_ids:
         pt, lm = (legs.get(sub_trip_id) for sub_trip_id in lm_ids)
-        if pt is not None and lm is not None:
-            walking = _get_numeric_offer_parameter(pt.get(G_RQ_OFFERS), G_PT_OFFER_TARGET_WALKING_TIME)
-            ready = _finite_number(pt.get(G_RQ_DO)) + walking
-            if np.isfinite(ready) and _finite_number(lm.get(G_RQ_PU)) < ready:
-                return False
+        if pt is None or lm is None:
+            return False
+        walking = _get_numeric_offer_parameter(pt[G_RQ_OFFERS], G_PT_OFFER_TARGET_WALKING_TIME)
+        ready = _finite_number(pt[G_RQ_DO]) + walking
+        lm_pickup = _finite_number(lm[G_RQ_PU])
+        if not np.isfinite(ready) or not np.isfinite(lm_pickup) or lm_pickup < ready:
+            return False
     return True
 
 
@@ -223,7 +215,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
 
         # Create aggregated parent row
         parent_agg = parent_row.to_dict()
-        parent_agg[G_RQ_MODAL_STATE_VALUE] = modal_state if modal_state is not None else np.nan
+        parent_agg[G_RQ_SELECTED_MODE] = modal_state if modal_state is not None else np.nan
         selected_legs = _selected_legs(parent_row, sub_trips, modal_state)
 
         # Determine if request is served
@@ -469,20 +461,20 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
     return parent_result_df
 
 
-def categorize_modal_state(modal_state_value):
-    """Categorize request based on modal state value."""
-    modal_state_value = _parse_execution_mode(modal_state_value)
-    if modal_state_value is None:
+def categorize_modal_state(selected_mode):
+    """Categorize the numeric mode selected for execution."""
+    selected_mode = _parse_execution_mode(selected_mode)
+    if selected_mode is None:
         return 'Unknown'
-    if modal_state_value == RQ_MODAL_STATE.MONOMODAL.value:
+    if selected_mode == RQ_MODAL_STATE.MONOMODAL.value:
         return 'DRT_only'
-    elif modal_state_value == RQ_MODAL_STATE.FIRSTMILE.value:
+    elif selected_mode == RQ_MODAL_STATE.FIRSTMILE.value:
         return 'FM'
-    elif modal_state_value == RQ_MODAL_STATE.LASTMILE.value:
+    elif selected_mode == RQ_MODAL_STATE.LASTMILE.value:
         return 'LM'
-    elif modal_state_value == RQ_MODAL_STATE.FIRSTLASTMILE.value:
+    elif selected_mode == RQ_MODAL_STATE.FIRSTLASTMILE.value:
         return 'FLM'
-    elif modal_state_value == RQ_MODAL_STATE.PT.value:
+    elif selected_mode == RQ_MODAL_STATE.PT.value:
         return 'PT_only'
     else:
         return 'Unknown'
@@ -507,21 +499,15 @@ def calculate_payg_metrics(parent_user_stats, is_payg_scenario=False, print_comm
     if not is_payg_scenario:
         return {}  # Not a PAYG scenario
 
-    # Check if PAYG columns exist (for backwards compatibility)
-    if G_RQ_PAYG_INTERRUPTED not in parent_user_stats.columns:
-        if print_comments:
-            print("  Warning: PAYG scenario but no payg_interrupted column found")
-        return {}
-
     # Filter to intermodal requests only (FM, LM, FLM) - these are the ones that can be interrupted
-    execution_modes = parent_user_stats.apply(_execution_mode, axis=1)
+    execution_modes = parent_user_stats[G_RQ_SELECTED_MODE].map(_parse_execution_mode)
     intermodal_mask = execution_modes.isin([
         RQ_MODAL_STATE.FIRSTMILE.value,
         RQ_MODAL_STATE.LASTMILE.value,
         RQ_MODAL_STATE.FIRSTLASTMILE.value
     ])
     intermodal_df = parent_user_stats[intermodal_mask].copy()
-    intermodal_df[G_RQ_MODAL_STATE_VALUE] = execution_modes[intermodal_mask]
+    intermodal_df[G_RQ_SELECTED_MODE] = execution_modes[intermodal_mask]
 
     total_intermodal = len(intermodal_df)
     if total_intermodal == 0:
@@ -531,7 +517,7 @@ def calculate_payg_metrics(parent_user_stats, is_payg_scenario=False, print_comm
     interrupted_mask = intermodal_df[G_RQ_PAYG_INTERRUPTED].map(_is_true)
     interrupted_df = intermodal_df[interrupted_mask]
     interrupted_count = len(interrupted_df)
-    completed_mask = intermodal_df.get('is_served', pd.Series(False, index=intermodal_df.index)).map(_is_true)
+    completed_mask = intermodal_df['is_served'].map(_is_true)
     completed_count = int((completed_mask & ~interrupted_mask).sum())
     incomplete_count = total_intermodal - interrupted_count - completed_count
 
@@ -545,16 +531,12 @@ def calculate_payg_metrics(parent_user_stats, is_payg_scenario=False, print_comm
     payg_stats['payg_incomplete_rate [%]'] = incomplete_count / total_intermodal * 100
 
     # Breakdown by interrupt state
-    if G_RQ_PAYG_INTERRUPT_STATE in interrupted_df.columns:
-        no_pt_count = len(interrupted_df[
-            interrupted_df[G_RQ_PAYG_INTERRUPT_STATE] == PAYG_TRIP_STATE.INTERRUPTED_NO_PT.value
-        ])
-        no_amod_count = len(interrupted_df[
-            interrupted_df[G_RQ_PAYG_INTERRUPT_STATE] == PAYG_TRIP_STATE.INTERRUPTED_NO_LM_AMOD.value
-        ])
-    else:
-        no_pt_count = 0
-        no_amod_count = 0
+    no_pt_count = len(interrupted_df[
+        interrupted_df[G_RQ_PAYG_INTERRUPT_STATE] == PAYG_TRIP_STATE.INTERRUPTED_NO_PT.value
+    ])
+    no_amod_count = len(interrupted_df[
+        interrupted_df[G_RQ_PAYG_INTERRUPT_STATE] == PAYG_TRIP_STATE.INTERRUPTED_NO_LM_AMOD.value
+    ])
 
     payg_stats['payg_interrupt_no_pt_count'] = no_pt_count
     payg_stats['payg_interrupt_no_pt_rate [%]'] = no_pt_count / total_intermodal * 100 if total_intermodal > 0 else 0
@@ -565,7 +547,7 @@ def calculate_payg_metrics(parent_user_stats, is_payg_scenario=False, print_comm
     for category, modal_value in [('FM', RQ_MODAL_STATE.FIRSTMILE.value),
                                    ('LM', RQ_MODAL_STATE.LASTMILE.value),
                                    ('FLM', RQ_MODAL_STATE.FIRSTLASTMILE.value)]:
-        cat_df = intermodal_df[intermodal_df[G_RQ_MODAL_STATE_VALUE] == modal_value]
+        cat_df = intermodal_df[intermodal_df[G_RQ_SELECTED_MODE] == modal_value]
         cat_total = len(cat_df)
         if cat_total > 0:
             cat_interrupted = len(cat_df[cat_df[G_RQ_PAYG_INTERRUPTED] == True])
@@ -630,10 +612,6 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
         output_dir, evaluation_start_time, evaluation_end_time, print_comments,
         completion_end_time=scenario_parameters.get(G_SIM_END_TIME))
 
-    # Add passenger column if needed
-    if G_RQ_PAX not in parent_user_stats.columns:
-        parent_user_stats[G_RQ_PAX] = 1
-
     # Filter to only served requests for metrics
     served_requests = parent_user_stats[parent_user_stats['is_served'] == True].copy()
 
@@ -641,7 +619,7 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
         print(f"\nCalculating metrics for {len(served_requests)} served requests...")
 
     # Categorize requests by modal state
-    served_requests['modal_category'] = served_requests[G_RQ_MODAL_STATE_VALUE].apply(categorize_modal_state)
+    served_requests['modal_category'] = served_requests[G_RQ_SELECTED_MODE].apply(categorize_modal_state)
 
     # Total counts
     total_requests = len(parent_user_stats)
@@ -662,50 +640,39 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
     # Service rates by category
     service_rates = {}
     for category in ['DRT_only', 'FM', 'LM', 'FLM', 'PT_only']:
-        cat_total = len(parent_user_stats[parent_user_stats[G_RQ_MODAL_STATE_VALUE].apply(categorize_modal_state) == category])
+        cat_total = len(parent_user_stats[parent_user_stats[G_RQ_SELECTED_MODE].apply(categorize_modal_state) == category])
         cat_served = category_counts.get(category, 0)
         service_rates[f'{category}_service_rate'] = cat_served / cat_total * 100 if cat_total > 0 else np.nan
         service_rates[f'{category}_count'] = cat_served
 
     # Calculate uncatchable PT statistics (requests that missed their PT connection after FM leg)
     uncatchable_stats = {}
-    if G_RQ_UNCATCHABLE_PT in parent_user_stats.columns:
-        # Count uncatchable requests by category (only FM and FLM can be uncatchable)
-        fm_uncatchable = parent_user_stats[
-            (parent_user_stats[G_RQ_MODAL_STATE_VALUE].apply(categorize_modal_state) == 'FM') &
-            (parent_user_stats[G_RQ_UNCATCHABLE_PT] == True)
-        ]
-        flm_uncatchable = parent_user_stats[
-            (parent_user_stats[G_RQ_MODAL_STATE_VALUE].apply(categorize_modal_state) == 'FLM') &
-            (parent_user_stats[G_RQ_UNCATCHABLE_PT] == True)
-        ]
-        total_uncatchable = len(fm_uncatchable) + len(flm_uncatchable)
+    # Count uncatchable requests by category (only FM and FLM can be uncatchable)
+    fm_uncatchable = parent_user_stats[
+        (parent_user_stats[G_RQ_SELECTED_MODE].apply(categorize_modal_state) == 'FM') &
+        (parent_user_stats[G_RQ_UNCATCHABLE_PT] == True)
+    ]
+    flm_uncatchable = parent_user_stats[
+        (parent_user_stats[G_RQ_SELECTED_MODE].apply(categorize_modal_state) == 'FLM') &
+        (parent_user_stats[G_RQ_UNCATCHABLE_PT] == True)
+    ]
+    total_uncatchable = len(fm_uncatchable) + len(flm_uncatchable)
 
-        uncatchable_stats['FM_uncatchable_count'] = len(fm_uncatchable)
-        uncatchable_stats['FLM_uncatchable_count'] = len(flm_uncatchable)
-        uncatchable_stats['total_uncatchable_count'] = total_uncatchable
+    uncatchable_stats['FM_uncatchable_count'] = len(fm_uncatchable)
+    uncatchable_stats['FLM_uncatchable_count'] = len(flm_uncatchable)
+    uncatchable_stats['total_uncatchable_count'] = total_uncatchable
 
-        # Calculate uncatchable rate (as % of FM+FLM requests)
-        fm_total = len(parent_user_stats[parent_user_stats[G_RQ_MODAL_STATE_VALUE].apply(categorize_modal_state) == 'FM'])
-        flm_total = len(parent_user_stats[parent_user_stats[G_RQ_MODAL_STATE_VALUE].apply(categorize_modal_state) == 'FLM'])
-        intermodal_with_fm_total = fm_total + flm_total
+    # Calculate uncatchable rate (as % of FM+FLM requests)
+    fm_total = len(parent_user_stats[parent_user_stats[G_RQ_SELECTED_MODE].apply(categorize_modal_state) == 'FM'])
+    flm_total = len(parent_user_stats[parent_user_stats[G_RQ_SELECTED_MODE].apply(categorize_modal_state) == 'FLM'])
+    intermodal_with_fm_total = fm_total + flm_total
 
-        uncatchable_stats['FM_uncatchable_rate'] = len(fm_uncatchable) / fm_total * 100 if fm_total > 0 else np.nan
-        uncatchable_stats['FLM_uncatchable_rate'] = len(flm_uncatchable) / flm_total * 100 if flm_total > 0 else np.nan
-        uncatchable_stats['total_uncatchable_rate'] = total_uncatchable / intermodal_with_fm_total * 100 if intermodal_with_fm_total > 0 else np.nan
+    uncatchable_stats['FM_uncatchable_rate'] = len(fm_uncatchable) / fm_total * 100 if fm_total > 0 else np.nan
+    uncatchable_stats['FLM_uncatchable_rate'] = len(flm_uncatchable) / flm_total * 100 if flm_total > 0 else np.nan
+    uncatchable_stats['total_uncatchable_rate'] = total_uncatchable / intermodal_with_fm_total * 100 if intermodal_with_fm_total > 0 else np.nan
 
-        if print_comments and total_uncatchable > 0:
-            print(f"  Uncatchable PT requests: {total_uncatchable} (FM: {len(fm_uncatchable)}, FLM: {len(flm_uncatchable)})")
-    else:
-        # No uncatchable_pt column, set defaults
-        uncatchable_stats = {
-            'FM_uncatchable_count': 0,
-            'FLM_uncatchable_count': 0,
-            'total_uncatchable_count': 0,
-            'FM_uncatchable_rate': np.nan,
-            'FLM_uncatchable_rate': np.nan,
-            'total_uncatchable_rate': np.nan
-        }
+    if print_comments and total_uncatchable > 0:
+        print(f"  Uncatchable PT requests: {total_uncatchable} (FM: {len(fm_uncatchable)}, FLM: {len(flm_uncatchable)})")
 
     # Calculate PAYG-specific metrics (if applicable)
     # Determine if this is a PAYG scenario based on broker_type in config

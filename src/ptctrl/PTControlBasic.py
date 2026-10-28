@@ -170,8 +170,6 @@ class PTControlBasic(PTControlBase):
         if not isinstance(first_departure, Real) or not isfinite(first_departure):
             raise ValueError(f"Invalid first PT departure for {pt_rid_struct}")
         # Accepted execution bindings are separate from replaceable proposal records.
-        if not hasattr(self, '_booked_pt_requests'):
-            self._booked_pt_requests = {}
         existing = self._booked_pt_requests.get(offer_key)
         if existing is not None:
             if existing[0] is pt_sub_rq_obj and pt_sub_rq_obj.pt_leg_state == PT_LEG_STATE.BOOKED:
@@ -202,7 +200,7 @@ class PTControlBasic(PTControlBase):
         sim_time: int,
         firstmile_amod_operator_id: int = None,
         *, missed_connection: bool = False,
-    ):
+    ) -> bool:
         """Remove a proposal, or retract a booked PT leg that was not boarded.
 
         Args:
@@ -212,15 +210,16 @@ class PTControlBasic(PTControlBase):
             missed_connection (bool): The caller has established that the passenger never boarded.
 
         Returns:
-            bool: Whether a proposal or unperformed booking was cancelled. Ordinary
-                cancellation at or after the accepted first departure is refused.
+            bool: True if the key is inactive after cancellation, including when
+                it was already absent. False if an accepted binding is protected
+                by its state or possible boarding at the first departure.
         """
         if not isinstance(missed_connection, bool):
             raise TypeError("missed_connection must be a bool")
         if isinstance(sim_time, bool) or not isinstance(sim_time, Real) or not isfinite(sim_time):
             raise ValueError("PT cancellation time must be a finite number")
         offer_key = (rid_struct, firstmile_amod_operator_id)
-        booking = getattr(self, '_booked_pt_requests', {}).get(offer_key)
+        booking = self._booked_pt_requests.get(offer_key)
         if booking is not None:
             child, first_departure = booking
             if child.pt_leg_state != PT_LEG_STATE.BOOKED or (
@@ -239,8 +238,8 @@ class PTControlBasic(PTControlBase):
             child.pt_cancel_time = sim_time
             child.pt_cancel_reason = 'missed_connection' if missed_connection else 'cancelled_before_boarding'
             del self._booked_pt_requests[offer_key]
-        removed = self.pt_offer_db.pop(offer_key, None)
-        return booking is not None or removed is not None
+        self.pt_offer_db.pop(offer_key, None)
+        return True
         
     def _update_gtfs_data(self):
         """This method will update the gtfs data of the pt router to reflect any changes in the pt network or schedule.

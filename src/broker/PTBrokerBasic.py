@@ -179,7 +179,7 @@ class PTBrokerBasic(BrokerBasic):
             for original_key, offer in raw.items():
                 if offer is None or offer.service_declined():
                     continue
-                key = original_key if parent.get_query_modes() == (RQ_MODAL_STATE.MONOMODAL,) else (mode.value, original_key)
+                key = (mode.value, original_key)
                 candidate = self._candidate_build_records[rid].get((mode, original_key))
                 if candidate is None:
                     candidate = self._build_candidate(rid, mode, original_key, offer)
@@ -262,7 +262,6 @@ class PTBrokerBasic(BrokerBasic):
         rq_obj.selected_candidate_id = chosen_key
         rq_obj.chosen_operator_id = chosen_key
         rq_obj.modal_state = candidate['mode']
-        rq_obj.modal_state_int = candidate['mode'].value
         rq_obj.fare = candidate['offer'].get(G_OFFER_FARE, 0)
         self._selected_candidates[rid] = candidate
         self._candidates[rid] = {chosen_key: candidate}
@@ -282,17 +281,10 @@ class PTBrokerBasic(BrokerBasic):
     def _cancel_pt_binding(self, rid, child_id, firstmile_op, sim_time, *, missed_connection=False):
         requests = self._pt_requests.get(rid, {})
         if (child_id, firstmile_op) in requests:
-            if missed_connection:
-                cancelled = self.pt_operator.user_cancels_request(
-                    child_id, sim_time, firstmile_op, missed_connection=True,
-                )
-            else:
-                cancelled = self.pt_operator.user_cancels_request(child_id, sim_time, firstmile_op)
-            if cancelled is False:
-                child = self.demand.rq_db.get(child_id)
-                state = getattr(child, 'pt_leg_state', None)
-                if state == PT_LEG_STATE.BOOKED or self.pt_operator.get_current_offer(child_id, firstmile_op) is not None:
-                    return False
+            if not self.pt_operator.user_cancels_request(
+                child_id, sim_time, firstmile_op, missed_connection=missed_connection,
+            ):
+                return False
             del requests[(child_id, firstmile_op)]
             return True
         return False
@@ -330,7 +322,7 @@ class PTBrokerBasic(BrokerBasic):
         keep_children.update(
             child_id for child_id, child in self.demand.rq_db.items()
             if isinstance(child_id, str) and child_id.startswith(f"{rid}_")
-            and getattr(child, 'pt_leg_state', None) is not None
+            and child.pt_leg_state is not None
         )
         proposals = self._amod_proposals.get(rid, {})
         for binding in list(proposals):
@@ -342,7 +334,7 @@ class PTBrokerBasic(BrokerBasic):
             if binding not in keep_pt:
                 self._cancel_pt_binding(rid, binding[0], binding[1], sim_time)
                 child = self.demand.rq_db.get(binding[0])
-                if child is not None and getattr(child, 'pt_leg_state', None) is not None:
+                if child is not None and child.pt_leg_state is not None:
                     # Keep accepted/cancelled PT execution rows for output and audit.
                     keep_children.add(binding[0])
         for child_id in list(self.demand.rq_db):
@@ -434,7 +426,6 @@ class PTBrokerBasic(BrokerBasic):
         child.selected_candidate_id = None
         child.selected_mode = None
         child.modal_state = mode
-        child.modal_state_int = mode.value
         child.candidate_modes = {}
         child.candidate_complete = {}
         child.candidate_durations = {}

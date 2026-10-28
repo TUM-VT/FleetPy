@@ -194,8 +194,7 @@ class PTBrokerPAYG(PTBrokerBasic):
         if self._expected_vehicles and self._expected_vehicles <= self._updated_vehicles:
             self._pending_update_time = sim_time
             # Fleet-state callbacks also run while draining remaining assignments.
-            end_time = self.scenario_parameters.get(G_SIM_END_TIME)
-            if end_time is None or sim_time < end_time:
+            if sim_time < self.scenario_parameters[G_SIM_END_TIME]:
                 self.time_trigger(sim_time)
 
     def _process_collect_firstmile_offers(
@@ -304,8 +303,7 @@ class PTBrokerPAYG(PTBrokerBasic):
         sub_trip_id = int(parts[1])
 
         # Draining final AMoD assignments must not activate a new PT leg.
-        end_time = self.scenario_parameters.get(G_SIM_END_TIME)
-        if (end_time is not None and alighting_time >= end_time
+        if (alighting_time >= self.scenario_parameters[G_SIM_END_TIME]
                 and sub_trip_id in (RQ_SUB_TRIP_ID.FM_AMOD.value, RQ_SUB_TRIP_ID.FLM_AMOD_0.value)):
             return
 
@@ -409,7 +407,6 @@ class PTBrokerPAYG(PTBrokerBasic):
         child.selected_mode = mode
         child.selected_candidate_id = parent.selected_candidate_id
         child.modal_state = mode
-        child.modal_state_int = mode.value
         child.offer = {self.pt_operator_id: offer}
         child.chosen_operator_id = self.pt_operator_id
         child.fare = offer.get(G_OFFER_FARE, 0)
@@ -435,10 +432,9 @@ class PTBrokerPAYG(PTBrokerBasic):
 
     def _handle_pt_alighting(
         self, rid: int, alighting_time: float, alighting_node: int,
-        processing_time: tp.Optional[float] = None,
+        processing_time: float,
     ):
         """Keep passenger readiness at arrival, but notify operators at the current step."""
-        processing_time = alighting_time if processing_time is None else processing_time
         if processing_time < alighting_time:
             raise ValueError("PAYG cannot process a PT arrival before the passenger arrives")
         LOG.debug(f"PAYG PT alighting: rid={rid}, time={alighting_time}")
@@ -514,8 +510,7 @@ class PTBrokerPAYG(PTBrokerBasic):
 
         # Set interrupted flag on parent request
         parent_rq_obj: 'BasicIntermodalRequest' = self.demand[rid]
-        if hasattr(parent_rq_obj, 'set_payg_interrupted'):
-            parent_rq_obj.set_payg_interrupted(True, interrupt_state.value, interrupt_time)
+        parent_rq_obj.set_payg_interrupted(True, interrupt_state.value, interrupt_time)
 
         LOG.warning(f"PAYG trip {rid} interrupted: {interrupt_state.name} at time {interrupt_time}")
 
