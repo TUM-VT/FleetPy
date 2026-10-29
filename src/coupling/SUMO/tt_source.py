@@ -95,6 +95,16 @@ def requested_bin_times(start_time, end_time, t_update) -> List[int]:
     return list(range(first, end + 1, step))
 
 
+def steering_bin_times(start_time, end_time, t_update) -> List[int]:
+    """The reloads that can still steer the fleet, which the coverage check requires.
+
+    The loop loads a bin's table after that second's FleetPy step, so the one at
+    ``end_time`` itself comes after the run's last step and steers nothing.
+    """
+    end = int(math.floor(float(end_time)))
+    return [t for t in requested_bin_times(start_time, end_time, t_update) if t < end]
+
+
 def missing_bins(source_dir: str, times: Sequence[int]) -> List[int]:
     """Which of ``times`` have no file in ``source_dir``."""
     return [t for t in times

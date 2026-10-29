@@ -19,7 +19,7 @@ import pathlib
 from src.coupling.SUMO.SUMOcontrolledSim import SUMOcontrolledSim
 from src.coupling.SUMO.sumocfg_utils import merge_additional_files, sumo_options, load_state_args
 from src.coupling.SUMO.tt_source import (
-    coverage_error, layer_coverage_error, requested_bin_times, resolve_source_dir,
+    coverage_error, layer_coverage_error, steering_bin_times, resolve_source_dir,
     run_log_path, tt_file_for, write_source_stats)
 from src.coupling.SUMO.insertion_guard import InsertionGuard, skip_blocked_edge
 from src.coupling.SUMO.enroute_schedule import EnrouteSchedule, reroute_now
@@ -227,8 +227,8 @@ class SUMOFleetPyServer():
         turns that into a one-second failure that names the missing bins.
         """
         params = self.fp_sim_env.scenario_parameters
-        times = requested_bin_times(params[G_SIM_START_TIME], params[G_SIM_END_TIME],
-                                    self.g_sumo_t_update)
+        times = steering_bin_times(params[G_SIM_START_TIME], params[G_SIM_END_TIME],
+                                   self.g_sumo_t_update)
         time_dependent = type(
             self.fp_sim_env.routing_engine).__name__.startswith("NetworkTimeDependent")
         if self.g_tt_source_dir is not None:
