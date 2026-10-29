@@ -92,8 +92,8 @@ def load_state_args(raw, seed, start_time, sumocfg_path: str, main_dir: Optional
     the full-day simulations behind the travel-time tables (docs/17 2026-10-28).
     ``{seed}`` in the path takes the scenario's seed, since each seed needs its own
     state; a relative path is read from the FleetPy root. A state saved at another
-    time, by another seed or from another day's routes loads without complaint and
-    simulates other traffic, so those are checked against its header here.
+    time, by another seed, from another day's routes or with other signal programs loads
+    without complaint and simulates other traffic, so those are checked against its header here.
     """
     if raw is None or (isinstance(raw, float) and math.isnan(raw)):
         return []
@@ -119,4 +119,14 @@ def load_state_args(raw, seed, start_time, sumocfg_path: str, main_dir: Optional
     if want is not None and (not got or names(got.group(1)) != names(want.get("value", ""))):
         raise ValueError(f"state {path} was saved from route files {got.group(1) if got else '?'}, "
                          f"the run loads {want.get('value')}")
+    # the signal programs too: a state saved with the hourly plans (TL/) restarts the plans' signals
+    # in a run that has dropped them (the 3 July states, docs/17 2026-10-29)
+    signals = lambda v: sorted(os.path.basename(x.strip()) for x in v.split(",") if "TL/" in x)
+    run_adds = ET.parse(sumocfg_path).getroot().find(".//additional-files")
+    state_adds = re.search(r'<additional-files value="([^"]*)"', head)
+    have = signals(state_adds.group(1)) if state_adds else []
+    need = signals(run_adds.get("value", "")) if run_adds is not None else []
+    if have != need:
+        raise ValueError(f"state {path} was saved with signal files {have or 'none (built-in programs)'}, "
+                         f"the run loads {need or 'none (built-in programs)'}")
     return ["--load-state", path]
