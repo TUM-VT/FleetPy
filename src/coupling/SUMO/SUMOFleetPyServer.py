@@ -17,7 +17,7 @@ import time
 import numpy as np
 import pathlib
 from src.coupling.SUMO.SUMOcontrolledSim import SUMOcontrolledSim
-from src.coupling.SUMO.sumocfg_utils import merge_additional_files, sumo_options, load_state_args
+from src.coupling.SUMO.sumocfg_utils import merge_additional_files, sumo_options, load_state_args, warmup_begin
 from src.coupling.SUMO.tt_source import (
     coverage_error, layer_coverage_error, steering_bin_times, resolve_source_dir,
     run_log_path, tt_file_for, write_source_stats)
@@ -266,8 +266,12 @@ class SUMOFleetPyServer():
         edges_output = os.path.join(results_path, "SumoDumps", "edge-output.xml")
   
 
+        params = self.fp_sim_env.scenario_parameters
+        start_time = params.get(G_SIM_START_TIME)
+        # docs/17 2026-10-29: SUMO runs alone from the warm-up time to the start time, then the fleet joins
+        warm = warmup_begin(params.get(G_SUMO_WARMUP_BEGIN), start_time, params.get(G_SUMO_LOAD_STATE))
         sumoCmd = [self.sumo_binary, "-c", self.sumo_config_path ,
-                "--begin",str(self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME)),
+                "--begin",str(warm if warm is not None else start_time),
                  # SUMO's -a REPLACES the sumocfg's <additional-files> rather
                  # than extending it, so passing EdgeDataCfgPath alone would
                  # silently drop the scenario's traffic-light programs, WAUT
@@ -281,7 +285,6 @@ class SUMOFleetPyServer():
                 "--start",
                 ]
         # options shared with the run that saves a warm-start state (sumocfg_utils)
-        params = self.fp_sim_env.scenario_parameters
         sumoCmd += sumo_options(params, params[G_RANDOM_SEED])
         # docs/17 2026-10-28: start from SUMO's state at the start time, saved by a run
         # from the morning, instead of an empty network; unset = the empty start
@@ -290,6 +293,9 @@ class SUMOFleetPyServer():
                                    self.fp_sim_env.dir_names.get(G_DIR_MAIN))
      
         traci.start(sumoCmd)
+        if warm is not None:
+            print(f"SUMO warm-up from t={warm} to the start time t={start_time} (no fleet)")
+            traci.simulationStep(float(start_time))
         print(f"SUMO-Simulation Initialized at t={self.fp_sim_env.scenario_parameters.get(G_SIM_START_TIME)}")
 
     def _create_EdgeDataCfg_xml(self):

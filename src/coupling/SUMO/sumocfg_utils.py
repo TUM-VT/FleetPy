@@ -130,3 +130,33 @@ def load_state_args(raw, seed, start_time, sumocfg_path: str, main_dir: Optional
         raise ValueError(f"state {path} was saved with signal files {have or 'none (built-in programs)'}, "
                          f"the run loads {need or 'none (built-in programs)'}")
     return ["--load-state", path]
+
+
+def warmup_begin(raw, start_time, load_state=None) -> Optional[int]:
+    """SUMO's begin time for a warm-up before the fleet joins, or None to begin at the start time.
+
+    The co-simulation then runs SUMO alone from this time to the start time in the same
+    process and couples the fleet there. It replaces a saved state: on 3 July the run from
+    the saved 12:00 state was 4-7% slower in the peak than a continuous run of the same seed,
+    beyond the 2% two seeds differ by (docs/17 2026-10-29). Both at once are refused.
+    """
+    if raw is None or (isinstance(raw, float) and math.isnan(raw)):
+        return None
+    s = str(raw).strip()
+    if not s or s.lower() in ("nan", "none"):
+        return None
+    begin = int(float(s))
+    if begin >= float(start_time):
+        raise ValueError(f"warm-up must begin before the start time {start_time}, got {begin}")
+    if load_state is not None and load_args_set(load_state):
+        raise ValueError("a warm-up and a saved state were both set; use one")
+    return begin
+
+
+def load_args_set(raw) -> bool:
+    """Whether a sumo_load-state value is set (the same rule load_state_args applies)."""
+    if raw is None or (isinstance(raw, float) and math.isnan(raw)):
+        return False
+    s = str(raw).strip()
+    return bool(s) and s.lower() not in ("nan", "none")
+
