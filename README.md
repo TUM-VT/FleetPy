@@ -227,18 +227,21 @@ We welcome contributions from the community! 🚀
 FleetPy has been applied in various academic and applied research projects across topics like shared mobility, autonomous vehicle operations, and electrified fleets:
 
 ### Ongoing Projects
-
-* **[CONDUCTOR](https://conductor-project.eu/?show=consortium)** – Development of an integrated ride-parcel-pooling service using automated vehicles (CCAM), evaluated via FleetPy-Aimsun coupling *(multi-modal integration, AVs, cooperative routing, traffic control, simulation coupling)*
+* **[EMILIA](https://www.bmv.de/SharedDocs/DE/Artikel/mFUND/Projekte/emilia.html)** - EMILIA develops digital tools, simulation-based digital twins, and optimization methods to plan and improve intermodal public transport services in rural areas by integrating demand-responsive and scheduled services.
+* **[MILA.mobility](https://www.vdv.de/autonomes-fahren-im-oepnv.aspx))** - The MILA.mobility project advances the integration of autonomous vehicles into public transport through an open, manufacturer-independent system architecture that connects fleet management, dispatching, and booking systems, supporting the transition from pilot projects to scalable, reliable, and economically viable Level 4 autonomous mobility services.
+* **[AGIMO B3](https://www.mos.ed.tum.de/vt/forschung/projekte/aktuelle-projekte/agimo-b3/)** - Project Agimo B3 develops methods for jointly planning autonomous line-based and on-demand public transport services, using analytical models, simulations, and heuristics to identify suitable service configurations and their interaction with demand within the AgiMo digital twin.
+* **[AcceptRemote](https://acceptremote.eu/index.php?show=home)** - AcceptRemote investigates how remote operations in passenger transport and autonomous logistics can be developed and validated through AI-based optimisation, human-centred decision-support tools, and real-world pilots, while ensuring safety, trust, inclusiveness, and societal acceptance.
 * **[metaCCAZE](https://www.metaccaze-project.eu/)** – Scientific support and simulation-based evaluation of Munich’s Living Lab innovations including multimodal logistics hubs, dynamic curbside management, and connected/autonomous last-mile vehicles. FleetPy contributes to monitoring and optimizing operations *(multimodal hubs, curbside management, AV logistics, LL evaluation, policy support)*
 * **[MINGA](https://www.mos.ed.tum.de/en/vt/research/projects/current-projects/minga/)** – Evaluation of AV stop concepts and passenger interactions at TUM’s test field. FleetPy is used alongside MATSim and microscopic traffic simulations to model AV and non-AV traffic, evaluate climate and system-wide impacts, and support accessibility-focused user studies *(AV integration, stop concepts, MATSim coupling, KPI evaluation, accessibility research)*
-* **[STADT:up](https://www.mos.ed.tum.de/en/vt/research/projects/current-projects/stadtup/)** – Simulation of autonomous shuttle bus in different inter-mobility scenarios with dynamic stops *(Operation, traffic evaluation)*
-* **[SUM (Seamless Shared Urban Mobility)](https://sum-project.eu/)** – Simulation-based evaluation of operational strategies for automated on-demand fleets in Munich using FleetPy, including integration with public transport, pricing strategies, and transferability to future mobility hubs *(on-demand AV fleets, public transport integration, pricing, living lab scalability)*
+
 
 ### Completed Projects
 
 * **[MOIA](https://www.mos.ed.tum.de/en/vt/forschung/projekte/abgeschlossene-projekte/moia-accompanying-research-completed-2021/)** – Implementation of algorithms to represent MOIA’s fleet control *(operation, ride-pooling)*
-
+* **[CONDUCTOR](https://conductor-project.eu/?show=consortium)** – Development of an integrated ride-parcel-pooling service using automated vehicles (CCAM), evaluated via FleetPy-Aimsun coupling *(multi-modal integration, AVs, cooperative routing, traffic control, simulation coupling)*
 * **[MCube: STEAM](https://mcube-cluster.de/en/projekt/steam/)** – Simulation of semi-flexible bus lines in Munich using FleetPy, integrated with the TUM-OSM decision support system *(agent-based simulation, semi-flexible transit, DSS coupling, urban mobility, evaluation pipeline)*
+* **[SUM (Seamless Shared Urban Mobility)](https://sum-project.eu/)** – Simulation-based evaluation of operational strategies for automated on-demand fleets in Munich using FleetPy, including integration with public transport, pricing strategies, and transferability to future mobility hubs *(on-demand AV fleets, public transport integration, pricing, living lab scalability)*
+* * **[STADT:up](https://www.mos.ed.tum.de/en/vt/research/projects/current-projects/stadtup/)** – Simulation of autonomous shuttle bus in different inter-mobility scenarios with dynamic stops *(Operation, traffic evaluation)*
 
 > 🧠 Do you use FleetPy in your research? [Let us know!](mailto:florian.dandl@tum.de)
 
@@ -247,16 +250,18 @@ FleetPy has been applied in various academic and applied research projects acros
 ## Citation
 
 If you find this framework useful for your work or use it in your project, please consider citing:
-Engelhardt, R., Dandl, F., Syed, A., Zhang, Y., Fehn, F., Wolf, F., Bogenberger, K. (2022). FleetPy: A Modular Open-Source Simulation Tool for Mobility On-Demand Services. Arxiv pre-print
+
+Engelhardt, R., Dandl, F., Syed, A.A. et al. FleetPy: an open source simulator for reproducible research on mobility-on-demand services. Eur. Transp. Res. Rev. 18, 52 (2026). https://doi.org/10.1186/s12544-026-00823-3
 
 ```
-@misc{engelhardt2022fleetpymodularopensourcesimulation,
-      title={FleetPy: A Modular Open-Source Simulation Tool for Mobility On-Demand Services}, 
-      author={Roman Engelhardt and Florian Dandl and Arslan-Ali Syed and Yunfei Zhang and Fabian Fehn and Fynn Wolf and Klaus Bogenberger},
-      year={2022},
-      eprint={2207.14246},
-      archivePrefix={arXiv},
-      primaryClass={cs.MA},
-      url={https://arxiv.org/abs/2207.14246}, 
+@article{engelhardt2026fleetpy,
+  title={FleetPy: an open source simulator for reproducible research on mobility-on-demand services},
+  author={Engelhardt, Roman and Dandl, Florian and Syed, Arslan Ali and Ding, Chenhao and Alvarez-Ossorio Martinez, Santiago and Zhang, Yunfei and Hamdy, Hoda and Brodersen, Joel and Chen, Zhipu and Bogenberger, Klaus},
+  journal={European Transport Research Review},
+  volume={18},
+  number={1},
+  pages={52},
+  year={2026},
+  publisher={Springer}
 }
 ```
