@@ -67,7 +67,7 @@ class DriverUtilityMax(RepositioningBase):
                 current_zone = self.zone_system.get_zone_from_pos(self.fleetctrl.sim_vehicles[vid].pos)
                 i = zone_list.index(current_zone)
                 best_zone = zone_list[np.nanargmax(utility_matrix[i, :])]
-                if best_zone != i:
+                if best_zone != current_zone:
                     self._od_to_veh_plan_assignment(sim_time,current_zone,best_zone,[self.fleetctrl.sim_vehicles[vid]])
                     # print('xx: Yes repos vid ' + str(vid) + ', from ' + str(i) + ' to zone ' + str(best_zone))
                 else:

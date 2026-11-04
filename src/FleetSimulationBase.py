@@ -457,7 +457,7 @@ class FleetSimulationBase:
     def _load_broker_module(self):
         """ Loads the broker """
  
-        if self.scenario_parameters.get(G_BROKER_TYPE) is None:
+        if self.scenario_parameters.get(G_BROKER_TYPE) is None or self.scenario_parameters.get('subsidy_matrix', None) == "No" or self.scenario_parameters.get('subsidy_matrix', None) is False:
             LOG.info("No broker type specified, using default broker: BrokerBasic.")
             op_broker_class_string = "BrokerBasic"
             BrokerClass = load_broker_module(op_broker_class_string)
