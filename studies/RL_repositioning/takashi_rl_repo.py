@@ -655,7 +655,7 @@ if __name__ == "__main__":
     model_path = os.path.join(
         MAIN_DIR,
         "studies",
-        "ml_test",
+        "RL_repositioning",
         "results",
         "models",
         "0902",
@@ -664,7 +664,7 @@ if __name__ == "__main__":
    
 
     # default (without arguments) paths for the Manhattan case study configs
-    scs_path = os.path.join(MAIN_DIR, "studies", "ml_test", "scenarios") # studies/ml_test/scenarios
+    scs_path = os.path.join(MAIN_DIR, "studies", "RL_repositioning", "scenarios") # studies/ml_test/scenarios
     const_config = os.path.join(scs_path, "const_cfg_manhattan_case_study.yaml")
     sc_config = os.path.join(scs_path, "scenario_cfg_manhattan_ml_takashi.csv")
 

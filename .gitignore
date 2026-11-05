@@ -57,6 +57,9 @@ studies/chicago_case_study/git_info.txt
 !studies/munich_case_study
 studies/munich_case_study/results/*
 studies/munich_case_study/git_info.txt
+!studies/RL_repositioning
+studies/RL_repositioning/results/*
+studies/RL_repositioning/git_info.txt
 
 *zip
 
