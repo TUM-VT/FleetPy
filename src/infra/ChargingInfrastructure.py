@@ -26,7 +26,7 @@ from src.simulation.StationaryProcess import ChargingProcess
 from src.fleetctrl.planning.VehiclePlan import ChargingPlanStop, VehiclePlan, RoutingTargetPlanStop
 from src.misc.config import decode_config_str
 if TYPE_CHECKING:
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.simulation.Vehicles import SimulationVehicle
     from src.fleetctrl.FleetControlBase import FleetControlBase
 

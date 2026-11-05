@@ -7,10 +7,10 @@ from multiprocessing import Pool
 fleet_sim_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
 os.sys.path.append(fleet_sim_path)
 try:
-    from src.routing.NetworkBasicCpp import NetworkBasicCpp as Network
+    from src.routing.road.NetworkBasicCpp import NetworkBasicCpp as Network
 except:
     print("cpp router not found")
-    from src.routing.NetworkBasic import NetworkBasic as Network
+    from src.routing.road.NetworkBasic import NetworkBasic as Network
 
 
 """ this script is used to preprocess travel time tables for the routing_engine

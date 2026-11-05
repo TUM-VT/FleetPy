@@ -9,7 +9,7 @@ import pandas as pd
 # ----------------
 from src.misc.globals import *
 from src.demand.TravelerModels import RequestBase
-from src.routing.NetworkBase import NetworkBase
+from src.routing.road.NetworkBase import NetworkBase
 from src.simulation.Offers import TravellerOffer
 
 LOG = logging.getLogger(__name__)
@@ -206,6 +206,11 @@ class PlanRequest:
         if new_earliest_pu_time is not None:
             self.t_pu_earliest = new_earliest_pu_time
         # LOG.debug("after: {}".format(self))
+
+    def set_new_dropoff_time_constraint(self, new_latest_do_time : int):
+        """ this function is used to update dropoff time constraints of the plan request
+        :param new_latest_do_time: new latest dropoff time"""
+        self.t_do_latest = new_latest_do_time
 
     def set_new_max_trip_time(self, new_max_trip_time : float):
         """ this function updates the maximum trip time constraint

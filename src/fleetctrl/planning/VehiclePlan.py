@@ -14,7 +14,7 @@ from typing import List, Dict, Tuple, Optional
 from src.simulation.Legs import VehicleRouteLeg
 from src.simulation.Vehicles import SimulationVehicle
 from src.fleetctrl.planning.PlanRequest import PlanRequest
-from src.routing.NetworkBase import NetworkBase
+from src.routing.road.NetworkBase import NetworkBase
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables

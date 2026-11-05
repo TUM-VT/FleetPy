@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Callable
 if TYPE_CHECKING:
     from src.fleetctrl.planning.VehiclePlan import VehiclePlan
     from src.simulation.Vehicles import SimulationVehicle
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.infra.Zoning import ZoneSystem
 
 LOG = logging.getLogger(__name__)

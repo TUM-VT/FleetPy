@@ -1,7 +1,7 @@
 from src.fleetctrl.RidePoolingBatchAssignmentFleetcontrol import RidePoolingBatchAssignmentFleetcontrol
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan, BoardingPlanStop, PlanStopBase, RoutingTargetPlanStop
 from src.fleetctrl.planning.PlanRequest import PlanRequest
-from src.routing.NetworkBase import NetworkBase
+from src.routing.road.NetworkBase import NetworkBase
 from src.fleetctrl.pooling.immediate.insertion import simple_insert, simple_remove
 from src.misc.globals import *
 from typing import Any, Callable, List, Dict, Tuple, Type
