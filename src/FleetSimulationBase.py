@@ -24,12 +24,13 @@ import numpy as np
 from src.misc.init_modules import load_fleet_control_module, load_routing_engine, load_broker_module
 from src.demand.demand import Demand, SlaveDemand
 from src.simulation.Vehicles import SimulationVehicle
+from src.ml_gym.hooks_manager import Events
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
     from src.routing.NetworkBase import NetworkBase
     from src.broker.BrokerBase import BrokerBase
     from src.python_plots.plot_classes import PyPlot
-    from src.ml_gym.HookManager import HookManager
+    from src.ml_gym.hooks_manager import HookManager
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -122,7 +123,7 @@ def build_operator_attribute_dicts(parameters, n_op, prefix="op_"):
 # ----
 
 class FleetSimulationBase:
-    def __init__(self, scenario_parameters: dict, hook_manager: 'HookManager' = None):
+    def __init__(self, scenario_parameters: dict, hook_manager: 'HookManager' = None, process_id = None):
         self.t_init_start = time.perf_counter()
         # config
         self.scenario_name = scenario_parameters[G_SCENARIO_NAME]
@@ -169,6 +170,8 @@ class FleetSimulationBase:
         self.skip_output = True if scenario_parameters.get(G_SKIP_OUTPUT, 0) > 0 else False
         
         self.hook_manager = hook_manager
+        if process_id is not None:
+            self.hook_manager.set_process_id(process_id)
 
         # take care of random seeds at beginning of simulations
         random.seed(self.scenario_parameters[G_RANDOM_SEED])
@@ -187,6 +190,7 @@ class FleetSimulationBase:
             # remove old log handlers (otherwise sequential simulations only log to first simulation)
             for handler in logging.root.handlers[:]:
                 logging.root.removeHandler(handler)
+                handler.close()
             # start new log file
             logging.VERBOSE = 5
             logging.addLevelName(logging.VERBOSE, "VERBOSE")
@@ -697,6 +701,9 @@ class FleetSimulationBase:
                 self.broker.receive_status_update(op_id, vid, next_time, passed_VRL, True)
             else:
                 self.broker.receive_status_update(op_id, vid, next_time, passed_VRL, force_update_plan)
+        if self.hook_manager is not None:
+            for op in self.operators:
+                self.hook_manager.trigger(Events.OBSERVE_FLEET_STATE_AFTER_RECEIVING_STATUS_UPDATE, op)
         # TODO # after ISTTT: live visualization: send vehicle states (self.live_visualization_flag==True)
 
     def update_vehicle_routes(self, sim_time):

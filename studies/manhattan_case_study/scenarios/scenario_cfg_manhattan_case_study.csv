@@ -1,3 +1,5 @@
-scenario_name,rq_file,op_fleet_composition
-test_manhattatan_scenario_1,2018-11-12_sample_5_1.csv,default_vehtype:80
-test_manhattatan_scenario_2,2018-11-12_sample_5_2.csv,default_vehtype:80
+scenario_name,rq_file,nw_dynamic_f,op_fleet_composition
+test_manhattatan_scenario_29,2018-11-18_sample_5_1.csv,2018-11-18_mean_tt_factor_hourly.csv,default_vehtype:80
+test_manhattatan_scenario_30,2018-11-18_sample_5_2.csv,2018-11-18_mean_tt_factor_hourly.csv,default_vehtype:80
+test_manhattatan_scenario_31,2018-11-18_sample_5_3.csv,2018-11-18_mean_tt_factor_hourly.csv,default_vehtype:80
+test_manhattatan_scenario_32,2018-11-18_sample_5_4.csv,2018-11-18_mean_tt_factor_hourly.csv,default_vehtype:80

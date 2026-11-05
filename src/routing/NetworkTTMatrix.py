@@ -341,7 +341,7 @@ class NetworkTTMatrix(NetworkBase):
         """
         pass
 
-    def move_along_route(self, route, last_position, time_step, sim_vid_id=None, new_sim_time=None,
+    def move_along_route(self, route, last_position, time_step, target_position=None, sim_vid_id=None, new_sim_time=None,
                          record_node_times=False):
         if new_sim_time is not None:
             end_time = new_sim_time + time_step
@@ -351,7 +351,13 @@ class NetworkTTMatrix(NetworkBase):
             last_time = self.sim_time
         c_pos = last_position
         if c_pos[2] is None:
+            if len(route) == 0:
+                return c_pos, 0, last_time, [], []
             c_pos = (c_pos[0], route[0], 0.0)
+            
+        if target_position is None:
+            target_position = (route[-1], None, None)
+
         list_passed_nodes = []
         list_passed_node_times = []
         arrival_in_time_step = -1
@@ -361,10 +367,20 @@ class NetworkTTMatrix(NetworkBase):
             # check remaining time on current edge
             if c_pos[2] is None:
                 c_pos = (c_pos[0], route[i], 0)
-            rel_factor = (1 - c_pos[2])
+            if target_position[1] is not None and i == len(route)-1:
+                if route[i] != target_position[1]:
+                    LOG.error(f"move_along_route: target position not consistent with route for vid {sim_vid_id} at time {new_sim_time} -> vehicle stops {target_position} | {c_pos} | {route}")
+                    raise Exception("move_along_route: target position not consistent with route -> vehicle stops")
+                rel_factor = target_position[2] - c_pos[2]
+                if rel_factor < 0:
+                    LOG.error(f"move_along_route: target position already reached for vid {sim_vid_id} at time {new_sim_time} -> vehicle stops {target_position} | {c_pos} | {route}")
+                    raise Exception("move_along_route: target position already reached -> vehicle stops")
+            else:
+                rel_factor = (1 - c_pos[2])
             # c_edge_tt = rel_factor * self.tt_factor * self.tt[c_pos[0]][c_pos[1]]
             # next_node_time = last_time + c_edge_tt
             c_edge_tt = self.tt_factor * self.tt[c_pos[0]][c_pos[1]]
+            c_edge_td = self.td[c_pos[0]][c_pos[1]]
             next_node_time = last_time + rel_factor * c_edge_tt
             end_time = np.round(end_time, 2)
             next_node_time = np.round(next_node_time, 2)  # TODO # raw value leads to 1.00000002 being recognized as > 1
@@ -372,20 +388,30 @@ class NetworkTTMatrix(NetworkBase):
             if next_node_time > end_time:
                 # move vehicle to final position of current edge
                 end_rel_factor = c_pos[2] + (end_time - last_time) / c_edge_tt
-                driven_distance += (end_rel_factor - c_pos[2]) * self.td[c_pos[0]][c_pos[1]]
+                driven_distance += (end_rel_factor - c_pos[2]) * c_edge_td
                 c_pos = (c_pos[0], c_pos[1], end_rel_factor)
                 arrival_in_time_step = -1
                 break
             else:
                 # move vehicle to next node/edge and record data
-                driven_distance += rel_factor * self.td[c_pos[0]][c_pos[1]]
-                next_node = route[i]
-                list_passed_nodes.append(next_node)
-                if record_node_times:
-                    list_passed_node_times.append(next_node_time)
-                last_time = next_node_time
-                c_pos = (next_node, None, None)
-                arrival_in_time_step = last_time
+                if i < len(route)-1 or target_position[1] is None:
+                    driven_distance += rel_factor * c_edge_td
+                    next_node = route[i]
+                    list_passed_nodes.append(next_node)
+                    if record_node_times:
+                        list_passed_node_times.append(next_node_time)
+                    last_time = next_node_time
+                    c_pos = (next_node, None, None)
+                    arrival_in_time_step = last_time
+                else:
+                    driven_distance += rel_factor * c_edge_td
+                    end_rel_factor = rel_factor + c_pos[2]
+                    last_time = next_node_time
+                    c_pos = (c_pos[0], c_pos[1], end_rel_factor)
+                    LOG.debug(f"move vehicle to final target position: {c_pos}, {last_time} | {target_position}")
+                    c_pos = target_position
+                    arrival_in_time_step = last_time
+
         return c_pos, driven_distance, arrival_in_time_step, list_passed_nodes, list_passed_node_times
 
     def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function=None):

@@ -49,6 +49,7 @@ def add_repositioning_modules():
     :return: dictionary of additional module options
     """
     add_repo_dict = {}  # str -> (module path, class name)
+    add_repo_dict["MLZoneBasedRepositioning"] = ("src.ml_gym.MLClasses.MLZoneBasedRepositioning", "MLZoneBasedRepositioning")
     return add_repo_dict 
 
 def add_charging_strategy_modules():

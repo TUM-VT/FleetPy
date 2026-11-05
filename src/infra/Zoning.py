@@ -68,6 +68,14 @@ class ZoneSystem:
                     self.zone_centroids[zone_id].append(node_id)
                 except KeyError:
                     self.zone_centroids[zone_id] = [node_id]
+        else:
+            LOG.warning("No centroids defined! Use random node in zone!")
+            self.zone_centroids = {}
+            for node_id, zone_id in self.node_zone_df[G_ZONE_ZID].items():
+                try:
+                    self.zone_centroids[zone_id].append(node_id)
+                except KeyError:
+                    self.zone_centroids[zone_id] = [node_id]
         self.zone_boarding = None
         if G_ZONE_BOARD in self.node_zone_df.columns:
             self.zone_boarding = {}
