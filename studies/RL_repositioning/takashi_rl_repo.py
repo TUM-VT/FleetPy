@@ -290,6 +290,28 @@ class TakashiRLRepo(FleetPyGym):
             self.cost_deviation_history[-1],
         )
 
+    def on_fleetpy_sim_end(self):
+        """ this method is triggered, when fleetpy simulation ends. It can be used to clean up resources, save results, etc. """
+        super().on_fleetpy_sim_end()
+        # Check values of terms in reward function 
+        for name, values in [
+            ("Unserved", self.cost_unserved_history),
+            ("Travel", self.cost_travel_history),
+            ("Deviation", self.cost_deviation_history),
+            ]:
+            if len(values) == 0:
+                continue
+
+            print(f"\n{name}")
+            print(f"Mean   : {np.mean(values):.3f}")
+            print(f"Median : {np.median(values):.3f}")
+            print(f"Max    : {np.max(values):.3f}")
+            print(f"Min    : {np.min(values):.3f}")
+
+        self.cost_unserved_history.clear()
+        self.cost_travel_history.clear()
+        self.cost_deviation_history.clear()
+
 # Optimize repositioning based on action (desired proportion)
 def repo_optimization(action, observation, zone_ids, nr_zones):
     ## Softmax

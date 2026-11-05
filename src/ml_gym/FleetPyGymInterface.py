@@ -98,26 +98,7 @@ class FleetPyGym(gym.Env, ABC):
         observation, reward = self.last_observation, self.last_reward
         new_observation, actor_type, done = self._poll_for_observation(process_id=0)
         if done:
-            print("FleetPy thread is dead")
-
-            # Check values of terms in reward function 
-            for name, values in [
-                ("Unserved", self.cost_unserved_history),
-                ("Travel", self.cost_travel_history),
-                ("Deviation", self.cost_deviation_history),
-                ]:
-                if len(values) == 0:
-                    continue
-
-                print(f"\n{name}")
-                print(f"Mean   : {np.mean(values):.3f}")
-                print(f"Median : {np.median(values):.3f}")
-                print(f"Max    : {np.max(values):.3f}")
-                print(f"Min    : {np.min(values):.3f}")
-
-            self.cost_unserved_history.clear()
-            self.cost_travel_history.clear()
-            self.cost_deviation_history.clear()
+            self.on_fleetpy_sim_end()
             
         else:
             observation = new_observation
@@ -126,5 +107,9 @@ class FleetPyGym(gym.Env, ABC):
             self.last_reward = reward
         translated_observation = self.translate_observation(observation)
         return translated_observation, reward, done, False, {}
+
+    def on_fleetpy_sim_end(self):
+        """ this method is triggered, when fleetpy simulation ends. It can be used to clean up resources, save results, etc. """
+        print("FleetPy thread is dead")
 
 
