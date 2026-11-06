@@ -76,6 +76,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
             
             org_plan_copy.list_plan_stops[i] = BoardingPlanStop(prq_o_stop_pos, boarding_dict=new_boarding_dict, max_trip_time_dict=mtt_dict.copy(),
                                                               latest_arrival_time_dict=lat_dict.copy(), earliest_pickup_time_dict=new_earliest_pickup_time_dict,
+                                                              latest_alighting_end_time_dict=old_pstop.latest_alighting_end_time_dict.copy(),
                                                               latest_pickup_time_dict=new_latest_pickup_time_dict, change_nr_pax=change_nr_pax,duration=stop_duration,
                                                               change_nr_parcels=old_pstop.get_change_nr_parcels(),
                                                               earliest_start_time=old_pstop.direct_earliest_start_time, earliest_end_time=old_pstop.direct_earliest_end_time,
@@ -127,6 +128,8 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
 
     # add d_stop for all tmp_plans
     d_stop_pos, prq_t_do_latest, prq_max_trip_time = new_prq_obj.get_d_stop_info()  # TODO # the checks with t_do_latest and max_trip_time can be confusing!
+    end_deadline = getattr(new_prq_obj, "latest_alighting_end_time", None)
+    end_constraints = {new_rid_struct: end_deadline} if end_deadline is not None else {}
     skip_next = -1
     for (o_index, same_stop), o_stop in poss_o_insertions.items():
         d_feasible = True  # once latest arrival is reached, no insertion at later index is feasible for current pick-up
@@ -149,6 +152,8 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                 ept_dict, lpt_dict, mtt_dict, lat_dict = old_pstop.get_boarding_time_constraint_dicts()
                 new_max_trip_time_dict = mtt_dict.copy()
                 new_max_trip_time_dict[new_rid_struct] = prq_max_trip_time
+                new_end_constraints = old_pstop.latest_alighting_end_time_dict.copy()
+                new_end_constraints.update(end_constraints)
                 stop_duration, _ = old_pstop.get_duration_and_earliest_departure()
                 if stop_duration is None:
                     stop_duration = std_bt
@@ -159,6 +164,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                 
                 org_plan_copy.list_plan_stops[j] = BoardingPlanStop(d_stop_pos, boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
                                                                   latest_arrival_time_dict=lat_dict.copy(), earliest_pickup_time_dict=ept_dict.copy(),
+                                                                  latest_alighting_end_time_dict=new_end_constraints,
                                                                   latest_pickup_time_dict=lpt_dict.copy(), change_nr_pax=change_nr_pax, change_nr_parcels=old_pstop.get_change_nr_parcels(),
                                                                   duration=stop_duration,
                                                                   earliest_start_time=old_pstop.direct_earliest_start_time, earliest_end_time=old_pstop.direct_earliest_end_time,
@@ -182,6 +188,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
                     continue
                 # add it after this stop else
                 new_plan_stop = BoardingPlanStop(d_stop_pos, boarding_dict={-1: [new_rid_struct]}, max_trip_time_dict={new_rid_struct : prq_max_trip_time},
+                                                 latest_alighting_end_time_dict=end_constraints.copy(),
                                                  change_nr_pax=-new_prq_obj.nr_pax, duration=std_bt)
                 org_plan_copy.list_plan_stops[j:j] = [new_plan_stop]
                 # check constraints > yield plan if feasible
@@ -202,6 +209,7 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
         if skip_next != number_stops and not org_plan_copy.list_plan_stops[-1].is_locked_end():
             j = number_stops
             new_plan_stop = BoardingPlanStop(d_stop_pos, boarding_dict={-1: [new_rid_struct]}, max_trip_time_dict={new_rid_struct : prq_max_trip_time},
+                                                latest_alighting_end_time_dict=end_constraints.copy(),
                                                 change_nr_pax=-new_prq_obj.nr_pax, duration=std_bt)
             org_plan_copy.list_plan_stops[j:j] = [new_plan_stop]
             # check constraints > yield plan if feasible
@@ -277,6 +285,8 @@ def simple_remove(veh_obj : SimulationVehicle, veh_plan : VehiclePlan, remove_ri
             #                           earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
             #                           change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked())
             new_ps = PlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
+                                      latest_arrival_time_dict={rid: value for rid, value in lat_dict.items() if rid != remove_rid},
+                                      latest_alighting_end_time_dict={rid: value for rid, value in ps.latest_alighting_end_time_dict.items() if rid != remove_rid},
                                       earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
                                       change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked(), locked_end=ps.is_locked_end(), fixed_stop=ps.is_fixed_stop(),
                                       earliest_start_time=ps.direct_earliest_start_time, earliest_end_time=ps.direct_earliest_end_time, latest_start_time=ps.direct_latest_start_time)
@@ -372,7 +382,10 @@ def single_insertion(veh_obj_list : List[SimulationVehicle], current_vid_to_vehp
             rid = prq_to_insert.get_rid_struct()
             pu_stop = BoardingPlanStop(prq_o_stop_pos, boarding_dict={1 : [rid]}, earliest_pickup_time_dict={rid: prq_t_pu_earliest},
                                        latest_pickup_time_dict={rid : prq_t_pu_latest}, duration=std_bt)
-            do_stop = BoardingPlanStop(d_stop_pos, boarding_dict={-1 : [rid]}, max_trip_time_dict={rid : prq_max_trip_time}, duration=std_bt)
+            end_deadline = getattr(prq_to_insert, "latest_alighting_end_time", None)
+            end_constraints = {rid: end_deadline} if end_deadline is not None else {}
+            do_stop = BoardingPlanStop(d_stop_pos, boarding_dict={-1 : [rid]}, max_trip_time_dict={rid : prq_max_trip_time}, duration=std_bt,
+                                       latest_alighting_end_time_dict=end_constraints)
             new_veh_plan = VehiclePlan(veh_obj, sim_time, routing_engine, [pu_stop, do_stop])
             if not new_veh_plan.is_feasible():
                 continue

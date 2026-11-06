@@ -1,5 +1,7 @@
 import logging
 import time
+from math import isfinite
+from numbers import Real
 
 from src.simulation.Offers import TravellerOffer
 from src.fleetctrl.FleetControlBase import FleetControlBase
@@ -285,6 +287,55 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         else:
             offer = self._create_rejection(prq, simulation_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
         return offer
+
+    def _proposal_alighting_plan(self, rid):
+        """Return the plan and vehicle holding an immediate or rolling-horizon proposal."""
+        prq = self.rq_dict[rid]
+        if prq.get_reservation_flag():
+            vid = self.reservation_module.rid_to_assigned_vid.get(rid)
+            if vid is None:
+                raise ValueError(f"No assigned reservation plan for {rid}")
+            return self.veh_plans[vid], self.sim_vehicles[vid], True
+        plan = self.tmp_assignment[rid]
+        return plan, self.sim_vehicles[plan.vid], False
+
+    @staticmethod
+    def _proposal_alighting_stop(plan, rid):
+        stops = [stop for stop in plan.list_plan_stops if rid in stop.get_list_alighting_rids()]
+        if len(stops) != 1:
+            raise ValueError(f"Expected one alighting stop for {rid}, found {len(stops)}")
+        return stops[0]
+
+    def get_proposal_alighting_end_time(self, rid):
+        """Return the proposed end of alighting, including the full stop duration."""
+        plan, _, _ = self._proposal_alighting_plan(rid)
+        stop = self._proposal_alighting_stop(plan, rid)
+        _, end_time = stop.get_planned_arrival_and_departure_time()
+        if not isinstance(end_time, Real) or not isfinite(end_time):
+            raise ValueError(f"Missing planned alighting end time for {rid}")
+        return end_time
+
+    def constrain_proposal_alighting_end(self, rid, latest_end_time):
+        """Install a PT connection deadline if the proposed plan remains feasible."""
+        if isinstance(latest_end_time, bool) or not isinstance(latest_end_time, Real) or not isfinite(latest_end_time):
+            raise ValueError(f"Invalid alighting deadline for {rid}: {latest_end_time!r}")
+        plan, vehicle, reservation = self._proposal_alighting_plan(rid)
+        proposed = plan.copy()
+        self._proposal_alighting_stop(proposed, rid).update_rid_alighting_end_time_constraint(rid, latest_end_time)
+        if not proposed.update_tt_and_check_plan(vehicle, self.sim_time, self.routing_engine):
+            return False
+        self.rq_dict[rid].latest_alighting_end_time = latest_end_time
+        if reservation:
+            self.assign_vehicle_plan(vehicle, proposed, self.sim_time)
+        else:
+            self.tmp_assignment[rid] = proposed
+        return True
+
+    def refresh_reservation_proposal(self, rid, sim_time):
+        """Rebind a selected reservation's route to the selected demand request."""
+        if self.rq_dict[rid].get_reservation_flag():
+            plan, vehicle, _ = self._proposal_alighting_plan(rid)
+            self.assign_vehicle_plan(vehicle, plan, sim_time)
 
     def change_prq_time_constraints(self, sim_time, rid, new_lpt, new_ept=None):
         """This method should be called when the hard time constraints of a customer should be changed.

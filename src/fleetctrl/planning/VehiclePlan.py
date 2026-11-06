@@ -219,12 +219,14 @@ class PlanStop(PlanStopBase):
     def __init__(self, position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={}, earliest_pickup_time_dict={}, latest_pickup_time_dict={},
                  change_nr_pax=0, change_nr_parcels=0, earliest_start_time=None, latest_start_time=None, duration=None, earliest_end_time=None,
                  locked=False, locked_end=False, charging_power=0, planstop_state : G_PLANSTOP_STATES=G_PLANSTOP_STATES.MIXED,
-                 charging_task_id: Tuple[int, str] = None, status: Optional[VRL_STATES] = None, fixed_stop: bool = False):
+                 charging_task_id: Tuple[int, str] = None, status: Optional[VRL_STATES] = None, fixed_stop: bool = False,
+                 latest_alighting_end_time_dict=None):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param boarding_dict: dictionary with entries +1 -> list of request ids that board the vehicle there; -1 -> list of requests that alight the vehicle there
         :param max_trip_time_dict: dictionary request_id -> maximum trip time of all requests alighting at this stop to check max trip time constraint
         :param latest_arrival_time_dict: dictionary request_id -> absolute latest arival time of all requests alighting at this stop to check latest arrival time constraint
+        :param latest_alighting_end_time_dict: request_id -> latest time the alighting stop may end
         :param earliest_pickup_time_dict: dictionary request_id -> earliest pickup time of all requests boarding at this stop to check earliest pickup time constraint
         :param latest_pickup_time_dict: dictionary request_id -> latest pickup time of all requests boarding at this top to check latest pickup time constraint
         :param change_nr_pax: (int) change of number of passengers at this point: number people boarding - number people alighting to check capacity constraint
@@ -258,6 +260,7 @@ class PlanStop(PlanStopBase):
         # parameters that define time constraints
         self.max_trip_time_dict = max_trip_time_dict  # deboarding rid -> max_trip_time constraint
         self.latest_arrival_time_dict = latest_arrival_time_dict    # deboarding rid -> latest_arrival_time constraint
+        self.latest_alighting_end_time_dict = {} if latest_alighting_end_time_dict is None else latest_alighting_end_time_dict
         self.earliest_pickup_time_dict = earliest_pickup_time_dict  # boarding rid -> earliest pickup time
         self.latest_pickup_time_dict = latest_pickup_time_dict  # boarding rid -> latest pickup time
         if type(self.boarding_dict) != dict:
@@ -265,6 +268,8 @@ class PlanStop(PlanStopBase):
         if type(self.max_trip_time_dict) != dict:
             raise TypeError
         if type(self.latest_arrival_time_dict) != dict:
+            raise TypeError
+        if type(self.latest_alighting_end_time_dict) != dict:
             raise TypeError
         if type(self.earliest_pickup_time_dict) != dict:
             raise TypeError
@@ -323,6 +328,7 @@ class PlanStop(PlanStopBase):
         """
         cp_ps = PlanStop(self.pos, boarding_dict=self.boarding_dict.copy(), max_trip_time_dict=self.max_trip_time_dict.copy(),
                          latest_arrival_time_dict=self.latest_arrival_time_dict.copy(), earliest_pickup_time_dict=self.earliest_pickup_time_dict.copy(),
+                         latest_alighting_end_time_dict=self.latest_alighting_end_time_dict.copy(),
                          latest_pickup_time_dict=self.latest_pickup_time_dict.copy(), change_nr_pax=self.change_nr_pax, change_nr_parcels=self.change_nr_parcels,
                          earliest_start_time=self.direct_earliest_start_time, latest_start_time=self.direct_latest_start_time,
                          duration=self.direct_duration, earliest_end_time=self.direct_earliest_end_time, locked=self.locked, locked_end=self.locked_end,
@@ -460,6 +466,10 @@ class PlanStop(PlanStopBase):
         if new_latest_dropoff_time is not None:
             self.latest_arrival_time_dict[rid] = new_latest_dropoff_time
 
+    def update_rid_alighting_end_time_constraint(self, rid, latest_end_time):
+        """Set the latest time the passenger may finish alighting at this stop."""
+        self.latest_alighting_end_time_dict[rid] = latest_end_time
+
     def __str__(self):
         return f"PS: {self.pos} state {self.state.name} locked {self.locked} bd {self.boarding_dict} earl dep {self._earliest_start_time} latest arr " \
                f"{self._latest_start_time} eta {self._planned_arrival_time}"
@@ -483,12 +493,14 @@ class BoardingPlanStop(PlanStop):
     def __init__(self, position, boarding_dict={}, max_trip_time_dict={}, latest_arrival_time_dict={},
                  earliest_pickup_time_dict={}, latest_pickup_time_dict={}, change_nr_pax=0, change_nr_parcels=0,
                  duration=None, locked=False,
-                 earliest_start_time=None, latest_start_time=None, earliest_end_time=None, fixed_stop=False):
+                 earliest_start_time=None, latest_start_time=None, earliest_end_time=None, fixed_stop=False,
+                 latest_alighting_end_time_dict=None):
         """
         :param position: network position (3 tuple) of the position this PlanStops takes place (target for routing)
         :param boarding_dict: dictionary with entries +1 -> list of request ids that board the vehicle there; -1 -> list of requests that alight the vehicle there
         :param max_trip_time_dict: dictionary request_id -> maximum trip time of all requests alighting at this stop to check max trip time constraint
         :param latest_arrival_time_dict: dictionary request_id -> absolute latest arival time of all requests alighting at this stop to check latest arrival time constraint
+        :param latest_alighting_end_time_dict: request_id -> latest time the alighting stop may end
         :param earliest_pickup_time_dict: dictionary request_id -> earliest pickup time of all requests boarding at this stop to check earliest pickup time constraint
         :param latest_pickup_time_dict: dictionary request_id -> latest pickup time of all requests boarding at this top to check latest pickup time constraint
         :param change_nr_pax: (int) change of number of passengers at this point: number people boarding - number people alighting to check capacity constraint
@@ -498,6 +510,7 @@ class BoardingPlanStop(PlanStop):
         """
         super().__init__(position, boarding_dict=boarding_dict, max_trip_time_dict=max_trip_time_dict,
                          latest_arrival_time_dict=latest_arrival_time_dict, earliest_pickup_time_dict=earliest_pickup_time_dict,
+                         latest_alighting_end_time_dict=latest_alighting_end_time_dict,
                          latest_pickup_time_dict=latest_pickup_time_dict, change_nr_pax=change_nr_pax, change_nr_parcels=change_nr_parcels,
                          earliest_start_time=earliest_start_time, latest_start_time=latest_start_time,
                          duration=duration, earliest_end_time=earliest_end_time, locked=locked,
@@ -950,6 +963,9 @@ class VehiclePlan:
                     infeasible_index = i
 
                 c_time = pstop.get_departure_time(c_time)
+                if pstop.latest_alighting_end_time_dict and c_time > min(pstop.latest_alighting_end_time_dict.values()):
+                    is_feasible = False
+                    infeasible_index = i
                 pstop.set_planned_arrival_and_departure_time(last_c_time, c_time)
 
                 if pstop.get_charging_power() > 0:  # TODO # is charging now in waiting included as planned here?

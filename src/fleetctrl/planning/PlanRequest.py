@@ -78,6 +78,8 @@ class PlanRequest:
         else:
             self.t_pu_latest = min(self.t_pu_earliest + max_wait_time, rq.latest_start_time)
         self.t_do_latest = LARGE_INT
+        # Absolute time by which alighting must finish, e.g. to catch a PT connection.
+        self.latest_alighting_end_time = None
         if rq.max_trip_time is not None:
             self.max_trip_time = rq.max_trip_time
         else:
