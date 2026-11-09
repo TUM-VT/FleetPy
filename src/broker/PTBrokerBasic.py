@@ -269,6 +269,12 @@ class PTBrokerBasic(BrokerBasic):
         return candidate
 
     def _confirm_amod_binding(self, rid, op_id, request_id, sim_time):
+        # Reservation routes can predate the selected child snapshot in demand.
+        # Refresh supported controllers after binding the child and before confirmation.
+        if request_id != rid:
+            refresh = getattr(self.amod_operators[op_id], 'refresh_reservation_proposal', None)
+            if refresh is not None:
+                refresh(request_id, sim_time)
         self.amod_operators[op_id].user_confirms_booking(request_id, sim_time)
         self._confirmed_amod.setdefault(rid, set()).add((op_id, request_id))
 

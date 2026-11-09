@@ -35,7 +35,6 @@ from src.broker.PTBrokerBasic import PTBrokerBasic
 from src.simulation.Offers import IntermodalOffer
 if tp.TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
-    from src.fleetctrl.planning.PlanRequest import PlanRequest
     from src.ptctrl.PTControlBase import PTControlBase
     from src.demand.demand import Demand
     from src.routing.road.NetworkBase import NetworkBase
@@ -186,7 +185,7 @@ class PTBroker(PTBrokerBasic):
             transfer_station_ids: tp.List[str] = parent_rq_obj.get_transfer_station_ids_for_mode(parent_modal_state)
             transfer_street_node, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
             # determine the earliest start time of the PT sub-request based on the FM AMoD offer
-            fm_est_pt_mod: int = self._determine_est_pt_mod(parent_rq_obj,amod_op_id, fm_amod_offer)
+            fm_est_pt_mod: int = self._determine_est_pt_mod(amod_op_id, fm_amod_offer)
             # inform PT operator
             fm_pt_arrival: tp.Optional[int] = self._inform_pt_sub_request(
                                                                             parent_rq_obj,
@@ -202,6 +201,10 @@ class PTBroker(PTBrokerBasic):
             if fm_pt_arrival is None or fm_pt_offer is None or fm_pt_offer.service_declined():
                 LOG.info(f"PT offer is not available for sub_request {fm_pt_rid_struct}, skipping to next AMoD operator.")
                 continue
+            # Keep the PT waiting-time slack available for later FM plan adjustments.
+            self.amod_operators[amod_op_id].constrain_proposal_alighting_end(
+                fm_amod_rid_struct, fm_pt_offer.origin_node_latest_arrival_time
+            )
             # register the PT offer in the sub-request
             self.demand[fm_pt_rid_struct].receive_offer(self.pt_operator_id, fm_pt_offer, None)
 
@@ -211,12 +214,6 @@ class PTBroker(PTBrokerBasic):
             sub_trip_offers[RQ_SUB_TRIP_ID.FM_PT.value] = fm_pt_offer
             intermodal_offer: 'IntermodalOffer' = self._create_intermodal_offer(rid, sub_trip_offers, parent_modal_state)
             LOG.info(f"Created intermodal offer for request {rid}: {intermodal_offer}")
-
-            # update FM latest dropoff time based on the PT offer
-            sub_prq_obj: 'PlanRequest' = self.amod_operators[amod_op_id].rq_dict[fm_amod_rid_struct]
-            old_t_do_latest: int = sub_prq_obj.t_do_latest
-            new_t_do_latest: int = self._determine_amod_latest_dropoff_time(parent_rq_obj, fm_amod_offer, fm_pt_offer.get(G_OFFER_WAIT), old_t_do_latest)
-            sub_prq_obj.set_new_dropoff_time_constraint(new_t_do_latest)
 
             # add intermodal offer to offers dictionary
             offers[intermodal_offer.operator_id] = intermodal_offer
@@ -285,7 +282,7 @@ class PTBroker(PTBrokerBasic):
             transfer_street_node_0, _ = self._find_transfer_info(transfer_station_ids[0], "pt2street")
             transfer_street_node_1, _ = self._find_transfer_info(transfer_station_ids[1], "pt2street")
             # determine the earliest start time of the PT sub-request based on the FM AMoD offer
-            flm_est_pt_mod: int = self._determine_est_pt_mod(parent_rq_obj, amod_op_id, flm_amod_offer_0)
+            flm_est_pt_mod: int = self._determine_est_pt_mod(amod_op_id, flm_amod_offer_0)
             # inform PT operator
             flm_pt_arrival: tp.Optional[int] = self._inform_pt_sub_request(
                                                                             parent_rq_obj,
@@ -301,6 +298,10 @@ class PTBroker(PTBrokerBasic):
             if flm_pt_arrival is None or flm_pt_offer is None or flm_pt_offer.service_declined():
                 LOG.info(f"PT offer is not available for sub_request {flm_pt_rid_struct}, skipping to next AMoD operator.")
                 continue
+            # Apply the PT connection deadline to the FM leg of the FLM journey.
+            self.amod_operators[amod_op_id].constrain_proposal_alighting_end(
+                flm_amod_rid_struct_0, flm_pt_offer.origin_node_latest_arrival_time
+            )
             # register the PT offer in the sub-request
             self.demand[flm_pt_rid_struct].receive_offer(self.pt_operator_id, flm_pt_offer, None)
 
@@ -331,28 +332,11 @@ class PTBroker(PTBrokerBasic):
             intermodal_offer: 'IntermodalOffer' = self._create_intermodal_offer(rid, sub_trip_offers, parent_modal_state)
             LOG.info(f"Created intermodal offer for request {rid}: {intermodal_offer}")
 
-            # update FM latest dropoff time based on the PT offer
-            sub_prq_obj: 'PlanRequest' = self.amod_operators[amod_op_id].rq_dict[flm_amod_rid_struct_0]
-            old_t_do_latest: int = sub_prq_obj.t_do_latest
-            new_t_do_latest: int = self._determine_amod_latest_dropoff_time(parent_rq_obj, flm_amod_offer_0, flm_pt_offer.get(G_OFFER_WAIT), old_t_do_latest)
-            sub_prq_obj.set_new_dropoff_time_constraint(new_t_do_latest)
-
             # add intermodal offer to offers dictionary
             offers[intermodal_offer.operator_id] = intermodal_offer
 
         return offers
         
-    def _determine_est_pt_mod(self, rq_obj: 'RequestBase', amod_op_id: int, amod_offer: 'TravellerOffer') -> int:
-        """This method determines the earliest start time for the pt sub-request.
-        """
-        t_est_pt_mod: int = rq_obj.earliest_start_time + amod_offer.get(G_OFFER_WAIT) + amod_offer.get(G_OFFER_DRIVE) + self.amod_operators[amod_op_id].const_bt
-        return t_est_pt_mod
-    
-    def _determine_amod_latest_dropoff_time(self, rq_obj: 'RequestBase', amod_offer: 'TravellerOffer', pt_waiting_time: int, old_t_do_latest: int) -> tp.Optional[int]:
-        """This method determines the latest dropoff time for the amod sub-request.
-        """
-        t_do_latest: int = rq_obj.earliest_start_time + amod_offer.get(G_OFFER_WAIT) + amod_offer.get(G_OFFER_DRIVE) + pt_waiting_time
-        # add latest dropoff time constraint check
-        if t_do_latest > old_t_do_latest:
-            t_do_latest = old_t_do_latest
-        return t_do_latest
+    def _determine_est_pt_mod(self, amod_op_id: int, amod_offer: 'TravellerOffer') -> float:
+        """Use the assigned vehicle plan's end of FM alighting as PT readiness."""
+        return self.amod_operators[amod_op_id].get_proposal_alighting_end_time(amod_offer.traveler_id)

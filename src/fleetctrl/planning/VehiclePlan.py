@@ -547,7 +547,7 @@ class VehiclePlan:
     a Vehicle mainly consists of two parts:
         - a vehicle this plan is assigned to, and therefore the current state of the vehicle
         - an ordered list of PlanStops defining the tasks the vehicle is supposed to perform (vehicles move from one plan stop to another)"""
-    def __init__(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase, list_plan_stops : List[PlanStopBase], copy: bool =False, external_pax_info : dict = {}):
+    def __init__(self, veh_obj : SimulationVehicle, sim_time : float, routing_engine : NetworkBase, list_plan_stops : List[PlanStopBase], copy: bool =False, external_pax_info : dict = {}, latest_alighting_end_times : dict = None):
         """
         :param veh_obj: corresponding simulation vehicle reference
         :param sim_time: current simulation time
@@ -555,8 +555,11 @@ class VehiclePlan:
         :param list_plan_stops: ordered list of plan stops to perform
         :param copy: optional; set if an init is set for creation of a copy of the plan (only for internal use)
         :param external_pax_info: optional; dictionary of allready computed pax info (only for internal use)
+        :param latest_alighting_end_times: optional rid -> latest absolute alighting completion time
         """
         self.list_plan_stops = list_plan_stops
+        # Keep each plan's deadlines independent, including plans without additional deadlines.
+        self.latest_alighting_end_times = dict(latest_alighting_end_times or {})
         self.utility = None
         # pax info:
 
@@ -579,7 +582,8 @@ class VehiclePlan:
         """
         creates a copy
         """
-        tmp_VehiclePlan = VehiclePlan(None, None, None, [ps.copy() for ps in self.list_plan_stops], copy=True)
+        tmp_VehiclePlan = VehiclePlan(None, None, None, [ps.copy() for ps in self.list_plan_stops], copy=True,
+                                      latest_alighting_end_times=self.latest_alighting_end_times)
         tmp_VehiclePlan.vid = self.vid
         tmp_VehiclePlan.utility = self.utility
         tmp_VehiclePlan.pax_info = self.pax_info.copy()
@@ -710,6 +714,9 @@ class VehiclePlan:
                         self.feasible = False
                         self.structural_feasible = False
                         return False
+                    # The completed route leg matches this stop, so its alighting deadlines are no longer needed.
+                    for rid in rid_alighted_at_stop:
+                        self.latest_alighting_end_times.pop(rid, None)
                     # remove stop from plan
                     self.list_plan_stops = self.list_plan_stops[1:]
                 else:
@@ -950,6 +957,11 @@ class VehiclePlan:
                     infeasible_index = i
 
                 c_time = pstop.get_departure_time(c_time)
+                # Alighting requests share the stop end time, including its duration and any required waiting.
+                if any(c_time > self.latest_alighting_end_times[rid]
+                       for rid in pstop.get_list_alighting_rids() if rid in self.latest_alighting_end_times):
+                    is_feasible = False
+                    infeasible_index = i
                 pstop.set_planned_arrival_and_departure_time(last_c_time, c_time)
 
                 if pstop.get_charging_power() > 0:  # TODO # is charging now in waiting included as planned here?

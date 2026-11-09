@@ -286,6 +286,47 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
             offer = self._create_rejection(prq, simulation_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
         return offer
 
+    def _proposal_alighting_plan(self, rid):
+        """Return the plan and vehicle holding an immediate or rolling-horizon proposal."""
+        prq = self.rq_dict[rid]
+        if prq.get_reservation_flag():
+            vid = self.reservation_module.rid_to_assigned_vid.get(rid)
+            if vid is None:
+                raise ValueError(f"No assigned reservation plan for {rid}")
+            return self.veh_plans[vid], self.sim_vehicles[vid], True
+        plan = self.tmp_assignment[rid]
+        return plan, self.sim_vehicles[plan.vid], False
+
+    @staticmethod
+    def _proposal_alighting_stop(plan, rid):
+        stops = [stop for stop in plan.list_plan_stops if rid in stop.get_list_alighting_rids()]
+        if len(stops) != 1:
+            raise ValueError(f"Expected one alighting stop for {rid}, found {len(stops)}")
+        return stops[0]
+
+    def get_proposal_alighting_end_time(self, rid) -> float:
+        """Return the proposed end of alighting, including the full stop duration."""
+        plan, _, _ = self._proposal_alighting_plan(rid)
+        stop = self._proposal_alighting_stop(plan, rid)
+        _, end_time = stop.get_planned_arrival_and_departure_time()
+        return end_time
+
+    def constrain_proposal_alighting_end(self, rid, latest_end_time: float) -> None:
+        """Install the PT deadline without changing the proposed vehicle schedule."""
+        plan, _, _ = self._proposal_alighting_plan(rid)
+        plan.latest_alighting_end_times[rid] = min(plan.latest_alighting_end_times.get(rid, latest_end_time), latest_end_time)
+
+    def refresh_reservation_proposal(self, rid, sim_time):
+        """Rebind a selected reservation's route to the selected demand request.
+
+        RollingHorizon may have assigned the route before the broker selected the
+        child request. Reassigning the plan rebuilds its route legs using the
+        selected demand objects. Immediate requests are assigned upon confirmation.
+        """
+        if self.rq_dict[rid].get_reservation_flag():
+            plan, vehicle, _ = self._proposal_alighting_plan(rid)
+            self.assign_vehicle_plan(vehicle, plan, sim_time)
+
     def change_prq_time_constraints(self, sim_time, rid, new_lpt, new_ept=None):
         """This method should be called when the hard time constraints of a customer should be changed.
         It changes the PlanRequest attributes. Moreover, this method called on child classes should adapt the

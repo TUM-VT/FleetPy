@@ -276,10 +276,15 @@ def simple_remove(veh_obj : SimulationVehicle, veh_plan : VehiclePlan, remove_ri
             # new_ps = BoardingPlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
             #                           earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
             #                           change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked())
+            # Preserve other riders' latest arrivals when rebuilding the stop; removing B from
+            # {A: 115, B: 150} keeps {A: 115}.
             new_ps = PlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
-                                      earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
-                                      change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked(), locked_end=ps.is_locked_end(), fixed_stop=ps.is_fixed_stop(),
-                                      earliest_start_time=ps.direct_earliest_start_time, earliest_end_time=ps.direct_earliest_end_time, latest_start_time=ps.direct_latest_start_time)
+                              latest_arrival_time_dict={rid: value for rid, value in lat_dict.items() if rid != remove_rid},
+                              earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
+                              change_nr_pax=change_nr_pax, duration=dur, locked=ps.is_locked(),
+                              locked_end=ps.is_locked_end(), fixed_stop=ps.is_fixed_stop(),
+                              earliest_start_time=ps.direct_earliest_start_time, earliest_end_time=ps.direct_earliest_end_time,
+                              latest_start_time=ps.direct_latest_start_time)
             new_plan_list.append(new_ps)
     #LOG.info("simple remove: {}".format([str(x) for x in new_plan_list]))
     external_pax_info = veh_plan.pax_info.copy()
@@ -287,7 +292,12 @@ def simple_remove(veh_obj : SimulationVehicle, veh_plan : VehiclePlan, remove_ri
         del external_pax_info[remove_rid]
     except:
         pass
-    new_veh_plan = VehiclePlan(veh_obj, sim_time, routing_engine, new_plan_list, external_pax_info=external_pax_info)
+    # Retain other riders' PT deadlines for the new plan's initial feasibility check;
+    # removing B from {A: 150, B: 200} keeps {A: 150}.
+    latest_alighting_end_times = {rid: deadline for rid, deadline in veh_plan.latest_alighting_end_times.items()
+                                  if rid != remove_rid}
+    new_veh_plan = VehiclePlan(veh_obj, sim_time, routing_engine, new_plan_list, external_pax_info=external_pax_info,
+                               latest_alighting_end_times=latest_alighting_end_times)
     if not rid_found_in_plan_flag:
         LOG.warning(f"trying to remove rid {remove_rid} from plan which is not part of it!")
         LOG.warning(f"old plan {veh_plan}")
