@@ -68,6 +68,10 @@ python -B studies/TRE-PTBroker_revision/run_revision.py
 
 可通过 `--workers 32` 调整并发，通过 `--progress-interval 60` 调整进度报告间隔（秒）；也可用 `--group ei60_on_c8` 单独运行 2,916 个场景。终端显示完成及失败数量、正在运行的 scenario、已用时间和基于当前吞吐量粗估的剩余时间及总时长。各场景耗时差异较大，尤其开始时估计可能不准。FleetPy 的 stdout/stderr 保存在 `run_logs/<run-id>/<scenario_name>.log`，其自身的 `00_simulation.log` 仍在 scenario 结果目录中。
 
+每次进度报告还显示 Linux 整机 CPU 使用率、内存使用量／总量和 CPU 温度。CPU 使用率按两次报告之间的 `/proc/stat` 变化计算；内存使用量为 `/proc/meminfo` 中的 `MemTotal - MemAvailable`，它们反映整机而非仅本次仿真。温度读取 Intel `coretemp` 的 package 传感器；没有 package 读数时使用最高 core 温度并标明来源。某项系统接口或传感器不可用时，该项显示 `N/A`，不影响模拟。初次 CPU 采样没有可比较的历史值时也显示 `N/A`。无需额外安装 Python 监控库；温度是否可见取决于服务器的 `coretemp` 传感器接口。
+
+在服务器启动模拟前，可以用 `python -B studies/TRE-PTBroker_revision/run_revision.py --hardware-check` 采样一次硬件信息；它等待约一秒以计算 CPU 使用率，不会启动模拟。
+
 启动前会检查所有选定场景的请求模式、重复名称和已有输出。任何选定 scenario 的输出路径已存在（包括不完整结果），都会拒绝启动；同一 study 同时只允许一个本入口运行。单个 scenario 报错时会保留日志并继续其他场景，最终以非零状态退出。Ctrl-C 后停止派发新任务，等待已派发的任务结束，随后退出；如果某个任务卡住，等待可能很长。其他终止方式可能留下不完整输出或仍在运行的子进程，重新启动前应检查。当前入口不支持自动续跑或直接选择自定义恢复文件，重新运行前需要检查并保留既有输出，再另行准备未完成场景的执行入口。大量结果和日志需要足够的磁盘空间。
 
 ## 已知边界

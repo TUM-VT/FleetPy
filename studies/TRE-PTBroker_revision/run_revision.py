@@ -53,6 +53,8 @@ def parse_args(argv=None):
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--group", choices=GROUPS, help="run only this group")
     selection.add_argument("--list-groups", action="store_true", help="list available groups")
+    selection.add_argument("--hardware-check", action="store_true",
+                           help="show a hardware sample without starting simulations")
     parser.add_argument("--workers", type=positive_int, default=24,
                         help="parallel scenarios (default: 24, for the target 14900K)")
     parser.add_argument("--progress-interval", type=positive_int, default=30,
@@ -156,7 +158,111 @@ def format_duration(seconds):
     return str(datetime.timedelta(seconds=max(0, int(seconds))))
 
 
-def print_progress(total, succeeded, failed, pending, active, started, interrupted=False):
+class HardwareMonitor:
+    """Read Linux host utilization and Intel CPU temperature without extra dependencies."""
+
+    def __init__(self, proc_root=Path("/proc"), hwmon_root=Path("/sys/class/hwmon")):
+        self.proc_root = Path(proc_root)
+        self.hwmon_root = Path(hwmon_root)
+        self.previous_cpu = None
+
+    def _cpu_percent(self):
+        try:
+            fields = (self.proc_root / "stat").read_text().splitlines()[0].split()
+            if fields[0] != "cpu" or len(fields) < 5:
+                raise ValueError("Invalid aggregate CPU counters")
+            counters = [int(value) for value in fields[1:9]]
+            if any(value < 0 for value in counters):
+                raise ValueError("Invalid aggregate CPU counters")
+            total = sum(counters)
+            idle = counters[3] + (counters[4] if len(counters) > 4 else 0)
+        except (OSError, ValueError, IndexError):
+            self.previous_cpu = None
+            return None
+        previous = self.previous_cpu
+        self.previous_cpu = (total, idle)
+        if previous is None:
+            return None
+        total_delta, idle_delta = total - previous[0], idle - previous[1]
+        if total_delta <= 0 or idle_delta < 0 or idle_delta > total_delta:
+            return None
+        return 100 * (total_delta - idle_delta) / total_delta
+
+    def _memory(self):
+        try:
+            values = {}
+            for line in (self.proc_root / "meminfo").read_text().splitlines():
+                key, _, value = line.partition(":")
+                if key in ("MemTotal", "MemAvailable"):
+                    fields = value.split()
+                    if len(fields) != 2 or fields[1] != "kB":
+                        raise ValueError("Invalid memory counters")
+                    values[key] = int(fields[0])
+            total, available = values["MemTotal"], values["MemAvailable"]
+            if total <= 0 or not 0 <= available <= total:
+                raise ValueError("Invalid memory counters")
+            return (total - available) / 1048576, total / 1048576
+        except (OSError, ValueError, IndexError, KeyError):
+            return None, None
+
+    def _temperature(self):
+        packages = []
+        cores = []
+        try:
+            devices = sorted(self.hwmon_root.glob("hwmon*"))
+        except OSError:
+            return None, None
+        for device in devices:
+            try:
+                if (device / "name").read_text().strip().lower() != "coretemp":
+                    continue
+                inputs = sorted(device.glob("temp*_input"))
+            except OSError:
+                continue
+            for path in inputs:
+                try:
+                    label = path.with_name(path.name.replace("_input", "_label")).read_text().strip()
+                    temperature = int(path.read_text().strip()) / 1000
+                    if not -40 <= temperature <= 150:
+                        continue
+                except (OSError, ValueError):
+                    continue
+                if label.lower().startswith("package id "):
+                    packages.append((temperature, label))
+                elif label.lower().startswith("core "):
+                    cores.append((temperature, label))
+        if packages:
+            temperature, label = max(packages)
+            return temperature, f"coretemp {label}"
+        if cores:
+            temperature, label = max(cores)
+            return temperature, f"coretemp max {label}"
+        return None, None
+
+    def sample(self):
+        cpu = self._cpu_percent()
+        memory_used, memory_total = self._memory()
+        temperature, label = self._temperature()
+        return {"cpu_percent": cpu, "memory_used_gib": memory_used,
+                "memory_total_gib": memory_total, "temperature_c": temperature,
+                "temperature_label": label}
+
+
+def format_hardware(sample):
+    cpu = f"{sample['cpu_percent']:.1f}%" if sample["cpu_percent"] is not None else "N/A"
+    if sample["memory_used_gib"] is None or sample["memory_total_gib"] is None:
+        memory = "N/A"
+    else:
+        used, total = sample["memory_used_gib"], sample["memory_total_gib"]
+        memory = f"{used:.1f}/{total:.1f} GiB ({100 * used / total:.1f}%)"
+    if sample["temperature_c"] is None:
+        temperature = "N/A"
+    else:
+        temperature = f"{sample['temperature_c']:.1f} C ({sample['temperature_label']})"
+    return f"Host CPU: {cpu} | RAM used/total: {memory} | CPU temperature: {temperature}"
+
+
+def print_progress(total, succeeded, failed, pending, active, started, monitor, interrupted=False):
     now = time.monotonic()
     elapsed = now - started
     done = succeeded + failed
@@ -167,6 +273,7 @@ def print_progress(total, succeeded, failed, pending, active, started, interrupt
     print(f"Completed: {done}/{total} ({100 * done / total:.1f}%) | Failed: {failed} | Running: {len(active)} | "
           f"Elapsed: {format_duration(elapsed)} | ETA (rough): {remaining} | "
           f"Estimated total (rough): {estimated_total}{suffix}", flush=True)
+    print(format_hardware(monitor.sample()), flush=True)
     for name, (pid, begin) in sorted(active.items()):
         if name in pending:
             print(f"  PID {pid} | {format_duration(now - begin)} | {name}", flush=True)
@@ -187,6 +294,7 @@ def run_scenarios(scenarios, workers, progress_interval, log_dir):
     succeeded = failed = 0
     interrupted = False
     interrupt_reported = False
+    monitor = HardwareMonitor()
     start = time.monotonic()
     next_report = start
 
@@ -233,7 +341,7 @@ def run_scenarios(scenarios, workers, progress_interval, log_dir):
                     print(f"FAILED {name}: {error} (see {log_dir / (name + '.log')})", flush=True)
                 submit_one()
             if time.monotonic() >= next_report or not pending:
-                print_progress(total, succeeded, failed, pending.values(), active, start, interrupted)
+                print_progress(total, succeeded, failed, pending.values(), active, start, monitor, interrupted)
                 next_report = time.monotonic() + progress_interval
         return 130 if interrupted else (1 if failed else 0)
     finally:
@@ -247,6 +355,12 @@ def main(argv=None):
     args = parse_args(argv)
     if args.list_groups:
         print("\n".join(GROUPS))
+        return 0
+    if args.hardware_check:
+        monitor = HardwareMonitor()
+        monitor.sample()
+        time.sleep(1)
+        print(format_hardware(monitor.sample()))
         return 0
     groups = (args.group,) if args.group else GROUPS
     if args.dry_run:
