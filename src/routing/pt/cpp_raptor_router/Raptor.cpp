@@ -281,6 +281,7 @@ std::vector<Journey> Raptor::findJourneys() {
     
     // Check if any included target stop has been improved
     for (const auto& [target_id, station_stop_transfer_time] : query_.included_targets) {
+      if (included_target_ids_.find(target_id) == included_target_ids_.end()) continue;
       const auto target_label_id = getVehicleArrivalLabel(target_id, k);
       if (target_label_id.has_value() &&
           target_label_id != arrivals_.at(target_id).at(k - 1).vehicle_label_id) {
@@ -336,6 +337,7 @@ std::optional<Journey> Raptor::findOptimalJourney() {
     if (marked_stops.empty()) break;   
     
     for (const auto& [target_id, target_station_stop_transfer_time] : query_.included_targets) {
+      if (included_target_ids_.find(target_id) == included_target_ids_.end()) continue;
       const auto target_label_id = getVehicleArrivalLabel(target_id, k);
       if (target_label_id.has_value() &&
           target_label_id != arrivals_.at(target_id).at(k - 1).vehicle_label_id) {
