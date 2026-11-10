@@ -794,7 +794,10 @@ class BasicIntermodalRequest(RequestBase):
         if not 0 <= max_transfers <= 2147483647:
             raise ValueError(f"max_transfers for request {self.rid} must be between 0 and 2147483647; got {max_transfers!r}")
         self.max_transfers: int = int(max_transfers)  # Zero allows direct PT journeys only; default 999 is a high finite limit.
-        self.lastmile_max_wait_time: tp.Optional[int] = rq_row.get(G_IM_LM_WAIT_TIME, None)  # the customizable max waiting time for lastmile amod service
+        lastmile_max_wait_time = rq_row.get(G_IM_LM_WAIT_TIME, None)
+        self.lastmile_max_wait_time: tp.Optional[float] = (
+            None if pd.isna(lastmile_max_wait_time) else lastmile_max_wait_time
+        )
         self.uncatchable_pt: bool = False  # flag for requests that missed their PT connection after FM leg
         self.pt_leg_state: tp.Optional[PT_LEG_STATE] = None
         self.pt_cancel_time: tp.Optional[float] = None
@@ -927,7 +930,7 @@ class BasicIntermodalRequest(RequestBase):
     def get_max_transfers(self) -> int:
         return self.max_transfers
     
-    def get_lastmile_max_wait_time(self) -> tp.Optional[int]:
+    def get_lastmile_max_wait_time(self) -> tp.Optional[float]:
         return self.lastmile_max_wait_time
     
     def set_uncatchable_pt(self, value: bool):
