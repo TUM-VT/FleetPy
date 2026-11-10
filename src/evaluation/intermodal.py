@@ -4,7 +4,7 @@ import glob
 import numpy as np
 import pandas as pd
 import re
-from numbers import Real
+from numbers import Integral, Real
 
 MAIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(MAIN_DIR)
@@ -30,11 +30,11 @@ def _get_numeric_offer_parameter(offer_str, parameter):
     return value if np.isfinite(value) else np.nan
 
 
-def calculate_pt_wait_time(fm_amod_row, pt_row):
+def calculate_pt_wait_time(fm_alighting_end_time, pt_row):
     """Calculate PT wait time for a given request based on its sub-trips.
-    Defines wait time as: (PT Pick-up - AMoD Drop-off) - Required Transfer Time + Station Waiting Time. (Note: PT Pick-up refers to the source station departure time).
+    Use the actual FM alighting end and the source station readiness and wait.
     """
-    amod_dropoff_time = fm_amod_row.get(G_RQ_DO, np.nan)
+    amod_dropoff_time = fm_alighting_end_time
     pt_pickup_time = pt_row.get(G_RQ_PU, np.nan)
     
     pt_offer_str = pt_row.get(G_RQ_OFFERS, None)
@@ -133,7 +133,7 @@ def _selected_legs(parent_row, sub_trips, modal_state):
     return rows
 
 
-def _connections_are_feasible(modal_state, legs, parent_row=None):
+def _connections_are_feasible(modal_state, legs, fm_alighting_end_time):
     """Require finite PT transfer times for the accepted connecting legs."""
     fm_ids = {
         RQ_MODAL_STATE.FIRSTMILE.value: (RQ_SUB_TRIP_ID.FM_AMOD.value, RQ_SUB_TRIP_ID.FM_PT.value),
@@ -146,9 +146,7 @@ def _connections_are_feasible(modal_state, legs, parent_row=None):
         walking = _get_numeric_offer_parameter(pt[G_RQ_OFFERS], G_PT_OFFER_SOURCE_WALKING_TIME)
         waiting = _get_numeric_offer_parameter(pt[G_RQ_OFFERS], G_OFFER_WAIT)
         latest_origin = _finite_number(pt[G_RQ_PU]) + waiting - walking
-        fm_dropoff = _finite_number(fm[G_RQ_DO])
-        if parent_row is not None and parent_row.get(G_RQ_EI_REBOOKING_STATUS) == EI_REBOOKING_STATE.BOOKED.value:
-            fm_dropoff = _finite_number(parent_row.get(G_RQ_EI_REBOOKING_TRIGGER_TIME))
+        fm_dropoff = _finite_number(fm_alighting_end_time)
         if not np.isfinite(latest_origin) or not np.isfinite(fm_dropoff) or fm_dropoff > latest_origin:
             return False
     lm_ids = {
@@ -165,6 +163,59 @@ def _connections_are_feasible(modal_state, legs, parent_row=None):
         if not np.isfinite(ready) or not np.isfinite(lm_pickup) or lm_pickup < ready:
             return False
     return True
+
+
+def _fm_alighting_end_time(output_dir, parent_row, fm_row, cache):
+    """Resolve the selected FM request's completed vehicle stop."""
+    def integer_id(value, allow_negative=False):
+        if isinstance(value, (bool, np.bool_)):
+            return None
+        if isinstance(value, Integral):
+            result = int(value)
+        elif isinstance(value, str) and value.removeprefix('-').isdecimal():
+            result = int(value)
+        elif isinstance(value, Real) and np.isfinite(value) and float(value).is_integer():
+            result = int(value)
+        else:
+            return None
+        return result if allow_negative or result >= 0 else None
+
+    operator_id = integer_id(fm_row.get(G_RQ_OP_ID))
+    vehicle_id = integer_id(fm_row.get(G_RQ_VID))
+    request_id = integer_id(parent_row.get(G_RQ_ID), allow_negative=True)
+    sub_trip_id = integer_id(fm_row.get(G_RQ_SUB_TRIP_ID))
+    start_time = _finite_number(fm_row.get(G_RQ_DO))
+    values = (operator_id, vehicle_id, request_id, sub_trip_id)
+    if any(value is None for value in values):
+        raise ValueError(f"Invalid FM operator, vehicle or request identity: {values}")
+    rid = f"{request_id}_{sub_trip_id}"
+    if operator_id not in cache:
+        path = os.path.join(output_dir, f"2-{operator_id}_op-stats.csv")
+        columns = [G_V_OP_ID, G_V_VID, G_VR_STATUS, G_VR_LEG_START_TIME,
+                   G_VR_LEG_END_TIME, G_VR_ALIGHTING_RID]
+        try:
+            records = pd.read_csv(path, usecols=columns, dtype={G_VR_ALIGHTING_RID: str},
+                                  float_precision="round_trip")
+        except (OSError, ValueError) as exc:
+            raise ValueError(f"Cannot read FM alighting events from {path} for {rid}") from exc
+        index = {}
+        statuses = {VRL_STATES.BOARDING.display_name, VRL_STATES.BOARDING_WITH_CHARGING.display_name}
+        for op, vid, status, start, end, alighting in records[columns].itertuples(index=False, name=None):
+            if status not in statuses or not isinstance(alighting, str):
+                continue
+            op, vid, start, end = map(_finite_number, (op, vid, start, end))
+            if not all(np.isfinite(value) for value in (op, vid, start, end)):
+                continue
+            if not op.is_integer() or not vid.is_integer() or int(op) != operator_id or end < start:
+                continue
+            for child_id in alighting.split(';'):
+                index.setdefault((int(vid), child_id.strip()), []).append((start, end))
+        cache[operator_id] = index
+    matches = cache[operator_id].get((vehicle_id, rid), [])
+    if len(matches) != 1 or not np.isfinite(start_time) or matches[0][0] != start_time:
+        raise ValueError(f"Expected one matching FM alighting event for {rid}, operator {operator_id}, "
+                         f"vehicle {vehicle_id}, start {start_time}; found {matches}")
+    return matches[0][1]
 
 
 def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_end_time=None,
@@ -190,7 +241,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
 
     # Read original user stats
     user_stats_file = os.path.join(output_dir, "1_user-stats.csv")
-    df = pd.read_csv(user_stats_file)
+    df = pd.read_csv(user_stats_file, float_precision="round_trip")
     completion_end_time = _completion_horizon(output_dir, evaluation_end_time, completion_end_time)
 
     # Apply time filters
@@ -208,6 +259,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
 
     # For each parent request, aggregate sub-trip information
     parent_rows = []
+    alighting_cache = {}
 
     for parent_idx, parent_row in parent_df.iterrows():
         request_id = parent_row[G_RQ_ID]
@@ -220,6 +272,12 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
         parent_agg = parent_row.to_dict()
         parent_agg[G_RQ_SELECTED_MODE] = modal_state if modal_state is not None else np.nan
         selected_legs = _selected_legs(parent_row, sub_trips, modal_state)
+        fm_id = {RQ_MODAL_STATE.FIRSTMILE.value: RQ_SUB_TRIP_ID.FM_AMOD.value,
+                 RQ_MODAL_STATE.FIRSTLASTMILE.value: RQ_SUB_TRIP_ID.FLM_AMOD_0.value}.get(modal_state)
+        fm_row = selected_legs.get(fm_id) if fm_id is not None else None
+        fm_alighting_end_time = None
+        if fm_row is not None and np.isfinite(_finite_number(fm_row.get(G_RQ_DO))):
+            fm_alighting_end_time = _fm_alighting_end_time(output_dir, parent_row, fm_row, alighting_cache)
 
         # Determine if request is served
         # For MONOMODAL (0), parent itself determines if served
@@ -282,7 +340,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                     fm_amod_wait = fm_amod_row.get(G_RQ_PU, 0) - fm_amod_row.get(G_RQ_TIME, 0)
 
                     # Wait time for PT leg (waiting for PT after AMoD dropoff)
-                    fm_pt_wait = calculate_pt_wait_time(fm_amod_row, fm_pt_row)
+                    fm_pt_wait = calculate_pt_wait_time(fm_alighting_end_time, fm_pt_row)
 
                     total_wait_time = fm_amod_wait + fm_pt_wait
 
@@ -372,7 +430,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
 
                     # Wait times
                     flm_amod_0_wait = flm_amod_0_row.get(G_RQ_PU, 0) - flm_amod_0_row.get(G_RQ_TIME, 0)
-                    flm_pt_wait = calculate_pt_wait_time(flm_amod_0_row, flm_pt_row)
+                    flm_pt_wait = calculate_pt_wait_time(fm_alighting_end_time, flm_pt_row)
                     flm_pt_offer_str = flm_pt_row.get(G_RQ_OFFERS, None)
                     flm_pt_target_walking_time = _get_numeric_offer_parameter(flm_pt_offer_str, G_PT_OFFER_TARGET_WALKING_TIME)
                     # Wait time for FLM_AMOD_1 (waiting for AMoD): LM AMoD pickup - PT drop-off - target walking time
@@ -415,7 +473,9 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
             RQ_MODAL_STATE.FIRSTLASTMILE.value: (RQ_SUB_TRIP_ID.FLM_AMOD_0.value, RQ_SUB_TRIP_ID.FLM_AMOD_1.value),
         }.get(modal_state, ())
         completed_amod_legs = [selected_legs.get(sub_trip_id) for sub_trip_id in amod_ids
-                               if _leg_is_complete(selected_legs.get(sub_trip_id), completion_end_time)]
+                               if _leg_is_complete(selected_legs.get(sub_trip_id), completion_end_time)
+                               and (fm_id is None or sub_trip_id != fm_id or completion_end_time is None
+                                    or fm_alighting_end_time <= completion_end_time)]
         parent_agg['amod_required_legs'] = len(amod_ids)
         parent_agg['amod_completed_legs'] = len(completed_amod_legs)
         for leg in completed_amod_legs:
@@ -429,7 +489,9 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                          all(_leg_is_complete(row, completion_end_time) for row in selected_legs.values()) and
                          not _has_journey_failure(parent_row) and
                          not any(_has_journey_failure(row) for row in selected_legs.values() if row is not None) and
-                         _connections_are_feasible(modal_state, selected_legs, parent_row))
+                         (fm_id is None or completion_end_time is None
+                          or fm_alighting_end_time <= completion_end_time) and
+                         _connections_are_feasible(modal_state, selected_legs, fm_alighting_end_time))
 
         # Update parent aggregation with computed values
         parent_agg['is_served'] = is_served
