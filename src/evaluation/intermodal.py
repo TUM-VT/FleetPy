@@ -1,6 +1,6 @@
+import ast
 import os
 import sys
-import glob
 import numpy as np
 import pandas as pd
 import re
@@ -9,12 +9,6 @@ from numbers import Integral, Real
 MAIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(MAIN_DIR)
 from src.misc.globals import *
-
-# Import constants from standard evaluation
-EURO_PER_TON_OF_CO2 = 145 # from BVWP2030 Modulhandbuch (page 113)
-EMISSION_CPG = 145 * 100 / 1000**2
-ENERGY_EMISSIONS = 112 # g/kWh from https://www.swm.de/dam/swm/dokumente/geschaeftskunden/broschuere-strom-erdgas-gk.pdf
-PV_G_CO2_KM = 130 # g/km from https://www.ris-muenchen.de/RII/RII/DOK/ANTRAG/2337762.pdf with 60:38 benzin vs diesel
 
 def _get_numeric_offer_parameter(offer_str, parameter):
     """Read a finite offer value, retaining decimal and scientific notation."""
@@ -88,9 +82,9 @@ def _has_journey_failure(row):
     return _pt_leg_failed(row) or missed_without_rebooking or _is_true(row[G_RQ_PAYG_INTERRUPTED])
 
 
-def _completion_horizon(output_dir, evaluation_end_time, completion_end_time):
+def _completion_horizon(output_dir, completion_end_time):
     """Use the simulation/observation horizon to exclude prefilled future PT ends."""
-    limits = [evaluation_end_time, completion_end_time]
+    limits = [completion_end_time]
     if completion_end_time is None and os.path.isfile(os.path.join(output_dir, G_SC_INP_F)):
         scenario_parameters, _, _ = load_scenario_inputs(output_dir)
         limits.append(scenario_parameters.get(G_SIM_END_TIME))
@@ -219,7 +213,7 @@ def _fm_alighting_end_time(output_dir, parent_row, fm_row, cache):
 
 
 def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_end_time=None,
-                             print_comments=False, completion_end_time=None):
+                             print_comments=False, completion_end_time=None, return_amod_legs=False):
     """
     Pre-processing step: Aggregate sub-trips into parent requests.
 
@@ -234,7 +228,8 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
     :param evaluation_end_time: end time filter
     :param print_comments: print status messages
     :param completion_end_time: observation horizon for completed legs; defaults to config end_time when available
-    :return: parent_df - DataFrame with aggregated parent request data
+    :param return_amod_legs: also return the selected completed AMoD leg records
+    :return: parent DataFrame, or a pair of parent and AMoD leg DataFrames
     """
     if print_comments:
         print("Creating parent user stats from sub-trips...")
@@ -242,16 +237,14 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
     # Read original user stats
     user_stats_file = os.path.join(output_dir, "1_user-stats.csv")
     df = pd.read_csv(user_stats_file, float_precision="round_trip")
-    completion_end_time = _completion_horizon(output_dir, evaluation_end_time, completion_end_time)
+    completion_end_time = _completion_horizon(output_dir, completion_end_time)
 
-    # Apply time filters
-    if evaluation_start_time is not None:
-        df = df[df[G_RQ_TIME] >= evaluation_start_time]
-    if evaluation_end_time is not None:
-        df = df[df[G_RQ_TIME] < evaluation_end_time]
-
-    # Separate parent requests and sub-trips
+    # Select the cohort by parent request time, then retain all of its children.
     parent_df = df[df[G_RQ_IS_PARENT_REQUEST] == True].copy()
+    if evaluation_start_time is not None:
+        parent_df = parent_df[parent_df[G_RQ_TIME] >= evaluation_start_time]
+    if evaluation_end_time is not None:
+        parent_df = parent_df[parent_df[G_RQ_TIME] < evaluation_end_time]
     subtrip_df = df[df[G_RQ_IS_PARENT_REQUEST] == False].copy()
 
     if print_comments:
@@ -259,6 +252,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
 
     # For each parent request, aggregate sub-trip information
     parent_rows = []
+    completed_leg_rows = []
     alighting_cache = {}
 
     for parent_idx, parent_row in parent_df.iterrows():
@@ -287,7 +281,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
         total_wait_time = 0
         total_travel_time = 0
 
-        # AMoD-only metrics (excluding PT segments for comparability with standard evaluation)
+        # Parent-level AMoD sums; standard metrics are calculated separately per leg.
         amod_fare = 0
         amod_wait_time = 0  # Only AMoD wait time (initial wait + LM wait if applicable)
         amod_travel_time = 0  # Only AMoD in-vehicle time
@@ -483,6 +477,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
             if np.isfinite(operator_id) and operator_id >= 0 and operator_id.is_integer():
                 field = f'amod_op{int(operator_id)}_completed_legs'
                 parent_agg[field] = parent_agg.get(field, 0) + 1
+            completed_leg_rows.append(leg.to_dict())
 
         # PT bookings prefill times: completion needs the selected legs, horizon and failure checks.
         is_served = bool(is_served and selected_legs and
@@ -499,7 +494,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
         parent_agg['total_wait_time'] = total_wait_time if is_served else np.nan
         parent_agg['total_travel_time'] = total_travel_time if is_served else np.nan
 
-        # AMoD-only metrics (excluding PT segments for comparability with standard evaluation)
+        # Parent-level AMoD sums; standard metrics are calculated separately per leg.
         has_completed_amod_journey = is_served and bool(amod_ids)
         parent_agg['amod_fare'] = amod_fare if has_completed_amod_journey else np.nan
         parent_agg['amod_wait_time'] = amod_wait_time if has_completed_amod_journey else np.nan
@@ -513,7 +508,9 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
         parent_rows.append(parent_agg)
 
     # Create parent DataFrame
-    parent_result_df = pd.DataFrame(parent_rows)
+    parent_result_df = pd.DataFrame(parent_rows) if parent_rows else parent_df.assign(
+        is_served=pd.Series(dtype=bool), amod_required_legs=pd.Series(dtype=int),
+        amod_completed_legs=pd.Series(dtype=int))
 
     # Save to file
     parent_output_file = os.path.join(output_dir, "1_user-stats_parent.csv")
@@ -523,6 +520,8 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
         print(f"  Saved parent user stats to: {parent_output_file}")
         print(f"  Served requests: {parent_result_df['is_served'].sum()} / {len(parent_result_df)}")
 
+    if return_amod_legs:
+        return parent_result_df, pd.DataFrame(completed_leg_rows, columns=df.columns)
     return parent_result_df
 
 
@@ -632,403 +631,188 @@ def calculate_payg_metrics(parent_user_stats, is_payg_scenario=False, print_comm
     return payg_stats
 
 
-def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end_time=None, print_comments=False, dir_names_in={}):
-    """
-    Main intermodal evaluation function.
+def _operator_user_metrics(legs, parents, operator_attributes, op_id):
+    """Calculate standard user metrics per completed, selected AMoD leg.
 
-    Follows the same pattern as standard_evaluation but:
-    1. Pre-processes user stats to create parent request aggregations
-    2. Calculates standard metrics on parent requests
-    3. Adds intermodal-specific metrics
-
-    :param output_dir: scenario output directory
-    :param evaluation_start_time: start time filter
-    :param evaluation_end_time: end time filter
-    :param print_comments: print status messages
-    :param dir_names_in: directory dictionary (optional)
-    :return: result DataFrame
+    Counts and averages use legs. Modal split uses unique parents in the cohort,
+    allowing a parent to be counted once for each participating operator.
     """
+    count = len(legs)
+    pax = pd.to_numeric(legs[G_RQ_PAX], errors='coerce').sum()
+    total_pax = pd.to_numeric(parents[G_RQ_PAX], errors='coerce').sum()
+    def numeric(name):
+        return pd.to_numeric(legs[name], errors='coerce') if name in legs else pd.Series(np.nan, index=legs.index)
+    pickup, dropoff = numeric(G_RQ_PU), numeric(G_RQ_DO)
+    request_time, ept = numeric(G_RQ_TIME), numeric(G_RQ_EPT)
+    direct_time, direct_distance = numeric(G_RQ_DRT), numeric(G_RQ_DRD)
+    wait, travel = pickup - request_time, dropoff - pickup
+    boarding = operator_attributes.get('op_const_boarding_time', 0)
+    boarding = _finite_number(boarding)
+    detour = travel - direct_time - boarding
+    rel_detour = detour / direct_time.where(direct_time > 0) * 100
+    horizon = operator_attributes.get(G_RA_OPT_HOR, 0)
+    reservation = ept - request_time > horizon
+    parent_reservation = (pd.to_numeric(parents[G_RQ_EPT], errors='coerce') -
+                          pd.to_numeric(parents[G_RQ_TIME], errors='coerce') > horizon)
+    reservation_pax = pd.to_numeric(legs.loc[reservation, G_RQ_PAX], errors='coerce').sum()
+    parent_reservation_pax = pd.to_numeric(parents.loc[parent_reservation, G_RQ_PAX], errors='coerce').sum()
+    def ratio(numerator, denominator, factor=1):
+        return numerator / denominator * factor if denominator else np.nan
+    def operator_offered(value):
+        if not isinstance(value, str):
+            return False
+        for entry in value.split('|'):
+            try:
+                mode, key = ast.literal_eval(entry.split(':', 1)[0])
+            except (ValueError, SyntaxError, TypeError):
+                continue
+            if mode in (RQ_MODAL_STATE.MONOMODAL.value, RQ_MODAL_STATE.FIRSTMILE.value,
+                        RQ_MODAL_STATE.FIRSTLASTMILE.value) and key == op_id:
+                return True
+            if isinstance(key, tuple) and any(isinstance(pair, tuple) and len(pair) == 2
+                                              and pair[0] == op_id for pair in key):
+                return True
+        return False
+
+    offers = sum(operator_offered(value) for value in parents[G_RQ_OFFERS]) if G_RQ_OFFERS in parents else 0
+    served_parents = parents[parents[G_RQ_ID].isin(legs[G_RQ_ID])]
+    served_parent_pax = pd.to_numeric(served_parents[G_RQ_PAX], errors='coerce').sum()
+    served_parent_reservation = parent_reservation.loc[served_parents.index]
+    served_reservation_pax = pd.to_numeric(served_parents.loc[served_parent_reservation, G_RQ_PAX], errors='coerce').sum()
+    result = {
+        'operator_id': op_id,
+        'number users': count,
+        'number travelers': pax,
+        'modal split': ratio(served_parent_pax, total_pax),
+        'modal split rq': ratio(len(served_parents), len(parents)),
+        'reservation users': int(reservation.sum()),
+        'reservation pax': reservation_pax,
+        'served reservation users [%]': ratio(int(served_parent_reservation.sum()), int(parent_reservation.sum()), 100),
+        'served reservation pax [%]': ratio(served_reservation_pax, parent_reservation_pax, 100),
+        'online users': count - int(reservation.sum()),
+        'online pax': pax - reservation_pax,
+        'served online users [%]': ratio(len(served_parents) - int(served_parent_reservation.sum()), len(parents) - int(parent_reservation.sum()), 100),
+        'served online pax [%]': ratio(served_parent_pax - served_reservation_pax, total_pax - parent_reservation_pax, 100),
+        # Rejected offers are not retained by the broker in the parent record.
+        '% created offers': np.nan,
+        'candidate offers [%]': ratio(offers, len(parents), 100),
+        'utility': numeric(G_RQ_C_UTIL).mean(),
+        'travel time': travel.mean(),
+        'travel distance': np.nan,
+        'waiting time': wait.mean(),
+        'waiting time from ept': (pickup - ept).mean(),
+        'waiting time (median)': wait.median(),
+        'waiting time (90% quantile)': wait.quantile(0.9),
+        'detour time': detour.mean(),
+        'rel detour': rel_detour.mean(),
+        'customer direct distance [km]': direct_distance.sum(min_count=1) / 1000,
+        'mod revenue': numeric(G_RQ_FARE).sum(min_count=1),
+    }
+    return result, travel.sum(min_count=1)
+
+
+def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end_time=None, print_comments=False, dir_names_in=None):
+    """Evaluate the parent cohort and selected, completed AMoD legs.
+
+    MoD columns use standard evaluation names and per-leg units; the Intermodal
+    column describes parent journeys. Vehicle records use the standard interval
+    filter. Completion is observed through the simulation end, independently of
+    the request cohort interval. PT completion uses recorded booking times and
+    the available failure and connection state.
+    """
+    from src.evaluation.standard import create_vehicle_type_db
+    from src.evaluation.intermodal_fleet import evaluate_operator_fleet
+
     if not os.path.isdir(output_dir):
         raise IOError(f"Could not find result directory {output_dir}!")
-
-    # Load scenario configuration
     scenario_parameters, list_operator_attributes, _ = load_scenario_inputs(output_dir)
-    dir_names = get_directory_dict(scenario_parameters, list_operator_attributes, abs_fleetpy_dir=MAIN_DIR)
-    if dir_names_in:
-        dir_names = dir_names_in
-
-    # Evaluation interval
+    dir_names = dir_names_in or get_directory_dict(scenario_parameters, list_operator_attributes, abs_fleetpy_dir=MAIN_DIR)
     if evaluation_start_time is None and scenario_parameters.get(G_EVAL_INT_START) is not None:
         evaluation_start_time = int(scenario_parameters[G_EVAL_INT_START])
     if evaluation_end_time is None and scenario_parameters.get(G_EVAL_INT_END) is not None:
         evaluation_end_time = int(scenario_parameters[G_EVAL_INT_END])
 
-    # Vehicle type data
-    from src.evaluation.standard import create_vehicle_type_db, read_op_output_file, avg_in_vehicle_distance, shared_rides
-    veh_type_db = create_vehicle_type_db(dir_names[G_DIR_VEH])
-    veh_type_stats = pd.read_csv(os.path.join(output_dir, "2_vehicle_types.csv"))
-
-    if print_comments:
-        print(f"Evaluating {scenario_parameters[G_SCENARIO_NAME]}")
-        print("="*80)
-
-    # Step 1: Create parent user stats
-    parent_user_stats = create_parent_user_stats(
+    parents, legs = create_parent_user_stats(
         output_dir, evaluation_start_time, evaluation_end_time, print_comments,
-        completion_end_time=scenario_parameters.get(G_SIM_END_TIME))
-
-    # Filter to only served requests for metrics
-    served_requests = parent_user_stats[parent_user_stats['is_served'] == True].copy()
-
-    if print_comments:
-        print(f"\nCalculating metrics for {len(served_requests)} served requests...")
-
-    # Categorize requests by modal state
-    served_requests['modal_category'] = served_requests[G_RQ_SELECTED_MODE].apply(categorize_modal_state)
-
-    # Total counts
-    total_requests = len(parent_user_stats)
-    total_served = len(served_requests)
-    total_pax = parent_user_stats[G_RQ_PAX].sum()
-    total_served_pax = served_requests[G_RQ_PAX].sum()
-    amod_required_legs = int(parent_user_stats['amod_required_legs'].sum())
-    amod_completed_legs = int(parent_user_stats['amod_completed_legs'].sum())
-
-    # Category breakdown
-    category_counts = served_requests.groupby('modal_category').size()
-    category_pax = served_requests.groupby('modal_category')[G_RQ_PAX].sum()
-
-    # Calculate service rates
-    service_rate_overall = total_served / total_requests * 100 if total_requests > 0 else 0
-    service_rate_pax = total_served_pax / total_pax * 100 if total_pax > 0 else 0
-
-    # Service rates by category
-    service_rates = {}
-    for category in ['DRT_only', 'FM', 'LM', 'FLM', 'PT_only']:
-        cat_total = len(parent_user_stats[parent_user_stats[G_RQ_SELECTED_MODE].apply(categorize_modal_state) == category])
-        cat_served = category_counts.get(category, 0)
-        service_rates[f'{category}_service_rate'] = cat_served / cat_total * 100 if cat_total > 0 else np.nan
-        service_rates[f'{category}_count'] = cat_served
-
-    # Calculate uncatchable PT statistics (requests that missed their PT connection after FM leg)
-    uncatchable_stats = {}
-    # Count uncatchable requests by category (only FM and FLM can be uncatchable)
-    fm_uncatchable = parent_user_stats[
-        (parent_user_stats[G_RQ_SELECTED_MODE].apply(categorize_modal_state) == 'FM') &
-        (parent_user_stats[G_RQ_UNCATCHABLE_PT] == True)
-    ]
-    flm_uncatchable = parent_user_stats[
-        (parent_user_stats[G_RQ_SELECTED_MODE].apply(categorize_modal_state) == 'FLM') &
-        (parent_user_stats[G_RQ_UNCATCHABLE_PT] == True)
-    ]
-    total_uncatchable = len(fm_uncatchable) + len(flm_uncatchable)
-    rebooking_status = parent_user_stats.get(
-        G_RQ_EI_REBOOKING_STATUS, pd.Series(index=parent_user_stats.index, dtype=object))
-    rebooking_booked = rebooking_status == EI_REBOOKING_STATE.BOOKED.value
-    rebooking_failed = rebooking_status.isin((EI_REBOOKING_STATE.FAILED_NO_PT.value,
-                                             EI_REBOOKING_STATE.FAILED_NO_LM.value,
-                                             EI_REBOOKING_STATE.FAILED_PT_CANCEL.value,
-                                             EI_REBOOKING_STATE.FAILED_HORIZON.value))
-
-    uncatchable_stats['FM_uncatchable_count'] = len(fm_uncatchable)
-    uncatchable_stats['FLM_uncatchable_count'] = len(flm_uncatchable)
-    uncatchable_stats['total_uncatchable_count'] = total_uncatchable
-
-    # Calculate uncatchable rate (as % of FM+FLM requests)
-    fm_total = len(parent_user_stats[parent_user_stats[G_RQ_SELECTED_MODE].apply(categorize_modal_state) == 'FM'])
-    flm_total = len(parent_user_stats[parent_user_stats[G_RQ_SELECTED_MODE].apply(categorize_modal_state) == 'FLM'])
-    intermodal_with_fm_total = fm_total + flm_total
-
-    uncatchable_stats['FM_uncatchable_rate'] = len(fm_uncatchable) / fm_total * 100 if fm_total > 0 else np.nan
-    uncatchable_stats['FLM_uncatchable_rate'] = len(flm_uncatchable) / flm_total * 100 if flm_total > 0 else np.nan
-    uncatchable_stats['total_uncatchable_rate'] = total_uncatchable / intermodal_with_fm_total * 100 if intermodal_with_fm_total > 0 else np.nan
-
-    if print_comments and total_uncatchable > 0:
-        print(f"  Uncatchable PT requests: {total_uncatchable} (FM: {len(fm_uncatchable)}, FLM: {len(flm_uncatchable)})")
-
-    # Calculate PAYG-specific metrics (if applicable)
-    # Determine if this is a PAYG scenario based on broker_type in config
-    broker_type = scenario_parameters.get(G_BROKER_TYPE, "")
-    is_payg_scenario = broker_type == "PTBrokerPAYG"
-    payg_stats = calculate_payg_metrics(parent_user_stats, is_payg_scenario, print_comments)
-
-    # Calculate PT wait times for FM and FLM
-    fm_requests = served_requests[served_requests['modal_category'] == 'FM']
-    flm_requests = served_requests[served_requests['modal_category'] == 'FLM']
-
-    pt_wait_time_fm = fm_requests['fm_pt_wait'].mean() if len(fm_requests) > 0 and 'fm_pt_wait' in fm_requests.columns else np.nan
-    pt_wait_time_flm = flm_requests['flm_pt_wait'].mean() if len(flm_requests) > 0 and 'flm_pt_wait' in flm_requests.columns else np.nan
-
-    # Combined PT wait time
-    pt_waits = []
-    if 'fm_pt_wait' in fm_requests.columns:
-        pt_waits.extend(fm_requests['fm_pt_wait'].dropna().tolist())
-    if 'flm_pt_wait' in flm_requests.columns:
-        pt_waits.extend(flm_requests['flm_pt_wait'].dropna().tolist())
-    pt_wait_time_combined = np.mean(pt_waits) if len(pt_waits) > 0 else np.nan
-
-    # Calculate LM wait times for LM and FLM
-    lm_requests = served_requests[served_requests['modal_category'] == 'LM']
-
-    lm_wait_time_lm = lm_requests['lm_amod_wait'].mean() if len(lm_requests) > 0 and 'lm_amod_wait' in lm_requests.columns else np.nan
-    lm_wait_time_flm = flm_requests['flm_amod_1_wait'].mean() if len(flm_requests) > 0 and 'flm_amod_1_wait' in flm_requests.columns else np.nan
-
-    # Combined LM wait time
-    lm_waits = []
-    if 'lm_amod_wait' in lm_requests.columns:
-        lm_waits.extend(lm_requests['lm_amod_wait'].dropna().tolist())
-    if 'flm_amod_1_wait' in flm_requests.columns:
-        lm_waits.extend(flm_requests['flm_amod_1_wait'].dropna().tolist())
-    lm_wait_time_combined = np.mean(lm_waits) if len(lm_waits) > 0 else np.nan
-
-    # Overall metrics
-    avg_wait_time = served_requests['total_wait_time'].mean()
-    med_wait_time = served_requests['total_wait_time'].median()
-    quantile_90_wait_time = served_requests['total_wait_time'].quantile(q=0.9)
-    avg_travel_time = served_requests['total_travel_time'].mean()
-    total_revenue = served_requests['total_fare'].sum()
-
-    # AMoD-only metrics (excluding PT segments for comparability with standard evaluation)
-    amod_avg_wait_time = served_requests['amod_wait_time'].mean()
-    amod_med_wait_time = served_requests['amod_wait_time'].median()
-    amod_quantile_90_wait_time = served_requests['amod_wait_time'].quantile(q=0.9)
-    amod_avg_travel_time = served_requests['amod_travel_time'].mean()
-    amod_total_revenue = served_requests['amod_fare'].sum()
-    amod_total_direct_distance = served_requests['amod_direct_distance'].sum() / 1000.0  # Convert to km
-
-    # Detour time calculation (AMoD segments only, excluding PT)
-    # Detour = actual_travel_time - direct_route_time - boarding_time
-    # Get boarding time from operator attributes (will be set later when processing operators)
-    boarding_time = scenario_parameters.get("op_const_boarding_time", 30)  # Default 30s
-
-    # Calculate detour for each request based on AMoD segments
-    # For requests with direct_route_time available
-    if G_RQ_DRT in served_requests.columns:
-        # MONOMODAL: use parent's direct route time
-        monomodal_mask = served_requests['modal_category'] == 'DRT_only'
-        served_requests.loc[monomodal_mask, 'amod_direct_route_time'] = served_requests.loc[monomodal_mask, G_RQ_DRT]
-
-    # Calculate detour time for AMoD segments
-    served_requests['amod_detour_time'] = served_requests['amod_travel_time'] - served_requests.get('amod_direct_route_time', served_requests['amod_travel_time']) - boarding_time
-    # For intermodal, estimate direct route time from direct distance (assuming avg speed ~30 km/h = 8.33 m/s)
-    avg_speed_ms = 8.33  # m/s, approximately 30 km/h
-    served_requests.loc[served_requests['amod_detour_time'].isna(), 'amod_detour_time'] = (
-        served_requests.loc[served_requests['amod_detour_time'].isna(), 'amod_travel_time'] -
-        served_requests.loc[served_requests['amod_detour_time'].isna(), 'amod_direct_distance'] / avg_speed_ms - boarding_time
-    )
-
-    amod_avg_detour_time = served_requests['amod_detour_time'].mean()
-
-    # Relative detour (percentage)
-    served_requests['amod_rel_detour'] = (
-        (served_requests['amod_travel_time'] - boarding_time - served_requests['amod_direct_distance'] / avg_speed_ms) /
-        (served_requests['amod_direct_distance'] / avg_speed_ms)
-    ) * 100.0
-    amod_avg_rel_detour = served_requests['amod_rel_detour'].mean()
-
-    # Standard metrics (matching standard_eval.csv format)
-    result_dict = {
-        'operator_id': -3,  # Intermodal operator
-        'number users': total_served,
-        'number travelers': total_served_pax,
-        'modal split': service_rate_pax / 100,
-        'modal split rq': service_rate_overall / 100,
-        'Service_Rate [%]': service_rate_overall,
-        'Service_Rate_Pax [%]': service_rate_pax,
-        'DRT_required_legs': amod_required_legs,
-        'DRT_completed_legs': amod_completed_legs,
-        'DRT_leg_service_rate [%]': (amod_completed_legs / amod_required_legs * 100
-                                   if amod_required_legs else np.nan),
-
-        # Category breakdown
-        'DRT_only_count': service_rates.get('DRT_only_count', 0),
-        'FM_count': service_rates.get('FM_count', 0),
-        'LM_count': service_rates.get('LM_count', 0),
-        'FLM_count': service_rates.get('FLM_count', 0),
-        'PT_only_count': service_rates.get('PT_only_count', 0),
-
-        'DRT_only_service_rate [%]': service_rates.get('DRT_only_service_rate', np.nan),
-        'FM_service_rate [%]': service_rates.get('FM_service_rate', np.nan),
-        'LM_service_rate [%]': service_rates.get('LM_service_rate', np.nan),
-        'FLM_service_rate [%]': service_rates.get('FLM_service_rate', np.nan),
-        'PT_only_service_rate [%]': service_rates.get('PT_only_service_rate', np.nan),
-
-        # Uncatchable PT statistics (requests that missed their PT connection after FM leg)
-        'FM_uncatchable_count': uncatchable_stats.get('FM_uncatchable_count', 0),
-        'FLM_uncatchable_count': uncatchable_stats.get('FLM_uncatchable_count', 0),
-        'total_uncatchable_count': uncatchable_stats.get('total_uncatchable_count', 0),
-        'FM_uncatchable_rate [%]': uncatchable_stats.get('FM_uncatchable_rate', np.nan),
-        'FLM_uncatchable_rate [%]': uncatchable_stats.get('FLM_uncatchable_rate', np.nan),
-        'total_uncatchable_rate [%]': uncatchable_stats.get('total_uncatchable_rate', np.nan),
-        'EI_rebooking_booked_count': int(rebooking_booked.sum()),
-        'EI_rebooking_failed_count': int(rebooking_failed.sum()),
-        'EI_rebooking_completed_count': int((rebooking_booked & parent_user_stats['is_served'].map(_is_true)).sum()),
-
-        # Wait times (total, including PT wait)
-        'waiting time': avg_wait_time,
-        'waiting time (median)': med_wait_time,
-        'waiting time (90% quantile)': quantile_90_wait_time,
-        'PT_Wait_Time_FM [s]': pt_wait_time_fm,
-        'PT_Wait_Time_FLM [s]': pt_wait_time_flm,
-        'PT_Wait_Time_Combined [s]': pt_wait_time_combined,
-        'LM_Wait_Time_LM [s]': lm_wait_time_lm,
-        'LM_Wait_Time_FLM [s]': lm_wait_time_flm,
-        'LM_Wait_Time_Combined [s]': lm_wait_time_combined,
-
-        # AMoD-only metrics (excluding PT, for comparability with standard evaluation)
-        'amod_waiting_time': amod_avg_wait_time,
-        'amod_waiting_time (median)': amod_med_wait_time,
-        'amod_waiting_time (90% quantile)': amod_quantile_90_wait_time,
-        'amod_travel_time': amod_avg_travel_time,
-        'amod_detour_time': amod_avg_detour_time,
-        'amod_rel_detour [%]': amod_avg_rel_detour,
-        'amod_revenue': amod_total_revenue,
-        'amod_customer_direct_distance [km]': amod_total_direct_distance,
-
-        # Travel metrics
-        'travel time': avg_travel_time,
-        'mod revenue': total_revenue,
+        completion_end_time=scenario_parameters.get(G_SIM_END_TIME), return_amod_legs=True)
+    legs.to_csv(os.path.join(output_dir, '1_user-stats_amod_legs.csv'), index=False)
+    served = parents[parents['is_served'].map(_is_true)].copy()
+    categories = parents[G_RQ_SELECTED_MODE].apply(categorize_modal_state)
+    served_categories = served[G_RQ_SELECTED_MODE].apply(categorize_modal_state)
+    total_pax = pd.to_numeric(parents[G_RQ_PAX], errors='coerce').sum()
+    served_pax = pd.to_numeric(served[G_RQ_PAX], errors='coerce').sum()
+    required = int(parents['amod_required_legs'].sum())
+    completed = int(parents['amod_completed_legs'].sum())
+    def pct(numerator, denominator):
+        return 100 * numerator / denominator if denominator else np.nan
+    journey = {
+        'journey requests': len(parents),
+        'journey completed': len(served),
+        'journey completed travelers': served_pax,
+        'Service_Rate [%]': pct(len(served), len(parents)),
+        'Service_Rate_Pax [%]': pct(served_pax, total_pax),
+        'DRT_required_legs': required,
+        'DRT_completed_legs': completed,
+        'DRT_leg_service_rate [%]': pct(completed, required),
+        'journey waiting time [s]': served['total_wait_time'].mean() if len(served) else np.nan,
+        'journey first pickup to last dropoff [s]': served['total_travel_time'].mean() if len(served) else np.nan,
+        'journey fare': served['total_fare'].sum(min_count=1) if len(served) else np.nan,
     }
+    for category in ('DRT_only', 'FM', 'LM', 'FLM', 'PT_only'):
+        count = int((served_categories == category).sum())
+        journey[f'{category}_count'] = count
+        journey[f'{category}_service_rate [%]'] = pct(count, int((categories == category).sum()))
+    uncatchable = parents[G_RQ_UNCATCHABLE_PT].map(_is_true)
+    for category in ('FM', 'FLM'):
+        mask = categories == category
+        journey[f'{category}_uncatchable_count'] = int((uncatchable & mask).sum())
+        journey[f'{category}_uncatchable_rate [%]'] = pct(int((uncatchable & mask).sum()), int(mask.sum()))
+    fm_mask = categories.isin(['FM', 'FLM'])
+    journey['total_uncatchable_count'] = int((uncatchable & fm_mask).sum())
+    journey['total_uncatchable_rate [%]'] = pct(int((uncatchable & fm_mask).sum()), int(fm_mask.sum()))
+    rebooking = parents.get(G_RQ_EI_REBOOKING_STATUS, pd.Series(index=parents.index, dtype=object))
+    booked = rebooking == EI_REBOOKING_STATE.BOOKED.value
+    failed = rebooking.isin((EI_REBOOKING_STATE.FAILED_NO_PT.value, EI_REBOOKING_STATE.FAILED_NO_LM.value,
+                             EI_REBOOKING_STATE.FAILED_PT_CANCEL.value, EI_REBOOKING_STATE.FAILED_HORIZON.value))
+    journey['EI_rebooking_booked_count'] = int(booked.sum())
+    journey['EI_rebooking_failed_count'] = int(failed.sum())
+    journey['EI_rebooking_completed_count'] = int((booked & parents['is_served'].map(_is_true)).sum())
+    for prefix, fields in [('PT_Wait_Time', ('fm_pt_wait', 'flm_pt_wait')),
+                           ('LM_Wait_Time', ('lm_amod_wait', 'flm_amod_1_wait'))]:
+        values = []
+        names = ('FM', 'FLM') if prefix.startswith('PT') else ('LM', 'FLM')
+        for name, field in zip(names, fields):
+            series = pd.to_numeric(served[field], errors='coerce').dropna() if field in served else pd.Series(dtype=float)
+            journey[f'{prefix}_{name} [s]'] = series.mean()
+            values.extend(series.tolist())
+        journey[f'{prefix}_Combined [s]'] = np.mean(values) if values else np.nan
+    journey.update(calculate_payg_metrics(parents, scenario_parameters.get(G_BROKER_TYPE) == 'PTBrokerPAYG', print_comments))
 
-    # Add PAYG-specific metrics if available
-    if payg_stats:
-        result_dict.update(payg_stats)
-
-    # Vehicle-level analysis for AMoD operators
+    veh_type_db = create_vehicle_type_db(dir_names[G_DIR_VEH])
+    try:
+        veh_type_stats = pd.read_csv(os.path.join(output_dir, '2_vehicle_types.csv'))
+    except FileNotFoundError:
+        veh_type_stats = None
+    results = {}
+    n_operators = scenario_parameters.get(G_NR_OPERATORS, 0)
+    if not legs.empty:
+        operator_ids = pd.to_numeric(legs[G_RQ_OP_ID], errors='coerce')
+        if (operator_ids.isna() | (operator_ids < 0) | (operator_ids >= n_operators) |
+                (operator_ids % 1 != 0)).any():
+            raise ValueError('Completed AMoD leg has an invalid or unconfigured operator ID')
+    for op_id in range(n_operators):
+        op_legs = legs[pd.to_numeric(legs[G_RQ_OP_ID], errors='coerce') == op_id]
+        metrics, total_travel = _operator_user_metrics(op_legs, parents, list_operator_attributes[op_id], op_id)
+        metrics.update(evaluate_operator_fleet(output_dir, op_id, scenario_parameters, veh_type_stats,
+                                               veh_type_db, evaluation_start_time, evaluation_end_time,
+                                               metrics['number users'], metrics['number travelers'],
+                                               metrics['customer direct distance [km]'], total_travel))
+        results[f'MoD_{op_id}'] = metrics
+    results['Intermodal'] = journey
+    result_df = pd.DataFrame(results)
+    result_df.to_csv(os.path.join(output_dir, 'standard_eval.csv'))
     if print_comments:
-        print("\nAnalyzing vehicle operations...")
-
-    # Process each AMoD operator
-    for op_id in range(scenario_parameters.get(G_NR_OPERATORS, 0)):
-        try:
-            op_vehicle_df = read_op_output_file(output_dir, op_id, evaluation_start_time, evaluation_end_time)
-            operator_attributes = list_operator_attributes[int(op_id)]
-
-            if print_comments:
-                print(f"  Processing operator {op_id}: {op_vehicle_df.shape[0]} vehicle route legs")
-
-            # Fleet metrics
-            n_vehicles = veh_type_stats[veh_type_stats[G_V_OP_ID] == op_id].shape[0]
-            sim_end_time = scenario_parameters["end_time"]
-            simulation_time = scenario_parameters["end_time"] - scenario_parameters["start_time"]
-
-            # Utilization
-            op_vehicle_df["VRL_end_sim_end_time"] = np.minimum(op_vehicle_df[G_VR_LEG_END_TIME], sim_end_time)
-            op_vehicle_df["VRL_start_sim_end_time"] = np.minimum(op_vehicle_df[G_VR_LEG_START_TIME], sim_end_time)
-            utilized_veh_df = op_vehicle_df[(op_vehicle_df["status"] != VRL_STATES.OUT_OF_SERVICE.display_name) &
-                                           (op_vehicle_df["status"] != VRL_STATES.CHARGING.display_name)]
-            utilization_time = utilized_veh_df["VRL_end_sim_end_time"].sum() - utilized_veh_df["VRL_start_sim_end_time"].sum()
-            unutilized_veh_df = op_vehicle_df[(op_vehicle_df["status"] == VRL_STATES.OUT_OF_SERVICE.display_name) |
-                                              (op_vehicle_df["status"] == VRL_STATES.CHARGING.display_name)]
-            unutilized_time = unutilized_veh_df["VRL_end_sim_end_time"].sum() - unutilized_veh_df["VRL_start_sim_end_time"].sum()
-
-            fleet_utilization = 100 * (utilization_time / (n_vehicles * simulation_time - unutilized_time)) if (n_vehicles * simulation_time - unutilized_time) > 0 else 0
-
-            # Distance metrics
-            total_km = op_vehicle_df[G_VR_LEG_DISTANCE].sum() / 1000.0
-
-            def weight_ob_pax(entries):
-                try:
-                    return entries[G_VR_NR_PAX] * entries[G_VR_LEG_DISTANCE]
-                except:
-                    return 0.0
-
-            op_vehicle_df["weighted_ob_pax"] = op_vehicle_df.apply(weight_ob_pax, axis=1)
-            distance_avg_occupancy = op_vehicle_df["weighted_ob_pax"].sum() / op_vehicle_df[G_VR_LEG_DISTANCE].sum() if op_vehicle_df[G_VR_LEG_DISTANCE].sum() > 0 else 0
-
-            empty_df = op_vehicle_df[op_vehicle_df[G_VR_OB_RID].isnull()]
-            empty_vkm = empty_df[G_VR_LEG_DISTANCE].sum() / 1000.0 / total_km * 100.0 if total_km > 0 else 0
-
-            # Repositioning VKM (new)
-            repositioning_df = empty_df[empty_df[G_VR_STATUS] == "reposition"]
-            repositioning_vkm = repositioning_df[G_VR_LEG_DISTANCE].sum() / 1000.0 / total_km * 100.0 if total_km > 0 else 0
-
-            # Revenue metrics
-            rev_df = op_vehicle_df[op_vehicle_df["status"].isin([x.display_name for x in G_REVENUE_STATUS])]
-            vehicle_revenue_hours = (rev_df["VRL_end_sim_end_time"].sum() - rev_df["VRL_start_sim_end_time"].sum()) / 3600.0
-
-            # Rides per vehicle revenue hours (new)
-            op_completed_legs = parent_user_stats.get(
-                f'amod_op{op_id}_completed_legs', pd.Series(0, index=parent_user_stats.index)).fillna(0)
-            op_completed_pax = (op_completed_legs * parent_user_stats[G_RQ_PAX]).sum()
-            rides_per_veh_rev_hours = op_completed_pax / vehicle_revenue_hours if vehicle_revenue_hours > 0 else 0
-            rides_per_veh_rev_hours_rq = op_completed_legs.sum() / vehicle_revenue_hours if vehicle_revenue_hours > 0 else 0
-
-            # Shared rides and customer in-vehicle distance (new)
-            op_shared_rides = shared_rides(op_vehicle_df)
-            op_customer_in_vehicle_distance = avg_in_vehicle_distance(op_vehicle_df)
-
-            # By-vehicle stats
-            op_veh_types = veh_type_stats[veh_type_stats[G_V_OP_ID] == op_id]
-            op_veh_types.set_index(G_V_VID, inplace=True)
-            all_vid_dict = {}
-
-            for vid, vid_vtype_row in op_veh_types.iterrows():
-                vtype_data = veh_type_db[vid_vtype_row[G_V_TYPE]]
-                op_vid_vehicle_df = op_vehicle_df[op_vehicle_df[G_V_VID] == vid]
-                veh_km = op_vid_vehicle_df[G_VR_LEG_DISTANCE].sum() / 1000
-                veh_kWh = veh_km * vtype_data[G_VTYPE_BATTERY_SIZE] / vtype_data[G_VTYPE_RANGE]
-                co2_per_kWh = scenario_parameters.get(G_ENERGY_EMISSIONS, ENERGY_EMISSIONS)
-                if co2_per_kWh is None:
-                    co2_per_kWh = ENERGY_EMISSIONS
-                veh_co2 = co2_per_kWh * veh_kWh
-                veh_fix_costs = np.rint(scenario_parameters.get(G_OP_SHARE_FC, 1.0) * vtype_data[G_VTYPE_FIX_COST])
-                veh_var_costs = np.rint(vtype_data[G_VTYPE_DIST_COST] * veh_km)
-
-                all_vid_dict[vid] = {
-                    "type": vtype_data[G_VTYPE_NAME],
-                    "total km": veh_km,
-                    "total kWh": veh_kWh,
-                    "total CO2 [g]": veh_co2,
-                    "fix costs": veh_fix_costs,
-                    "total variable costs": veh_var_costs
-                }
-
-            # Save vehicle-level stats
-            all_vid_df = pd.DataFrame.from_dict(all_vid_dict, orient="index")
-            all_vid_df.to_csv(os.path.join(output_dir, f"standard_mod-{op_id}_veh_eval.csv"))
-
-            # Aggregate vehicle metrics
-            total_co2 = all_vid_df["total CO2 [g]"].sum() if len(all_vid_df) > 0 else 0
-            fix_costs = all_vid_df["fix costs"].sum() if len(all_vid_df) > 0 else 0
-            var_costs = all_vid_df["total variable costs"].sum() if len(all_vid_df) > 0 else 0
-
-            # External emission costs (new)
-            external_emission_costs = np.rint(EMISSION_CPG * total_co2)
-
-            # Add to result dict with operator prefix
-            result_dict[f'op{op_id}_fleet_utilization [%]'] = fleet_utilization
-            result_dict[f'op{op_id}_total_vkm'] = total_km
-            result_dict[f'op{op_id}_occupancy'] = distance_avg_occupancy
-            result_dict[f'op{op_id}_empty_vkm [%]'] = empty_vkm
-            result_dict[f'op{op_id}_repositioning_vkm [%]'] = repositioning_vkm
-            result_dict[f'op{op_id}_vehicle_revenue_hours'] = vehicle_revenue_hours
-            result_dict[f'op{op_id}_rides_per_veh_rev_hours'] = rides_per_veh_rev_hours
-            result_dict[f'op{op_id}_rides_per_veh_rev_hours_rq'] = rides_per_veh_rev_hours_rq
-            result_dict[f'op{op_id}_total_CO2_emissions [t]'] = total_co2 / 10**6
-            result_dict[f'op{op_id}_external_emission_costs'] = external_emission_costs
-            result_dict[f'op{op_id}_fix_costs'] = fix_costs
-            result_dict[f'op{op_id}_var_costs'] = var_costs
-            result_dict[f'op{op_id}_shared_rides [%]'] = op_shared_rides
-            result_dict[f'op{op_id}_customer_in_vehicle_distance'] = op_customer_in_vehicle_distance
-
-        except FileNotFoundError:
-            if print_comments:
-                print(f"  No vehicle data found for operator {op_id}")
-            continue
-
-    # Create result DataFrame
-    result_df = pd.DataFrame([result_dict], index=['Intermodal']).T
-    result_df.columns = ['Intermodal']
-
-    # Save to standard_eval.csv for consistency
-    output_file = os.path.join(output_dir, "standard_eval.csv")
-    result_df.to_csv(output_file)
-
-    if print_comments:
-        print(f"\nEvaluation complete! Results saved to: {output_file}")
-        print("="*80)
-
+        print(f"Evaluation complete: {len(served)}/{len(parents)} journeys and {completed}/{required} DRT legs completed.")
     return result_df
 
 

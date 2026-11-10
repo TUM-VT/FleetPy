@@ -440,7 +440,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
             driving = op_vehicle_df[op_vehicle_df["status"].isin([i.display_name for i in G_DRIVING_STATUS])]
             driving_time = driving["end_time"].sum() - driving["start_time"].sum()
             op_avg_velocity = op_total_km/driving_time*3600.0
-            op_trip_velocity = trip_direct_distance/op_user_sum_travel_time*3.6
+            op_trip_velocity = trip_direct_distance/op_user_sum_travel_time*3600.0
 
             # by vehicle stats
             # ----------------
