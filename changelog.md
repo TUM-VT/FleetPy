@@ -37,7 +37,9 @@ Key update:
 
 - PTBroker (Collaborative Coordination): Simulates a future scenario with tight MaaS–DRT integration. DRT provides a predicted FM dropoff time; PT feeds back the user's expected station waiting time, which MaaS uses to dynamically adjust the DRT dropoff deadline, giving DRT more pooling flexibility while guaranteeing PT connection. LM DRT wait time can also be constrained to minimize destination wait.
 
-- PTBrokerEI (Estimation-based Integration): Simulates current MaaS platforms with limited real-time DRT communication. FM dropoff time is estimated using `broker_maas_detour_time_factor` rather than obtained from an actual DRT offer. A conservative factor ensures PT is caught but increases travel time; an optimistic factor risks missing PT.
+- PTBrokerEI (Estimation-based Integration): Simulates current MaaS platforms with limited real-time DRT communication. FM dropoff time is estimated using `broker_ei_assumed_wait_time` and `broker_ei_assumed_detour_ratio` rather than obtained from an actual DRT offer. Conservative assumptions allow more time for a PT connection; optimistic assumptions risk missing PT.
+
+- PTBrokerEI supports optional FLM rebooking after a missed PT connection via `broker_ei_rebooking_enabled` (default `False`).
 
 - PTBrokerPAYG (Plan-As-You-Go): Simulates the absence of a MaaS platform. Each leg is planned only after the previous one completes (FM DRT → PT → LM DRT). Trips may be interrupted if a subsequent leg is unavailable.
 
@@ -45,7 +47,7 @@ Key update:
 
 - example_study & module_tests: Added intermodal scenario example experiments
 
-- globals: Added `RQ_MODAL_STATE`, `RQ_SUB_TRIP_ID`, and `PAYG_TRIP_STATE` enums for intermodal sub-request classification; added global variable names for PT (`G_PT_*`), intermodal offers (`G_IM_*`), and broker configuration (`G_BROKER_*`, including `G_BROKER_MAAS_DETOUR_TIME_FACTOR`, `G_BROKER_TRANSFER_SEARCH_METHOD`, `G_BROKER_ALWAYS_QUERY_PT`, `G_IM_LM_WAIT_TIME`)
+- globals: Added `RQ_MODAL_STATE`, `RQ_SUB_TRIP_ID`, and `PAYG_TRIP_STATE` enums for intermodal sub-request classification; added global variable names for PT (`G_PT_*`), intermodal offers (`G_IM_*`), and broker configuration (`G_BROKER_*`, including `G_BROKER_EI_ASSUMED_WAIT_TIME`, `G_BROKER_EI_ASSUMED_DETOUR_RATIO`, and `G_BROKER_TRANSFER_SEARCH_METHOD`)
 
 - init_modules: Added initialization code for PTControl and PTBroker modules
 

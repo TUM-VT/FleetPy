@@ -83,8 +83,9 @@ def _pt_leg_failed(row):
 
 
 def _has_journey_failure(row):
-    return _pt_leg_failed(row) or any(_is_true(row[field]) for field in
-                                    (G_RQ_UNCATCHABLE_PT, G_RQ_PAYG_INTERRUPTED))
+    missed_without_rebooking = (_is_true(row[G_RQ_UNCATCHABLE_PT]) and
+                                row.get(G_RQ_EI_REBOOKING_STATUS) != EI_REBOOKING_STATE.BOOKED.value)
+    return _pt_leg_failed(row) or missed_without_rebooking or _is_true(row[G_RQ_PAYG_INTERRUPTED])
 
 
 def _completion_horizon(output_dir, evaluation_end_time, completion_end_time):
@@ -132,7 +133,7 @@ def _selected_legs(parent_row, sub_trips, modal_state):
     return rows
 
 
-def _connections_are_feasible(modal_state, legs):
+def _connections_are_feasible(modal_state, legs, parent_row=None):
     """Require finite PT transfer times for the accepted connecting legs."""
     fm_ids = {
         RQ_MODAL_STATE.FIRSTMILE.value: (RQ_SUB_TRIP_ID.FM_AMOD.value, RQ_SUB_TRIP_ID.FM_PT.value),
@@ -146,6 +147,8 @@ def _connections_are_feasible(modal_state, legs):
         waiting = _get_numeric_offer_parameter(pt[G_RQ_OFFERS], G_OFFER_WAIT)
         latest_origin = _finite_number(pt[G_RQ_PU]) + waiting - walking
         fm_dropoff = _finite_number(fm[G_RQ_DO])
+        if parent_row is not None and parent_row.get(G_RQ_EI_REBOOKING_STATUS) == EI_REBOOKING_STATE.BOOKED.value:
+            fm_dropoff = _finite_number(parent_row.get(G_RQ_EI_REBOOKING_TRIGGER_TIME))
         if not np.isfinite(latest_origin) or not np.isfinite(fm_dropoff) or fm_dropoff > latest_origin:
             return False
     lm_ids = {
@@ -426,7 +429,7 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                          all(_leg_is_complete(row, completion_end_time) for row in selected_legs.values()) and
                          not _has_journey_failure(parent_row) and
                          not any(_has_journey_failure(row) for row in selected_legs.values() if row is not None) and
-                         _connections_are_feasible(modal_state, selected_legs))
+                         _connections_are_feasible(modal_state, selected_legs, parent_row))
 
         # Update parent aggregation with computed values
         parent_agg['is_served'] = is_served
@@ -657,6 +660,13 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
         (parent_user_stats[G_RQ_UNCATCHABLE_PT] == True)
     ]
     total_uncatchable = len(fm_uncatchable) + len(flm_uncatchable)
+    rebooking_status = parent_user_stats.get(
+        G_RQ_EI_REBOOKING_STATUS, pd.Series(index=parent_user_stats.index, dtype=object))
+    rebooking_booked = rebooking_status == EI_REBOOKING_STATE.BOOKED.value
+    rebooking_failed = rebooking_status.isin((EI_REBOOKING_STATE.FAILED_NO_PT.value,
+                                             EI_REBOOKING_STATE.FAILED_NO_LM.value,
+                                             EI_REBOOKING_STATE.FAILED_PT_CANCEL.value,
+                                             EI_REBOOKING_STATE.FAILED_HORIZON.value))
 
     uncatchable_stats['FM_uncatchable_count'] = len(fm_uncatchable)
     uncatchable_stats['FLM_uncatchable_count'] = len(flm_uncatchable)
@@ -788,6 +798,9 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
         'FM_uncatchable_rate [%]': uncatchable_stats.get('FM_uncatchable_rate', np.nan),
         'FLM_uncatchable_rate [%]': uncatchable_stats.get('FLM_uncatchable_rate', np.nan),
         'total_uncatchable_rate [%]': uncatchable_stats.get('total_uncatchable_rate', np.nan),
+        'EI_rebooking_booked_count': int(rebooking_booked.sum()),
+        'EI_rebooking_failed_count': int(rebooking_failed.sum()),
+        'EI_rebooking_completed_count': int((rebooking_booked & parent_user_stats['is_served'].map(_is_true)).sum()),
 
         # Wait times (total, including PT wait)
         'waiting time': avg_wait_time,

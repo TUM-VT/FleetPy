@@ -2,13 +2,14 @@
 # PTBrokerEI: Estimation-based Integration Strategy
 #
 # Simulates current MaaS platforms with limited real-time DRT communication:
-# - MaaS cannot obtain an actual FM DRT offer in time, so it *estimates* the FM DRT dropoff time
-#   using a detour time factor (`broker_maas_dtf`).
+# - MaaS estimates the FM DRT dropoff time from assumed waiting and detour values,
+#   without using the assigned vehicle's predicted dropoff time.
 # - PT and LM DRT are booked based on this estimated dropoff time.
-# - `broker_maas_dtf` controls estimation conservatism:
-#   - A large (conservative) value ensures the user catches PT but increases overall travel time.
-#   - A small (optimistic) value reduces travel time but risks missing PT due to pooling delays.
-# - In experiments, only `broker_maas_dtf=100` was used (50 was not run).
+# - Assumed waiting and detour values default to the DRT operator's upper limits.
+# - After FM alighting, a missed PT connection is marked and cancellation of the PT booking is attempted.
+# - For FLM trips, the original LM booking is cancelled after all vehicles have been updated.
+# - If rebooking is enabled, a replacement PT and LM are requested at the end of the time step.
+#   If either is unavailable, the replacement bookings are cancelled.
 #
 # NOTE: This code has only been tested and applied in the ImmediateDecisionsSimulation environment
 #       combined with the PoolingIRSOnly fleet controller.
@@ -51,7 +52,7 @@ INPUT_PARAMETERS_PTBroker = {
     "doc" : "this class represents a broker platform which handles intermodal requests",
     "inherit" : PTBrokerBasic,
     "input_parameters_mandatory": ["n_amod_op", "amod_operators", "pt_operator", "demand", "routing_engine", "scenario_parameters"],
-    "input_parameters_optional": [],
+    "input_parameters_optional": [G_BROKER_EI_REBOOKING_ENABLED],
     "mandatory_modules": [],
     "optional_modules": []
 }
@@ -82,8 +83,19 @@ class PTBrokerEI(PTBrokerBasic):
         """
         super().__init__(n_amod_op, amod_operators, pt_operator, demand, routing_engine, scenario_parameters)
 
-        # set MaaS detour time estimation parameter
-        self.maas_detour_time_factor: float = self.scenario_parameters.get(G_BROKER_MAAS_DETOUR_TIME_FACTOR , 100) / 100 
+        self._pending_lm_cancellations = []
+        self._pending_rebookings = []
+        self._vehicle_status_time = None
+        self._updated_vehicles = set()
+        self._expected_vehicles = set()
+        self.rebooking_enabled = self.scenario_parameters.get(G_BROKER_EI_REBOOKING_ENABLED) or False
+        self.assumed_wait_time = self.scenario_parameters.get(G_BROKER_EI_ASSUMED_WAIT_TIME)
+        self.assumed_detour_ratio = self.scenario_parameters.get(G_BROKER_EI_ASSUMED_DETOUR_RATIO)
+        for op in self.amod_operators:
+            if not pd.isna(self.assumed_wait_time) and not 0 <= self.assumed_wait_time <= op.max_wait_time:
+                raise ValueError(f"{G_BROKER_EI_ASSUMED_WAIT_TIME} must be non-negative and at most operator {op.op_id} maximum")
+            if not pd.isna(self.assumed_detour_ratio) and not 0 <= self.assumed_detour_ratio <= op.max_dtf:
+                raise ValueError(f"{G_BROKER_EI_ASSUMED_DETOUR_RATIO} must be non-negative and at most operator {op.op_id} maximum")
 
     def _process_inform_firstmile_request(self, rid: int, rq_obj: 'BasicIntermodalRequest', sim_time: int, parent_modal_state: RQ_MODAL_STATE = RQ_MODAL_STATE.FIRSTMILE):
         """This method processes the new firstmile request.
@@ -106,9 +118,9 @@ class PTBrokerEI(PTBrokerBasic):
             fm_amod_rid_struct: str = f"{rid}_{RQ_SUB_TRIP_ID.FM_AMOD.value}"
             fm_amod_sub_rq_obj: BasicIntermodalRequest = self.demand[fm_amod_rid_struct]
             # create sub-request for PT
-            estimated_amod_dropoff_time: int = self._estimate_amod_dropoff_time(op_id, fm_amod_sub_rq_obj)
+            estimated_amod_dropoff_time: float = self._estimate_amod_dropoff_time(op_id, fm_amod_sub_rq_obj)
             # estimate the earliest start time of the pt sub-request
-            fm_est_pt_mod: int = estimated_amod_dropoff_time + self.amod_operators[op_id].const_bt
+            fm_est_pt_mod: float = estimated_amod_dropoff_time + self.amod_operators[op_id].const_bt
             # create the pt sub-request
             _ = self._inform_pt_sub_request(rq_obj, RQ_SUB_TRIP_ID.FM_PT.value, transfer_street_node, rq_obj.get_destination_node(), fm_est_pt_mod, parent_modal_state, op_id)
 
@@ -156,9 +168,9 @@ class PTBrokerEI(PTBrokerBasic):
             flm_amod_sub_rq_obj_0: BasicIntermodalRequest = self.demand[flm_amod_rid_struct_0]
             # create sub-request for PT
             # estimate the dropoff time of the amod sub-request
-            estimated_amod_dropoff_time: int = self._estimate_amod_dropoff_time(op_id, flm_amod_sub_rq_obj_0)
+            estimated_amod_dropoff_time: float = self._estimate_amod_dropoff_time(op_id, flm_amod_sub_rq_obj_0)
             # estimate the earliest start time of the pt sub-request
-            flm_est_pt_mod: int = estimated_amod_dropoff_time + self.amod_operators[op_id].const_bt
+            flm_est_pt_mod: float = estimated_amod_dropoff_time + self.amod_operators[op_id].const_bt
             # create the pt sub-request
             flm_pt_arrival: tp.Optional[int] = self._inform_pt_sub_request(rq_obj, RQ_SUB_TRIP_ID.FLM_PT.value, transfer_street_node_0,transfer_street_node_1, flm_est_pt_mod,parent_modal_state,op_id)
 
@@ -298,7 +310,7 @@ class PTBrokerEI(PTBrokerBasic):
             offers[intermodal_offer.operator_id] = intermodal_offer
         return offers
         
-    def _estimate_amod_dropoff_time(self, amod_op_id: int, sub_rq_obj: 'BasicIntermodalRequest') -> tp.Optional[int]:
+    def _estimate_amod_dropoff_time(self, amod_op_id: int, sub_rq_obj: 'BasicIntermodalRequest') -> float:
         """This method estimates the dropoff time of an amod sub-request.
         This time point marks the start of alighting the FM amod vehicle.
 
@@ -306,20 +318,20 @@ class PTBrokerEI(PTBrokerBasic):
             amod_op_id (int): the id of the amod operator
             sub_rq_obj (BasicIntermodalRequest): the sub-request object
         Returns:
-            int: the dropoff time of the sub-request
+            float: the dropoff time of the sub-request
         """
         sub_rq_rid_struct: str = sub_rq_obj.get_rid_struct()
         sub_prq_obj: PlanRequest = self.amod_operators[amod_op_id].rq_dict.get(sub_rq_rid_struct, None)
 
         prq_direct_tt = sub_prq_obj.init_direct_tt
         amod_boarding_time = self.amod_operators[amod_op_id].const_bt
-        amod_max_dtf = self.amod_operators[amod_op_id].max_dtf / 100 
-        prq_pu_latest = sub_prq_obj.t_pu_latest
+        assumed_detour_ratio = self.amod_operators[amod_op_id].max_dtf if pd.isna(self.assumed_detour_ratio) else self.assumed_detour_ratio
+        estimated_pickup_time = sub_prq_obj.t_pu_latest
+        if not pd.isna(self.assumed_wait_time):
+            estimated_pickup_time = sub_prq_obj.t_pu_earliest + self.assumed_wait_time
 
-        # MaaS estimates that only a certain percentage of the operator maximum detour time will be realized
-        maas_estimated_prq_max_trip_time = (1 + self.maas_detour_time_factor * amod_max_dtf) * (prq_direct_tt + amod_boarding_time)
-
-        maas_estimated_latest_dropoff_time: int = prq_pu_latest + int(maas_estimated_prq_max_trip_time)
+        estimated_trip_time = (1 + assumed_detour_ratio / 100) * (prq_direct_tt + amod_boarding_time)
+        maas_estimated_latest_dropoff_time: float = estimated_pickup_time + estimated_trip_time
         return maas_estimated_latest_dropoff_time
     
     def acknowledge_user_alighting(self, op_id: int, rid_struct: str, vid: int, alighting_time: int):
@@ -410,8 +422,94 @@ class PTBrokerEI(PTBrokerBasic):
             self._cancel_pt_binding(parent_rid, pt_rid_struct, amod_op_id, sim_time, missed_connection=True)
         elif parent_modal_state == RQ_MODAL_STATE.FIRSTLASTMILE:
             pt_rid_struct = f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}"
-            self._cancel_pt_binding(parent_rid, pt_rid_struct, amod_op_id, sim_time, missed_connection=True)
+            pt_offer = self.pt_operator.get_current_offer(pt_rid_struct, amod_op_id)
+            parent_rq_obj.ei_rebooking_trigger_time = sim_time
+            parent_rq_obj.ei_missed_pt_offer = pt_offer.to_output_str()
+            pt_cancelled = self._cancel_pt_binding(parent_rid, pt_rid_struct, amod_op_id, sim_time, missed_connection=True)
             lm_id = f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}"
+            lm_bindings = []
             for op_id, request_id in list(self._amod_proposals.get(parent_rid, {})):
                 if request_id == lm_id:
-                    self._cancel_amod_binding(parent_rid, op_id, request_id, sim_time)
+                    self._pending_lm_cancellations.append((parent_rid, op_id, request_id))
+                    lm_bindings.append((op_id, request_id))
+            if self.rebooking_enabled:
+                if not pt_cancelled:
+                    parent_rq_obj.ei_rebooking_status = EI_REBOOKING_STATE.FAILED_PT_CANCEL
+                elif not lm_bindings:
+                    parent_rq_obj.ei_rebooking_status = EI_REBOOKING_STATE.FAILED_NO_LM
+                else:
+                    self._pending_rebookings.append((parent_rid, amod_op_id, lm_bindings[0][0]))
+
+    def receive_status_update(self, op_id, vid, sim_time, passed_VRL, force_update_plan):
+        """Cancel missed-connection requests after the fleet has been updated."""
+        super().receive_status_update(op_id, vid, sim_time, passed_VRL, force_update_plan)
+        if self._vehicle_status_time != sim_time:
+            self._vehicle_status_time = sim_time
+            self._updated_vehicles = set()
+            self._expected_vehicles = {
+                (operator_id, vehicle.vid)
+                for operator_id, operator in enumerate(self.amod_operators)
+                for vehicle in operator.sim_vehicles
+            }
+        self._updated_vehicles.add((op_id, vid))
+        if self._expected_vehicles <= self._updated_vehicles:
+            while self._pending_lm_cancellations:
+                parent_rid, lm_op_id, request_id = self._pending_lm_cancellations[0]
+                self._cancel_amod_binding(parent_rid, lm_op_id, request_id, sim_time)
+                self._pending_lm_cancellations.pop(0)
+            while self._pending_rebookings:
+                parent_rid, fm_op_id, lm_op_id = self._pending_rebookings[0]
+                self._rebook_flm(parent_rid, fm_op_id, lm_op_id, sim_time)
+                self._pending_rebookings.pop(0)
+
+    def _rebook_flm(self, parent_rid, fm_op_id, lm_op_id, sim_time):
+        """Replace a missed PT and its LM leg after cancelling the old bindings."""
+        parent = self.demand[parent_rid]
+        parent.ei_rebooking_processing_time = sim_time
+        if sim_time >= self.scenario_parameters[G_SIM_END_TIME]:
+            parent.ei_rebooking_status = EI_REBOOKING_STATE.FAILED_HORIZON
+            return
+        pt_id = f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}"
+        lm_id = f"{parent_rid}_{RQ_SUB_TRIP_ID.FLM_AMOD_1.value}"
+        old_pt = self.demand[pt_id]
+        old_lm = self.demand[lm_id]
+        mode = RQ_MODAL_STATE.FIRSTLASTMILE
+
+        try:
+            pt_arrival = self._inform_pt_sub_request(
+                parent, RQ_SUB_TRIP_ID.FLM_PT.value, old_pt.get_origin_node(), old_pt.get_destination_node(),
+                sim_time, mode, fm_op_id)
+            if pt_arrival is None:
+                parent.ei_rebooking_status = EI_REBOOKING_STATE.FAILED_NO_PT
+                return
+
+            pt_offer = self.pt_operator.get_current_offer(pt_id, fm_op_id)
+            try:
+                self._inform_amod_sub_request(
+                    parent, RQ_SUB_TRIP_ID.FLM_AMOD_1.value, old_lm.get_origin_node(), old_lm.get_destination_node(),
+                    pt_arrival, mode, lm_op_id, sim_time)
+            except Exception:
+                if lm_id in self.amod_operators[lm_op_id].rq_dict:
+                    self._amod_proposals.setdefault(parent_rid, {})[(lm_op_id, lm_id)] = self.demand[lm_id]
+                raise
+            lm_offer = self.amod_operators[lm_op_id].get_current_offer(lm_id)
+            if lm_offer is None or lm_offer.service_declined():
+                parent.ei_rebooking_status = EI_REBOOKING_STATE.FAILED_NO_LM
+                return
+
+            pt_child = self.demand[pt_id]
+            pt_child.selected_mode = parent.selected_mode
+            pt_child.selected_candidate_id = parent.selected_candidate_id
+            pt_child.chosen_operator_id = self.pt_operator_id
+            pt_child.offer = {self.pt_operator_id: pt_offer}
+            pt_child.fare = pt_offer.get(G_OFFER_FARE, 0)
+            self._bind_amod_child(parent_rid, lm_op_id, lm_id, lm_offer)
+            self._confirm_amod_binding(parent_rid, lm_op_id, lm_id, sim_time)
+            self.pt_operator.user_confirms_booking(pt_child, fm_op_id)
+            parent.ei_rebooking_status = EI_REBOOKING_STATE.BOOKED
+        finally:
+            if parent.ei_rebooking_status != EI_REBOOKING_STATE.BOOKED:
+                self._cancel_amod_binding(parent_rid, lm_op_id, lm_id, sim_time)
+                self._cancel_pt_binding(parent_rid, pt_id, fm_op_id, sim_time)
+                self.demand.rq_db[pt_id] = old_pt
+                self.demand.rq_db[lm_id] = old_lm

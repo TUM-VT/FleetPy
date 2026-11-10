@@ -5,7 +5,7 @@ from src.simulation.Offers import TravellerOffer
 from src.fleetctrl.FleetControlBase import FleetControlBase
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.fleetctrl.pooling.objectives import return_pooling_objective_function
-from src.fleetctrl.pooling.immediate.insertion import insertion_with_heuristics
+from src.fleetctrl.pooling.immediate.insertion import insertion_with_heuristics, simple_remove
 from src.misc.globals import *
 
 LOG = logging.getLogger(__name__)
@@ -192,10 +192,20 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         prq = self.rq_dict[rid]
         if prq.get_reservation_flag():
             self.reservation_module.user_cancels_request(rid, simulation_time)
+            self.rid_to_assigned_vid.pop(rid, None)
         else:
             prev_assignment = self.tmp_assignment.get(rid)
             if prev_assignment:
                 del self.tmp_assignment[rid]
+            elif rid in self.rid_to_assigned_vid:
+                if prq.pu_time is not None:
+                    raise ValueError(f"Cannot cancel request {rid} after pickup")
+                vid = self.rid_to_assigned_vid[rid]
+                veh_obj = self.sim_vehicles[vid]
+                new_plan = simple_remove(veh_obj, self.veh_plans[vid], rid, simulation_time,
+                                         self.routing_engine, self.vr_ctrl_f, self.rq_dict, self.const_bt, self.add_bt)
+                self.assign_vehicle_plan(veh_obj, new_plan, simulation_time)
+                del self.rid_to_assigned_vid[rid]
         del self.rq_dict[rid]
 
     def acknowledge_boarding(self, rid, vid, simulation_time):

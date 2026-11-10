@@ -799,6 +799,10 @@ class BasicIntermodalRequest(RequestBase):
         self.pt_leg_state: tp.Optional[PT_LEG_STATE] = None
         self.pt_cancel_time: tp.Optional[float] = None
         self.pt_cancel_reason: tp.Optional[str] = None
+        self.ei_rebooking_status = EI_REBOOKING_STATE.NOT_ATTEMPTED
+        self.ei_rebooking_trigger_time = None
+        self.ei_rebooking_processing_time = None
+        self.ei_missed_pt_offer = None
         # PAYG (Plan-As-You-Go) specific attributes
         self.payg_interrupted: bool = False  # flag for PAYG trips that were interrupted
         self.payg_interrupt_state: tp.Optional[int] = None  # PAYG_TRIP_STATE value when interrupted
@@ -1004,6 +1008,10 @@ class BasicIntermodalRequest(RequestBase):
         record_dict[G_RQ_PT_LEG_STATE] = None if self.pt_leg_state is None else self.pt_leg_state.value
         record_dict[G_RQ_PT_CANCEL_TIME] = self.pt_cancel_time
         record_dict[G_RQ_PT_CANCEL_REASON] = self.pt_cancel_reason
+        record_dict[G_RQ_EI_REBOOKING_STATUS] = self.ei_rebooking_status.value if self.sub_rid_struct is None else None
+        record_dict[G_RQ_EI_REBOOKING_TRIGGER_TIME] = self.ei_rebooking_trigger_time if self.sub_rid_struct is None else None
+        record_dict[G_RQ_EI_REBOOKING_PROCESSING_TIME] = self.ei_rebooking_processing_time if self.sub_rid_struct is None else None
+        record_dict[G_RQ_EI_MISSED_PT_OFFER] = self.ei_missed_pt_offer if self.sub_rid_struct is None else None
         # PAYG specific records
         record_dict[G_RQ_PAYG_INTERRUPTED] = self.payg_interrupted
         record_dict[G_RQ_PAYG_INTERRUPT_STATE] = self.payg_interrupt_state

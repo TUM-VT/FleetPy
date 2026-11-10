@@ -283,6 +283,7 @@ class PTBrokerBasic(BrokerBasic):
         if (op_id, request_id) in proposals:
             self.amod_operators[op_id].user_cancels_request(request_id, sim_time)
             del proposals[(op_id, request_id)]
+            self._confirmed_amod.get(rid, set()).discard((op_id, request_id))
 
     def _cancel_pt_binding(self, rid, child_id, firstmile_op, sim_time, *, missed_connection=False):
         requests = self._pt_requests.get(rid, {})

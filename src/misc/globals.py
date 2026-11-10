@@ -74,7 +74,9 @@ G_TOLL_COST_SCALE = "toll_cost_scale"
 # broker specific attributes
 G_BROKER_TYPE = "broker_type"
 G_BROKER_TRANSFER_SEARCH_METHOD = "broker_transfer_search_method"  # method for finding transfer stations: "closest" or "best_overall"
-G_BROKER_MAAS_DETOUR_TIME_FACTOR = "broker_maas_detour_time_factor"  # factor to estimate detour time for MaaS intermodal trips (default: 1.0)
+G_BROKER_EI_ASSUMED_WAIT_TIME = "broker_ei_assumed_wait_time"  # assumed FM waiting time in seconds; default: operator maximum
+G_BROKER_EI_ASSUMED_DETOUR_RATIO = "broker_ei_assumed_detour_ratio"  # assumed FM detour ratio in percent; default: operator maximum
+G_BROKER_EI_REBOOKING_ENABLED = "broker_ei_rebooking_enabled"
 
 # public transport specific attributes
 G_PT_TYPE = "pt_type"
@@ -506,6 +508,10 @@ G_RQ_UNCATCHABLE_PT = "uncatchable_pt"  # flag for requests that missed their PT
 G_RQ_PT_LEG_STATE = "pt_leg_state"
 G_RQ_PT_CANCEL_TIME = "pt_cancel_time"
 G_RQ_PT_CANCEL_REASON = "pt_cancel_reason"
+G_RQ_EI_REBOOKING_STATUS = "ei_rebooking_status"
+G_RQ_EI_REBOOKING_TRIGGER_TIME = "ei_rebooking_trigger_time"
+G_RQ_EI_REBOOKING_PROCESSING_TIME = "ei_rebooking_processing_time"
+G_RQ_EI_MISSED_PT_OFFER = "ei_missed_pt_offer"
 # PAYG (Plan-As-You-Go) specific
 G_RQ_PAYG_INTERRUPTED = "payg_interrupted"  # flag for PAYG trips that were interrupted
 G_RQ_PAYG_INTERRUPT_STATE = "payg_interrupt_state"  # PAYG_TRIP_STATE value when interrupted
@@ -543,6 +549,14 @@ class PT_LEG_STATE(Enum):
     BOOKED = "booked"
     CANCELLED = "cancelled"
     MISSED = "missed"
+
+class EI_REBOOKING_STATE(Enum):
+    NOT_ATTEMPTED = "not_attempted"
+    BOOKED = "booked"
+    FAILED_NO_PT = "failed_no_pt"
+    FAILED_NO_LM = "failed_no_lm"
+    FAILED_PT_CANCEL = "failed_pt_cancel"
+    FAILED_HORIZON = "failed_horizon"
 
 class PAYG_TRIP_STATE(Enum):
     """PAYG trip state tracking"""
