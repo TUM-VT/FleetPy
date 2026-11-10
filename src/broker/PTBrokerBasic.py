@@ -221,16 +221,13 @@ class PTBrokerBasic(BrokerBasic):
                 children[child_id] = child
         expected = None
         if complete:
-            if mode == RQ_MODAL_STATE.MONOMODAL:
+            if isinstance(offer, IntermodalOffer):
+                expected = offer.get(G_IM_OFFER_DURATION)
+            elif mode == RQ_MODAL_STATE.MONOMODAL:
                 expected = offer.get(G_OFFER_WAIT) + offer.get(G_OFFER_DRIVE)
-            elif mode in (RQ_MODAL_STATE.PT, RQ_MODAL_STATE.FIRSTMILE):
+            elif mode == RQ_MODAL_STATE.PT:
                 pt_offer = next(sub for sub in sub_offers.values() if sub.operator_id == self.pt_operator_id)
                 expected = pt_offer.destination_node_arrival_time - self.demand[rid].rq_time
-            else:
-                last_leg = RQ_SUB_TRIP_ID.LM_AMOD.value if mode == RQ_MODAL_STATE.LASTMILE else RQ_SUB_TRIP_ID.FLM_AMOD_1.value
-                last_offer = sub_offers[last_leg]
-                last_child = children[f"{rid}_{last_leg}"]
-                expected = last_child.rq_time + last_offer.get(G_OFFER_WAIT) + last_offer.get(G_OFFER_DRIVE) - self.demand[rid].rq_time
         return dict(mode=mode, offer=offer, original_key=original_key,
                     child_requests=children, proposal_bindings=tuple(amod),
                     pt_bindings=tuple(pt), is_complete=complete, expected_duration=expected)
@@ -720,7 +717,16 @@ class PTBrokerBasic(BrokerBasic):
     def _create_intermodal_offer(self, rid: int, sub_trip_offers: tp.Dict[int, 'TravellerOffer'], rq_modal_state: RQ_MODAL_STATE) -> 'IntermodalOffer':
         """This method merges the amod and pt offers into an intermodal offer.
         """
-        offer = IntermodalOffer(rid, sub_trip_offers, rq_modal_state)
+        lastmile_id = {
+            RQ_MODAL_STATE.LASTMILE: RQ_SUB_TRIP_ID.LM_AMOD.value,
+            RQ_MODAL_STATE.FIRSTLASTMILE: RQ_SUB_TRIP_ID.FLM_AMOD_1.value,
+        }.get(rq_modal_state)
+        lastmile_rq_time = None
+        if lastmile_id is not None:
+            lastmile_offer = sub_trip_offers[lastmile_id]
+            lastmile_rq_time = self._amod_proposals[rid][
+                (lastmile_offer.operator_id, lastmile_offer.traveler_id)].rq_time
+        offer = IntermodalOffer(rid, sub_trip_offers, rq_modal_state, self.demand[rid].rq_time, lastmile_rq_time)
         candidate = self._build_candidate(rid, rq_modal_state, offer.operator_id, offer)
         self._candidate_build_records[rid][(rq_modal_state, offer.operator_id)] = candidate
         return offer

@@ -210,7 +210,9 @@ class IntermodalOffer(TravellerOffer):
         self, 
         traveler_id: int, 
         sub_trip_offers: tp.Dict[int, TravellerOffer], 
-        rq_modal_state: RQ_MODAL_STATE, 
+        rq_modal_state: RQ_MODAL_STATE,
+        parent_rq_time: float,
+        lastmile_rq_time: tp.Optional[float] = None,
     ):
         """Initialize an intermodal offer that can include multiple sub-trips from different operators.
         
@@ -220,11 +222,15 @@ class IntermodalOffer(TravellerOffer):
         :type sub_trip_offers: dict
         :param rq_modal_state: modal state of the parent request
         :type rq_modal_state: RQ_MODAL_STATE
+        :param parent_rq_time: request time of the parent trip
+        :param lastmile_rq_time: request time used by the last-mile AMoD offer
         :param additional_parameters: dictionary of other offer attributes
         :type additional_parameters: dict or None
         """
         self.rq_modal_state = rq_modal_state 
         self.sub_trip_offers: tp.Dict[int, TravellerOffer] = sub_trip_offers
+        self.parent_rq_time = parent_rq_time
+        self.lastmile_rq_time = lastmile_rq_time
 
         self.additional_offer_parameters: tp.Dict[str, tp.Any] = {}
 
@@ -282,6 +288,27 @@ class IntermodalOffer(TravellerOffer):
             total_wait += sub_trip_offer.get(G_OFFER_WAIT, 0)
             total_drive += sub_trip_offer.get(G_OFFER_DRIVE, 0)
 
+        pt_id, lm_id = {
+            RQ_MODAL_STATE.FIRSTMILE: (RQ_SUB_TRIP_ID.FM_PT.value, None),
+            RQ_MODAL_STATE.LASTMILE: (RQ_SUB_TRIP_ID.LM_PT.value, RQ_SUB_TRIP_ID.LM_AMOD.value),
+            RQ_MODAL_STATE.FIRSTLASTMILE: (RQ_SUB_TRIP_ID.FLM_PT.value, RQ_SUB_TRIP_ID.FLM_AMOD_1.value),
+        }[self.rq_modal_state]
+        pt_offer = self.sub_trip_offers[pt_id]
+        lm_wait = None
+        if lm_id is None:
+            duration = pt_offer.destination_node_arrival_time - self.parent_rq_time
+        else:
+            if self.lastmile_rq_time is None:
+                raise ValueError("Last-mile request time is required for an intermodal offer")
+            lm_offer = self.sub_trip_offers[lm_id]
+            lm_pickup = self.lastmile_rq_time + lm_offer.get(G_OFFER_WAIT)
+            lm_wait = lm_pickup - pt_offer.destination_node_arrival_time
+            total_wait += lm_wait - lm_offer.get(G_OFFER_WAIT)
+            duration = lm_pickup + lm_offer.get(G_OFFER_DRIVE) - self.parent_rq_time
+            if lm_wait < 0:
+                # The passenger cannot board LM before reaching its pickup point.
+                total_wait = None
+
         # map amod attributes into additional parameters
         mapping_configs = amod_state_mapping.get(self.rq_modal_state, [])
         
@@ -291,10 +318,9 @@ class IntermodalOffer(TravellerOffer):
             if sub_trip_id == RQ_SUB_TRIP_ID.FM_PT.value or sub_trip_id == RQ_SUB_TRIP_ID.LM_PT.value or sub_trip_id == RQ_SUB_TRIP_ID.FLM_PT.value:
                 for attr in pt_attributes_to_extract:
                     self.additional_offer_parameters[attr] = offer.get(attr)
-            self.additional_offer_parameters[wait_key] = offer.get(G_OFFER_WAIT)
+            self.additional_offer_parameters[wait_key] = lm_wait if sub_trip_id == lm_id else offer.get(G_OFFER_WAIT)
             self.additional_offer_parameters[drive_key] = offer.get(G_OFFER_DRIVE)
 
-        duration = total_wait + total_drive
         self.additional_offer_parameters[G_IM_OFFER_DURATION] = duration
 
         return {
