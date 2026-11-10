@@ -294,6 +294,7 @@ def run_scenarios(scenarios, workers, progress_interval, log_dir):
     succeeded = failed = 0
     interrupted = False
     interrupt_reported = False
+    failure_reported = False
     monitor = HardwareMonitor()
     start = time.monotonic()
     next_report = start
@@ -339,9 +340,14 @@ def run_scenarios(scenarios, workers, progress_interval, log_dir):
                 else:
                     failed += 1
                     print(f"FAILED {name}: {error} (see {log_dir / (name + '.log')})", flush=True)
-                submit_one()
+            if failed and not failure_reported:
+                print("Failure received: no more scenarios will be scheduled; waiting for active scenarios.", flush=True)
+                failure_reported = True
+            if not failed and not interrupted:
+                for _ in done:
+                    submit_one()
             if time.monotonic() >= next_report or not pending:
-                print_progress(total, succeeded, failed, pending.values(), active, start, monitor, interrupted)
+                print_progress(total, succeeded, failed, pending.values(), active, start, monitor, interrupted or bool(failed))
                 next_report = time.monotonic() + progress_interval
         return 130 if interrupted else (1 if failed else 0)
     finally:
