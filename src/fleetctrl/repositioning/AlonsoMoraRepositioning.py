@@ -105,6 +105,8 @@ class AlonsoMoraRepositioning(RepositioningBase):
                     
         if self.solver_key == "Gurobi":
             vid_to_repo_target = self._solve_gurobi(vid_to_origin_to_tt, origin_to_counts, sim_time)
+        elif self.solver_key.lower() == "highs":
+            vid_to_repo_target = self._solve_pyomo(vid_to_origin_to_tt, origin_to_counts, sim_time)
         else:
             raise NotImplementedError(f"optimizer {self.solver_key} not implemented here!")
         
@@ -219,3 +221,103 @@ class AlonsoMoraRepositioning(RepositioningBase):
                 new_assignments = {}
 
             return new_assignments
+    
+    def _solve_pyomo(self, vid_to_origin_tt, origin_to_counts, sim_time):
+        """Solve the original vehicle-to-reposition-target assignment with HiGHS.
+
+        :param vid_to_origin_tt: vehicle id -> target node -> additional travel time
+        :param origin_to_counts: target node -> number of rejected requests there
+        :param sim_time: current simulation time
+        :return: vehicle id -> target node for optimally selected assignments
+
+        The original Gurobi model is preserved exactly:
+        - one binary variable for each feasible vehicle/target pair;
+        - minimize total added travel time;
+        - if eligible vehicles <= rejected requests, assign each eligible
+          vehicle exactly once, with target assignment counts bounded above;
+        - otherwise, assign at most one target per vehicle and meet the
+          rejected-request count at each reachable target exactly.
+
+        As in the original implementation, only a proven optimal solution is
+        accepted; infeasibility and time limits produce no repositionings.
+        """
+        try:
+            import pyomo.environ as pyo
+            from pyomo.opt import TerminationCondition
+        except ImportError as exc:
+            raise ImportError(
+                "Pyomo and HiGHS are required for AlonsoMoraRepositioning. "
+                "Install them with: python -m pip install pyomo highspy"
+            ) from exc
+
+        # Only include feasible vehicle/target pairs, as the Gurobi version did.
+        arcs = []
+        for vid, target_costs in vid_to_origin_tt.items():
+            for target in target_costs:
+                arcs.append((vid, target))
+
+
+        if not arcs:
+            LOG.debug("No feasible vehicle-to-reposition-target assignments at %s", sim_time)
+            return {}
+
+        vehicle_to_targets = {}
+        target_to_vehicles = {}
+        for vid, target in arcs:
+            vehicle_to_targets.setdefault(vid, []).append(target)
+            target_to_vehicles.setdefault(target, []).append(vid)
+
+        model = pyo.ConcreteModel(name=f"AlonsoMoraRepositioning_{sim_time}")
+        model.arcs = pyo.Set(dimen=2, initialize=arcs)
+        model.assign = pyo.Var(model.arcs, domain=pyo.Binary)
+        model.objective = pyo.Objective(
+            expr=pyo.quicksum(
+                float(vid_to_origin_tt[vid][target]) * model.assign[vid, target]
+                for vid, target in arcs
+            ),
+            sense=pyo.minimize,
+        )
+
+        # Identical branching condition and assignment constraints to Gurobi.
+        assign_all_vehicles = len(vehicle_to_targets) <= sum(origin_to_counts.values())
+
+        model.vehicle_constraints = pyo.ConstraintList()
+        for vid, targets in vehicle_to_targets.items():
+            n_assigned = pyo.quicksum(model.assign[vid, target] for target in targets)
+            if assign_all_vehicles:
+                model.vehicle_constraints.add(n_assigned == 1)
+            else:
+                model.vehicle_constraints.add(n_assigned <= 1)
+
+        model.target_constraints = pyo.ConstraintList()
+        for target, vehicles in target_to_vehicles.items():
+            n_assigned = pyo.quicksum(model.assign[vid, target] for vid in vehicles)
+            if assign_all_vehicles:
+                model.target_constraints.add(n_assigned <= origin_to_counts[target])
+            else:
+                model.target_constraints.add(n_assigned == origin_to_counts[target])
+
+        solver = pyo.SolverFactory("appsi_highs")
+        if not solver.available(exception_flag=False):
+            raise RuntimeError("HiGHS is not available to Pyomo. Install it with: python -m pip install pyomo highspy")
+        solver.options["time_limit"] = TIME_OUT
+        solver.options["threads"] = max(1, int(self.fleetctrl.n_cpu))
+
+        # Suppress automatic solution loading: the model may be infeasible,
+        # and appsi_highs would otherwise raise before we could inspect status.
+        results = solver.solve(model, tee=False, load_solutions=False)
+        if results.solver.termination_condition == TerminationCondition.optimal:
+            model.solutions.load_from(results)
+            sol_dict = {vid: target for vid, target in arcs if pyo.value(model.assign[vid, target]) > 0.5}
+            return sol_dict
+
+        # Preserve the original behavior: write the unsuccessful model and
+        # do not apply repositioning assignments unless optimality is proven.
+        model_file = os.path.join(self.output_dir, f"70_repo_am_opt_model_infeasible_{sim_time}.lp")
+        try:
+            model.write(model_file, io_options={"symbolic_solver_labels": True})
+        except Exception:
+            LOG.exception("Could not write repositioning model to %s", model_file)
+        LOG.warning("Operator %s: No optimal repositioning solution (HiGHS status: %s); no repositioning applied.",
+                    self.fleetctrl.op_id, results.solver.termination_condition,)
+        return {}
