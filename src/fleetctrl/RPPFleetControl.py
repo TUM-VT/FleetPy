@@ -309,7 +309,7 @@ class RPPFleetControlFullInsertion(FleetControlBase):
                 LOG.debug(f"new offer for rid {rid_struct} : {offer}")
             else:
                 LOG.debug(f"rejection for rid {rid_struct}")
-                self._create_rejection(prq, sim_time)
+                self._create_rejection(prq, sim_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
                 
         if self.repo and not prq.get_reservation_flag():
             self.repo.register_user_request(prq, sim_time)
@@ -516,7 +516,7 @@ class RPPFleetControlFullInsertion(FleetControlBase):
                                    self._compute_fare(simulation_time, prq, assigned_vehicle_plan))
             prq.set_service_offered(offer)  # has to be called
         else:
-            offer = self._create_rejection(prq, simulation_time)
+            offer = self._create_rejection(prq, simulation_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
         return offer
     
     def _create_parcel_offer(self, prq : ParcelPlanRequest, simulation_time : int, assigned_vehicle_plan : VehiclePlan=None, offer_dict_without_plan : dict={}):
@@ -990,7 +990,7 @@ class RPPFleetControlSingleStopInsertionGuided(RPPFleetControlSingleStopInsertio
                 LOG.debug(f"new offer for rid {rid_struct} : {offer}")
             else:
                 LOG.debug(f"rejection for rid {rid_struct}")
-                self._create_rejection(prq, sim_time)
+                self._create_rejection(prq, sim_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
         # record cpu time
         dt = round(time.perf_counter() - t0, 5)
         old_dt = self._get_current_dynamic_fleetcontrol_value(sim_time, G_FCTRL_CT_RQU)
