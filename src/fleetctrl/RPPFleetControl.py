@@ -260,7 +260,6 @@ class RPPFleetControlFullInsertion(FleetControlBase):
         self.unassigned_parcel_dict[rid_struct] = parcel_prq
         
         if not self._is_valid_request(sim_time, parcel_prq):
-            self._create_rejection(parcel_prq, sim_time)
             return
         
         self._create_parcel_offer(parcel_prq, sim_time)
@@ -288,7 +287,6 @@ class RPPFleetControlFullInsertion(FleetControlBase):
         self.rq_dict[rid_struct] = prq
 
         if not self._is_valid_request(sim_time, prq):
-            self._create_rejection(prq, sim_time)
             return
 
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
@@ -937,7 +935,6 @@ class RPPFleetControlSingleStopInsertionGuided(RPPFleetControlSingleStopInsertio
         self.rq_dict[rid_struct] = prq
 
         if not self._is_valid_request(sim_time, prq):
-            self._create_rejection(prq, sim_time)
             return
 
         o_pos, t_pu_earliest, t_pu_latest = prq.get_o_stop_info()
