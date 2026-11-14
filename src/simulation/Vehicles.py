@@ -593,6 +593,10 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
     def __init__(self, operator_id, vehicle_id, veh_attributes_dict, routing_engine, rq_db, op_output, record_route_flag, replay_flag):
         super().__init__(operator_id, vehicle_id, veh_attributes_dict, routing_engine, rq_db, op_output, record_route_flag, replay_flag)
         self._route_update_needed = False # set true if new route available or vehicle doesnt move on planned route
+        # seconds spent with a driving leg but no route at a node ("stays there"); a vehicle that
+        # piles these up is frozen with its passengers, so the run reports it (frozen_vehicles.py)
+        self.stays_at_node_s = 0
+        self.stays_at_node_pos = None
 
     def update_vehicle_position(self, veh_pos, simulation_time):
         """ this method is used to update the vehicle position in the network
@@ -732,8 +736,10 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
 
                     else:
                         route = None
+                        self.stays_at_node_s += 1
+                        self.stays_at_node_pos = self.pos[0]
                         LOG.warning(f"Veh {self.vid} at {self.pos} is at node and stays there -> {route}")
-                        return route                       
+                        return route
                
         else:
             #LOG.debug('_route_update_needed is False')
@@ -782,7 +788,13 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
             if start_flag:
                 self.start_next_leg_first = True
                 if self.status in G_DRIVING_STATUS or self.status == VRL_STATES.IDLE:
-                    if not self.assigned_route[0].status in G_DRIVING_STATUS:
+                    if (not self.assigned_route[0].status in G_DRIVING_STATUS
+                            and self.pos == self.assigned_route[0].destination_pos):
+                        # Already standing at the stop (e.g. waiting for a reserved pickup): start
+                        # it here. A driving leg to its own node never reaches SUMO, so the vehicle
+                        # would never "arrive" and froze with every passenger in its plan.
+                        self._route_update_needed = False
+                    elif not self.assigned_route[0].status in G_DRIVING_STATUS:
                         LOG.warning("while currently driving a new route without start driving vrl assigned {} {}".format(self, list_route_legs))
                         if self.status == VRL_STATES.IDLE:
                             next_status = VRL_STATES.ROUTE

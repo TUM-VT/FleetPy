@@ -23,6 +23,7 @@ from src.coupling.SUMO.tt_source import (
     run_log_path, tt_file_for, write_source_stats)
 from src.coupling.SUMO.insertion_guard import InsertionGuard, skip_blocked_edge
 from src.coupling.SUMO.enroute_schedule import EnrouteSchedule, reroute_now
+from src.coupling.SUMO.frozen_vehicles import frozen_vehicle_stats
 from src.misc.init_modules import load_simulation_environment
 import src.misc.config as config
 from src.misc.globals import *
@@ -491,6 +492,7 @@ class SUMOFleetPyServer():
             pd.DataFrame(self.g_enroute_log,
                          columns=["sim_time", "op_id", "vid", "cost_old", "cost_new"]).to_csv(
                 run_log_path(resultsPath, "enroute_reroutes.csv"), index=False)
+        setup.update(frozen_vehicle_stats(self.fp_sim_env.sim_vehicles.values()))
         write_source_stats(resultsPath, self.g_tt_source_dir,
                            self.g_tt_bins_loaded, self.g_tt_bins_missing,
                            routing_engine=self.fp_sim_env.routing_engine, setup=setup)
