@@ -132,6 +132,7 @@ def get_src_repositioning_strategies():
     repo_dict = {}  # str -> (module path, class name)
     repo_dict["PavoneFC"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingRepositioningFC")
     repo_dict["PavoneFCV2"] = ("src.fleetctrl.repositioning.PavoneHailingFC", "PavoneHailingV2RepositioningFC")
+    repo_dict["PavoneFCInfo"] = ("src.fleetctrl.repositioning.InformationSeekingPavoneFC", "InformationSeekingPavoneFC")
     repo_dict["DensityFrontiers"] = ("src.fleetctrl.repositioning.FrontiersDensityBasedRepositioning", "DensityRepositioning")
     repo_dict["AlonsoMoraRepositioning"] = ("src.fleetctrl.repositioning.AlonsoMoraRepositioning", "AlonsoMoraRepositioning")
     repo_dict["LinearHailingRebalancing"] = ("src.fleetctrl.repositioning.LinearHailingRebalancing", "LinearHailingRebalancing")
