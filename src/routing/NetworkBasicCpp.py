@@ -92,7 +92,7 @@ class NetworkBasicCpp(NetworkBasic):
                 tt_file = os.path.join(f, "edges_td_att.csv")
                 self.cpp_router.updateEdgeTravelTimes(tt_file.encode())
 
-    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None):
+    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None, departure_time=None):
         """
         This method will return the travel costs of the fastest route between two nodes.
         :param origin_position: (current_edge_origin_node_index, current_edge_destination_node_index, relative_position)

@@ -25,10 +25,16 @@ What this does NOT change, and why
   Xto1 and then asks about the same pairs with 1to1, so leaving them in handed
   the time-dependent query a static answer for exactly the pairs that matter, and
   the arm would have been its static twin wherever it was screened first.
-* **A query's departure time is the current bin.** FleetPy's routing API takes no
-  departure time, so a leg that will not start until after a pickup is still
-  priced from now. Layer 0 therefore covers the first 300 s of the route rather
-  than of the trip. The mean pickup wait in this study is under one bin.
+* **A leg is priced from when it starts, not from now.** The plan checks
+  (``VehiclePlan``), the objective's distance and a request's direct ride time
+  pass ``departure_time`` to ``return_travel_costs_1to1``, and the search reads
+  the layers from there: a leg that starts 15 min ahead, after a pickup or at a
+  reserved pickup, is priced by the horizons covering minutes 15 on, not by the
+  ones for now. Before 14.11 every stop started a fresh query at the current
+  offset, so a schedule saw the forecast only for its first leg. A query with no
+  departure time, or one at or before now, is priced exactly as before. A bin
+  whose horizons repeat its base table (the flat estimation arms) ignores the
+  departure time, so those arms price exactly as they did before this change.
 * **The base table is horizon 1.** A directory of ``tt_<t>.csv`` files loaded by
   a static network module and by this one differ only in the search, not in the
   numbers, so the time-dependent arm is one scenario parameter away from its
@@ -39,6 +45,7 @@ Authors: extends the FleetPy modules of Roman Engelhardt and Florian Dandl.
 import csv
 import glob
 import logging
+import math
 import os
 import re
 
@@ -107,6 +114,11 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
         # The layers again, on the Python side, so a given path can be priced
         # exactly as the C++ search prices it (`price_route`).
         self._py_layers = {}
+        # Results of queries that leave after now, one store per offset bucket;
+        # valid until the next table load. A bin whose layers repeat its base
+        # table is flat: a departure time cannot change any cost there.
+        self._departure_stores = {}
+        self._bin_is_flat = False
 
     def load_tt_file(self, scenario_time, ext_path=None):
         """Load the bin's base table, then every horizon exported beside it."""
@@ -117,6 +129,7 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
             # pricing this bin with the last bin's forecast.
             self.cpp_router.setLayerSeconds(-1.0)
             self._py_layers = {}
+            self._departure_stores = {}
             super().load_tt_file(scenario_time, ext_path=ext_path)
             return
 
@@ -152,6 +165,8 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
             self._last_tt_load_time = None
         self._offset_bucket = 0
         self.cpp_router.setQueryOffset(0.0)
+        self._departure_stores = {}
+        self._bin_is_flat = self._layers_repeat_base()
 
         self.td_bins_loaded += 1
         self.td_layers_loaded += loaded
@@ -163,6 +178,61 @@ class NetworkTimeDependentCpp(NetworkBasicWithStoreCpp):
             self.td_bins_without_layers += 1
             self.cpp_router.setLayerSeconds(-1.0)
             LOG.warning("no horizon files beside %s; this bin routes statically", ext_path)
+
+    def return_travel_costs_1to1(self, origin_position, destination_position,
+                                 customized_section_cost_function=None, departure_time=None):
+        """Travel costs of a leg that the vehicle starts at ``departure_time``.
+
+        The layers describe clock intervals from the bin's start, so a leg that
+        leaves later reads them from a later offset: the query runs with the C++
+        offset moved to the departure (quantised like the clock's own offset) and
+        answers from a store of its own, keyed by that offset. Without a
+        departure time, or with one at or before now, this is the plain query at
+        the current offset with the shared store, exactly as before.
+        """
+        bucket = self._departure_bucket(departure_time, customized_section_cost_function)
+        if bucket is None:
+            return super().return_travel_costs_1to1(
+                origin_position, destination_position,
+                customized_section_cost_function=customized_section_cost_function)
+        store_now, offset_now = self.travel_time_infos, self.cpp_router.getQueryOffset()
+        self.travel_time_infos = self._departure_stores.setdefault(bucket, {})
+        self.cpp_router.setQueryOffset(bucket * OFFSET_QUANTUM_SECONDS)
+        try:
+            return super().return_travel_costs_1to1(origin_position, destination_position)
+        finally:
+            self.travel_time_infos = store_now
+            self.cpp_router.setQueryOffset(offset_now)
+
+    def _departure_bucket(self, departure_time, customized_section_cost_function=None):
+        """Offset bucket a leg leaving at ``departure_time`` reads, or None for "now".
+
+        Buckets past the last layer are merged: every edge then holds its last
+        layer whatever the offset, so they price identically.
+        """
+        if (departure_time is None or customized_section_cost_function is not None
+                or self._last_tt_load_time is None or self._bin_is_flat
+                or self.cpp_router.getLayerSeconds() <= 0 or not self._py_layers):
+            return None
+        offset = float(departure_time) - self._last_tt_load_time
+        bucket = int(offset // OFFSET_QUANTUM_SECONDS) if offset > 0 else 0
+        last = int(math.ceil(max(self._py_layers) * self._layer_seconds / OFFSET_QUANTUM_SECONDS))
+        bucket = min(bucket, last)
+        if self._offset_bucket is not None and bucket <= self._offset_bucket:
+            return None
+        return bucket
+
+    def _layers_repeat_base(self, tol=1e-6):
+        """True if every loaded layer equals the base table on every edge it lists."""
+        for layer in self._py_layers.values():
+            for (u, v), tt in layer.items():
+                try:
+                    base = self.get_section_infos(u, v)[0]
+                except (KeyError, IndexError, AttributeError):
+                    return False
+                if base is None or abs(base - tt) > tol:
+                    return False
+        return True
 
     def return_travel_costs_Xto1(self, *args, **kwargs):
         """Screen candidate vehicles, without teaching the store a static answer.

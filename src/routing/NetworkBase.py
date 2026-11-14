@@ -279,7 +279,7 @@ class NetworkBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function=None):
+    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function=None, departure_time=None):
         """This method will return the travel costs of the fastest route between two nodes.
 
         :param origin_position: (origin_node_index, destination_node_index, relative_position) of current_edge
@@ -290,6 +290,9 @@ class NetworkBase(metaclass=ABCMeta):
                 which takes the args: (travel_time, travel_distance, current_dijkstra_node_index) -> cost_value
                 if None: travel_time is considered as the cost_function of a section
         :type customized_section_cost_function: func
+        :param departure_time: simulation time the vehicle starts this leg; only a time-dependent
+                network reads it, every other network prices the leg from its single table
+        :type departure_time: float
         :return: (cost_function_value, travel time, travel_distance) between the two nodes
         :rtype: tuple
         """

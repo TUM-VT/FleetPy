@@ -388,7 +388,7 @@ class NetworkTTMatrix(NetworkBase):
                 arrival_in_time_step = last_time
         return c_pos, driven_distance, arrival_in_time_step, list_passed_nodes, list_passed_node_times
 
-    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function=None):
+    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function=None, departure_time=None):
         """This method will return the travel costs of the fastest route between two nodes.
 
         :param origin_position: (origin_node_index, destination_node_index, relative_position) of current_edge
