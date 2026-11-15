@@ -400,7 +400,7 @@ class NetworkBasic(NetworkBase):
             all_travel_cost = customized_section_cost_function(all_travel_time, all_travel_distance, self.nodes[position[1]])
         return all_travel_cost * overhead_fraction, all_travel_time * overhead_fraction, all_travel_distance * overhead_fraction
 
-    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None):
+    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None, departure_time=None):
         """
         This method will return the travel costs of the fastest route between two nodes.
         :param origin_position: (current_edge_origin_node_index, current_edge_destination_node_index, relative_position)

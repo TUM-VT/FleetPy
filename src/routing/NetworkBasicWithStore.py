@@ -71,7 +71,7 @@ class NetworkBasicWithStore(NetworkBasic):
         """
         return super().update_network(simulation_time, update_state=update_state)
 
-    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None):
+    def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None, departure_time=None):
         """
         This method will return the travel costs of the fastest route between two nodes.
         :param origin_position: (current_edge_origin_node_index, current_edge_destination_node_index, relative_position)

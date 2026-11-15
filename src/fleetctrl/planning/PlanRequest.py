@@ -60,8 +60,6 @@ class PlanRequest:
         #
         self.walking_time_start = walking_time_start
         self.walking_time_end = walking_time_end
-        #
-        _, self.init_direct_tt, self.init_direct_td = routing_engine.return_travel_costs_1to1(self.o_pos, self.d_pos)
         # decision/output
         self.service_vehicle = None
         self.pu_time = None
@@ -71,6 +69,10 @@ class PlanRequest:
         if min_wait_time is None:
             min_wait_time = 0
         self.t_pu_earliest = max(self.rq_time + min_wait_time, rq.earliest_start_time)
+        # the direct ride starts at the earliest pickup, not now: a reservation booked an hour
+        # ahead is priced on the forecast for its pickup by a time-dependent network
+        _, self.init_direct_tt, self.init_direct_td = routing_engine.return_travel_costs_1to1(
+            self.o_pos, self.d_pos, departure_time=self.t_pu_earliest)
         if max_wait_time is None:
             max_wait_time = LARGE_INT
         if rq.latest_start_time is None:
@@ -224,7 +226,8 @@ class PlanRequest:
         :param min_detour_time_window: this detour time describes the minimum allowed detour
         :param max_constant_detour_time: defines absolute increase of maximum allowed travel time relative to direct route travel time
         """
-        _, self.init_direct_tt, self.init_direct_td = routing_engine.return_travel_costs_1to1(self.o_pos, self.d_pos)
+        _, self.init_direct_tt, self.init_direct_td = routing_engine.return_travel_costs_1to1(
+            self.o_pos, self.d_pos, departure_time=self.t_pu_earliest)
         max_trip_time = self.init_direct_tt + boarding_time
         if not pd.isnull(max_detour_time_factor):
             max_trip_time = (100 + max_detour_time_factor) * max_trip_time / 100

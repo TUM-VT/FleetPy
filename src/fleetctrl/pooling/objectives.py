@@ -316,16 +316,21 @@ def return_pooling_objective_function(vr_control_func_dict:dict)->Callable[[int,
                 else:
                     assignment_reward += assignment_reward_per_rq
                     
-            # distance term
+            # distance term: each leg on the path it takes when it starts, i.e. at the
+            # previous stop's planned departure (set by the plan check)
             sum_dist = 0
             last_pos = veh_obj.pos
+            last_departure = simulation_time
             for ps in veh_plan.list_plan_stops:
                 if ps.is_locked_end() and ignore_reservation_stop:
                     break
                 pos = ps.get_pos()
                 if pos != last_pos:
-                    sum_dist += routing_engine.return_travel_costs_1to1(last_pos, pos)[2]
+                    sum_dist += routing_engine.return_travel_costs_1to1(last_pos, pos, departure_time=last_departure)[2]
                     last_pos = pos
+                planned_departure = ps.get_planned_arrival_and_departure_time()[1]
+                if planned_departure is not None:
+                    last_departure = planned_departure
             # value of time term (treat waiting and in-vehicle time the same)
             sum_user_times = 0
             for rid, boarding_info_list in veh_plan.pax_info.items():
