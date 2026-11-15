@@ -39,7 +39,7 @@ from src.misc.globals import *
 DEFAULT_LOG_LEVEL = logging.INFO
 LOG = logging.getLogger(__name__)
 BUFFER_SIZE = 10
-PROGRESS_LOOP = "demand"
+PROGRESS_LOOP = "time"
 PROGRESS_LOOP_VEHICLE_STATUS = [VRL_STATES.IDLE,VRL_STATES.CHARGING,VRL_STATES.REPOSITION]
 # check for computation on LRZ cluster
 if os.environ.get('SLURM_PROCID'):
@@ -792,7 +792,7 @@ class FleetSimulationBase:
                 for sim_time in range(self.start_time, self.end_time, self.time_step):
                     self.step(sim_time)
                     self._update_realtime_plots_dict(sim_time)
-            elif PROGRESS_LOOP == "demand":
+            else:
                 # loop over time with progress bar scaling according to future demand
                 all_requests = sum([len(x) for x in self.demand.future_requests.values()])
                 with tqdm(total=100, position=tqdm_position) as pbar:
@@ -800,22 +800,18 @@ class FleetSimulationBase:
                     for sim_time in range(self.start_time, self.end_time, self.time_step):
                         remaining_requests = sum([len(x) for x in self.demand.future_requests.values()])
                         self.step(sim_time)
-                        cur_perc = int(100 * (1 - remaining_requests/all_requests))
-                        pbar.update(cur_perc - pbar.n)
+                        if PROGRESS_LOOP == "demand":
+                            cur_perc = int(100 * (1 - remaining_requests/all_requests))
+                            upd = cur_perc - pbar.n
+                        elif PROGRESS_LOOP == "time":
+                            upd = round(100 * (sim_time - self.start_time) / (self.end_time - self.start_time), 1)
+                        pbar.update(upd)
                         vehicle_counts = self.count_fleet_status()
                         info_dict = {"simulation_time": sim_time,
                                      "driving": sum([vehicle_counts[x] for x in G_DRIVING_STATUS])}
                         info_dict.update({x.display_name: vehicle_counts[x] for x in PROGRESS_LOOP_VEHICLE_STATUS})
                         pbar.set_postfix(info_dict)
                         self._update_realtime_plots_dict(sim_time)
-            else:
-                # loop over time with progress bar scaling with time
-                for sim_time in tqdm(range(self.start_time, self.end_time, self.time_step), position=tqdm_position,
-                                     desc=self.scenario_parameters.get(G_SCENARIO_NAME)):
-                    self.step(sim_time)
-                    self._update_realtime_plots_dict(sim_time)
-
-            # record stats
             self.record_stats()
 
             # save final state, record remaining travelers and vehicle tasks
