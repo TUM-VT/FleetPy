@@ -669,7 +669,7 @@ class FleetSimulationBase:
                     write_mode = "w"
                     write_header = True
                 tmp_df = pd.DataFrame(self.op_output[op_id])
-                tmp_df.to_csv(op_output_f, index=False, mode=write_mode, header=write_header)
+                tmp_df.to_csv(op_output_f, index=False, mode=write_mode, header=write_header, float_format="%.2f")
                 self.op_output[op_id].clear()
                 # LOG.info(f"\t ... just wrote {current_buffer_size} entries from buffer to stats of operator {op_id}.")
                 LOG.debug(f"\t ... just wrote {current_buffer_size} entries from buffer to stats of operator {op_id}.")
