@@ -801,11 +801,11 @@ class FleetSimulationBase:
                         remaining_requests = sum([len(x) for x in self.demand.future_requests.values()])
                         self.step(sim_time)
                         if PROGRESS_LOOP == "demand":
-                            cur_perc = int(100 * (1 - remaining_requests/all_requests))
-                            upd = cur_perc - pbar.n
+                            cur_perc = 100 * (1 - remaining_requests/all_requests)
                         elif PROGRESS_LOOP == "time":
-                            upd = round(100 * (sim_time - self.start_time) / (self.end_time - self.start_time), 1)
-                        pbar.update(upd)
+                            cur_perc = 100 * (sim_time + self.time_step - self.start_time) / (self.end_time - self.start_time)
+                        cur_perc = min(100, round(cur_perc, 1))
+                        pbar.update(cur_perc - pbar.n)
                         vehicle_counts = self.count_fleet_status()
                         info_dict = {"simulation_time": sim_time,
                                      "driving": sum([vehicle_counts[x] for x in G_DRIVING_STATUS])}
