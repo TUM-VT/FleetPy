@@ -191,7 +191,7 @@ class Demand:
                 write_mode, write_header = "w", True
             out_df = pd.DataFrame(self.user_stat_buffer)
             out_df.set_index(G_RQ_ID, inplace=True)
-            out_df.to_csv(self.output_f, mode=write_mode, header=write_header)
+            out_df.to_csv(self.output_f, mode=write_mode, header=write_header, float_format="%.2f")
             self.user_stat_buffer = []
             # LOG.info(f"\t ... just wrote {current_buffer_size} entries from buffer to customer output file.")
             LOG.debug(f"\t ... just wrote {current_buffer_size} entries from buffer to customer output file.")
