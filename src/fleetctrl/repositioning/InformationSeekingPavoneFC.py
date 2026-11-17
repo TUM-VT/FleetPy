@@ -18,10 +18,17 @@ INPUT_PARAMETERS_InformationSeekingPavoneFC = {
     against empty driving through one weight, and the vehicle drives that route.""",
     "inherit": "PavoneHailingRepositioningFC",
     "input_parameters_mandatory": ["op_repo_info_table", "op_repo_info_weight"],
-    "input_parameters_optional": [],
+    "input_parameters_optional": ["op_repo_info_demand"],
     "mandatory_modules": [],
     "optional_modules": []
 }
+
+
+def _flag(value, default):
+    """A 0/1 scenario column; missing or empty gives the default."""
+    if value is None or (isinstance(value, float) and value != value) or str(value).strip() == "":
+        return default
+    return bool(int(float(value)))
 
 
 class Candidate(NamedTuple):
@@ -56,6 +63,8 @@ class InformationSeekingPavoneFC(PavoneHailingRepositioningFC):
     Parameters (scenario columns):
         op_repo_info_table: value map, path relative to the FleetPy root
         op_repo_info_weight: seconds of empty driving per vehicle-second of misestimated travel time
+        op_repo_info_demand: 1 (default) keeps PavoneFC's demand rule; 0 drops it, so idle vehicles
+            move only for information (data collection only, the 2 x 2 design of vaas docs/19)
 
     Writes, per step, 4-<op_id>_information_repositioning.csv (LOG_COLUMNS: the unmet targets, the
     candidate routes, the program's size and result, the trips routed to an end edge, and the
@@ -70,6 +79,7 @@ class InformationSeekingPavoneFC(PavoneHailingRepositioningFC):
                    "planned_s", "candidate_s", "travel_s", "solve_s", "ok"]
     TRIP_COLUMNS = ["sim_time", "vid", "o_zone", "d_zone", "from_node", "to_node", "as_credited",
                     "targets", "value", "route"]
+    info_demand = True                # PavoneFC's demand rule kept unless op_repo_info_demand = 0
 
     def __init__(self, fleetctrl, operator_attributes, dir_names, solver="Gurobi"):
         super().__init__(fleetctrl, operator_attributes, dir_names, solver=solver)
@@ -78,6 +88,9 @@ class InformationSeekingPavoneFC(PavoneHailingRepositioningFC):
         table = os.path.join(dir_names[G_DIR_MAIN], operator_attributes["op_repo_info_table"])
         self.info_table = iv.InformationTable.from_csv(table)
         self.info_weight = float(operator_attributes["op_repo_info_weight"])
+        self.info_demand = _flag(operator_attributes.get("op_repo_info_demand"), default=True)
+        if not self.info_demand and self.info_weight <= 0:
+            raise IOError("op_repo_info_demand = 0 needs op_repo_info_weight > 0")
         op = self.fleetctrl.op_id
         self.info_log = os.path.join(self.output_dir, f"4-{op}_information_repositioning.csv")
         self.info_trip_log = os.path.join(self.output_dir, f"4-{op}_information_trips.csv")
@@ -139,7 +152,7 @@ class InformationSeekingPavoneFC(PavoneHailingRepositioningFC):
             c3 = time.perf_counter()
             res = iv.solve(list_zones, travel, v_i_e_dict, v_i_d_dict, number_idle_vehicles,
                            {od: c.targets for od, c in self._candidates.items()}, self._unmet,
-                           self.info_weight, threads=self.fleetctrl.n_cpu)
+                           self.info_weight, threads=self.fleetctrl.n_cpu, demand=self.info_demand)
             c4 = time.perf_counter()
             if not res["ok"]:
                 LOG.warning(f"Operator {self.fleetctrl.op_id}: no optimal information-seeking repositioning"

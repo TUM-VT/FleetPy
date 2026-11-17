@@ -164,7 +164,7 @@ def target_groups(credits, value):
 
 
 def solve(zones, travel_time, excess, desired, idle, credits, value, weight, threads=1,
-          size_limit=GUROBI_SIZE_LIMIT):
+          size_limit=GUROBI_SIZE_LIMIT, demand=True):
     """Pavone's repositioning program (PavoneHailingRepositioningFC) with the information a trip's
     route collects:
 
@@ -183,6 +183,8 @@ def solve(zones, travel_time, excess, desired, idle, credits, value, weight, thr
     :param credits: {(o, d): [target]} the targets the candidate trip on (o, d) collects
     :param value: {target: value}
     :param weight: seconds of empty driving per vehicle-second of misestimated travel time
+    :param demand: False drops the desired-excess constraint: data collection only, the 2 x 2
+        design's corner without demand anticipation (vaas docs/19, 17 Nov)
     :return: {"ok", "trips": [(o, d)] one per vehicle, "drive_s": sum t_od n_od,
               "credited_targets", "credited_value": the targets and value the trips collect,
               "groups", "groups_dropped", "value_dropped": the groups the licence left out}
@@ -191,7 +193,7 @@ def solve(zones, travel_time, excess, desired, idle, credits, value, weight, thr
 
     pairs = [(o, d) for o in zones if idle.get(o, 0) > 0 for d in zones if o != d]
     groups = target_groups(credits, value) if weight > 0 else []
-    rows = len(zones) + sum(1 for z in zones if idle.get(z, 0) > 0)
+    rows = (len(zones) if demand else 0) + sum(1 for z in zones if idle.get(z, 0) > 0)
     room = max(0, min(size_limit - len(pairs), size_limit - rows))
     kept, dropped = groups[:room], groups[room:]
     out = {"ok": False, "trips": [], "drive_s": 0.0, "credited_targets": 0, "credited_value": 0.0,
@@ -208,7 +210,8 @@ def solve(zones, travel_time, excess, desired, idle, credits, value, weight, thr
         for z in zones:
             into = gp.quicksum(n[(o, z)] for o in zones if (o, z) in n)
             out_z = [n[(z, d)] for d in zones if (z, d) in n]
-            m.addConstr(excess.get(z, 0) + into - gp.quicksum(out_z) >= desired.get(z, 0))
+            if demand:
+                m.addConstr(excess.get(z, 0) + into - gp.quicksum(out_z) >= desired.get(z, 0))
             if out_z:
                 m.addConstr(gp.quicksum(out_z) <= idle.get(z, 0))
         for var, (ods, _, _) in zip(y, kept):
