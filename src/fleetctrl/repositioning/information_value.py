@@ -1,5 +1,6 @@
 """Information value of a repositioning trip's route, and the repositioning program that trades it
-against empty driving (vaas docs/19, stage 5).
+against empty driving (vaas docs/19, stage 5). Detour mode (17 Nov): PavoneFC's program decides
+where vehicles go; `via_edges` and `solve_detours` decide only a detour on the way.
 
 No FleetPy imports (numpy and pandas only; gurobipy is imported by `solve`), so the vaas tests
 load this file directly. `InformationSeekingPavoneFC` is the FleetPy glue.
@@ -227,3 +228,113 @@ def solve(zones, travel_time, excess, desired, idle, credits, value, weight, thr
                    credited_targets=int(sum(g * k for g, (_, _, k) in zip(got, kept))),
                    credited_value=sum(g * v for g, (_, v, _) in zip(got, kept)))
     return out
+
+
+# --- detour mode: PavoneFC decides where a vehicle goes, information only a detour on the way ---
+
+#: A detour longer than the repositioning step runs into the next step's plan.
+DETOUR_CAP_S = 300
+#: Via-edges kept per vehicle, best first.
+DETOUR_OPTIONS = 5
+
+
+def by_edge(unmet_targets):
+    """{edge: {interval_end: value}} of the unmet targets."""
+    out = defaultdict(dict)
+    for (edge, end), v in unmet_targets.items():
+        out[edge][end] = v
+    return dict(out)
+
+
+def via_edges(t_from, t_to, section_tt, t_direct, unmet_by_edge, start, weight, exclude=(),
+              cap_s=DETOUR_CAP_S, k=DETOUR_OPTIONS):
+    """The k best via-edges for a vehicle sent to a destination (detour mode).
+
+    The detour of edge (a, b) is T(vehicle -> a) + tt(a, b) + T(b -> destination) - T(vehicle ->
+    destination), at least 0. The vehicle leaves the edge at start + T(vehicle -> a) + tt(a, b), and
+    the edge is worth its unmet target in that interval. An edge is an option if its detour is at
+    most cap_s and that target is unmet and not in `exclude` (the targets the direct route collects
+    anyway). The score, weight x value - detour, ranks the options; the program judges each by the
+    full route's credit.
+
+    :param t_from: {node: T(vehicle -> node)} (one forward search)
+    :param t_to: {node: T(node -> destination)} (one backward search)
+    :param section_tt: (from_node, to_node) -> travel time (s)
+    :param t_direct: T(vehicle -> destination)
+    :param unmet_by_edge: by_edge(unmet targets)
+    :return: [(edge, detour_s, value, score)], best score first (ties by edge), at most k
+    """
+    out = []
+    for edge, values in unmet_by_edge.items():
+        a, b = edge
+        if a not in t_from or b not in t_to:
+            continue
+        leave = t_from[a] + section_tt(a, b)
+        detour = leave + t_to[b] - t_direct
+        if detour > cap_s:
+            continue
+        end = interval_end(start + leave)
+        v = values.get(end, 0.0)
+        if v <= 0 or (edge, end) in exclude:
+            continue
+        detour = max(detour, 0.0)
+        out.append((edge, detour, v, weight * v - detour))
+    out.sort(key=lambda x: (-x[3], x[0]))
+    return out[:k]
+
+
+def solve_detours(detours, credits, value, weight, threads=1, size_limit=GUROBI_SIZE_LIMIT):
+    """The detour program (detour mode): every vehicle PavoneFC sent takes one of its options, the
+    direct route to its PavoneFC destination (option 0, detour 0) or a route via an unmet target
+    edge:
+
+        max  weight * sum_g V_g y_g  -  sum_(v,k) detour_vk x_vk
+        s.t. sum_k x_vk = 1                     one option per vehicle
+             y_g <= sum_((v,k) in S_g) x_vk     a target is collected if a chosen option passes it
+             0 <= y_g <= 1, x_vk binary         and pays once however many do
+
+    g is a group of targets passed by the same options S_g (target_groups), V_g their value. If
+    the licence's size limit leaves no room for every group, the least valuable are dropped.
+
+    :param detours: {(vehicle, option): detour_s}; option 0 is the vehicle's direct route
+    :param credits: {(vehicle, option): [target]} the targets the option's route collects
+    :param value: {target: value}
+    :param weight: seconds of detour per vehicle-second of misestimated travel time
+    :return: {"ok", "choice": {vehicle: option}, "detoured": vehicles off option 0, "detour_s",
+              "credited_targets", "credited_value": the targets and value the chosen routes
+              collect, each once (dropped groups included), "groups", "groups_dropped",
+              "value_dropped"}
+    """
+    import gurobipy as gp
+
+    options = sorted(detours)
+    vehicles = sorted({v for v, _ in options})
+    groups = target_groups(credits, value)
+    room = max(0, min(size_limit - len(options), size_limit - len(vehicles)))
+    kept, dropped = groups[:room], groups[room:]
+    choice = {v: 0 for v in vehicles}
+    ok = False
+    with gp.Env(empty=True) as env:
+        env.setParam("OutputFlag", 0)
+        env.start()
+        m = gp.Model("information_detours", env=env)
+        m.setParam(gp.GRB.Param.Threads, threads)
+        x = {o: m.addVar(vtype=gp.GRB.BINARY, obj=detours[o], name=f"x[{o[0]}-{o[1]}]") for o in options}
+        y = [m.addVar(lb=0, ub=1, obj=-weight * v, name=f"y[{i}]") for i, (_, v, _) in enumerate(kept)]
+        for veh in vehicles:
+            m.addConstr(gp.quicksum(x[o] for o in options if o[0] == veh) == 1)
+        for var, (opts, _, _) in zip(y, kept):
+            m.addConstr(var <= gp.quicksum(x[o] for o in opts))
+        m.ModelSense = gp.GRB.MINIMIZE
+        m.optimize()
+        if m.Status == gp.GRB.Status.OPTIMAL:
+            ok = True
+            choice = {o[0]: o[1] for o in options if x[o].X > 0.5}
+    got = set()
+    for veh, k in choice.items():
+        got.update(credits.get((veh, k), []))
+    return {"ok": ok, "choice": choice, "detoured": sum(1 for k in choice.values() if k != 0),
+            "detour_s": sum(detours[(veh, k)] for veh, k in choice.items()),
+            "credited_targets": len(got), "credited_value": float(sum(value[t] for t in got)),
+            "groups": len(groups), "groups_dropped": len(dropped),
+            "value_dropped": float(sum(v for _, v, _ in dropped))}
