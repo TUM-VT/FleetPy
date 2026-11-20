@@ -127,8 +127,8 @@ def simple_insert(routing_engine : NetworkBase, sim_time : int, veh_obj : Simula
 
     # add d_stop for all tmp_plans
     d_stop_pos, prq_t_do_latest, prq_max_trip_time = new_prq_obj.get_d_stop_info()  # TODO # the checks with t_do_latest and max_trip_time can be confusing!
-    skip_next = -1
     for (o_index, same_stop), o_stop in poss_o_insertions.items():
+        skip_next = -1
         d_feasible = True  # once latest arrival is reached, no insertion at later index is feasible for current pick-up
         # always start checking plans after pick-up of new_prq_obj -> everything before is feasible and stay the same
         if same_stop:
@@ -320,7 +320,7 @@ def single_insertion(veh_obj_list : List[SimulationVehicle], current_vid_to_vehp
     veh_obj_dict = {}
     for veh_obj in veh_obj_list:
         # do not consider inactive vehicles
-        if veh_obj.status == 5:
+        if veh_obj.status == VRL_STATES.OUT_OF_SERVICE:
             continue
         vid = veh_obj.vid
         veh_obj_dict[vid] = veh_obj
@@ -346,7 +346,7 @@ def single_insertion(veh_obj_list : List[SimulationVehicle], current_vid_to_vehp
             for vid in veh_pos_dict[vid_pos]:
                 rv_vids.append(vid)
     else:
-        rv_vids = [veh_obj.vid for veh_obj in veh_obj_list if veh_obj.status != 5]
+        rv_vids = [veh_obj.vid for veh_obj in veh_obj_list if veh_obj.status != VRL_STATES.OUT_OF_SERVICE]
 
     # TODO # discuss: 0 only works for objective functions with assignment rewards, not for priority (match if feasible)
     current_best_obj_delta = 0
@@ -574,7 +574,7 @@ def reservation_insertion_with_heuristics(
     rv_con = set([])
     sorted_insertion_return_list = sorted(insertion_return_list, key=lambda x: x[2])
     if max_rq_plans is not None:
-        return_rv_tuples = sorted_insertion_return_list[:1]
+        return_rv_tuples = sorted_insertion_return_list[:max_rq_plans]
     elif max_rv_con is not None:
         for rv_tuple in sorted_insertion_return_list:
             vid = rv_tuple[0]

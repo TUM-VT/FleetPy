@@ -4,7 +4,7 @@ LOG = logging.getLogger(__name__)
 WARNING_FOR_SEARCH_RADIUS = 900
 
 
-def veh_search_for_immediate_request(sim_time, prq, fleetctrl, list_excluded_vids=[]):
+def veh_search_for_immediate_request(sim_time, prq, fleetctrl, list_excluded_vids=None):
     """This function can be used to find pooling vehicles for an immediate service of a request.
 
     :param sim_time: current simulation time
@@ -14,11 +14,12 @@ def veh_search_for_immediate_request(sim_time, prq, fleetctrl, list_excluded_vid
     :return: list of vehicle objects considered for assignment, routing_results_dict ( (o_pos, d_pos) -> (cfv, tt, dis))
     :rtype: tuple of list of SimulationVehicle, dict
     """
+    excluded_vids = set(list_excluded_vids) if list_excluded_vids else set()
     if sim_time != fleetctrl.pos_veh_dict_time or not fleetctrl.pos_veh_dict:
         veh_locations_to_vid = {}
         for vid, veh_obj in enumerate(fleetctrl.sim_vehicles):
             # do not consider inactive vehicles
-            if veh_obj.status == 5 or vid in list_excluded_vids:
+            if veh_obj.status == VRL_STATES.OUT_OF_SERVICE:
                 continue
             try:
                 veh_locations_to_vid[veh_obj.pos].append(vid)
@@ -32,13 +33,20 @@ def veh_search_for_immediate_request(sim_time, prq, fleetctrl, list_excluded_vid
     sr = prq_t_pu_latest - sim_time
     max_routes = fleetctrl.rv_heuristics.get(G_RH_I_NWS)
 
+    if excluded_vids:
+        query_positions = [pos for pos, vids in fleetctrl.pos_veh_dict.items() if any(v not in excluded_vids for v in vids)]
+    else:
+        query_positions = fleetctrl.pos_veh_dict.keys()
+
     # backwards Dijkstra
-    rv_routing = fleetctrl.routing_engine.return_travel_costs_Xto1(fleetctrl.pos_veh_dict.keys(), prq_o_stop_pos,
+    rv_routing = fleetctrl.routing_engine.return_travel_costs_Xto1(query_positions, prq_o_stop_pos,
                                                                    max_routes=max_routes, max_cost_value=sr)
     rv_vehicles = []
     rv_results_dict = {}
     for vid_pos, cfv,tt,dis in rv_routing:
         for vid in fleetctrl.pos_veh_dict[vid_pos]:
+            if vid in excluded_vids:
+                continue
             rv_vehicles.append(fleetctrl.sim_vehicles[vid])
             rv_results_dict[(prq_o_stop_pos, vid_pos)] = (cfv, tt, dis)
     return rv_vehicles, rv_results_dict
@@ -78,16 +86,16 @@ def veh_search_for_reservation_request(sim_time, prq, fleetctrl, list_excluded_v
         search_method = "P2"
         max_routes = None
     else:
-        # use Dijkstra search method to find positions near prq origin; number max routes is necessary input then!
+        # use Dijkstra search method to find positions near prq origin
         search_method = "P1"
-        max_routes = fleetctrl.rv_heuristics[G_RH_R_NWS]
+        max_routes = fleetctrl.rv_heuristics.get(G_RH_R_NWS)
     max_ps = fleetctrl.rv_heuristics.get(G_RH_R_MPS)
 
     # 1) vehicle availability
     pos_to_vid_time = {}  # pos -> {}: vid -> (delta_t, later_stops_flag)
     for vid, veh_obj in enumerate(fleetctrl.sim_vehicles):
         # do not consider inactive vehicles
-        if veh_obj.status == 5 or vid in list_excluded_vid:
+        if veh_obj.status == VRL_STATES.OUT_OF_SERVICE or vid in list_excluded_vid:
             continue
         # only use currently assigned vehicle plan, create a flag whether the stop is the latest considered stop
         if veh_plans is None:

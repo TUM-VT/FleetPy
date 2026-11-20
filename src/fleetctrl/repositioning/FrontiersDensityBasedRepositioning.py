@@ -49,7 +49,7 @@ class DensityRepositioning(RepositioningBase):
         :param solver: solver for optimization problems
         """
         super().__init__(fleetctrl, operator_attributes, dir_names)
-        self.distance_cost = np.mean([veh_obj.distance_cost for veh_obj in fleetctrl.sim_vehicles])/1000
+        self.distance_cost = np.mean([veh_obj.distance_cost for veh_obj in fleetctrl.sim_vehicles])
         self.zone_corr_matrix = np.array(self._return_squared_zone_imbalance_np_array())
         self.gamma = operator_attributes.get(G_OP_REPO_GAMMA, 1.0)
         self.method = operator_attributes.get(G_OP_REPO_FRONTIERS_M, "2-RFRR")
@@ -103,7 +103,7 @@ class DensityRepositioning(RepositioningBase):
         # output_dir = self.fleetctrl.dir_names[G_DIR_OUTPUT]
         # output_dir = None
         if self.solver_key == "Gurobi":
-            idle_count = [number_idle_vehicles.get(zone, 0) for zone in list_zones]
+            idle_count = np.array([number_idle_vehicles.get(zone, 0) for zone in list_zones])
             alpha_od = self.reposition_g(np.array(orig_zone_imbalances), idle_count)
         else:
             raise NotImplementedError(f"Optimization problem in {self.__class__.__name__} only implemented for Gurobi!")
@@ -153,17 +153,17 @@ class DensityRepositioning(RepositioningBase):
     def _get_random_reachable_node(self, point, zone_id):
         """ Get random reachable node from provided point"""
 
-        zone_nodes = self.zone_system.get_all_nodes_in_zone(zone_id)
+        zone_nodes = list(self.zone_system.get_all_nodes_in_zone(zone_id))
         random.shuffle(zone_nodes)
         travel_time = np.inf
-        try:
-            while np.isinf(travel_time) and len(zone_nodes) > 0:
-                node = zone_nodes.pop()
-                travel_time = self.routing_engine.return_travel_costs_1to1(point, (node, None, None))[0]
-            return node
-        except IndexError:
+        node = None
+        while np.isinf(travel_time) and len(zone_nodes) > 0:
+            node = zone_nodes.pop()
+            travel_time = self.routing_engine.return_travel_costs_1to1(point, (node, None, None))[0]
+        if node is None or np.isinf(travel_time):
             raise IndexError(f"No reachable node found in destination zone {zone_id} while repositioning "
                              f"from vehicle position{point}")
+        return node
 
     def reposition_g(self, omegas, idle_vehicles):
         """ Calculates the the number of vehicles to be repositioned between zones using kernel functions
