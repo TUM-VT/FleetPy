@@ -9,7 +9,7 @@ LOG = logging.getLogger(__name__)
 class AbstractActor(ABC):
 
     @abstractmethod
-    def compute_action(self, observation, process_id):
+    def compute_action(self, observation, process_id, **kwargs):
         """ This method computes the action required by specific FleetPy actor.
 
         Note for FleetPy Developers: This method is used to manually calculate the FleetPy action. If the FleetPy actor
@@ -35,15 +35,15 @@ class AbstractActor(ABC):
                                 f"{type(action)} action: {action}.")
 
     def _compute_action_via_master_process(self, observation, hook_id, process_id=None, in_queue: Queue = None,
-                                           out_queue: Queue = None,):
+                                           out_queue: Queue = None, **kwargs):
         if out_queue is not None:
             out_queue.put((process_id, hook_id, type(self), observation))
             action = in_queue.get()
             self.check_action_format(action)
         else:
-            action = self.compute_action(observation, process_id)
+            action = self.compute_action(observation, process_id, **kwargs)
         return action
 
     def _act(self, observation, fleetpy_module, hook_id, process_id: int = None, in_queue: Queue = None,
-             out_queue: Queue = None):
+             out_queue: Queue = None, **kwargs):
         self.compute_action(observation, process_id)

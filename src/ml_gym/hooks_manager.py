@@ -114,7 +114,7 @@ class HookManager:
         if event in self._hooks:
             print(f"\ntrigger {event}")
             for h in self._hooks[event]:
-                h.on_event(event, fleetpy_module, self._process_id, in_queue, out_queue)
+                h.on_event(event, fleetpy_module, self._process_id, in_queue, out_queue, **kwargs)
 
     def reply_to_slave_processes(self, block=False, timeout_per_process = None):
         """ Uses the actor object of the master process to the reply to actors of all slave processes """
@@ -163,17 +163,17 @@ class Hook:
         raise AssertionError(f"The actor {actor_type} for hook id {self._hook_id} was not found. Make sure you are "
                              f"using multiprocessing, otherwise this method should not have been called.")
     
-    def on_event(self, event, fleetpy_module, process_id = None, in_queue: Queue = None, out_queue: Queue=None):
+    def on_event(self, event, fleetpy_module, process_id = None, in_queue: Queue = None, out_queue: Queue=None, **kwargs):
         if event != self._event:
             return
 
         observation = {}
         for observer in self._observers:
             print(f"\nHook: trigger observer - {observer}")
-            observation.update(observer.observe(fleetpy_module))
+            observation.update(observer.observe(fleetpy_module, **kwargs))
 
         for actor in self._actors:
-            actor._act(observation, fleetpy_module, self._hook_id, process_id, in_queue, out_queue)
+            actor._act(observation, fleetpy_module, self._hook_id, process_id, in_queue, out_queue, **kwargs)
     
     def add_observer(self, observer: AbstractObserver):
         if observer not in self._observers:

@@ -4,14 +4,14 @@ from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 
 class SimTimeObserver(AbstractObserver):
 
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         assert isinstance(fleetpy_module, RepositioningBase), "SimTimeObserver only works with RepositioningBase"
         return {"sim_time": fleetpy_module.sim_time}
 
 
 class DemandForecastObserver(AbstractObserver):
 
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         assert isinstance(fleetpy_module, RepositioningBase), "DemandForecastObserver only works with RepositioningBase"
         sim_time = fleetpy_module.sim_time
         list_zones = fleetpy_module.zone_system.get_all_zones()
@@ -26,7 +26,7 @@ class DemandForecastObserver(AbstractObserver):
 
 class ZoneBasedVehicleStatesObserver(AbstractObserver):
 
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         assert isinstance(fleetpy_module, RepositioningBase), "DemandForecastObserver only works with RepositioningBase"
         sim_time = fleetpy_module.sim_time
         list_zones = fleetpy_module.zone_system.get_all_zones()
