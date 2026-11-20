@@ -128,7 +128,7 @@ def avg_in_vehicle_distance(op_df):
                         except KeyError:
                             pass
         dis_dict = {}
-    return sum_dis/N
+    return sum_dis / N if N > 0 else np.nan
 
 def shared_rides(op_df):
     N = 0
@@ -158,7 +158,7 @@ def shared_rides(op_df):
                             except KeyError:
                                 pass
         rid_shared_dict = {}
-    return 100.0*N_shared/N
+    return 100.0 * N_shared / N if N > 0 else np.nan
 
 
 def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end_time = None, print_comments=False, dir_names_in = {}):
@@ -227,7 +227,12 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
     for op_id, op_users in user_stats.groupby(G_RQ_OP_ID):
         op_name = "?"
         
-        op_reservation_horizon = list_operator_attributes[int(op_id)].get(G_RA_OPT_HOR,0)
+        if 0 <= int(op_id) < len(list_operator_attributes):
+            op_reservation_horizon = list_operator_attributes[int(op_id)].get(G_RA_OPT_HOR, 0)
+        elif len(list_operator_attributes) > 0:
+            op_reservation_horizon = list_operator_attributes[0].get(G_RA_OPT_HOR, 0)
+        else:
+            op_reservation_horizon = 0
 
         op_number_users = op_users.shape[0]
         op_number_pax = op_users[G_RQ_PAX].sum()

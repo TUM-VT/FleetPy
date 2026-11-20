@@ -1,6 +1,7 @@
 # -------------------------------------------------------------------------------------------------------------------- #
 # standard distribution imports
 # -----------------------------
+import os
 import logging
 import random
 import pandas as pd
@@ -222,8 +223,8 @@ class MATSimSimulationClass(FleetSimulationBase):
             self._user_leaves_system(rid, sim_time)
         else:
             amode_confirmed_rids = self.broker.inform_user_booking(rid, rq_obj, sim_time, chosen_operator)
-            for rid, rq_obj in amode_confirmed_rids:
-                self.demand.waiting_rq[rid] = rq_obj
+            for conf_rid, conf_rq_obj in amode_confirmed_rids:
+                self.demand.waiting_rq[conf_rid] = conf_rq_obj
             try:
                 del self.demand.undecided_rq[rid]
             except KeyError:

@@ -993,7 +993,6 @@ class ExternallyControlledVehicle(ExternallyMovingSimulationVehicle):
                 
             if len(self.assigned_route) == 0 and (len(current_pick_up) != 0 or len(current_drop_off) != 0):
                 LOG.error(f"current boarding process but not route assigned! pu {current_pick_up} | do {current_drop_off}")
-                LOG.error(f"current leg: {self.assigned_route[0]}")
                 LOG.error(f"{self}")
                 raise_error_msg()
         

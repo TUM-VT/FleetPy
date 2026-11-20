@@ -96,8 +96,8 @@ def run_scenarios(constant_config_file, scenario_file, n_parallel_sim=1, n_cpu_p
                 run_single_simulation(scenario_cfg)
     else:
         if n_cpu_per_sim == 1:
-            mp_pool = mp.Pool(n_parallel_sim)
-            mp_pool.map(run_single_simulation, scenario_cfgs)
+            with mp.Pool(n_parallel_sim) as mp_pool:
+                mp_pool.map(run_single_simulation, scenario_cfgs)
         else:
             n_scenarios = len(scenario_cfgs)
             rest_scenarios = n_scenarios
@@ -141,8 +141,17 @@ if __name__ == "__main__":
     """
     mp.freeze_support()
 
-    if len(sys.argv) > 2:
-        run_scenarios(*sys.argv)
+    args = sys.argv[1:]
+    if len(args) >= 2:
+        parsed_args = list(args[:2])
+        for idx, val in enumerate(args[2:]):
+            if idx in (0, 1, 2):
+                parsed_args.append(int(val))
+            elif idx in (4, 5):
+                parsed_args.append(val.lower() in ("true", "1", "yes"))
+            else:
+                parsed_args.append(val)
+        run_scenarios(*parsed_args)
     else:
         print("ERROR! Not enough input arguments! Please provide at least the constant and scenario config file as input argument!")
         print("Usage: python run_scenarios.py <constant_config_file> <scenario_file> [n_parallel_sim] [n_cpu_per_sim] [evaluate] [log_level]")

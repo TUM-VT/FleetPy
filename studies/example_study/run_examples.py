@@ -16,8 +16,19 @@ if __name__ == "__main__":
     The required parameters are stated in the documentation of the run_scenarios function."""
     mp.freeze_support()
 
-    if len(sys.argv) > 1:
-        run_scenarios(*sys.argv)
+    args = sys.argv[1:]
+    if len(args) >= 2:
+        parsed_args = list(args[:2])
+        for idx, val in enumerate(args[2:]):
+            if idx in (0, 1, 2):
+                parsed_args.append(int(val))
+            elif idx in (4, 5):
+                parsed_args.append(val.lower() in ("true", "1", "yes"))
+            else:
+                parsed_args.append(val)
+        run_scenarios(*parsed_args)
+    elif len(args) == 1:
+        print("ERROR! Please provide at least <constant_config_file> and <scenario_file>!")
     else:
         import time
 

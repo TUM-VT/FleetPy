@@ -1,5 +1,4 @@
 import os
-from click import option
 import pandas as pd
 
 from src.misc.globals import *
@@ -114,11 +113,11 @@ class ScenarioCreator():
     def __init__(self):
         self.possible_modules = list(MODULE_PARAM_TO_DICT_LOAD.keys())
         
-        self._current_mandatory_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_mandatory"] # list of mandatory parameters that have not been selected
-        self._current_optional_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_optional"]   # list of optional parameters that have not been selected
+        self._current_mandatory_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_mandatory"].copy() # list of mandatory parameters that have not been selected
+        self._current_optional_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_optional"].copy()   # list of optional parameters that have not been selected
         
-        self._current_mandatory_modules = INPUT_PARAMETERS_FleetSimulationBase["mandatory_modules"] # list of mandatory modules that have not been selected
-        self._current_optional_modules = INPUT_PARAMETERS_FleetSimulationBase["optional_modules"]   # list of optional modules that have not been selected
+        self._current_mandatory_modules = INPUT_PARAMETERS_FleetSimulationBase["mandatory_modules"].copy() # list of mandatory modules that have not been selected
+        self._current_optional_modules = INPUT_PARAMETERS_FleetSimulationBase["optional_modules"].copy()   # list of optional modules that have not been selected
         
         self._currently_selected_modules = {}   # module_name -> currently selected value
         self._currently_selected_parameters = {}    # parameter name -> currently selected value
@@ -134,18 +133,18 @@ class ScenarioCreator():
                 continue
             self.parameter_dict[parameter_name] = Parameter(parameter_name, doc, parameter_types[parameter_name],
                                                             default_value=parameter_defaults.get(parameter_name))
-        study_name_str = "this parameter specifies the name of the simulation study. all simulation scenario configurations and simulation results \
-            are stored in the folder FleetPy\studies\{study_name}. If this folder does not exist, it will be create automatically!"
+        study_name_str = ("this parameter specifies the name of the simulation study. all simulation scenario configurations and simulation results "
+                          "are stored in the folder FleetPy/studies/{study_name}. If this folder does not exist, it will be create automatically!")
         self.parameter_dict["study_name"] = Parameter("study_name", study_name_str, "str")
         self._current_mandatory_params.append("study_name")
             
     def _reset_module_init(self):
-        self._current_mandatory_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_mandatory"] # list of mandatory parameters that have not been selected
-        self._current_optional_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_optional"]   # list of optional parameters that have not been selected
+        self._current_mandatory_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_mandatory"].copy() # list of mandatory parameters that have not been selected
+        self._current_optional_params = INPUT_PARAMETERS_FleetSimulationBase["input_parameters_optional"].copy()   # list of optional parameters that have not been selected
         self._current_mandatory_params.append("study_name")
         
-        self._current_mandatory_modules = INPUT_PARAMETERS_FleetSimulationBase["mandatory_modules"] # list of mandatory modules that have not been selected
-        self._current_optional_modules = INPUT_PARAMETERS_FleetSimulationBase["optional_modules"]   # list of optional modules that have not been selected
+        self._current_mandatory_modules = INPUT_PARAMETERS_FleetSimulationBase["mandatory_modules"].copy() # list of mandatory modules that have not been selected
+        self._current_optional_modules = INPUT_PARAMETERS_FleetSimulationBase["optional_modules"].copy()   # list of optional modules that have not been selected
 
         for mod, mod_val in self._currently_selected_modules.items():
             self._load_module_params(mod, mod_val)
