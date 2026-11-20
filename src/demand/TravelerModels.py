@@ -445,6 +445,88 @@ class PriceSensitiveIndividualConstraintRequest(IndividualConstraintRequest):
                 LOG.debug(f" -> accept")
                 self.fare = self.offer[op].get(G_OFFER_FARE, 0)
                 return op
+
+# -------------------------------------------------------------------------------------------------------------------- #
+
+INPUT_PARAMETERS_LinearSensitivePriceDeviationFromNominal = {
+    "doc": """This request is linearly sensitive to a fixed deviation from the nominal fare
+    - nominal fare is calculated by the based price G_RQ_BASE_FARE and distance based fare G_RQ_DIST_FARE
+    - the probability of acceptance decreases linearly from -G_RQ_MIN_NOM * nominal_fare to +G_RQ_MAX_NOM * nominal_fare
+    - any offer with wait time more than G_AR_MAX_WT is also rejected.
+    """,
+    "inherit": "RequestBase",
+    "input_parameters_mandatory": [G_OP_FARE_B, G_OP_FARE_D, G_AR_MIN_NOM, G_AR_MAX_NOM, G_AR_MAX_WT],
+    "input_parameters_optional": [G_AR_MAX_DTF],
+    "mandatory_modules": [],
+    "optional_modules": []
+}
+
+class LinearSensitivePriceDeviationFromNominal(RequestBase):
+    """This request is linearly sensitive to a fixed deviation from the nominal fare
+    - nominal fare is calculated by the based price G_RQ_BASE_FARE and distance based fare G_RQ_DIST_FARE
+    - the probability of acceptance decreases linearly from -G_RQ_MIN_NOM * nominal_fare to +G_RQ_MAX_NOM * nominal_fare
+    - any offer with wait time more than G_AR_MAX_WT is also rejected.
+    """
+    type = "LinearSensitivePriceDeviationFromNominal"
+
+    def __init__(self, rq_row, routing_engine, simulation_time_step, scenario_parameters):
+        super().__init__(rq_row, routing_engine, simulation_time_step, scenario_parameters)
+        self.routing_engine = routing_engine
+        self.set_direct_route_travel_infos(self.routing_engine)
+        self.set_direct_route_travel_infos(routing_engine)
+        self._base_f = scenario_parameters[G_OP_FARE_B]
+        self._dist_f = scenario_parameters[G_OP_FARE_D]
+        self._min_fare_ratio = scenario_parameters[G_AR_MIN_NOM]
+        self._max_fare_ratio = scenario_parameters[G_AR_MAX_NOM]
+        self.max_wait = scenario_parameters.get(G_AR_MAX_WT)
+        self.latest_start_time = self.earliest_start_time + self.max_wait
+        self._rel_dt_f = scenario_parameters.get(G_AR_MAX_DTF, None)
+        self._board_t = scenario_parameters.get(G_OP_CONST_BT, 0)
+
+    def choose_offer(self, sc_parameters, simulation_time):
+        LOG.debug("choose offer {}".format(offer_str(self.offer)))
+        test_all_decline = super().choose_offer(sc_parameters, simulation_time)
+        if test_all_decline is not None and test_all_decline < 0:
+            return -1
+        if len(self.offer) == 0:
+            return None
+        elif len(self.offer) == 1:
+            op = list(self.offer.keys())[0]
+            if self.offer[op].service_declined():
+                LOG.debug(" -> no offer!")
+                return -1
+            wt = self.offer[op][G_OFFER_WAIT]
+            if wt > self.max_wait:
+                LOG.debug(f" -> decline. too long?? {wt} > {self.max_wait}")
+                return -1
+
+            # We recalculate the travel info due to changing travel times
+            self.set_direct_route_travel_infos(self.routing_engine)
+
+            # Check detour
+            if self._rel_dt_f is not None:
+                max_trip_time = (100 + self._rel_dt_f) * (self.direct_route_travel_time + self._board_t) / 100
+                if self.offer[op][G_OFFER_DRIVE] > max_trip_time:
+                    LOG.debug(F" -> decline. too much detour {self.offer[op][G_OFFER_DRIVE]} > {max_trip_time}")
+                    return -1
+
+            # Check price
+            nominal_fare = self._base_f + self._dist_f * self.direct_route_travel_distance
+            min_fare = nominal_fare * (1 - self._min_fare_ratio)
+            max_fare = nominal_fare * (1 + self._max_fare_ratio)
+            assert max_fare >= min_fare, f"max fare {max_fare} smaller than min fare {min_fare}"
+
+            offered_fare = self.offer[op].get(G_OFFER_FARE)
+            r = np.random.random()
+            acc_prob = np.clip((max_fare - offered_fare) / (max_fare - min_fare),0.0, 1.0)
+            if r < acc_prob:
+                LOG.debug(F" -> accept")
+                self.fare = offered_fare
+                return op
+            else:
+                LOG.debug(F" -> decline. Too much fare {offered_fare}. min: {min_fare}, max: {max_fare}, prob:{acc_prob}, rand: {r}")
+                return -1
+
 # -------------------------------------------------------------------------------------------------------------------- #
 
 INPUT_PARAMETERS_WaitingTimeSensitiveLinearDeclineRequest = {

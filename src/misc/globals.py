@@ -132,6 +132,8 @@ G_AR_MAX_CDT = "user_max_constant_detour_time"
 G_AR_MAX_DTF = "user_max_detour_time_factor"
 G_AR_MAX_DEC_T = "user_max_decision_time"
 G_AR_PRICE_F = "user_price_sensitivity_func_dict"
+G_AR_MIN_NOM = "user_acceptance_lower_ratio"
+G_AR_MAX_NOM = "user_acceptance_upper_ratio"
 
 # traveler mode choice attributes
 G_MC_VOT = "value_of_time"
