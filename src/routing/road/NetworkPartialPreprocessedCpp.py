@@ -84,12 +84,14 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
 
     def _load_travel_info_tables(self, network_name_dir, scenario_time = None):
         if scenario_time is None:
-            f = "base"
+            folder_path = os.path.join(network_name_dir, "base")
         else:
-            f = str(self.travel_time_file_infos[scenario_time])
+            folder_path = str(self.travel_time_file_infos[scenario_time])
+            if not os.path.exists(folder_path):
+                folder_path = os.path.join(network_name_dir, folder_path)
         try:
-            self.tt_table = np.load(os.path.join(network_name_dir, f, "tt_matrix.npy"))
-            self.dis_table = np.load(os.path.join(network_name_dir, f, "dis_matrix.npy"))
+            self.tt_table = np.load(os.path.join(folder_path, "tt_matrix.npy"))
+            self.dis_table = np.load(os.path.join(folder_path, "dis_matrix.npy"))
             self.max_preprocessed_index = self.tt_table.shape[0]
             LOG.info(" ... travel time tables loaded until index {}".format(self.max_preprocessed_index))
             print(" ... travel time tables loaded until index {}".format(self.max_preprocessed_index))
@@ -213,7 +215,7 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
                 origin_node = origin_position[1]
                 origin_overhead = self.get_section_overhead(origin_position, from_start=False)
             destination_node = destination_position[0]
-            if self.max_preprocessed_index >= origin_node and self.max_preprocessed_index >= destination_node:
+            if origin_node < self.max_preprocessed_index and destination_node < self.max_preprocessed_index:
                 continue
             if self.travel_time_infos.get( (origin_node, destination_node) ) is not None:
                 continue
@@ -235,7 +237,7 @@ class NetworkPartialPreprocessedCpp(NetworkBasicCpp):
         depending on the class the function can be overwritten to store certain results in the database
         """
         #LOG.warning("add to db: {} -> {} tt {}".format(o_node, d_node, tt ))
-        if self.max_preprocessed_index < o_node or self.max_preprocessed_index < d_node:
+        if o_node >= self.max_preprocessed_index or d_node >= self.max_preprocessed_index:
             if self.travel_time_infos.get( (o_node, d_node) ) is None:
                 #LOG.warning("done")
                 self.travel_time_infos[ (o_node, d_node) ] = (cfv, tt, dis)

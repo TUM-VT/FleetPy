@@ -40,6 +40,8 @@ cdef class PyNetwork:
         """
         #defining ctypes
         cdef int N_targets = len(list_target_node_indices)
+        if N_targets == 0:
+            return []
         cdef double mr = -1.0
         if max_time_range is not None:
             mr = max_time_range
@@ -70,6 +72,8 @@ cdef class PyNetwork:
         """
         #defining ctypes
         cdef int N_targets = len(list_target_node_indices)
+        if N_targets == 0:
+            return []
         cdef double mr = -1.0
         if max_time_range is not None:
             mr = max_time_range
@@ -104,7 +108,7 @@ cdef class PyNetwork:
     def computeRoute1To1(self, start_node_index, end_node_index):
         cdef int route_length = self.c_net.computeRouteSize1to1(start_node_index, end_node_index)
         cdef np.ndarray[int, ndim=1, mode='c'] route
-        if route_length >= 0:
+        if route_length > 0:
             route = np.zeros((route_length,), dtype=np.int32)
             self.c_net.writeRoute(&route[0])
             return list(route)

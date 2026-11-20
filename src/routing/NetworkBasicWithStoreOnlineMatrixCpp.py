@@ -12,7 +12,7 @@ import numpy as np
 
 # src imports
 # -----------
-from src.routing.NetworkBasicWithStoreCpp import NetworkBasicWithStoreCpp
+from src.routing.road.NetworkBasicWithStoreCpp import NetworkBasicWithStoreCpp
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
@@ -69,18 +69,21 @@ class NetworkBasicWithStoreOnlineMatrixCpp(NetworkBasicWithStoreCpp):
         """
         if customized_section_cost_function is not None:
             return super().return_travel_costs_1to1(origin_position, destination_position, customized_section_cost_function = customized_section_cost_function)
+        origin_node = origin_position[1] if origin_position[1] is not None else origin_position[0]
+        destination_node = destination_position[0]
         # Update query counter
-        self._routing_query_counter[origin_position[0]] = self._routing_query_counter.get(origin_position[0], 0) +1
-        self._routing_query_counter[origin_position[0]] += 1
-        self._routing_query_counter[destination_position[0]] = self._routing_query_counter.get(destination_position[0], 0) +1
-        self._routing_query_counter[destination_position[0]] += 1
+        self._routing_query_counter[origin_node] = self._routing_query_counter.get(origin_node, 0) + 1
+        self._routing_query_counter[destination_node] = self._routing_query_counter.get(destination_node, 0) + 1
         
-        o_matrix_index = self._node_index_to_matrix_index.get(origin_position[0], None)
-        d_matrix_index = self._node_index_to_matrix_index.get(destination_position[0], None)
-        if o_matrix_index is not None and d_matrix_index is not None:
-            tt = self.tt_table[o_matrix_index, d_matrix_index]
-            dis = self.dis_table[o_matrix_index, d_matrix_index]
-            return tt, tt, dis
+        if origin_position[1] is None and destination_position[1] is None:
+            o_matrix_index = self._node_index_to_matrix_index.get(origin_node, None)
+            d_matrix_index = self._node_index_to_matrix_index.get(destination_node, None)
+            if o_matrix_index is not None and d_matrix_index is not None:
+                tt = self.tt_table[o_matrix_index, d_matrix_index]
+                dis = self.dis_table[o_matrix_index, d_matrix_index]
+                if self._current_tt_factor is not None:
+                    tt = tt * self._current_tt_factor
+                return tt, tt, dis
 
         return super().return_travel_costs_1to1(origin_position, destination_position, customized_section_cost_function = customized_section_cost_function)
     

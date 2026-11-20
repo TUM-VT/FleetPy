@@ -150,18 +150,18 @@ class NetworkBasicCpp(NetworkBasic):
                 if tt < -0.0001:
                     continue
                 self._add_to_database(org_node, destination_node, tt, tt, dis)
-                tt += destination_overhead[1]
-                dis += destination_overhead[2]
+                base_tt = tt + destination_overhead[1]
+                base_dis = dis + destination_overhead[2]
                 for origin_position in origin_nodes[org_node]:
                     origin_overhead = (0.0, 0.0, 0.0)
                     if origin_position[1] is not None:
                         origin_overhead = self.get_section_overhead(origin_position, from_start=False)
-                    tt += origin_overhead[1]
-                    dis += origin_overhead[2]
-                    if max_cost_value is not None and tt > max_cost_value:
+                    pos_tt = base_tt + origin_overhead[1]
+                    pos_dis = base_dis + origin_overhead[2]
+                    if max_cost_value is not None and pos_tt > max_cost_value:
                         #pass
                         continue
-                    return_list.append( (origin_position, tt, tt, dis) )
+                    return_list.append( (origin_position, pos_tt, pos_tt, pos_dis) )
         if max_routes is not None and len(return_list) > max_routes:
             return sorted(return_list, key = lambda x:x[1])[:max_routes]
         return return_list
@@ -214,17 +214,17 @@ class NetworkBasicCpp(NetworkBasic):
                 if tt < -0.0001:
                     continue
                 self._add_to_database(origin_node, dest_node, tt, tt, dis)
-                tt += origin_overhead[1]
-                dis += origin_overhead[2]
+                base_tt = tt + origin_overhead[1]
+                base_dis = dis + origin_overhead[2]
                 for destination_position in destination_nodes[dest_node]:
                     destination_overhead = (0.0, 0.0, 0.0)
                     if destination_position[1] is not None:
                         destination_overhead = self.get_section_overhead(destination_position, from_start=True)
-                    tt += destination_overhead[1]
-                    dis += destination_overhead[2]
-                    if max_cost_value is not None and tt > max_cost_value:
+                    pos_tt = base_tt + destination_overhead[1]
+                    pos_dis = base_dis + destination_overhead[2]
+                    if max_cost_value is not None and pos_tt > max_cost_value:
                         continue
-                    return_list.append( (destination_position, tt, tt, dis) )
+                    return_list.append( (destination_position, pos_tt, pos_tt, pos_dis) )
         if max_routes is not None and len(return_list) > max_routes:
             return sorted(return_list, key = lambda x:x[1])[:max_routes]
         return return_list

@@ -117,7 +117,7 @@ class Edge():
         #
 
     def __str__(self):
-        return "-".join(self.edge_index)
+        return f"{self.edge_index[0]}-{self.edge_index[1]}"
 
     def set_tt(self, travel_time):
         self.travel_time = travel_time
@@ -248,7 +248,7 @@ class NetworkBasic(NetworkBase):
         it resets the network to the travel times a stimulation_time
         :param simulation_time: current simulation time"""
         sorted_tts = sorted(self.travel_time_file_infos.keys())
-        if len(sorted_tts) > 2:
+        if len(sorted_tts) > 0:
             for i in range(len(sorted_tts) - 1):
                 if sorted_tts[i] <= simulation_time and sorted_tts[i+1] > simulation_time:
                     self.update_network(sorted_tts[i])
@@ -397,7 +397,7 @@ class NetworkBasic(NetworkBase):
             overhead_fraction = 1.0 - overhead_fraction
         all_travel_cost = all_travel_time
         if customized_section_cost_function is not None:
-            all_travel_cost = customized_section_cost_function(all_travel_time, all_travel_distance, self.nodes[position[1]])
+            all_travel_cost = customized_section_cost_function(all_travel_time, all_travel_distance, position[1])
         return all_travel_cost * overhead_fraction, all_travel_time * overhead_fraction, all_travel_distance * overhead_fraction
 
     def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function = None):
@@ -485,20 +485,20 @@ class NetworkBasic(NetworkBase):
                 org_node = entry[0][0]
                 if customized_section_cost_function is None:
                     self._add_to_database(org_node, destination_node, cfv, tt, dis)
-                cfv += destination_overhead[0]
-                tt += destination_overhead[1]
-                dis += destination_overhead[2]
+                base_cfv = cfv + destination_overhead[0]
+                base_tt = tt + destination_overhead[1]
+                base_dis = dis + destination_overhead[2]
                 for origin_position in origin_nodes[org_node]:
                     origin_overhead = (0.0, 0.0, 0.0)
                     if origin_position[1] is not None:
-                        origin_overhead = self.get_section_overhead(origin_position, from_start=False)
-                    cfv += origin_overhead[0]
-                    tt += origin_overhead[1]
-                    dis += origin_overhead[2]
-                    if max_cost_value is not None and cfv > max_cost_value:
+                        origin_overhead = self.get_section_overhead(origin_position, from_start=False, customized_section_cost_function=customized_section_cost_function)
+                    pos_cfv = base_cfv + origin_overhead[0]
+                    pos_tt = base_tt + origin_overhead[1]
+                    pos_dis = base_dis + origin_overhead[2]
+                    if max_cost_value is not None and pos_cfv > max_cost_value:
                         #pass
                         continue
-                    return_list.append( (origin_position, cfv, tt, dis) )
+                    return_list.append( (origin_position, pos_cfv, pos_tt, pos_dis) )
         if max_routes is not None and len(return_list) > max_routes:
             return sorted(return_list, key = lambda x:x[1])[:max_routes]
         return return_list
@@ -554,19 +554,19 @@ class NetworkBasic(NetworkBase):
                 dest_node = entry[0][-1]
                 if customized_section_cost_function is None:
                     self._add_to_database(origin_node, dest_node, cfv, tt, dis)
-                cfv += origin_overhead[0]
-                tt += origin_overhead[1]
-                dis += origin_overhead[2]
+                base_cfv = cfv + origin_overhead[0]
+                base_tt = tt + origin_overhead[1]
+                base_dis = dis + origin_overhead[2]
                 for destination_position in destination_nodes[dest_node]:
                     destination_overhead = (0.0, 0.0, 0.0)
                     if destination_position[1] is not None:
-                        destination_overhead = self.get_section_overhead(destination_position, from_start=True)
-                    cfv += destination_overhead[0]
-                    tt += destination_overhead[1]
-                    dis += destination_overhead[2]
-                    if max_cost_value is not None and cfv > max_cost_value:
+                        destination_overhead = self.get_section_overhead(destination_position, from_start=True, customized_section_cost_function=customized_section_cost_function)
+                    pos_cfv = base_cfv + destination_overhead[0]
+                    pos_tt = base_tt + destination_overhead[1]
+                    pos_dis = base_dis + destination_overhead[2]
+                    if max_cost_value is not None and pos_cfv > max_cost_value:
                         continue
-                    return_list.append( (destination_position, cfv, tt, dis) )
+                    return_list.append( (destination_position, pos_cfv, pos_tt, pos_dis) )
         if max_routes is not None and len(return_list) > max_routes:
             return sorted(return_list, key = lambda x:x[1])[:max_routes]
         return return_list
@@ -657,20 +657,18 @@ class NetworkBasic(NetworkBase):
                 cfv, tt, dis = entry[1]
                 if tt < 0:
                     continue
-                cfv += destination_overhead[0]
-                tt += destination_overhead[1]
-                dis += destination_overhead[2]
+                base_cfv = cfv + destination_overhead[0]
+                base_tt = tt + destination_overhead[1]
+                base_dis = dis + destination_overhead[2]
                 org_node = entry[0][0]
                 for origin_position in origin_nodes[org_node]:
                     origin_overhead = (0.0, 0.0, 0.0)
                     if origin_position[1] is not None:
-                        origin_overhead = self.get_section_overhead(origin_position, from_start=False)
-                    cfv += origin_overhead[0]
-                    tt += origin_overhead[1]
-                    dis += origin_overhead[2]
-                    if max_cost_value is not None and cfv > max_cost_value:
+                        origin_overhead = self.get_section_overhead(origin_position, from_start=False, customized_section_cost_function=customized_section_cost_function)
+                    pos_cfv = base_cfv + origin_overhead[0]
+                    if max_cost_value is not None and pos_cfv > max_cost_value:
                         continue
-                    if cfv > best_cfv:
+                    if pos_cfv > best_cfv:
                         continue
                     node_list = entry[0][:]
                     if origin_position[1] is not None:
@@ -681,7 +679,7 @@ class NetworkBasic(NetworkBase):
                     else:
                         if destination_position[1] is not None:
                             node_list = node_list + [destination_position[1]]
-                    best_cfv = cfv
+                    best_cfv = pos_cfv
                     if len(node_list) < 2:
                         return_route = []
                     else:
@@ -735,7 +733,7 @@ class NetworkBasic(NetworkBase):
             origin_overhead = self.get_section_overhead(origin_position, from_start=False)
         if len(destination_nodes.keys()) > 0:
             if self._current_tt_factor is None:
-                R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = max_cost_value, forward_flag = True)
+                R = Router(self, origin_node, destination_nodes=destination_nodes.keys(), time_radius = max_cost_value, forward_flag = True, customized_section_cost_function=customized_section_cost_function)
                 s = R.compute(return_route=True)
             else:
                 if max_cost_value is not None:
@@ -749,20 +747,16 @@ class NetworkBasic(NetworkBase):
                 cfv, tt, dis = entry[1]
                 if tt < 0:
                     continue
-                cfv += origin_overhead[0]
-                tt += origin_overhead[1]
-                dis += origin_overhead[2]
+                base_cfv = cfv + origin_overhead[0]
                 dest_node = entry[0][-1]
                 for destination_position in destination_nodes[dest_node]:
                     destination_overhead = (0.0, 0.0, 0.0)
                     if destination_position[1] is not None:
-                        destination_overhead = self.get_section_overhead(destination_position, from_start=True)
-                    cfv += destination_overhead[0]
-                    tt += destination_overhead[1]
-                    dis += destination_overhead[2]
-                    if max_cost_value is not None and cfv > max_cost_value:
+                        destination_overhead = self.get_section_overhead(destination_position, from_start=True, customized_section_cost_function=customized_section_cost_function)
+                    pos_cfv = base_cfv + destination_overhead[0]
+                    if max_cost_value is not None and pos_cfv > max_cost_value:
                         continue
-                    if cfv > best_cfv:
+                    if pos_cfv > best_cfv:
                         continue
                     node_list = entry[0][:]
                     if origin_position[1] is not None:
@@ -773,7 +767,7 @@ class NetworkBasic(NetworkBase):
                     else:
                         if destination_position[1] is not None:
                             node_list = node_list + [destination_position[1]]
-                    best_cfv = cfv
+                    best_cfv = pos_cfv
                     if len(node_list) < 2:
                         return_route = []
                     else:

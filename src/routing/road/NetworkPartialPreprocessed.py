@@ -81,11 +81,13 @@ class NetworkPartialPreprocessed(NetworkBasic):
 
     def _load_travel_info_tables(self, network_name_dir, scenario_time = None):
         if scenario_time is None:
-            f = "base"
+            folder_path = os.path.join(network_name_dir, "base")
         else:
-            f = str(self.travel_time_file_infos[scenario_time])
-        self.tt_table = np.load(os.path.join(network_name_dir, f, "tt_matrix.npy"))
-        self.dis_table = np.load(os.path.join(network_name_dir, f, "dis_matrix.npy"))
+            folder_path = str(self.travel_time_file_infos[scenario_time])
+            if not os.path.exists(folder_path):
+                folder_path = os.path.join(network_name_dir, folder_path)
+        self.tt_table = np.load(os.path.join(folder_path, "tt_matrix.npy"))
+        self.dis_table = np.load(os.path.join(folder_path, "dis_matrix.npy"))
         self.max_preprocessed_index = self.tt_table.shape[0]
         LOG.info(" ... travel time tables loaded until index {}".format(self.max_preprocessed_index))
 
@@ -156,7 +158,8 @@ class NetworkPartialPreprocessed(NetworkBasic):
                 R = Router(self, origin_node, destination_nodes=[destination_node], mode='bidirectional', customized_section_cost_function=customized_section_cost_function)
                 s = R.compute(return_route=False)[0][1]
                 s = (s[0] * self._current_tt_factor, s[1] * self._current_tt_factor, s[2])
-            self.travel_time_infos[(origin_node, destination_node)] = s
+            if customized_section_cost_function is None:
+                self.travel_time_infos[(origin_node, destination_node)] = s
         return (s[0] + origin_overhead[0] + destination_overhead[0], s[1] + origin_overhead[1] + destination_overhead[1], s[2] + origin_overhead[2] + destination_overhead[2])
 
     def add_travel_infos_to_database(self, travel_info_dict):
@@ -173,7 +176,7 @@ class NetworkPartialPreprocessed(NetworkBasic):
                 origin_node = origin_position[1]
                 origin_overhead = self.get_section_overhead(origin_position, from_start=False)
             destination_node = destination_position[0]
-            if self.max_preprocessed_index >= origin_node and self.max_preprocessed_index >= destination_node:
+            if origin_node < self.max_preprocessed_index and destination_node < self.max_preprocessed_index:
                 continue
             if self.travel_time_infos.get( (origin_node, destination_node) ) is not None:
                 continue
@@ -195,7 +198,7 @@ class NetworkPartialPreprocessed(NetworkBasic):
         depending on the class the function can be overwritten to store certain results in the database
         """
         #LOG.warning("add to db: {} -> {} tt {}".format(o_node, d_node, tt ))
-        if self.max_preprocessed_index < o_node or self.max_preprocessed_index < d_node:
+        if o_node >= self.max_preprocessed_index or d_node >= self.max_preprocessed_index:
             if self.travel_time_infos.get( (o_node, d_node) ) is None:
                 #LOG.warning("done")
                 self.travel_time_infos[ (o_node, d_node) ] = (cfv, tt, dis)
