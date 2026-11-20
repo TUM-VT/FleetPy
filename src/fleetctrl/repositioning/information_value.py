@@ -125,7 +125,9 @@ def unmet(window, passed):
 def end_edges(unmet_targets, zone_of_node):
     """{zone: edge}: each zone's unmet target edge of largest value summed over its intervals.
 
-    An edge belongs to the zone of its from_node (FleetPy's convention for positions); edges
+    An edge belongs to the zone of its to_node: the trip stops there, and FleetPy counts the
+    vehicle in that node's zone (a from_node zone left the target zone short whenever the edge
+    crossed a zone border, so the next call sent another vehicle; vaas docs/19, 20 Nov). Edges
     outside the zones are dropped; ties go to the smaller edge.
     """
     value = defaultdict(float)
@@ -133,7 +135,7 @@ def end_edges(unmet_targets, zone_of_node):
         value[edge] += v
     best = {}
     for edge in sorted(value):
-        zone = zone_of_node(edge[0])
+        zone = zone_of_node(edge[1])
         if zone is None or zone < 0:
             continue
         if zone not in best or value[edge] > value[best[zone]]:
