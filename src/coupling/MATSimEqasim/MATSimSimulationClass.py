@@ -3,6 +3,7 @@
 # -----------------------------
 import logging
 import random
+import pandas as pd
 
 from typing import TYPE_CHECKING
 
@@ -240,7 +241,7 @@ class MATSimSimulationClass(FleetSimulationBase):
         self.record_stats()
         self.demand.record_remaining_users()
 
-        #self.evaluate()    # TODO standard eval not working because of missing veh_type definitions
+        self.evaluate()    
         
     def get_current_assignments(self, sim_time):
         """
@@ -253,3 +254,36 @@ class MATSimSimulationClass(FleetSimulationBase):
             if new_assignment is not None:
                 new_assignments[vid] = new_assignment
         return new_assignments
+    
+    def evaluate(self):
+        LOG.info("Evaluating simulation results ...")
+        output_dir = self.dir_names[G_DIR_OUTPUT]
+        if not os.path.isfile(os.path.join(output_dir, "1_user-stats.csv")):
+            LOG.warning("No user stats file found in output directory. Skipping evaluation.")
+            return
+
+        for f in os.listdir(output_dir):
+            if f.endswith("op-stats.csv"):
+                op_stats = pd.read_csv(os.path.join(output_dir, f))
+                if op_stats.shape[0] > 0 and op_stats["driven_distance"].sum() == 0: # matsim vehicle doesnt write that automatically, so we calculate it here based on the route and the routing engine
+                    LOG.info(f"Calculating driven distance for operator stats in {f} ...")
+                    def convert_driven_distance(route_str):
+                        if route_str == "None" or pd.isna(route_str):
+                            return 0
+                        route = [int(x) for x in route_str.split(";")]
+                        distance = 0
+                        for i in range(len(route)-1):
+                            start_node = route[i]
+                            end_node = route[i+1]
+                            try:
+                                _, dis = self.routing_engine.get_section_infos(start_node, end_node)
+                            except:
+                                print(f"Error occurred while fetching section info for nodes {start_node} and {end_node}")
+                                dis = 0
+                            distance += dis
+                        return distance
+                    
+                    op_stats["driven_distance"] = op_stats["route"].apply(convert_driven_distance)
+                    op_stats.to_csv(os.path.join(output_dir, f), index=False)
+        
+        return super().evaluate()

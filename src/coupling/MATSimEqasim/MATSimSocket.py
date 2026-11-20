@@ -14,7 +14,7 @@ for p in os.sys.path:
         to_del.append(p)
 for p in to_del:
     os.sys.path.remove(p)
-os.sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+os.sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from src.misc.globals import *
 from src.coupling.MATSimEqasim.misc import *
@@ -28,7 +28,7 @@ LOG = logging.getLogger(__name__)
 
 STAT_INT = 60
 ENCODING = "utf-8"
-LOG_COMMUNICATION = True
+LOG_COMMUNICATION = False
 LARGE_INT = 100000
 
 # TODO : incorporate matsim inactive vehicle status -> new assignment (even if same as before) will trigger error
@@ -37,12 +37,13 @@ class MATSimSocket:
     """
     A class to handle communication with a MATSim server using sockets.
     """
-    def __init__(self, host: str, port: int, scenario_parameters, log_communication: bool = LOG_COMMUNICATION):
+    def __init__(self, host: str, port: int, scenario_parameters, log_communication: bool = LOG_COMMUNICATION, start_iteration: int = 0):
         self.server_ip = host
         self.server_port = port
         self.log_communication = log_communication
-        self.matsim_iteration = 0
+        self.matsim_iteration = start_iteration
         scenario_parameters["matsim_iteration"] = self.matsim_iteration
+        scenario_parameters["op_matsim_iteration"] = self.matsim_iteration
         self.scenario_parameters = scenario_parameters
         
         self.context = zmq.Context()
@@ -238,16 +239,28 @@ class MATSimSocket:
         # end FP simulation
         iteration = int(response_obj["iteration"])
         if iteration > 0:
+            last_output_dir = self.fs_obj.dir_names[G_DIR_OUTPUT]
             self.fs_obj.terminate()
             
             self.fs_obj = None
             
+            print("MATSimSocket: Starting iteration ", iteration)
+            print(" -> delete old log and travel time files from folder: {}".format(last_output_dir))
             if self.log_f is not None and os.path.exists(self.log_f):
                 ## delete old log file
                 os.remove(self.log_f)
+            # delete previous travel time files
+            for f in os.listdir(last_output_dir):
+                if f.startswith("matsim_edge_traveltimes_") and f.endswith(".csv"):
+                    os.remove(os.path.join(last_output_dir, f))
+                if f.endswith(".log"):
+                    os.remove(os.path.join(last_output_dir, f))
         
             scenario_parameters = self.scenario_parameters.copy()
-            scenario_parameters["matsim_iteration"] = iteration
+
+            self.matsim_iteration = iteration
+            scenario_parameters["matsim_iteration"] = self.matsim_iteration
+            scenario_parameters["op_matsim_iteration"] = self.matsim_iteration
             
             self.list_op_dicts = build_operator_attribute_dicts(scenario_parameters, scenario_parameters[G_NR_OPERATORS],
                                                                                 prefix="op_")
@@ -296,7 +309,7 @@ class MATSimSocket:
         """
         Handle new time step request from MATSim.
         """
-        new_sim_time = response_obj["time"]
+        new_sim_time = int(float(response_obj["time"]))
         if new_sim_time % 300 == 0:
             print(" -> new sim time: ", new_sim_time)
             
@@ -425,12 +438,12 @@ class MATSimSocket:
                 matsim_edge = self.from_fleetpy_to_matsim_position(stop["pos"])
                 list_pick_up = [self._from_fleetpy_to_matsim_rid(rid) for rid in stop["boarding_rids"]]
                 list_drop_off = [self._from_fleetpy_to_matsim_rid(rid) for rid in stop["alighting_rids"]]
-                stop_duration = stop["duration"]
-                earliest_start_time = stop["earliest_start_time"]
-                stop_id = stop["id"]
+                stop_duration = str(stop["duration"])
+                earliest_start_time = str(stop["earliest_start_time"])
+                stop_id = str(stop["id"])
                 # TODO route?
                 list_stops.append({
-                    "link" : matsim_edge,
+                    "link" : str(matsim_edge),
                     "pickup" : list_pick_up,
                     "dropoff" : list_drop_off,
                     "stopDuration" : stop_duration,
@@ -546,7 +559,7 @@ class MATSimSocket:
         pd.DataFrame(edge_tt_df_list).to_csv(tt_f_p, index=False)
         self.fs_obj.routing_engine.load_tt_file(sim_time, ext_path=tt_f_p)   
 
-def run(fleetpy_config_path, matsim_network_path, port):
+def run(fleetpy_config_path, matsim_network_path, port, start_iteration=0):
     from src.misc.config import ConstantConfig, ScenarioConfig
     
     const_cfg = ConstantConfig(fleetpy_config_path)
@@ -567,7 +580,7 @@ def run(fleetpy_config_path, matsim_network_path, port):
     
     print("Starting MATSimSocket ...")
     
-    matsim_socket = MATSimSocket(host, port, whole_config, log_communication=LOG_COMMUNICATION)
+    matsim_socket = MATSimSocket(host, port, whole_config, log_communication=LOG_COMMUNICATION, start_iteration=start_iteration)
     print(" -> MATSimSocket started")
     
     matsim_socket.keep_socket_alive()    
@@ -577,7 +590,8 @@ if __name__ == "__main__":
     the matsim-side has to be run with the start-script "RunSimulationWithFleetPy.java"
     :param fleetpy_config_path: path the the fleetpy simulation config file (in studies/{study_name}/scenarios folder)
     :param matsim_network_path: path to the network used in the matsim-simulation (usually where also the matsim population is) | this script assumes that network mathing has been done before; if hash-values dont match between fleetyp- and matsim-network an error is raise
-    :param port: (int) port for the socket communication (same as on matsim side)"""
+    :param port: (int) port for the socket communication (same as on matsim side)
+    :param start_iteration: (int) the iteration to start the simulation from (default: 0) | if > 0, it is assumed that a simulation has already been run up to this iteration and the socket communication is restarted for the next iterations (e.g. to test new assignment algorithms without re-running the whole simulation)"""
 
     if len(sys.argv) < 4:
         print("Usage: python MATSimSocket.py <fleetpy_config_path> <matsim_network_path> <port> [profile]")
@@ -585,11 +599,12 @@ if __name__ == "__main__":
     fleetpy_config_path = sys.argv[1]
     matsim_network_path = sys.argv[2]
     port = int(sys.argv[3])
+    start_iteration = int(sys.argv[4]) if len(sys.argv) > 4 else 0
     
     profile = False
     
     if not profile:
-        run(fleetpy_config_path, matsim_network_path, port)
+        run(fleetpy_config_path, matsim_network_path, port, start_iteration)
     
     else:
         import sys
@@ -599,7 +614,7 @@ if __name__ == "__main__":
         profiler.enable()
         
         try:
-            run(fleetpy_config_path, matsim_network_path, port)
+            run(fleetpy_config_path, matsim_network_path, port, start_iteration)
             
         finally:
             profiler.disable()

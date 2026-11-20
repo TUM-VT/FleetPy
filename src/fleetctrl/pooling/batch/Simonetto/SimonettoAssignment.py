@@ -11,7 +11,7 @@ from src.fleetctrl.pooling.batch.BatchAssignmentAlgorithmBase import BatchAssign
 from src.fleetctrl.planning.VehiclePlan import VehiclePlan, BoardingPlanStop
 from src.fleetctrl.pooling.immediate.insertion import simple_remove, insert_prq_in_selected_veh_list
 from src.misc.globals import *
-from src.routing.NetworkBase import NetworkBase
+from src.routing.road.NetworkBase import NetworkBase
 from src.simulation.Legs import VehicleRouteLeg
 from src.simulation.Vehicles import SimulationVehicle
 

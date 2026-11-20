@@ -7,7 +7,7 @@ from multiprocessing import Pool
 
 tum_fleet_sim_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.append(tum_fleet_sim_path)
-from src.routing.NetworkBasic import NetworkBasic as Network 
+from src.routing.road.NetworkBasic import NetworkBasic as Network 
 from src.infra.BoardingPointInfrastructure import BoardingPointInfrastructure
 
 def routing_min_distance_cost_function(travel_time, travel_distance, current_node_index):

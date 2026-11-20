@@ -21,7 +21,7 @@ from src.fleetctrl.rideparcelpooling.immediate.insertion import insert_parcel_pr
 from src.simulation.Offers import TravellerOffer
 if TYPE_CHECKING:
     from src.demand.TravelerModels import RequestBase, ParcelRequestBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.simulation.Vehicles import SimulationVehicle
 
 # -------------------------------------------------------------------------------------------------------------------- #

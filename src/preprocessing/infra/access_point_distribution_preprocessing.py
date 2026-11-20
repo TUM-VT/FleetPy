@@ -9,7 +9,7 @@ MAIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.pa
 print(MAIN_DIR)
 sys.path.append(MAIN_DIR)
 
-from src.routing.NetworkBasic import NetworkBasic as Network
+from src.routing.road.NetworkBasic import NetworkBasic as Network
 
 def routing_min_distance_cost_function(travel_time, travel_distance, current_node_index):
     """computes the customized section cost for routing (input for routing functions)

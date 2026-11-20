@@ -238,7 +238,7 @@ class AggForecastZoneSystem(ForecastZoneSystemBase):
         :type attribute_value: type(request_attribute)
         :param scale: scales forecast distribution by this values
         :type scale: float
-        :return: list of (time, origin_node, destination_node) of future requests
+        :return: list of (time, origin_pos, destination_pos) of future requests
         :rtype: list of 3-tuples
         """ 
         dep_fc = self.get_trip_departure_forecasts(t0, t1, scale = scale)
@@ -264,10 +264,10 @@ class AggForecastZoneSystem(ForecastZoneSystemBase):
                 break
             o_zone = np.random.choice(dep_zones, p=dep_prob)
             d_zone = np.random.choice(arr_zones, p=arr_prob)
-            o_n = self.get_random_node(o_zone, only_boarding_nodes=True)
-            d_n = self.get_random_node(d_zone, only_boarding_nodes=True)
-            if o_n != -1 and d_n != -1:
-                future_list.append( (int(tc), o_n, d_n) )
+            o_pos = (self.get_random_node(o_zone, only_boarding_nodes=True), None, None)
+            d_pos = (self.get_random_node(d_zone, only_boarding_nodes=True), None, None)
+            if o_pos != -1 and d_pos != -1:
+                future_list.append( (int(tc), o_pos, d_pos) )
             else:
                 LOG.warning(f"draw future: couldnt find nodes for {o_zone} and {d_zone}")
 

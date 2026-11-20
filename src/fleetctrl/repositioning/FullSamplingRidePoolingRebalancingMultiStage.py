@@ -25,7 +25,7 @@ LOG = logging.getLogger(__name__)
 from typing import TYPE_CHECKING, List, Dict, Tuple, Callable, Any
 if TYPE_CHECKING:
     from src.fleetctrl.FleetControlBase import FleetControlBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
 
 OPT_TIME_LIMIT = 120
 WRITE_SOL = True
@@ -85,7 +85,7 @@ def move_vehicle_according_to_plan(veh: SimulationVehicleStruct, veh_plan: Vehic
                             except:
                                 pass
                         LOG.debug(f"new route {cur_pos} {route}")
-                        new_pos, _, _, passed_nodes, _ = routing_engine.move_along_route(route, cur_pos, next_t - last_t, veh.vid, t)
+                        new_pos, _, _, passed_nodes, _ = routing_engine.move_along_route(route, cur_pos, next_t - last_t, sim_vid_id=veh.vid, new_sim_time=t)
                         veh.pos = new_pos
                         for node in passed_nodes:
                             route.remove(node)
@@ -360,17 +360,17 @@ class FullSamplingRidePoolingRebalancingMultiStage(RepositioningBase):
         rid_order = {}
         for atts in future_rq_atts:
             if len(atts) == 3:
-                t, o_n, d_n = atts
+                t, o_p, d_p = atts
                 priority = None
             else:
-                t, o_n, d_n, priority = atts
+                t, o_p, d_p, priority = atts
             rid = start_id + len(prqs)
             opt_time = int(np.floor(t/opt_time_step)) * opt_time_step
             try:
                 rid_order[opt_time].append(rid)
             except:
                 rid_order[opt_time] = [rid]
-            prqs[rid] = ArtificialPlanRequest(rid, t, (o_n, None, None), (d_n, None, None), self.routing_engine,
+            prqs[rid] = ArtificialPlanRequest(rid, t, o_p, d_p, self.routing_engine,
                                                 max_wait_time=self.fleetctrl.max_wait_time, max_detour_time_factor=self.fleetctrl.max_dtf,
                                                 max_constant_detour_time=self.fleetctrl.max_cdt, boarding_time=self.fleetctrl.const_bt)
             if priority is not None:

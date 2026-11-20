@@ -56,7 +56,7 @@ def run_missing_scenarios(scenario_configs: List[Dict[str, Any]],
         fleetpy_path: Path to FleetPy root directory
         scenarios_path: Path to scenarios directory
     """
-    from run_examples import run_scenarios
+    from studies.example_study.run_examples import run_scenarios
     
     # Check which scenarios need to be run
     missing_scenarios = check_results_exist(scenario_configs, fleetpy_path)

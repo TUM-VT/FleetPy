@@ -1,20 +1,20 @@
 import os
 import sys
-from enum import Enum
-from collections import defaultdict
-from multiprocessing.connection import PipeConnection
-from queue import Queue, Empty
-import logging
+from enum import Enum # 列挙型、選択肢を固定してタイプミスを防ぐ
+from collections import defaultdict # キーが存在しない時、自動で初期値を作る辞書
+from multiprocessing.connection import PipeConnection # プロセス間通信
+from queue import Queue, Empty # データやり取り用のキューとキューが空の時の例外
+import logging # printの上位互換
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)) ))) # add fleetpy path
 
 from src.ml_gym.Observers import AbstractObserver
 from src.ml_gym.Actors import AbstractActor
 
-from typing import List, Union
+from typing import List, Union # 型の指定
 
 LOG = logging.getLogger(__name__)
     
-class Events(Enum):
+class Events(Enum): # イベント名を４つ定義し、Event.ML_OBSERVEなどのコードで呼び出すことで、スペルミスを防ぐ
     ML_OBSERVE = "ml_observe",
     ML_ACTION = "ml_action",
     OBSERVE_FLEET_STATE_AFTER_RECEIVING_STATUS_UPDATE = "observe_fleet_state_after_receiving_status_update", # this event is triggered after the fleetcontrol received a new status update of its vehicle and is about to trigger its optimization
@@ -56,7 +56,7 @@ class HookManager:
         self._hooks[event].remove(hook)
 
     def _get_all_hooks_details(self, event: Events = None):
-        observers_dict = defaultdict(list)
+        observers_dict = defaultdict(list) # 存在しないキーが呼び出されたとき、そのキーの値を空辞書とする
         actors_dict = defaultdict(list)
         hook_list = self._hooks.values() if event is None else self._hooks[event]
         for hook in hook_list:
@@ -112,9 +112,9 @@ class HookManager:
     def trigger(self, event: Events, fleetpy_module, **kwargs):
         in_queue, out_queue = self._in_out_queue_dict[self._process_id] if self._process_id is not None else (None, None)
         if event in self._hooks:
-            print(f"\ntrigger {event}")
+            # print(f"\ntrigger {event}")
             for h in self._hooks[event]:
-                h.on_event(event, fleetpy_module, self._process_id, in_queue, out_queue, **kwargs)
+                h.on_event(event, fleetpy_module, self._process_id, in_queue, out_queue)
 
     def reply_to_slave_processes(self, block=False, timeout_per_process = None):
         """ Uses the actor object of the master process to the reply to actors of all slave processes """
@@ -132,7 +132,7 @@ class HookManager:
     def get_observations(self, process_id, block=True, timeout=None):
         out_queue = self._in_out_queue_dict[process_id][1]
         process_id, hook_id, actor_type, observations = out_queue.get(block, timeout)
-        return observations, actor_type, self._hooks_by_id[hook_id].get_hook_event()
+        return observations, actor_type
 
     def send_actor_response(self, process_id, action):
         in_queue = self._in_out_queue_dict[process_id][0]
@@ -152,9 +152,6 @@ class Hook:
     def get_hook_id(self):
         return self._hook_id
 
-    def get_hook_event(self):
-        return self._event
-
     def get_actor_response(self, actor_type: str, observations: dict, process_id: int):
         """ This method is specific to get the actor responses from master process in case of multiprocessing """
         for actor in self._actors:
@@ -163,17 +160,17 @@ class Hook:
         raise AssertionError(f"The actor {actor_type} for hook id {self._hook_id} was not found. Make sure you are "
                              f"using multiprocessing, otherwise this method should not have been called.")
     
-    def on_event(self, event, fleetpy_module, process_id = None, in_queue: Queue = None, out_queue: Queue=None, **kwargs):
+    def on_event(self, event, fleetpy_module, process_id = None, in_queue: Queue = None, out_queue: Queue=None):
         if event != self._event:
             return
 
         observation = {}
         for observer in self._observers:
-            print(f"\nHook: trigger observer - {observer}")
-            observation.update(observer.observe(fleetpy_module, **kwargs))
+            # print(f"\nHook: trigger observer - {observer}")
+            observation.update(observer.observe(fleetpy_module))
 
         for actor in self._actors:
-            actor._act(observation, fleetpy_module, self._hook_id, process_id, in_queue, out_queue, **kwargs)
+            actor._act(observation, fleetpy_module, self._hook_id, process_id, in_queue, out_queue)
     
     def add_observer(self, observer: AbstractObserver):
         if observer not in self._observers:

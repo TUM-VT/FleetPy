@@ -185,7 +185,11 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
     # vehicle type data
     veh_type_db = create_vehicle_type_db(dir_names[G_DIR_VEH])
-    veh_type_stats = pd.read_csv(os.path.join(output_dir, "2_vehicle_types.csv"))
+    try:
+        veh_type_stats = pd.read_csv(os.path.join(output_dir, "2_vehicle_types.csv"))
+    except FileNotFoundError:
+        print("Warning: No vehicle type stats file found in output directory.")
+        veh_type_stats = None
 
     if print_comments:
         print(f"Evaluating {scenario_parameters[G_SCENARIO_NAME]}\nReading user stats ...")
@@ -362,7 +366,10 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
             # vehicle stats
             # -------------
-            n_vehicles = veh_type_stats[veh_type_stats[G_V_OP_ID]==op_id].shape[0]
+            if veh_type_stats is not None:
+                n_vehicles = veh_type_stats[veh_type_stats[G_V_OP_ID]==op_id].shape[0]
+            else:
+                n_vehicles = op_vehicle_df[G_V_VID].nunique()
 
             sim_end_time = scenario_parameters["end_time"]
             simulation_time = scenario_parameters["end_time"] - scenario_parameters["start_time"]
@@ -437,11 +444,17 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
             # by vehicle stats
             # ----------------
-            op_veh_types = veh_type_stats[veh_type_stats[G_V_OP_ID] == op_id]
-            op_veh_types.set_index(G_V_VID, inplace=True)
+            if veh_type_stats is not None:
+                op_veh_types = veh_type_stats[veh_type_stats[G_V_OP_ID] == op_id]
+                op_veh_types.set_index(G_V_VID, inplace=True)
+            else:
+                op_veh_types = op_vehicle_df[[G_V_VID, G_V_TYPE]].drop_duplicates().set_index(G_V_VID)
             all_vid_dict = {}
             for vid, vid_vtype_row in op_veh_types.iterrows():
-                vtype_data = veh_type_db[vid_vtype_row[G_V_TYPE]]
+                vtype_data = veh_type_db.get(vid_vtype_row[G_V_TYPE])
+                if vtype_data is None:
+                    print("Warning: No vehicle type data found for vehicle type {}.".format(vid_vtype_row[G_V_TYPE]))
+                    vtype_data = {G_VTYPE_NAME: vid_vtype_row[G_V_TYPE], G_VTYPE_BATTERY_SIZE: np.nan, G_VTYPE_RANGE: np.nan, G_VTYPE_FIX_COST: np.nan, G_VTYPE_DIST_COST: np.nan}
                 op_vid_vehicle_df = op_vehicle_df[op_vehicle_df[G_V_VID] == vid]
                 veh_km = op_vid_vehicle_df[G_VR_LEG_DISTANCE].sum() / 1000
                 veh_kWh = veh_km * vtype_data[G_VTYPE_BATTERY_SIZE] / vtype_data[G_VTYPE_RANGE]

@@ -108,7 +108,7 @@ class ForecastZoneSystemBase(ZoneSystem):
         :type attribute_value: type(request_attribute)
         :param scale: scales forecast distribution by this values
         :type scale: float
-        :return: list of (time, origin_node, destination_node) of future requests
+        :return: list of (time, origin_pos, destination_pos) of future requests
         :rtype: list of 3-tuples
         """ 
         

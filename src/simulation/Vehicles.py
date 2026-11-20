@@ -14,7 +14,7 @@ from src.simulation.StationaryProcess import ChargingProcess
 
 if tp.TYPE_CHECKING:
     from src.demand.TravelerModels import RequestBase
-    from src.routing.NetworkBase import NetworkBase
+    from src.routing.road.NetworkBase import NetworkBase
     from src.fleetctrl.FleetControlBase import FleetControlBase
 
 LOG = logging.getLogger(__name__)
@@ -344,8 +344,8 @@ class SimulationVehicle:
         # transform rq from PlanRequest to SimulationRequest (based on RequestBase)
         # LOG.info(f"Vehicle {self.vid} before new assignment: {[str(x) for x in self.assigned_route]} at time {sim_time}")
         for vrl in list_route_legs:
-            boarding_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(1,[])]
-            alighting_list = [self.rq_db[prq.get_rid()] for prq in vrl.rq_dict.get(-1,[])]
+            boarding_list = [self.rq_db[prq.get_rid_struct()] for prq in vrl.rq_dict.get(1,[])]
+            alighting_list = [self.rq_db[prq.get_rid_struct()] for prq in vrl.rq_dict.get(-1,[])]
             vrl.rq_dict = {1:boarding_list, -1:alighting_list}
         if logging.DEBUG  >= LOG.getEffectiveLevel():
             LOG.debug(f"Vehicle {self.vid} received new VRLs {[str(x) for x in list_route_legs]} at time {sim_time}")
@@ -753,10 +753,14 @@ class ExternallyMovingSimulationVehicle(SimulationVehicle):
         if list_route_legs:
             if start_flag:
                 self.start_next_leg_first = True
-                if self.status in G_DRIVING_STATUS:
+                if self.status in G_DRIVING_STATUS or self.status == VRL_STATES.IDLE:
                     if not self.assigned_route[0].status in G_DRIVING_STATUS:
                         LOG.warning("while currently driving a new route without start driving vrl assigned {} {}".format(self, list_route_legs))
-                        driving_vrl = VehicleRouteLeg(self.status, self.assigned_route[0].destination_pos, {})
+                        if self.status == VRL_STATES.IDLE:
+                            next_status = VRL_STATES.ROUTE
+                        else:
+                            next_status = self.status
+                        driving_vrl = VehicleRouteLeg(next_status, self.assigned_route[0].destination_pos, {})
                         self.assigned_route = [driving_vrl] + self.assigned_route[:]
         else: # check if vehicle needs to be stopped in aimsun control
             if self.status in G_DRIVING_STATUS:
