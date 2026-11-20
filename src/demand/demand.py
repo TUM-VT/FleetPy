@@ -329,7 +329,12 @@ class Demand:
 
     def __getitem__(self, rid):
         """Provides square-bracket indexing of Request objects (by request id)."""
-        return dict(self._get_all_requests())[rid]
+        if rid in self.rq_db:
+            return self.rq_db[rid]
+        for req_dict in self.future_requests.values():
+            if rid in req_dict:
+                return req_dict[rid]
+        raise KeyError(rid)
 
 
 class SlaveDemand(Demand):

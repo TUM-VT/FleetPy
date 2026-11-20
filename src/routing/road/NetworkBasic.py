@@ -46,6 +46,14 @@ def read_node_line(columns):
     return Node(int(columns["node_index"]), int(columns["is_stop_only"]), float(columns["pos_x"]), float(columns["pos_y"]))
 
 class Node():
+    __slots__ = (
+        "node_index", "is_stop_only", "pos_x", "pos_y",
+        "edges_to", "edges_from", "edges_to_pairs", "edges_from_pairs",
+        "travel_infos_from", "travel_infos_to",
+        "is_target_node", "prev", "settled", "cost_index", "cost",
+        "next", "settled_back", "cost_index_back", "cost_back",
+    )
+
     def __init__(self, node_index, is_stop_only, pos_x, pos_y, node_order=None):
         self.node_index = node_index
         self.is_stop_only = is_stop_only
@@ -54,6 +62,8 @@ class Node():
         # 
         self.edges_to = {}  #node_obj -> edge
         self.edges_from = {}    #node_obj -> edge
+        self.edges_to_pairs = []
+        self.edges_from_pairs = []
         #
         self.travel_infos_from = {} #node_index -> (tt, dis)
         self.travel_infos_to = {}   #node_index -> (tt, dis)
@@ -84,20 +94,33 @@ class Node():
         """
         :return: list of (node, edge) tuples [references to objects] in forward direction
         """
-        return self.edges_to.items()
+        return self.edges_to_pairs
 
     def get_prev_node_edge_pairs(self, ch_flag = False):
         """
         :return: list of (node, edge) tuples [references to objects] in backward direction
         """
-        return self.edges_from.items()
+        return self.edges_from_pairs
 
     def add_next_edge_to(self, other_node, edge):
-        #print("add next edge to: {} -> {}".format(self.node_index, other_node.node_index))
+        if other_node in self.edges_to:
+            for idx, (n, _) in enumerate(self.edges_to_pairs):
+                if n is other_node:
+                    self.edges_to_pairs[idx] = (other_node, edge)
+                    break
+        else:
+            self.edges_to_pairs.append((other_node, edge))
         self.edges_to[other_node] = edge
         self.travel_infos_to[other_node.node_index] = edge.get_tt_distance()
 
     def add_prev_edge_from(self, other_node, edge):
+        if other_node in self.edges_from:
+            for idx, (n, _) in enumerate(self.edges_from_pairs):
+                if n is other_node:
+                    self.edges_from_pairs[idx] = (other_node, edge)
+                    break
+        else:
+            self.edges_from_pairs.append((other_node, edge))
         self.edges_from[other_node] = edge
         self.travel_infos_from[other_node.node_index] = edge.get_tt_distance()
 
@@ -110,6 +133,8 @@ class Node():
 
 
 class Edge():
+    __slots__ = ("edge_index", "distance", "travel_time")
+
     def __init__(self, edge_index, distance, travel_time):
         self.edge_index = edge_index
         self.distance = distance
@@ -175,14 +200,28 @@ class NetworkBasic(NetworkBase):
         nodes_f = os.path.join(network_name_dir, "base", "nodes.csv")
         LOG.info(f"Loading nodes from {nodes_f} ...")
         nodes_df = pd.read_csv(nodes_f)
-        self.nodes = nodes_df.apply(read_node_line, axis=1)
+        self.nodes = [
+            Node(int(ni), int(so), float(px), float(py))
+            for ni, so, px, py in zip(
+                nodes_df["node_index"].to_numpy(),
+                nodes_df["is_stop_only"].to_numpy(),
+                nodes_df["pos_x"].to_numpy(),
+                nodes_df["pos_y"].to_numpy(),
+            )
+        ]
         edges_f = os.path.join(network_name_dir, "base", "edges.csv")
         LOG.info(f"Loading edges from {edges_f} ...")
         edges_df = pd.read_csv(edges_f)
-        for _, row in edges_df.iterrows():
-            o_node = self.nodes[row[G_EDGE_FROM]]
-            d_node = self.nodes[row[G_EDGE_TO]]
-            tmp_edge = Edge((o_node, d_node), row[G_EDGE_DIST], row[G_EDGE_TT])
+        nodes = self.nodes
+        for fn, tn, dist, tt in zip(
+            edges_df[G_EDGE_FROM].to_numpy(),
+            edges_df[G_EDGE_TO].to_numpy(),
+            edges_df[G_EDGE_DIST].to_numpy(),
+            edges_df[G_EDGE_TT].to_numpy(),
+        ):
+            o_node = nodes[int(fn)]
+            d_node = nodes[int(tn)]
+            tmp_edge = Edge((o_node, d_node), float(dist), float(tt))
             o_node.add_next_edge_to(d_node, tmp_edge)
             d_node.add_prev_edge_from(o_node, tmp_edge)
         LOG.info("... {} nodes loaded!".format(len(self.nodes)))

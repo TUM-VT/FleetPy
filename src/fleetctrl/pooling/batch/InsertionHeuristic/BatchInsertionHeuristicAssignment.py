@@ -44,21 +44,24 @@ class BatchInsertionHeuristicAssignment(BatchAssignmentAlgorithmBase):
             raise NotImplementedError
         
         self.veh_objs = {}
+        veh_plans = self.fleetcontrol.veh_plans
         if len(veh_objs_to_build.keys()) == 0:
             for veh_obj in self.fleetcontrol.sim_vehicles:
-                veh_obj_struct = SimulationVehicleStruct(veh_obj, self.fleetcontrol.veh_plans.get(veh_obj.vid, VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])), sim_time, self.routing_engine)
-                self.veh_objs[veh_obj.vid] = veh_obj_struct
+                vid = veh_obj.vid
+                vp = veh_plans[vid] if vid in veh_plans else VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])
+                self.veh_objs[vid] = SimulationVehicleStruct(veh_obj, vp, sim_time, self.routing_engine)
         else:
             self.veh_objs = veh_objs_to_build
         
         non_repo_veh_plans = {}
         for vid, veh_obj in self.veh_objs.items():
-            current_veh_p  : VehiclePlan = self.fleetcontrol.veh_plans.get(vid, VehiclePlan(veh_obj, self.sim_time, self.routing_engine, []))
+            current_veh_p : VehiclePlan = veh_plans[vid] if vid in veh_plans else VehiclePlan(veh_obj, self.sim_time, self.routing_engine, [])
             current_veh_p.update_tt_and_check_plan(veh_obj, sim_time, self.routing_engine, keep_feasible=True)
             obj = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, current_veh_p)
             current_veh_p.set_utility(obj)
             veh_p = current_veh_p.copy_and_remove_empty_planstops(veh_obj, sim_time, self.routing_engine)
-            obj = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, veh_p)
+            if len(veh_p.list_plan_stops) != len(current_veh_p.list_plan_stops):
+                obj = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, veh_p)
             veh_p.set_utility(obj)
             non_repo_veh_plans[vid] = veh_p
         
