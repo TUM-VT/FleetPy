@@ -34,8 +34,12 @@ class PiecewiseContinuousLinearFunction:
         :return: y-value
         :rtype: int/float
         """
-        return np.piecewise(x, [(x >= xl) & (x <= xu) for xl, xu in self.list_bounds],
-                            self.func_list)
+        x_arr = np.asarray(x, dtype=float)
+        res = np.piecewise(x_arr, [(x_arr >= xl) & (x_arr <= xu) for xl, xu in self.list_bounds],
+                           self.func_list)
+        if np.ndim(x) == 0:
+            return float(res)
+        return res
 
 
 class PolynomialFunction:
@@ -75,6 +79,7 @@ def load_function(input_dict):
     :type input_dict: dict
     :return: Function instance
     """
+    input_dict = input_dict.copy()
     func_key = input_dict.pop("func_key")
     if func_key == "pcw_lf":
         # x-y points have to be given in dictionary

@@ -9,7 +9,7 @@ import numpy as np
 
 from src.scenario_gui.ModuleSelectionPage import ModuleSelectionPage
 from src.scenario_gui.ParameterSelectionPage import ParametersSelectionPage
-from src.scenario_gui.scenario_creator import ScenarioCreator
+from src.scenario_gui.scenario_creator import ScenarioCreator, create_study_directories
 
 
 class MainWindow(QMainWindow):
@@ -109,25 +109,16 @@ class MainWindow(QMainWindow):
             scenario_name_idx = self.labels_for_params.index('scenario_name')
             study_name = self.params[study_name_idx]
             scenario_name = self.params[scenario_name_idx]
-            #check if a folder is laready created with the name study_name
-            if os.path.exists(os.path.join(os.path.dirname(__file__),'studies',study_name)):
-                path = os.path.join(os.path.dirname(__file__),'studies',study_name)
-            if not os.path.exists(os.path.join(os.path.dirname(__file__),'studies',study_name)):
-                path = os.path.join(os.path.dirname(__file__),'studies',study_name)
-                os.mkdir(path)
-            file_path = os.path.join(path, scenario_name)
-            df = pd.DataFrame()
-            labels = self.labels_for_modules + self.labels_for_params
-            entries = self.modules + self.params
-            df['labels'] = labels
-            df['entries'] = entries 
-            #drop the rows that contains the string 'None'
-            df['entries'].replace('None', np.nan, inplace=True)
-            df['entries'].replace('', np.nan, inplace=True)
-            #drop the rows that contains the string 'NO SELECTION'
-            df['entries'].replace('NO SELECTION', np.nan, inplace=True)
-            df.dropna()
-            df.to_csv(file_path + '.csv',header=False, index=False)
+            scenarios_path = create_study_directories(study_name)
+            file_path = os.path.join(scenarios_path, scenario_name)
+            df = pd.DataFrame({
+                'Input_Parameter_Name': self.labels_for_modules + self.labels_for_params,
+                'Parameter_Value': self.modules + self.params,
+            })
+            df = df[df['Input_Parameter_Name'] != 'study_name']
+            df['Parameter_Value'] = df['Parameter_Value'].replace({'None': np.nan, '': np.nan, 'NO SELECTION': np.nan})
+            df = df.dropna(subset=['Parameter_Value'])
+            df.to_csv(file_path + '.csv', header=True, index=False)
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Icon.Information)
             msg.setText("The scenario file has been saved to the selected study folder")

@@ -742,8 +742,8 @@ class FleetSimulationBase:
             self._user_leaves_system(rid, sim_time)
         else:
             amode_confirmed_rids = self.broker.inform_user_booking(rid, rq_obj, sim_time, chosen_operator)
-            for rid, rq_obj in amode_confirmed_rids:
-                self.demand.waiting_rq[rid] = rq_obj
+            for conf_rid, conf_rq_obj in amode_confirmed_rids:
+                self.demand.waiting_rq[conf_rid] = conf_rq_obj
             try:
                 del self.demand.undecided_rq[rid]
             except KeyError:
@@ -774,7 +774,7 @@ class FleetSimulationBase:
         :param sim_time: current simulation time
         :return: None
         """
-        for rid, rq_obj in self.demand.waiting_rq.items():
+        for rid, rq_obj in list(self.demand.waiting_rq.items()):
             chosen_operator = rq_obj.get_chosen_operator()
             in_vehicle = rq_obj.get_service_vehicle()
             if in_vehicle is None and chosen_operator is not None and rq_obj.cancels_booking(sim_time):
@@ -794,13 +794,18 @@ class FleetSimulationBase:
                     self._update_realtime_plots_dict(sim_time)
             elif PROGRESS_LOOP == "demand":
                 # loop over time with progress bar scaling according to future demand
-                all_requests = sum([len(x) for x in self.demand.future_requests.values()])
+                all_requests = sum(len(x) for x in self.demand.future_requests.values())
+                remaining_requests = all_requests
                 with tqdm(total=100, position=tqdm_position) as pbar:
                     pbar.set_description(self.scenario_parameters.get(G_SCENARIO_NAME))
                     for sim_time in range(self.start_time, self.end_time, self.time_step):
-                        remaining_requests = sum([len(x) for x in self.demand.future_requests.values()])
+                        step_requests = len(self.demand.future_requests.get(sim_time, ()))
                         self.step(sim_time)
-                        cur_perc = int(100 * (1 - remaining_requests/all_requests))
+                        if sim_time not in self.demand.future_requests:
+                            remaining_requests -= step_requests
+                        else:
+                            remaining_requests = sum(len(x) for x in self.demand.future_requests.values())
+                        cur_perc = int(100 * (1 - remaining_requests / all_requests)) if all_requests > 0 else 100
                         pbar.update(cur_perc - pbar.n)
                         vehicle_counts = self.count_fleet_status()
                         info_dict = {"simulation_time": sim_time,
