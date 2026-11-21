@@ -249,7 +249,7 @@ class ChargingStation:
         return booking
 
     def modify_booking(self, sim_time, booking: ChargingProcess):
-        raise NotImplemented
+        raise NotImplementedError
     
     def get_charging_slots(self, sim_time, vehicle, planned_arrival_time, planned_start_soc, desired_end_soc, max_offers_per_station=1):
         """ Returns specific charging possibilities for a vehicle at this charging station

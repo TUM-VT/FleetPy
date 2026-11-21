@@ -321,7 +321,7 @@ class PlanStop(PlanStopBase):
         """ this function returns the copy of a plan stop
         :return: PlanStop copy
         """
-        cp_ps = PlanStop(self.pos, boarding_dict=self.boarding_dict.copy(), max_trip_time_dict=self.max_trip_time_dict.copy(),
+        cp_ps = PlanStop(self.pos, boarding_dict={k: v[:] for k, v in self.boarding_dict.items()}, max_trip_time_dict=self.max_trip_time_dict.copy(),
                          latest_arrival_time_dict=self.latest_arrival_time_dict.copy(), earliest_pickup_time_dict=self.earliest_pickup_time_dict.copy(),
                          latest_pickup_time_dict=self.latest_pickup_time_dict.copy(), change_nr_pax=self.change_nr_pax, change_nr_parcels=self.change_nr_parcels,
                          earliest_start_time=self.direct_earliest_start_time, latest_start_time=self.direct_latest_start_time,
@@ -332,6 +332,7 @@ class PlanStop(PlanStopBase):
         cp_ps._planned_arrival_soc = self._planned_arrival_soc
         cp_ps._planned_departure_soc = self._planned_departure_soc
         cp_ps.started_at = self.started_at
+        cp_ps.infeasible_locked = self.infeasible_locked
         return cp_ps
 
     def get_earliest_start_time(self) -> float:
@@ -467,7 +468,7 @@ class PlanStop(PlanStopBase):
     def is_empty(self) -> bool:
         """ tests if nothing has to be done here and its just a routing target marker (i.e. reloc target)
         :return: (bool)"""
-        if self.change_nr_pax == 0 and len(self.boarding_dict.get(1, [])) == 0 and len(self.boarding_dict.get(-1, [])) == 0 and self.charging_power == 0: #and len(self.planned_departure) == 0
+        if self.change_nr_pax == 0 and self.change_nr_parcels == 0 and not self.fixed_stop and len(self.boarding_dict.get(1, [])) == 0 and len(self.boarding_dict.get(-1, [])) == 0 and self.charging_power == 0: #and len(self.planned_departure) == 0
             return True
         else:
             return False
@@ -582,7 +583,7 @@ class VehiclePlan:
         tmp_VehiclePlan = VehiclePlan(None, None, None, [ps.copy() for ps in self.list_plan_stops], copy=True)
         tmp_VehiclePlan.vid = self.vid
         tmp_VehiclePlan.utility = self.utility
-        tmp_VehiclePlan.pax_info = self.pax_info.copy()
+        tmp_VehiclePlan.pax_info = {k: v[:] for k, v in self.pax_info.items()}
         tmp_VehiclePlan.feasible = True
         return tmp_VehiclePlan
 
@@ -833,7 +834,7 @@ class VehiclePlan:
                 # set charge
                 if pstop.get_charging_power() > 0:  # TODO # is charging now in waiting included as planned here?
                     c_soc += veh_obj.compute_soc_charging(pstop.get_charging_power(), c_time - last_c_time)
-                    c_soc = max(c_soc, 1.0)
+                    c_soc = min(c_soc, 1.0)
                 pstop.set_planned_arrival_and_departure_soc(last_c_soc, c_soc)
                     
         return {"stop_index": stop_index, "c_pos": c_pos, "c_soc": c_soc, "c_time": c_time, "c_pax": c_pax,
@@ -954,7 +955,7 @@ class VehiclePlan:
 
                 if pstop.get_charging_power() > 0:  # TODO # is charging now in waiting included as planned here?
                     c_soc += veh_obj.compute_soc_charging(pstop.get_charging_power(), c_time - last_c_time)
-                    c_soc = max(c_soc, 1.0)
+                    c_soc = min(c_soc, 1.0)
                 pstop.set_planned_arrival_and_departure_soc(last_c_soc, c_soc)
                     
         if keep_feasible and not is_feasible:
@@ -1005,7 +1006,7 @@ class VehiclePlan:
         tmp = []
         rm = False
         for ps in new_plan.list_plan_stops:
-            if not ps.is_empty() or ps.is_locked() or ps.is_locked_end():
+            if not ps.is_empty() or ps.is_locked() or ps.is_locked_end() or ps.is_fixed_stop():
                 tmp.append(ps)
             else:
                 rm = True

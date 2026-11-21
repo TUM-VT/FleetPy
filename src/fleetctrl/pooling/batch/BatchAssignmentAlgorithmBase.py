@@ -72,7 +72,7 @@ class SimulationVehicleStruct():
         :return: delta SOC
         :rtype: float
         """
-        return power * duration / self.battery_size
+        return power * duration / (self.battery_size * 3600)
 
     def compute_soc_consumption(self, distance : float) -> float:
         """This method returns the SOC change for driving a certain given distance.
@@ -118,7 +118,7 @@ class SimulationVehicleStruct():
         if self.status == VRL_STATES.BOARDING:
             return sum([rq.nr_pax for rq in self.pax if not rq.is_parcel]) - sum([rq.nr_pax for rq in self.assigned_route[0].rq_dict.get(1, []) if not rq.is_parcel])
         else:
-            return sum([rq.nr_pax for rq in self.pax if not rq.is_parcel if not rq.is_parcel])
+            return sum([rq.nr_pax for rq in self.pax if not rq.is_parcel])
         
     def get_nr_parcels_without_currently_boarding(self) -> int:
         """ this method returns the current number of parcels for the use of setting the inititial stats for 
@@ -129,9 +129,9 @@ class SimulationVehicleStruct():
         :rtype: int
         """
         if self.status == VRL_STATES.BOARDING:
-            return sum([rq.nr_pax for rq in self.pax if rq.is_parcel]) - sum([rq.nr_pax for rq in self.assigned_route[0].rq_dict.get(1, []) if rq.is_parcel])
+            return sum([rq.parcel_size for rq in self.pax if rq.is_parcel]) - sum([rq.parcel_size for rq in self.assigned_route[0].rq_dict.get(1, []) if rq.is_parcel])
         else:
-            return sum([rq.nr_pax for rq in self.pax if rq.is_parcel])
+            return sum([rq.parcel_size for rq in self.pax if rq.is_parcel])
 
 INPUT_PARAMETERS_BatchAssignmentAlgorithmBase = {
     "doc" :  """This class is used to compute new vehicle assignments with an algorithm

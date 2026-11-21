@@ -102,8 +102,7 @@ class FleetControlBase(metaclass=ABCMeta):
                                                       network_dynamics_file_name=operator_attributes.get(G_RA_OP_NW_DYN_F))
             self.routing_engine.update_network(scenario_parameters[G_SIM_START_TIME])
             self._use_own_routing_engine = True
-        # TODO: is a zonesystem needed for the fleetcontrol module? -> moved to repo module
-        #self.zones: ZoneSystem = zone_system
+        self.zones: ZoneSystem = zone_system
         self.dir_names = dir_names
         #
         self.sim_vehicles: List[SimulationVehicle] = list_vehicles
@@ -435,6 +434,7 @@ class FleetControlBase(metaclass=ABCMeta):
                 return False
         if self.rq_min_distance and plan_request.init_direct_td < self.rq_min_distance:
             self._create_rejection(plan_request, sim_time, reason=REJECTION_REASON.TRAVEL_DISTANCE)
+            return False
         return True
 
     def get_current_offer(self, rid : Any) -> TravellerOffer:
@@ -633,7 +633,7 @@ class FleetControlBase(metaclass=ABCMeta):
         :return: None
         """
         prq = self.rq_dict[rid]
-        prq.set_soft_do_constraints(new_soft_lpt, new_soft_ept)
+        prq.set_soft_pu_constraints(new_soft_lpt, new_soft_ept)
 
     def _compute_fare(self, sim_time : int, prq : PlanRequest, assigned_veh_plan : VehiclePlan=None) -> float:
         """This method can be used to compute the fare. It already considers utilization and zone surge pricing. It
@@ -675,11 +675,11 @@ class FleetControlBase(metaclass=ABCMeta):
         n_active_vehicles = 0
         n_effective_utilized_vehicles = 0.0
         for veh in self.sim_vehicles:
+            if veh.status in G_INACTIVE_STATUS:
+                continue
             ass_plan = self.veh_plans[veh.vid]
             if len(ass_plan.list_plan_stops) == 0:
                 n_active_vehicles += 1
-                continue
-            if veh.status in G_INACTIVE_STATUS:
                 continue
             if ass_plan.list_plan_stops[0].is_empty() and not ass_plan.list_plan_stops[0].is_locked():
                 n_active_vehicles += 1
@@ -716,7 +716,7 @@ class FleetControlBase(metaclass=ABCMeta):
         if rid_info is not None:
             planned_pu_time = rid_info[0]
             if planned_pu_time - sim_time <= self.early_lock_time:
-                self.change_prq_time_constraints(sim_time, rid, planned_pu_time - 1, planned_pu_time + 1)
+                self.change_prq_time_constraints(sim_time, rid, planned_pu_time + 1, planned_pu_time - 1)
                 prq = self.rq_dict[rid]
                 prq.lock_request()
         else:

@@ -140,7 +140,7 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
                 if assigned_vid is None:
                     if self.max_wait_time_2 is not None and self.max_wait_time_2 > 0:    # retry with new waiting time constraint (no offer returned)
                         new_unassigned_requests_2[rid] = 1
-                        self.RPBO_Module.delRequest(rid)
+                        self.RPBO_Module.delete_request(rid)
                         _, earliest_pu, _ = prq.get_o_stop_info()
                         new_latest_pu = earliest_pu + self.max_wait_time_2
                         self.change_prq_time_constraints(simulation_time, rid, new_latest_pu)
@@ -152,10 +152,10 @@ class RidePoolingBatchAssignmentFleetcontrol(RidePoolingBatchOptimizationFleetCo
                     self._create_user_offer(prq, simulation_time, assigned_vehicle_plan=assigned_plan)
             for rid in self.unassigned_requests_2.keys():   # check second try rids
                 assigned_vid = self.rid_to_assigned_vid.get(rid, None)
+                prq = self.rq_dict[rid]
                 if assigned_vid is None:    # decline
                     self._create_rejection(prq, simulation_time, reason=REJECTION_REASON.NO_VEHICLE_AVAILABLE)
                 else:
-                    prq = self.rq_dict[rid]
                     assigned_plan = self.veh_plans[assigned_vid]
                     self._create_user_offer(prq, simulation_time, assigned_vehicle_plan=assigned_plan)
             self.unassigned_requests_1 = {}
