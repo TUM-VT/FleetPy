@@ -102,7 +102,8 @@ private:
   std::unordered_map<std::string, Stop> stops_; ///< Map of stop IDs to Stop objects.
   std::unordered_map<std::pair<std::string, std::string>, Route, pair_hash> routes_; ///< Map of route keys to Route objects.
   std::unordered_map<std::string, Trip> trips_; ///< Map of trip IDs to Trip objects.
-  int current_date_int_; ///< The current date as an integer.
+  int current_date_int_{-1}; ///< Cached current date as an integer.
+  int next_date_int_{-1}; ///< Cached next date as an integer.
 
   Query query_; ///< The current query for the RAPTOR algorithm.
   int max_transfers_; ///< The maximum number of transfers allowed in a journey.

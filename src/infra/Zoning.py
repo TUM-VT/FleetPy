@@ -60,6 +60,13 @@ class ZoneSystem:
         if self.general_info_df is not None:
             self.node_zone_df = pd.merge(self.node_zone_df, self.general_info_df, left_on=G_ZONE_ZID, right_on=G_ZONE_ZID)
         self.node_zone_df.set_index(G_ZONE_NID, inplace=True)
+        self._node_to_zone = self.node_zone_df[G_ZONE_ZID].to_dict()
+        self._zone_to_nodes = {}
+        for node_id, zone_id in self.node_zone_df[G_ZONE_ZID].items():
+            try:
+                self._zone_to_nodes[zone_id].append(node_id)
+            except KeyError:
+                self._zone_to_nodes[zone_id] = [node_id]
         self.zone_centroids = None # zone_id -> list node_indices (centroid not unique!)
         if G_ZONE_CEN in self.node_zone_df.columns:
             self.zone_centroids = {}
@@ -107,8 +114,7 @@ class ZoneSystem:
         :return: list of node_ids
         :rtype: list
         """
-        tmp_df = self.node_zone_df[self.node_zone_df[G_ZONE_ZID] == zone_id]
-        return tmp_df.index.values.tolist()
+        return list(self._zone_to_nodes.get(zone_id, []))
 
     def get_random_node(self, zone_id, only_boarding_nodes=False):
         """This method returns a random node_id for a given zone_id.
@@ -127,9 +133,9 @@ class ZoneSystem:
             else:
                 return -1
         else:
-            tmp_df = self.node_zone_df[self.node_zone_df[G_ZONE_ZID] == zone_id]
-            if len(tmp_df) > 0:
-                return np.random.choice(tmp_df.index.values.tolist())
+            nodes = self._zone_to_nodes.get(zone_id, [])
+            if len(nodes) > 0:
+                return np.random.choice(nodes)
             else:
                 return -1
 
@@ -154,7 +160,7 @@ class ZoneSystem:
         :return: zone_id of the node in question; return -1 if no zone is found
         :rtype: int
         """
-        return self.node_zone_df[G_ZONE_ZID].get(node_id, -1)
+        return self._node_to_zone.get(node_id, -1)
 
     def get_zone_from_pos(self, pos):
         """This method returns the zone_id of a given position by returning the zone of the origin node.

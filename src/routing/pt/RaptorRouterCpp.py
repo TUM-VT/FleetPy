@@ -46,6 +46,16 @@ class RaptorRouterCpp():
 
         # load the stations: used for station-stop mapping
         self.stations_fp_df = self._load_stations_from_gtfs(gtfs_dir)
+        self._station_stops_dict: tp.Dict[str, tp.List[tp.Tuple[str, int]]] = {}
+        for sid, inc_str, tt_str in zip(
+            self.stations_fp_df["station_id"],
+            self.stations_fp_df["stops_included"],
+            self.stations_fp_df["station_stop_transfer_times"],
+        ):
+            if sid not in self._station_stops_dict:
+                inc_list = ast.literal_eval(inc_str.replace(';', ','))
+                tt_list = ast.literal_eval(tt_str.replace(';', ','))
+                self._station_stops_dict[sid] = [(stop_id, int(transfer_time)) for stop_id, transfer_time in zip(inc_list, tt_list)]
 
     def _initialize_pt_router(self, gtfs_dir: str):
         """This method initializes the PT router.
@@ -147,19 +157,10 @@ class RaptorRouterCpp():
         Returns:
             tp.Tuple[tp.List[str], tp.List[int]]: The included stops and transfer times.
         """
-        station_data = self.stations_fp_df[self.stations_fp_df["station_id"] == station_id]
-        
-        if station_data.empty:
+        res = self._station_stops_dict.get(station_id)
+        if res is None:
             raise ValueError(f"Station ID {station_id} not found in the stations data")
-            
-        included_ids_str = station_data["stops_included"].iloc[0]
-        included_ids_str = included_ids_str.replace(';', ',')
-        included_ids_list = ast.literal_eval(included_ids_str)
-
-        transfer_times_str = station_data["station_stop_transfer_times"].iloc[0]
-        transfer_times_str = transfer_times_str.replace(';', ',')
-        transfer_times_list = ast.literal_eval(transfer_times_str)
-        return [(stop_id, int(transfer_time)) for stop_id, transfer_time in zip(included_ids_list, transfer_times_list)]
+        return res
 
 
 

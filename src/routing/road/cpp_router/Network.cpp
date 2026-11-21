@@ -103,7 +103,7 @@ Network::Network(string node_path, string edge_path) {
                     y_coord = stod(entry);
                 }
                 else if (column_counter == stop_onyl_col) {
-                    if (entry == "True") {
+                    if (entry == "True" || entry == "true" || entry == "1" || entry == "1.0") {
                         is_stop_only = true;
                     }
                 }
@@ -315,18 +315,17 @@ std::vector<Resultstruct> Network::computeTravelCosts1toX(int start_node_index, 
 
     int targets_reached = dijkstraForward(start_node_index, time_range = time_range, max_targets = max_targets);
 
-    vector<Resultstruct> return_vector(targets_reached);
-    int i = 0;
+    vector<Resultstruct> return_vector;
+    return_vector.reserve(targets_reached);
     for (int target : targets) {
         if (nodes[target].isSettledFw(dijkstra_number)) {
             //cout << "reached " << target << " max: " << targets_reached << endl;
             pair<double, double> costs = nodes[target].getCostFw();
             Resultstruct target_results;
             target_results.target = target;
-            target_results.traveltime = nodes[target].getCostFw().first;
-            target_results.traveldistance = nodes[target].getCostFw().second;
-            return_vector[i] = target_results;
-            i++;
+            target_results.traveltime = costs.first;
+            target_results.traveldistance = costs.second;
+            return_vector.push_back(target_results);
         }
     }
     //cout << "1toX: " << targets_reached << " " << i << endl;
@@ -426,17 +425,16 @@ std::vector<Resultstruct> Network::computeTravelCostsXto1(int start_node_index, 
 
     int targets_reached = dijkstraBackward(start_node_index, time_range = time_range, max_targets = max_targets);
 
-    vector<Resultstruct> return_vector(targets_reached);
-    int i = 0;
+    vector<Resultstruct> return_vector;
+    return_vector.reserve(targets_reached);
     for (int target : targets) {
         if (nodes[target].isSettledBw(dijkstra_number)) {
             pair<double, double> costs = nodes[target].getCostBw();
             Resultstruct target_results;
             target_results.target = target;
-            target_results.traveltime = nodes[target].getCostBw().first;
-            target_results.traveldistance = nodes[target].getCostBw().second;
-            return_vector[i] = target_results;
-            i++;
+            target_results.traveltime = costs.first;
+            target_results.traveldistance = costs.second;
+            return_vector.push_back(target_results);
         }
     }
     //cout << "Xto1: " << targets_reached << " " << i << endl;
@@ -576,16 +574,19 @@ pair<double, double> Network::dijkstraBidirectional(int start_node_index, int en
             if (current_node.isSettledFw(dijkstra_number)) {
                 continue;
             }
-            current_node.setSettledFw(dijkstra_number);
-            if (current_node.mustStop() & (current_node.getIndex() != start_node_index)) {
+            if (current_node.mustStop() && (current_node.getIndex() != start_node_index) && (current_node.getIndex() != end_node_index)) {
                 //cout << "skip a " << current_node.getIndex() << endl;
                 continue;
             }
+            current_node.setSettledFw(dijkstra_number);
             //cout << "dijkstra  " << current_node.getStr() << endl;
             current_fw_cost = -current_pair.first;
             if (current_node.isSettledBw(dijkstra_number)) {
                 common_node = current_node.getIndex();
                 break;
+            }
+            if (current_node.mustStop() && (current_node.getIndex() != start_node_index)) {
+                continue;
             }
             //cout << "forward " << current_pair.first << " " << current_pair.second << endl;
             dijkstraStepForward_(fw_pq, current_node, -current_pair.first);
@@ -601,16 +602,19 @@ pair<double, double> Network::dijkstraBidirectional(int start_node_index, int en
             if (current_node.isSettledBw(dijkstra_number)) {
                 continue;
             }
-            current_node.setSettledBw(dijkstra_number);
-            if (current_node.mustStop() & (current_node.getIndex() != end_node_index)) {
+            if (current_node.mustStop() && (current_node.getIndex() != end_node_index) && (current_node.getIndex() != start_node_index)) {
                 //cout << "skip b " << current_node.getIndex() << endl;
                 continue;
             }
+            current_node.setSettledBw(dijkstra_number);
             //cout << "dijkstra  " << current_node.getStr() << endl;
             current_bw_cost = -current_pair.first;
             if (current_node.isSettledFw(dijkstra_number)) {
                 common_node = current_node.getIndex();
                 break;
+            }
+            if (current_node.mustStop() && (current_node.getIndex() != end_node_index)) {
+                continue;
             }
             //cout << "backward " << current_pair.first << " " << current_pair.second << endl;
             dijkstraStepBackward_(bw_pq, current_node, -current_pair.first);

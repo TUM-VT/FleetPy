@@ -116,9 +116,9 @@ Date Utils::addOneDay(Date date) {
   time_info.tm_year = date.year - 1900;
   time_info.tm_mon = date.month - 1;
   time_info.tm_mday = date.day + 1; // Add one day
-  int date_weekday = (time_info.tm_wday == 0) ? 6 : time_info.tm_wday - 1;  // 0-6, 0 = Monday, 6 = Sunday
 
   std::mktime(&time_info); // Normalize the date
+  int date_weekday = (time_info.tm_wday == 0) ? 6 : time_info.tm_wday - 1;  // 0-6, 0 = Monday, 6 = Sunday
   Date new_date = {time_info.tm_year + 1900, time_info.tm_mon + 1, time_info.tm_mday, date_weekday};
 
   return new_date;  // Get the next day

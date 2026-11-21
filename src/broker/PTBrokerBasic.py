@@ -54,7 +54,7 @@ LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
 BUFFER_SIZE = 100
 
-INPUT_PARAMETERS_PTBroker = {
+INPUT_PARAMETERS_PTBrokerBasic = {
     "doc" : "this class represents a broker platform which handles intermodal requests",
     "inherit" : BrokerBasic,
     "input_parameters_mandatory": ["n_amod_op", "amod_operators", "pt_operator", "demand", "routing_engine", "scenario_parameters"],
@@ -62,6 +62,7 @@ INPUT_PARAMETERS_PTBroker = {
     "mandatory_modules": [],
     "optional_modules": []
 }
+INPUT_PARAMETERS_PTBroker = INPUT_PARAMETERS_PTBrokerBasic
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # main
@@ -105,6 +106,8 @@ class PTBrokerBasic(BrokerBasic):
 
         # method for finding transfer stations
         self.transfer_search_method: str = self.scenario_parameters.get(G_BROKER_TRANSFER_SEARCH_METHOD, "closest")
+        self._street2pt_dict: tp.Dict[int, tp.Tuple[str, int]] = {}
+        self._pt2street_dict: tp.Dict[str, tp.Tuple[int, int]] = {}
         # read necessary files based on the transfer search method
         # default method: closest transfer station search.
         if self.transfer_search_method == "closest":
@@ -114,6 +117,18 @@ class PTBrokerBasic(BrokerBasic):
             except FileNotFoundError:
                 LOG.error("PTBroker: street_station_transfers_fp.txt file not found in the GTFS directory, which is required for finding closest transfer stations!")
                 raise FileNotFoundError("PTBroker: street_station_transfers_fp.txt file not found in the GTFS directory, which is required for finding closest transfer stations!")
+            for node_id_val, station_id_val, transfer_time_val in zip(
+                self.street_station_transfers_fp_df["node_id"],
+                self.street_station_transfers_fp_df["closest_station_id"],
+                self.street_station_transfers_fp_df["street_station_transfer_time"],
+            ):
+                nid = int(node_id_val)
+                sid = str(station_id_val)
+                tt = int(transfer_time_val)
+                if nid not in self._street2pt_dict:
+                    self._street2pt_dict[nid] = (sid, tt)
+                if sid not in self._pt2street_dict or tt < self._pt2street_dict[sid][1]:
+                    self._pt2street_dict[sid] = (nid, tt)
 
 
     def inform_request(self, rid: int, rq_obj: 'RequestBase', sim_time: int):
@@ -565,24 +580,16 @@ class PTBrokerBasic(BrokerBasic):
         if self.transfer_search_method == "closest":  # closest station or street node
             if direction == "street2pt":  # find closest pt station from street node
                 street_node_id: int = int(node_id)
-                # TODO: allow multiple closest stations?
-                street_station_transfer = self.street_station_transfers_fp_df[self.street_station_transfers_fp_df["node_id"] == street_node_id]
-                if street_station_transfer.empty:
+                res = self._street2pt_dict.get(street_node_id)
+                if res is None:
                     raise ValueError(f"Street node id {street_node_id} not found in the street station transfers file")
-                closest_station_id: str = street_station_transfer["closest_station_id"].iloc[0]
-                walking_time: int = street_station_transfer["street_station_transfer_time"].iloc[0]
-                return closest_station_id, walking_time
+                return res
             elif direction == "pt2street":  # find closest street node from pt station
                 pt_station_id: str = str(node_id)
-                street_station_transfers = self.street_station_transfers_fp_df[self.street_station_transfers_fp_df["closest_station_id"] == pt_station_id]
-                if street_station_transfers.empty:
+                res = self._pt2street_dict.get(pt_station_id)
+                if res is None:
                     raise ValueError(f"PT station id {pt_station_id} not found in the street station transfers file")
-                # find the record with the minimum street_station_transfer_time
-                # TODO: if multiple exist, return all?
-                min_transfer = street_station_transfers.loc[street_station_transfers["street_station_transfer_time"].idxmin()]
-                closest_street_node_id: int = min_transfer["node_id"]
-                walking_time: int = min_transfer["street_station_transfer_time"]
-                return closest_street_node_id, walking_time
+                return res
             else:
                 raise ValueError(f"Invalid direction: {direction}. Must be 'pt2street' or 'street2pt'.")
         else:
