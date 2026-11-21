@@ -223,6 +223,9 @@ class NetworkTTMatrix(NetworkBase):
                         if self._current_tt_path != path:
                             self.tt_numpy = np.load(path.joinpath("tt_matrix.npy"))
                             self.tt = self.tt_numpy.tolist()
+                            for n in self.nodes:
+                                n.surround_prev.clear()
+                                n.surround_next.clear()
                             self._current_tt_path = path
                             tt_updated = True
                     if tt_updated is True:
@@ -237,7 +240,7 @@ class NetworkTTMatrix(NetworkBase):
         LOG.debug("reset network at {}".format(simulation_time))
         if self.sorted_tt_factor_times:
             self.current_tt_factor_index = 0
-            if len(self.sorted_tt_factor_times) > 2:
+            if len(self.sorted_tt_factor_times) > 0:
                 for i in range(len(self.sorted_tt_factor_times) - 1):
                     if self.sorted_tt_factor_times[i] <= simulation_time and self.sorted_tt_factor_times[i+1] > simulation_time:
                         self.update_network(self.sorted_tt_factor_times[i], update_state=True)
@@ -292,8 +295,8 @@ class NetworkTTMatrix(NetworkBase):
         :rtype: list
         """
         tt = self.tt[start_node_index][end_node_index]
-        scaled_tt = tt * self.tt_factor
-        if tt not in [None, np.nan, np.inf]:
+        if tt is not None and not np.isnan(tt) and not np.isinf(tt):
+            scaled_tt = tt * self.tt_factor
             return scaled_tt, self.td[start_node_index][end_node_index]
         else:
             return None, None
@@ -659,7 +662,7 @@ class NetworkTTMatrix(NetworkBase):
             for d_pos in list_positions:
                 result_dict[(o_pos, d_pos)] = self.return_travel_costs_1to1(o_pos, d_pos,
                                                                             customized_section_cost_function)
-            return result_dict
+        return result_dict
 
     # internal methods
     # ----------------
@@ -726,7 +729,7 @@ class NetworkTTMatrix(NetworkBase):
         route_tt = 0.0
         scaled_route_tt = 0.0
         total_tt = self.tt[origin_node.node_index][destination_node.node_index]
-        if total_tt in [None, np.nan, np.inf]:
+        if total_tt is None or np.isnan(total_tt) or np.isinf(total_tt):
             prt_str = f"There is no route from {origin_node} to {destination_node}"
             raise AssertionError(prt_str)
         while current_node != destination_node:

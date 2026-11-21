@@ -30,7 +30,9 @@ class Router():
     with_arc_flags: if True -> arc_flag filtering for next arcs is used
     ch_flag: contraction hierarchy is used
     """
-    def __init__(self, nw, start_node, destination_nodes = [], mode = None, time_radius = None, max_settled_targets = None, forward_flag = True, ch_flag = False, customized_section_cost_function = None):
+    def __init__(self, nw, start_node, destination_nodes = None, mode = None, time_radius = None, max_settled_targets = None, forward_flag = True, ch_flag = False, customized_section_cost_function = None):
+        if destination_nodes is None:
+            destination_nodes = []
         self.nw = nw
         self.start = start_node
         self.back_end = None
@@ -115,7 +117,7 @@ class Router():
         for n in self.destination_nodes.keys():
             self.nw.nodes[n].is_target_node = False
 
-        if ret[0][1][0] < 0:
+        if ret and ret[0][1][0] < 0:
             print(ret, self.mode)
             exit()
         return ret
@@ -245,7 +247,7 @@ class Router():
                     c_node = c_node.next
                 forward_path.append(c_node.node_index)
 
-            cost = ( common_node.cost[0] + common_node.cost_back[0], common_node.cost[1] + common_node.cost_back[1] )
+            cost = ( common_node.cost[0] + common_node.cost_back[0], common_node.cost[1] + common_node.cost_back[1], common_node.cost[2] + common_node.cost_back[2] )
             if not return_route:
                 forward_path = [end, self.start]
             return (forward_path, cost)
@@ -538,7 +540,7 @@ class Router():
             if current_forward_cost < current_backward_cost:
                 self.dijkstraStepForwards(frontierForward, current_forward_node_obj, current_forward_cost)
                 if current_forward_node_obj.settled_back == self.dijkstra_number:
-                    if not current_forward_node_obj.isFs() or current_forward_node_obj.node_index == self.start or current_forward_node_obj.node_index == end:
+                    if not current_forward_node_obj.must_stop() or current_forward_node_obj.node_index == self.start or current_forward_node_obj.node_index == end:
                         c = current_forward_node_obj.cost[0] + current_forward_node_obj.cost_back[0]
                         if c < current_solution[1]:
                             current_solution = (current_forward_node_obj, c)
@@ -547,7 +549,7 @@ class Router():
             else:
                 self.dijkstraStepBackwards(frontierBackward, current_backward_node_obj, current_backward_cost)
                 if current_backward_node_obj.settled == self.dijkstra_number:
-                    if not current_backward_node_obj.isFs() or current_backward_node_obj.node_index == end or current_backward_node_obj.node_index == self.start:
+                    if not current_backward_node_obj.must_stop() or current_backward_node_obj.node_index == end or current_backward_node_obj.node_index == self.start:
                         c = current_backward_node_obj.cost[0] + current_backward_node_obj.cost_back[0]
                         if c < current_solution[1]:
                             current_solution = (current_backward_node_obj, c)
