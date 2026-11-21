@@ -168,7 +168,7 @@ class ZoneSystem:
         """This method returns the zone_id of a given position by returning the zone of the origin node.
 
         :param pos: position-tuple (edge origin node, edge destination node, edge relative position)
-        :type pos: list
+        :type pos: list | tuple
         :return: zone_id of the node in question; return -1 if no zone is found
         :rtype: int
         """

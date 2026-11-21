@@ -71,7 +71,7 @@ def return_position_str(position_tuple):
         return "{};{};{:.3f}".format(position_tuple[0], position_tuple[1], position_tuple[2])
 
 
-def return_position_from_str(position_str):
+def return_position_from_str(position_str) -> tuple:
     if type(position_str) == str:
         entries = position_str.split(";")
         if len(entries) == 1:
@@ -90,7 +90,7 @@ def return_position_from_str(position_str):
             raise Exception("position_str has to be of type str or int, but is of type {}".format(type(position_str)))
         second_entry = None
         third_entry = None
-    return (first_entry, second_entry, third_entry)
+    return first_entry, second_entry, third_entry
 
 
 # TODO # consistent use of NwPos class instead of tuples in Framework
@@ -132,7 +132,7 @@ class NetworkBase(metaclass=ABCMeta):
         return return_position_str(position_tuple)
 
     @staticmethod
-    def return_position_from_str(position_str):
+    def return_position_from_str(position_str) -> tuple:
         return return_position_from_str(position_str)
 
     # common methods
@@ -352,9 +352,9 @@ class NetworkBase(metaclass=ABCMeta):
         destination_position[1] or (destination_position[0] if destination_position[1]==None) are included
 
         :param origin_position: (origin_node_index, destination_node_index, relative_position) of current_edge
-        :type origin_position: list
+        :type origin_position: list | tuple
         :param destination_position: (origin_node_index, destination_node_index, relative_position) of destination_edge
-        :type destination_position: list
+        :type destination_position: list | tuple
         :param customized_section_cost_function: function to compute the travel cost of an section
                 which takes the args: (travel_time, travel_distance, current_dijkstra_node_index) -> cost_value
                 if None: travel_time is considered as the cost_function of a section

@@ -49,6 +49,8 @@ class PlanRequest:
             self.sub_rid_struct = self.rid
         self.rq_time = rq.rq_time
         #
+        self.o_pos: tuple | None = None
+        self.d_pos: tuple | None = None
         if pickup_pos is None:
             self.o_pos = rq.o_pos
         else:

@@ -71,8 +71,8 @@ class RequestBase(metaclass=ABCMeta):
         self.max_trip_time = None
         self.nr_pax = rq_row.get(G_RQ_PAX, 1)   # TODO RPP: neue attribute für größe/menge/gewicht
         #
-        self.o_pos = routing_engine.return_position_from_str(rq_row[G_RQ_ORIGIN])
-        self.d_pos = routing_engine.return_position_from_str(rq_row[G_RQ_DESTINATION])
+        self.o_pos: tuple = routing_engine.return_position_from_str(rq_row[G_RQ_ORIGIN])
+        self.d_pos: tuple = routing_engine.return_position_from_str(rq_row[G_RQ_DESTINATION])
         # store miscellaneous custom values from demand file
         for param, value in rq_row.drop([G_RQ_TIME, G_RQ_ID, G_RQ_ORIGIN, G_RQ_DESTINATION]).items():
             setattr(self, str(param), value)
