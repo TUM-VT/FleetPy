@@ -72,6 +72,14 @@ class NetworkDynamicPreprocCpp(NetworkBasicWithStoreCpp):
         else:
             return False
 
+    def load_tt_file(self, scenario_time, ext_path=None):
+        """
+        loads new travel time files for scenario_time
+        """
+        x = super().load_tt_file(scenario_time, ext_path=ext_path)
+        self._preprocess_globally()
+        return x
+
     def _select_hot_destinations(self, k_max, coverage):
         if not self._destination_count:
             return []
