@@ -127,6 +127,20 @@ class NetworkPartialPreprocessed(NetworkBasic):
                 if None: travel_time is considered as the cost_function of a section
         :return: (cost_function_value, travel time, travel_distance) between the two nodes
         """
+        if origin_position[1] is None and destination_position[1] is None and customized_section_cost_function is None:
+            o_node = origin_position[0]
+            d_node = destination_position[0]
+            if o_node == d_node:
+                return (0.0, 0.0, 0.0)
+            if o_node < self.max_preprocessed_index and d_node < self.max_preprocessed_index:
+                tt = self.tt_table[o_node, d_node]
+                dis = self.dis_table[o_node, d_node]
+                if self._current_tt_factor is not None:
+                    tt = tt * self._current_tt_factor
+                return (tt, tt, dis)
+            s = self.travel_time_infos.get((o_node, d_node))
+            if s is not None:
+                return s
         trivial_test = self.test_and_get_trivial_route_tt_and_dis(origin_position, destination_position)
         if trivial_test is not None:
             return trivial_test[1]

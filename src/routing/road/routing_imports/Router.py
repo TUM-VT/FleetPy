@@ -1,4 +1,5 @@
 import logging
+from _heapq import heappush as _heappush, heappop as _heappop
 LOG = logging.getLogger(__name__)
 
 try:
@@ -255,146 +256,279 @@ class Router():
         """ backward dijkstra
         start node is self.start and ends if all destination nodes are settled or no more route available
         """
-
-        frontier = PQ.PriorityQueue()
-
-        #self.main_end = list(self.destination_nodes.keys())[0]
-
-        start_node = self.nw.nodes[self.start]
-        start_node.settled_back = self.dijkstra_number #settled_back attribute is set to dijkstra number for settled nodes
-        start_node.cost_index_back = -self.dijkstra_number  #if touched cost_index_attribute is set
-        start_node.cost_back = (0, 0, 0)       #if touched cost_back attribute is set to current_cfv, current tt, current dis
-        start_node.next = None          #pointer to next node obj in shortest path
+        dijkstra_num = self.dijkstra_number
+        neg_dijkstra_num = -dijkstra_num
+        start_idx = self.start
+        back_end = self.back_end
+        start_node = self.nw.nodes[start_idx]
+        start_node.settled_back = dijkstra_num
+        start_node.cost_index_back = neg_dijkstra_num
+        start_node.cost_back = (0, 0, 0)
+        start_node.next = None
 
         destinations_reached = 0
         destinations_to_reach = self.number_destinations
+        time_radius = self.time_radius
+        ch_flag = self.ch_flag
+        cost_fn = self.customized_section_cost_function
+        default_cost = (cost_fn is shortest_travel_time_cost_function)
 
-        frontier.addTask(start_node, 0)
+        heap = [(0, 0, start_node)]
+        count = 1
+        heappush = _heappush
+        heappop = _heappop
+        n_settled = self.n_settled
 
-        while True:
-            if not frontier.hasElements():
-                break
-            
-            current_node_obj, current_cost = frontier.popTaskPriority()
+        while heap:
+            current_cost, _, current_node_obj = heappop(heap)
+            if current_cost != current_node_obj.cost_back[0]:
+                continue
             if current_node_obj.is_target_node:
                 destinations_reached += 1
-                current_node_obj.settled_back = self.dijkstra_number
+                current_node_obj.settled_back = dijkstra_num
                 if destinations_reached == destinations_to_reach:
                     break
-
-            if self.time_radius is not None and current_cost > self.time_radius:
+            if time_radius is not None and current_cost > time_radius:
                 break
-            
-            self.dijkstraStepBackwards(frontier, current_node_obj, current_cost)
+
+            current_node_obj.settled_back = dijkstra_num
+            n_settled += 1
+            if current_node_obj.is_stop_only and current_node_obj.node_index != back_end:
+                continue
+
+            c_tt = current_node_obj.cost_back[1]
+            c_dis = current_node_obj.cost_back[2]
+            pairs = current_node_obj.edges_from_pairs if not ch_flag else current_node_obj.get_prev_node_edge_pairs(ch_flag=True)
+            if default_cost:
+                for next_node_obj, next_edge_obj in pairs:
+                    if next_node_obj.settled_back != dijkstra_num:
+                        edge_tt = next_edge_obj.travel_time
+                        new_end_cost = current_cost + edge_tt
+                        if next_node_obj.cost_index_back != neg_dijkstra_num or next_node_obj.cost_back[0] > new_end_cost:
+                            next_node_obj.cost_back = (new_end_cost, c_tt + edge_tt, c_dis + next_edge_obj.distance)
+                            next_node_obj.next = current_node_obj
+                            next_node_obj.cost_index_back = neg_dijkstra_num
+                            heappush(heap, (new_end_cost, count, next_node_obj))
+                            count += 1
+            else:
+                for next_node_obj, next_edge_obj in pairs:
+                    if next_node_obj.settled_back != dijkstra_num:
+                        edge_tt = next_edge_obj.travel_time
+                        edge_dis = next_edge_obj.distance
+                        new_end_cost = current_cost + cost_fn(edge_tt, edge_dis, next_node_obj.node_index)
+                        if next_node_obj.cost_index_back != neg_dijkstra_num or next_node_obj.cost_back[0] > new_end_cost:
+                            next_node_obj.cost_back = (new_end_cost, c_tt + edge_tt, c_dis + edge_dis)
+                            next_node_obj.next = current_node_obj
+                            next_node_obj.cost_index_back = neg_dijkstra_num
+                            heappush(heap, (new_end_cost, count, next_node_obj))
+                            count += 1
+        self.n_settled = n_settled
 
 
     def dijkstraForward(self):
         """ forward dijkstra
         start node is self.start and ends if all destination nodes are settled or no more route available
         """
-
-        frontier = PQ.PriorityQueue()
+        dijkstra_num = self.dijkstra_number
+        neg_dijkstra_num = -dijkstra_num
+        start_idx = self.start
+        start_node = self.nw.nodes[start_idx]
+        start_node.settled = dijkstra_num
+        start_node.cost_index = neg_dijkstra_num
+        start_node.cost = (0, 0, 0)
+        start_node.prev = None
 
         destinations_reached = 0
         destinations_to_reach = self.number_destinations
+        time_radius = self.time_radius
+        ch_flag = self.ch_flag
+        cost_fn = self.customized_section_cost_function
+        default_cost = (cost_fn is shortest_travel_time_cost_function)
 
-        start_node = self.nw.nodes[self.start] #start_node object
-        start_node.settled = self.dijkstra_number   #settled attribute is set to dijkstra number for settled nodes
-        start_node.cost_index = -self.dijkstra_number   #cost_index attribute is set for touched nodes
-        start_node.cost = (0, 0, 0)    #cost (cfv, tt, dis) is set for touched nodes
-        start_node.prev = None      #pointer to previous node object for current fastest route
+        heap = [(0, 0, start_node)]
+        count = 1
+        heappush = _heappush
+        heappop = _heappop
+        n_settled = self.n_settled
 
-        frontier.addTask(start_node, 0)
-
-        while True:
-            if not frontier.hasElements():
-                break
-            
-            current_node_obj, current_cost = frontier.popTaskPriority()
+        while heap:
+            current_cost, _, current_node_obj = heappop(heap)
+            if current_cost != current_node_obj.cost[0]:
+                continue
             if current_node_obj.is_target_node:
                 destinations_reached += 1
-                current_node_obj.settled = self.dijkstra_number
+                current_node_obj.settled = dijkstra_num
                 if destinations_reached == destinations_to_reach:
                     break
-            if self.time_radius is not None and current_cost > self.time_radius:
+            if time_radius is not None and current_cost > time_radius:
                 break
-            self.dijkstraStepForwards(frontier, current_node_obj, current_cost)
+
+            current_node_obj.settled = dijkstra_num
+            n_settled += 1
+            if current_node_obj.is_stop_only and current_node_obj.node_index != start_idx:
+                continue
+
+            c_tt = current_node_obj.cost[1]
+            c_dis = current_node_obj.cost[2]
+            pairs = current_node_obj.edges_to_pairs if not ch_flag else current_node_obj.get_next_node_edge_pairs(ch_flag=True)
+            if default_cost:
+                for next_node_obj, next_edge_obj in pairs:
+                    if next_node_obj.settled != dijkstra_num:
+                        edge_tt = next_edge_obj.travel_time
+                        new_end_cost = current_cost + edge_tt
+                        if next_node_obj.cost_index != neg_dijkstra_num or next_node_obj.cost[0] > new_end_cost:
+                            next_node_obj.cost = (new_end_cost, c_tt + edge_tt, c_dis + next_edge_obj.distance)
+                            next_node_obj.prev = current_node_obj
+                            next_node_obj.cost_index = neg_dijkstra_num
+                            heappush(heap, (new_end_cost, count, next_node_obj))
+                            count += 1
+            else:
+                for next_node_obj, next_edge_obj in pairs:
+                    if next_node_obj.settled != dijkstra_num:
+                        edge_tt = next_edge_obj.travel_time
+                        edge_dis = next_edge_obj.distance
+                        new_end_cost = current_cost + cost_fn(edge_tt, edge_dis, next_node_obj.node_index)
+                        if next_node_obj.cost_index != neg_dijkstra_num or next_node_obj.cost[0] > new_end_cost:
+                            next_node_obj.cost = (new_end_cost, c_tt + edge_tt, c_dis + edge_dis)
+                            next_node_obj.prev = current_node_obj
+                            next_node_obj.cost_index = neg_dijkstra_num
+                            heappush(heap, (new_end_cost, count, next_node_obj))
+                            count += 1
+        self.n_settled = n_settled
 
     def bidirectionalDijkstra(self, start, end, frontier_in = None):
         """ bidirectional dijkstra from start to end
         frontier_in: not implemented yet, for keeping track of Priority Queue of start for one to many routing
         """
-        #sets start and end nodes depending on forward flag an initializes PQs
-        if self.forward_flag:
-            if not frontier_in:
-                frontierForward = PQ.PriorityQueue()
-
-                start_node = self.nw.nodes[self.start]
-                start_node.settled = self.dijkstra_number
-                start_node.cost_index = -self.dijkstra_number
-                start_node.cost = (0, 0, 0)
-                start_node.prev = None
-
-                frontierForward.addTask(start_node, 0)
-            else:
+        if frontier_in:
+            if self.forward_flag:
                 frontierForward = frontier_in
-
-            frontierBackward = PQ.PriorityQueue()
-
-            end_node = self.nw.nodes[end]
-            end_node.settled_back = self.dijkstra_number
-            end_node.cost_index_back = -self.dijkstra_number
-            end_node.cost_back = (0, 0, 0)
-            end_node.next = None
-
-            frontierBackward.addTask(end_node, 0)
-
-        else:
-            if not frontier_in:
                 frontierBackward = PQ.PriorityQueue()
-
-                start_node = self.nw.nodes[self.start]
-                start_node.settled_back = self.dijkstra_number
-                start_node.cost_index_back = -self.dijkstra_number
-                start_node.cost_back = (0, 0, 0)
-                start_node.next = None
-
-                frontierBackward.addTask(start_node, 0)
+                end_node = self.nw.nodes[end]
+                end_node.settled_back = self.dijkstra_number
+                end_node.cost_index_back = -self.dijkstra_number
+                end_node.cost_back = (0, 0, 0)
+                end_node.next = None
+                frontierBackward.addTask(end_node, 0)
             else:
                 frontierBackward = frontier_in
-                
-            frontierForward = PQ.PriorityQueue()
+                frontierForward = PQ.PriorityQueue()
+                end_node = self.nw.nodes[end]
+                end_node.settled = self.dijkstra_number
+                end_node.cost_index = -self.dijkstra_number
+                end_node.cost = (0, 0, 0)
+                end_node.prev = None
+                frontierForward.addTask(end_node, 0)
+            current_forward_node_obj = None
+            current_forward_cost = -1
+            current_backward_node_obj = None
+            current_backward_cost = -1
+            common_node = None
+            while True:
+                if current_forward_cost < 0:
+                    if frontierForward.hasElements():
+                        current_forward_node_obj, current_forward_cost = frontierForward.popTaskPriority()
+                    else:
+                        current_forward_cost = float('inf')
+                if current_backward_cost < 0:
+                    if frontierBackward.hasElements():
+                        current_backward_node_obj, current_backward_cost = frontierBackward.popTaskPriority()
+                    else:
+                        current_backward_cost = float('inf')
+                if not current_backward_node_obj and not current_forward_node_obj:
+                    return None
+                if current_forward_cost < current_backward_cost:
+                    self.dijkstraStepForwards(frontierForward, current_forward_node_obj, current_forward_cost)
+                    if current_forward_node_obj.settled_back == self.dijkstra_number:
+                        if not current_forward_node_obj.must_stop() or current_forward_node_obj.node_index == self.start or current_forward_node_obj.node_index == end:
+                            common_node = current_forward_node_obj
+                            break
+                    current_forward_cost = -1
+                    current_forward_node_obj = None
+                else:
+                    self.dijkstraStepBackwards(frontierBackward, current_backward_node_obj, current_backward_cost)
+                    if current_backward_node_obj.settled == self.dijkstra_number:
+                        if not current_backward_node_obj.must_stop() or current_backward_node_obj.node_index == end or current_backward_node_obj.node_index == self.start:
+                            common_node = current_backward_node_obj
+                            break
+                    current_backward_cost = -1
+                    current_backward_node_obj = None
+            if common_node is None or common_node.cost is None or common_node.cost_back is None:
+                return None
+            poss_common_nodes = [(common_node, common_node.cost[0] + common_node.cost_back[0])]
+            while frontierForward.hasElements():
+                x = frontierForward.popTaskPriority()
+                if x[0].cost_index_back == -self.dijkstra_number:
+                    if not x[0].must_stop() or x[0].node_index == end or x[0].node_index == self.start:
+                        poss_common_nodes.append((x[0], x[1] + x[0].cost_back[0]))
+            while frontierBackward.hasElements():
+                x = frontierBackward.popTaskPriority()
+                if x[0].cost_index == -self.dijkstra_number:
+                    if not x[0].must_stop() or x[0].node_index == end or x[0].node_index == self.start:
+                        poss_common_nodes.append((x[0], x[1] + x[0].cost[0]))
+            return min(poss_common_nodes, key=lambda x: x[1])[0]
 
-            end_node = self.nw.nodes[end]
-            end_node.settled = self.dijkstra_number
-            end_node.cost_index = -self.dijkstra_number
-            end_node.cost = (0, 0, 0)
-            end_node.prev = None
+        dijkstra_num = self.dijkstra_number
+        neg_dijkstra_num = -dijkstra_num
+        nodes = self.nw.nodes
+        start_idx = self.start
+        back_end = self.back_end
+        ch_flag = self.ch_flag
+        cost_fn = self.customized_section_cost_function
+        default_cost = (cost_fn is shortest_travel_time_cost_function)
+        heappush = _heappush
+        heappop = _heappop
 
-            frontierForward.addTask(end_node, 0)
+        if self.forward_flag:
+            s_fwd = nodes[start_idx]
+            s_bwd = nodes[end]
+        else:
+            s_bwd = nodes[start_idx]
+            s_fwd = nodes[end]
 
-        current_forward_node_obj = None
-        current_forward_cost = -1
-        current_backward_node_obj = None
-        current_backward_cost = -1
+        s_fwd.settled = dijkstra_num
+        s_fwd.cost_index = neg_dijkstra_num
+        s_fwd.cost = (0, 0, 0)
+        s_fwd.prev = None
+        heap_fwd = [(0, 0, s_fwd)]
+        count_fwd = 1
 
+        s_bwd.settled_back = dijkstra_num
+        s_bwd.cost_index_back = neg_dijkstra_num
+        s_bwd.cost_back = (0, 0, 0)
+        s_bwd.next = None
+        heap_bwd = [(0, 0, s_bwd)]
+        count_bwd = 1
+
+        cur_fwd_node = None
+        cur_fwd_cost = -1
+        cur_bwd_node = None
+        cur_bwd_cost = -1
         common_node = None
+        inf = float("inf")
+        n_settled = self.n_settled
 
-        # alternating fowarward an backward - step depending on smaller current cost of differen PQs
-        # breaks if common node is found
-        # if PQ is empty cost is set very high
         while True:
-            if current_forward_cost < 0:
-                if frontierForward.hasElements():
-                    current_forward_node_obj, current_forward_cost = frontierForward.popTaskPriority()
+            if cur_fwd_cost < 0:
+                while heap_fwd:
+                    c, _, n = heappop(heap_fwd)
+                    if c == n.cost[0]:
+                        cur_fwd_node = n
+                        cur_fwd_cost = c
+                        break
                 else:
-                    current_forward_cost = float('inf')
-            if current_backward_cost < 0:
-                if frontierBackward.hasElements():
-                    current_backward_node_obj, current_backward_cost = frontierBackward.popTaskPriority()
+                    cur_fwd_cost = inf
+            if cur_bwd_cost < 0:
+                while heap_bwd:
+                    c, _, n = heappop(heap_bwd)
+                    if c == n.cost_back[0]:
+                        cur_bwd_node = n
+                        cur_bwd_cost = c
+                        break
                 else:
-                    current_backward_cost = float('inf')
-            if not current_backward_node_obj and not current_forward_node_obj:
+                    cur_bwd_cost = inf
+            if cur_bwd_node is None and cur_fwd_node is None:
+                self.n_settled = n_settled
                 if RAISE_ERROR:
                     prt_str = f"start {start} -> end {end} | no ch"
                     raise AssertionError(prt_str)
@@ -403,40 +537,109 @@ class Router():
                     LOG.warning("start {} -> end {} | no ch".format(start, end))
                     return None
 
-            if current_forward_cost < current_backward_cost:
-                self.dijkstraStepForwards(frontierForward, current_forward_node_obj, current_forward_cost)
-                if current_forward_node_obj.settled_back == self.dijkstra_number:
-                    if not current_forward_node_obj.must_stop() or current_forward_node_obj.node_index == self.start or current_forward_node_obj.node_index == end:
-                        common_node = current_forward_node_obj
+            if cur_fwd_cost < cur_bwd_cost:
+                cur_fwd_node.settled = dijkstra_num
+                n_settled += 1
+                if not (cur_fwd_node.is_stop_only and cur_fwd_node.node_index != start_idx):
+                    c_tt = cur_fwd_node.cost[1]
+                    c_dis = cur_fwd_node.cost[2]
+                    pairs = cur_fwd_node.edges_to_pairs if not ch_flag else cur_fwd_node.get_next_node_edge_pairs(ch_flag=True)
+                    if default_cost:
+                        for nxt, edg in pairs:
+                            if nxt.settled != dijkstra_num:
+                                ett = edg.travel_time
+                                nc = cur_fwd_cost + ett
+                                if nxt.cost_index != neg_dijkstra_num or nxt.cost[0] > nc:
+                                    nxt.cost = (nc, c_tt + ett, c_dis + edg.distance)
+                                    nxt.prev = cur_fwd_node
+                                    nxt.cost_index = neg_dijkstra_num
+                                    heappush(heap_fwd, (nc, count_fwd, nxt))
+                                    count_fwd += 1
+                    else:
+                        for nxt, edg in pairs:
+                            if nxt.settled != dijkstra_num:
+                                ett = edg.travel_time
+                                edis = edg.distance
+                                nc = cur_fwd_cost + cost_fn(ett, edis, nxt.node_index)
+                                if nxt.cost_index != neg_dijkstra_num or nxt.cost[0] > nc:
+                                    nxt.cost = (nc, c_tt + ett, c_dis + edis)
+                                    nxt.prev = cur_fwd_node
+                                    nxt.cost_index = neg_dijkstra_num
+                                    heappush(heap_fwd, (nc, count_fwd, nxt))
+                                    count_fwd += 1
+                if cur_fwd_node.settled_back == dijkstra_num:
+                    if not cur_fwd_node.is_stop_only or cur_fwd_node.node_index == start_idx or cur_fwd_node.node_index == end:
+                        common_node = cur_fwd_node
                         break
-                current_forward_cost = -1
-                current_forward_node_obj = None
+                cur_fwd_cost = -1
+                cur_fwd_node = None
             else:
-                self.dijkstraStepBackwards(frontierBackward, current_backward_node_obj, current_backward_cost)
-                if current_backward_node_obj.settled == self.dijkstra_number:
-                    if not current_backward_node_obj.must_stop() or current_backward_node_obj.node_index == end or current_backward_node_obj.node_index == self.start:
-                        common_node = current_backward_node_obj
+                cur_bwd_node.settled_back = dijkstra_num
+                n_settled += 1
+                if not (cur_bwd_node.is_stop_only and cur_bwd_node.node_index != back_end):
+                    c_tt = cur_bwd_node.cost_back[1]
+                    c_dis = cur_bwd_node.cost_back[2]
+                    pairs = cur_bwd_node.edges_from_pairs if not ch_flag else cur_bwd_node.get_prev_node_edge_pairs(ch_flag=True)
+                    if default_cost:
+                        for nxt, edg in pairs:
+                            if nxt.settled_back != dijkstra_num:
+                                ett = edg.travel_time
+                                nc = cur_bwd_cost + ett
+                                if nxt.cost_index_back != neg_dijkstra_num or nxt.cost_back[0] > nc:
+                                    nxt.cost_back = (nc, c_tt + ett, c_dis + edg.distance)
+                                    nxt.next = cur_bwd_node
+                                    nxt.cost_index_back = neg_dijkstra_num
+                                    heappush(heap_bwd, (nc, count_bwd, nxt))
+                                    count_bwd += 1
+                    else:
+                        for nxt, edg in pairs:
+                            if nxt.settled_back != dijkstra_num:
+                                ett = edg.travel_time
+                                edis = edg.distance
+                                nc = cur_bwd_cost + cost_fn(ett, edis, nxt.node_index)
+                                if nxt.cost_index_back != neg_dijkstra_num or nxt.cost_back[0] > nc:
+                                    nxt.cost_back = (nc, c_tt + ett, c_dis + edis)
+                                    nxt.next = cur_bwd_node
+                                    nxt.cost_index_back = neg_dijkstra_num
+                                    heappush(heap_bwd, (nc, count_bwd, nxt))
+                                    count_bwd += 1
+                if cur_bwd_node.settled == dijkstra_num:
+                    if not cur_bwd_node.is_stop_only or cur_bwd_node.node_index == end or cur_bwd_node.node_index == start_idx:
+                        common_node = cur_bwd_node
                         break
-                current_backward_cost = -1
-                current_backward_node_obj = None
+                cur_bwd_cost = -1
+                cur_bwd_node = None
 
-        # fastest route is not necessarily through common node
-        # also nodes, that have been touched by both dijkstras need to be checked
+        self.n_settled = n_settled
         if common_node is None or common_node.cost is None or common_node.cost_back is None:
             return None
-        poss_common_nodes = [(common_node , common_node.cost[0] + common_node.cost_back[0])]
-        while frontierForward.hasElements():
-            x = frontierForward.popTaskPriority()
-            if x[0].cost_index_back == -self.dijkstra_number:
-                if not x[0].must_stop() or x[0].node_index == end or x[0].node_index == self.start:
-                    poss_common_nodes.append((x[0], x[1] + x[0].cost_back[0]))
-        while frontierBackward.hasElements():
-            x = frontierBackward.popTaskPriority()
-            if x[0].cost_index == -self.dijkstra_number:
-                if not x[0].must_stop() or x[0].node_index == end or x[0].node_index == self.start:
-                    poss_common_nodes.append((x[0], x[1] + x[0].cost[0]))
-        common_node = min(poss_common_nodes, key = lambda x:x[1])[0]
 
+        best_cost = common_node.cost[0] + common_node.cost_back[0]
+        fwd_cands = []
+        for c, cnt, n in heap_fwd:
+            if c == n.cost[0] and n.cost_index_back == neg_dijkstra_num:
+                if not n.is_stop_only or n.node_index == end or n.node_index == start_idx:
+                    tot = c + n.cost_back[0]
+                    if tot < best_cost:
+                        fwd_cands.append((c, cnt, tot, n))
+        bwd_cands = []
+        for c, cnt, n in heap_bwd:
+            if c == n.cost_back[0] and n.cost_index == neg_dijkstra_num:
+                if not n.is_stop_only or n.node_index == end or n.node_index == start_idx:
+                    tot = c + n.cost[0]
+                    if tot < best_cost:
+                        bwd_cands.append((c, cnt, tot, n))
+        if fwd_cands or bwd_cands:
+            fwd_cands.sort()
+            bwd_cands.sort()
+            for _, _, tot, n in fwd_cands:
+                if tot < best_cost:
+                    best_cost = tot
+                    common_node = n
+            for _, _, tot, n in bwd_cands:
+                if tot < best_cost:
+                    best_cost = tot
+                    common_node = n
         return common_node
 
     def bidirectionalContractionHierarchiesDijkstra(self, start, end, frontier_in = None):

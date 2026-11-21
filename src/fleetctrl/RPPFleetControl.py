@@ -592,30 +592,32 @@ class RPPFleetControlFullInsertion(FleetControlBase):
         s_pos = self.sim_vehicles[vid].pos
         po = parcel_request.get_o_stop_info()[0]
         pd = parcel_request.get_d_stop_info()[0]
+        re_1to1 = self.routing_engine.return_travel_costs_1to1
+        s_to_po = re_1to1(s_pos, po)[2]
+        s_to_pd = re_1to1(s_pos, pd)[2]
         for ps in self.veh_plans[vid].list_plan_stops:
             c_pos = ps.get_pos()
-            o_dd = self.routing_engine.return_travel_costs_1to1(s_pos, po)[2] + self.routing_engine.return_travel_costs_1to1(po, c_pos)[2] - self.routing_engine.return_travel_costs_1to1(s_pos, c_pos)[2]
-            d_dd = self.routing_engine.return_travel_costs_1to1(s_pos, pd)[2] + self.routing_engine.return_travel_costs_1to1(pd, c_pos)[2] - self.routing_engine.return_travel_costs_1to1(s_pos, c_pos)[2]
+            s_to_c = re_1to1(s_pos, c_pos)[2]
+            o_dd = s_to_po + re_1to1(po, c_pos)[2] - s_to_c
+            d_dd = s_to_pd + re_1to1(pd, c_pos)[2] - s_to_c
             if o_dd < min_o_dd:
                 min_o_dd = o_dd
             if d_dd < min_d_dd:
                 min_d_dd = d_dd
             s_pos = c_pos
-        o_dd = self.routing_engine.return_travel_costs_1to1(s_pos, po)[2]
-        d_dd = self.routing_engine.return_travel_costs_1to1(s_pos, pd)[2]
-        if o_dd < min_o_dd:
-            min_o_dd = o_dd
-        if d_dd < min_d_dd:
-            min_d_dd = d_dd
+            s_to_po = re_1to1(s_pos, po)[2]
+            s_to_pd = re_1to1(s_pos, pd)[2]
+        if s_to_po < min_o_dd:
+            min_o_dd = s_to_po
+        if s_to_pd < min_d_dd:
+            min_d_dd = s_to_pd
         additional_parcel_distance = min_o_dd + min_d_dd
+        if parcel_request.init_direct_td == 0:
+            return additional_parcel_distance == 0
         rel_saved = (parcel_request.init_direct_td - additional_parcel_distance)/parcel_request.init_direct_td
-        LOG.debug(f"test {parcel_request.get_rid_struct()} -> vid {vid}: rel_saved {rel_saved}")
-        if rel_saved > self.parcel_assignment_threshold:
-            LOG.debug(f"-> True")
-            return True
-        else:
-            LOG.debug(f" -> False")
-            return False
+        if LOG.isEnabledFor(logging.DEBUG):
+            LOG.debug(f"test {parcel_request.get_rid_struct()} -> vid {vid}: rel_saved {rel_saved}")
+        return rel_saved > self.parcel_assignment_threshold
 
 INPUT_PARAMETERS_RPPFleetControlSingleStopInsertion = {
     "doc" :     """
@@ -792,32 +794,25 @@ class RPPFleetControlSingleStopInsertion(RPPFleetControlFullInsertion):
     def _pre_test_insertion(self, parcel_request : PlanRequest, vid, o_flag):
         min_dd = float("inf")
         s_pos = self.sim_vehicles[vid].pos
-        if o_flag:
-            p = parcel_request.get_o_stop_info()[0]
-        else:
-            p = parcel_request.get_d_stop_info()[0]
-        LOG.debug(f"test {parcel_request} {o_flag}")
-        LOG.debug(f" -> for {[str(x) for x in self.veh_plans[vid].list_plan_stops]}")
+        p = parcel_request.get_o_stop_info()[0] if o_flag else parcel_request.get_d_stop_info()[0]
+        re_1to1 = self.routing_engine.return_travel_costs_1to1
+        s_to_p = re_1to1(s_pos, p)[2]
         for ps in self.veh_plans[vid].list_plan_stops:
             c_pos = ps.get_pos()
-            dd = self.routing_engine.return_travel_costs_1to1(s_pos, p)[2] + self.routing_engine.return_travel_costs_1to1(p, c_pos)[2] - self.routing_engine.return_travel_costs_1to1(s_pos, c_pos)[2]
-            LOG.debug(f"{ps} -> {dd}")
+            dd = s_to_p + re_1to1(p, c_pos)[2] - re_1to1(s_pos, c_pos)[2]
             if dd < min_dd:
                 min_dd = dd
             s_pos = c_pos
-        dd = self.routing_engine.return_travel_costs_1to1(s_pos, p)[2]
-        if dd < min_dd:
-            min_dd = dd
+            s_to_p = re_1to1(s_pos, p)[2]
+        if s_to_p < min_dd:
+            min_dd = s_to_p
         additional_parcel_distance = min_dd
-        LOG.debug(f"min dd: {min_dd} | pdd {parcel_request.init_direct_td}")
+        if parcel_request.init_direct_td == 0:
+            return additional_parcel_distance == 0
         rel_saved = (parcel_request.init_direct_td/2.0 - additional_parcel_distance)/parcel_request.init_direct_td*2.0
-        LOG.debug(f"test {parcel_request.get_rid_struct()} oflag {o_flag} -> vid {vid}: rel_saved {rel_saved}")
-        if rel_saved > self.parcel_assignment_threshold:
-            LOG.debug(f"-> True")
-            return True
-        else:
-            LOG.debug(f" -> False")
-            return False
+        if LOG.isEnabledFor(logging.DEBUG):
+            LOG.debug(f"test {parcel_request.get_rid_struct()} oflag {o_flag} -> vid {vid}: rel_saved {rel_saved}")
+        return rel_saved > self.parcel_assignment_threshold
 
     def deliver_remaining_parcels(self, simulation_time):
         LOG.info("deliver remaining parcels!")
@@ -889,34 +884,27 @@ class RPPFleetControlSingleStopInsertionGuided(RPPFleetControlSingleStopInsertio
     def _pre_test_insertion(self, parcel_request : PlanRequest, vid, o_flag, vehplan = None):
         min_dd = float("inf")
         s_pos = self.sim_vehicles[vid].pos
-        if o_flag:
-            p = parcel_request.get_o_stop_info()[0]
-        else:
-            p = parcel_request.get_d_stop_info()[0]
+        p = parcel_request.get_o_stop_info()[0] if o_flag else parcel_request.get_d_stop_info()[0]
         if vehplan is None:
             vehplan = self.veh_plans[vid]
-        LOG.debug(f"test {parcel_request} {o_flag}")
-        LOG.debug(f" -> for {[str(x) for x in vehplan.list_plan_stops]}")
+        re_1to1 = self.routing_engine.return_travel_costs_1to1
+        s_to_p = re_1to1(s_pos, p)[2]
         for ps in vehplan.list_plan_stops:
             c_pos = ps.get_pos()
-            dd = self.routing_engine.return_travel_costs_1to1(s_pos, p)[2] + self.routing_engine.return_travel_costs_1to1(p, c_pos)[2] - self.routing_engine.return_travel_costs_1to1(s_pos, c_pos)[2]
-            LOG.debug(f"{ps} -> {dd}")
+            dd = s_to_p + re_1to1(p, c_pos)[2] - re_1to1(s_pos, c_pos)[2]
             if dd < min_dd:
                 min_dd = dd
             s_pos = c_pos
-        dd = self.routing_engine.return_travel_costs_1to1(s_pos, p)[2]
-        if dd < min_dd:
-            min_dd = dd
+            s_to_p = re_1to1(s_pos, p)[2]
+        if s_to_p < min_dd:
+            min_dd = s_to_p
         additional_parcel_distance = min_dd
-        LOG.debug(f"min dd: {min_dd} | pdd {parcel_request.init_direct_td}")
+        if parcel_request.init_direct_td == 0:
+            return additional_parcel_distance == 0
         rel_saved = (parcel_request.init_direct_td/2.0 - additional_parcel_distance)/parcel_request.init_direct_td*2.0
-        LOG.debug(f"test {parcel_request.get_rid_struct()} oflag {o_flag} -> vid {vid}: rel_saved {rel_saved}")
-        if rel_saved > self.parcel_assignment_threshold:
-            LOG.debug(f"-> True")
-            return True
-        else:
-            LOG.debug(f" -> False")
-            return False
+        if LOG.isEnabledFor(logging.DEBUG):
+            LOG.debug(f"test {parcel_request.get_rid_struct()} oflag {o_flag} -> vid {vid}: rel_saved {rel_saved}")
+        return rel_saved > self.parcel_assignment_threshold
         
     def _person_request(self, person_request : RequestBase, sim_time : int):
         """This method includes the main functionality for assigning the parcel delivery for this strategy.

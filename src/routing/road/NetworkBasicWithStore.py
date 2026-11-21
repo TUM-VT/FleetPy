@@ -80,6 +80,14 @@ class NetworkBasicWithStore(NetworkBasic):
                 if None: travel_time is considered as the cost_function of a section
         :return: (cost_function_value, travel time, travel_distance) between the two nodes
         """
+        if origin_position[1] is None and destination_position[1] is None and customized_section_cost_function is None:
+            o_node = origin_position[0]
+            d_node = destination_position[0]
+            if o_node == d_node:
+                return (0.0, 0.0, 0.0)
+            s = self.travel_time_infos.get((o_node, d_node))
+            if s is not None and s[0] != np.inf:
+                return s
         trivial_test = self.test_and_get_trivial_route_tt_and_dis(origin_position, destination_position)
         if trivial_test is not None:
             return trivial_test[1]
@@ -148,3 +156,167 @@ class NetworkBasicWithStore(NetworkBasic):
         """
         if self.travel_time_infos.get( (o_node, d_node) ) is None:
             self.travel_time_infos[ (o_node, d_node) ] = (cfv, tt, dis)
+
+    def return_travel_costs_Xto1(self, list_origin_positions, destination_position, max_routes=None,
+                                 max_cost_value=None, customized_section_cost_function = None):
+        if customized_section_cost_function is not None or max_routes is not None:
+            return super().return_travel_costs_Xto1(
+                list_origin_positions, destination_position, max_routes=max_routes,
+                max_cost_value=max_cost_value, customized_section_cost_function=customized_section_cost_function
+            )
+        origin_nodes = {}
+        return_list = []
+        for pos in list_origin_positions:
+            trivial_test = self.test_and_get_trivial_route_tt_and_dis(pos, destination_position)
+            if trivial_test is not None:
+                if max_cost_value is not None and trivial_test[1][0] > max_cost_value:
+                    continue
+                return_list.append((pos, trivial_test[1][0], trivial_test[1][1], trivial_test[1][2]))
+                continue
+            start_node = pos[1] if pos[1] is not None else pos[0]
+            if start_node in origin_nodes:
+                origin_nodes[start_node].append(pos)
+            else:
+                origin_nodes[start_node] = [pos]
+
+        if not origin_nodes:
+            return return_list
+
+        destination_node = destination_position[0]
+        destination_overhead = (
+            self.get_section_overhead(destination_position, from_start=True)
+            if destination_position[1] is not None else (0.0, 0.0, 0.0)
+        )
+        db = self.travel_time_infos
+
+        uncached_nodes = []
+        resolved = {}
+        for org_node in origin_nodes:
+            cached = db.get((org_node, destination_node))
+            if cached is not None and cached[0] != float("inf"):
+                resolved[org_node] = cached
+            else:
+                uncached_nodes.append(org_node)
+
+        if uncached_nodes:
+            if self._current_tt_factor is None:
+                R = Router(self, destination_node, destination_nodes=uncached_nodes, time_radius=max_cost_value,
+                           max_settled_targets=None, forward_flag=False)
+                s = R.compute(return_route=False)
+            else:
+                new_max_cost_value = max_cost_value / self._current_tt_factor if max_cost_value is not None else None
+                R = Router(self, destination_node, destination_nodes=uncached_nodes, time_radius=new_max_cost_value,
+                           max_settled_targets=None, forward_flag=False)
+                s = R.compute(return_route=False)
+                f = self._current_tt_factor
+                s = [(entry[0], (entry[1][0] * f, entry[1][1] * f, entry[1][2])) for entry in s]
+            for entry in s:
+                cfv, tt, dis = entry[1]
+                if cfv < 0 or cfv == float("inf"):
+                    continue
+                org_node = entry[0][0]
+                self._add_to_database(org_node, destination_node, cfv, tt, dis)
+                resolved[org_node] = (cfv, tt, dis)
+
+        d_cfv, d_tt, d_dis = destination_overhead
+        for org_node, pos_list in origin_nodes.items():
+            if org_node not in resolved:
+                continue
+            base_cfv, base_tt, base_dis = resolved[org_node]
+            base_cfv += d_cfv
+            base_tt += d_tt
+            base_dis += d_dis
+            for origin_position in pos_list:
+                if origin_position[1] is not None:
+                    o_cfv, o_tt, o_dis = self.get_section_overhead(origin_position, from_start=False)
+                    cfv = base_cfv + o_cfv
+                    tt = base_tt + o_tt
+                    dis = base_dis + o_dis
+                else:
+                    cfv, tt, dis = base_cfv, base_tt, base_dis
+                if max_cost_value is not None and cfv > max_cost_value:
+                    continue
+                return_list.append((origin_position, cfv, tt, dis))
+        return return_list
+
+    def return_travel_costs_1toX(self, origin_position, list_destination_positions, max_routes=None,
+                                 max_cost_value=None, customized_section_cost_function = None):
+        if customized_section_cost_function is not None or max_routes is not None:
+            return super().return_travel_costs_1toX(
+                origin_position, list_destination_positions, max_routes=max_routes,
+                max_cost_value=max_cost_value, customized_section_cost_function=customized_section_cost_function
+            )
+        destination_nodes = {}
+        return_list = []
+        for pos in list_destination_positions:
+            trivial_test = self.test_and_get_trivial_route_tt_and_dis(origin_position, pos)
+            if trivial_test is not None:
+                if max_cost_value is not None and trivial_test[1][0] > max_cost_value:
+                    continue
+                return_list.append((pos, trivial_test[1][0], trivial_test[1][1], trivial_test[1][2]))
+                continue
+            end_node = pos[0]
+            if end_node in destination_nodes:
+                destination_nodes[end_node].append(pos)
+            else:
+                destination_nodes[end_node] = [pos]
+
+        if not destination_nodes:
+            return return_list
+
+        origin_node = origin_position[1] if origin_position[1] is not None else origin_position[0]
+        origin_overhead = (
+            self.get_section_overhead(origin_position, from_start=False)
+            if origin_position[1] is not None else (0.0, 0.0, 0.0)
+        )
+        db = self.travel_time_infos
+
+        uncached_nodes = []
+        resolved = {}
+        for dest_node in destination_nodes:
+            cached = db.get((origin_node, dest_node))
+            if cached is not None and cached[0] != float("inf"):
+                resolved[dest_node] = cached
+            else:
+                uncached_nodes.append(dest_node)
+
+        if uncached_nodes:
+            if self._current_tt_factor is None:
+                R = Router(self, origin_node, destination_nodes=uncached_nodes, time_radius=max_cost_value,
+                           max_settled_targets=None, forward_flag=True)
+                s = R.compute(return_route=False)
+            else:
+                new_max_cost_value = max_cost_value / self._current_tt_factor if max_cost_value is not None else None
+                R = Router(self, origin_node, destination_nodes=uncached_nodes, time_radius=new_max_cost_value,
+                           max_settled_targets=None, forward_flag=True)
+                s = R.compute(return_route=False)
+                f = self._current_tt_factor
+                s = [(entry[0], (entry[1][0] * f, entry[1][1] * f, entry[1][2])) for entry in s]
+            for entry in s:
+                cfv, tt, dis = entry[1]
+                if cfv < 0 or cfv == float("inf"):
+                    continue
+                dest_node = entry[0][-1]
+                self._add_to_database(origin_node, dest_node, cfv, tt, dis)
+                resolved[dest_node] = (cfv, tt, dis)
+
+        o_cfv, o_tt, o_dis = origin_overhead
+        for dest_node, pos_list in destination_nodes.items():
+            if dest_node not in resolved:
+                continue
+            base_cfv, base_tt, base_dis = resolved[dest_node]
+            base_cfv += o_cfv
+            base_tt += o_tt
+            base_dis += o_dis
+            for destination_position in pos_list:
+                if destination_position[1] is not None:
+                    d_cfv, d_tt, d_dis = self.get_section_overhead(destination_position, from_start=True)
+                    cfv = base_cfv + d_cfv
+                    tt = base_tt + d_tt
+                    dis = base_dis + d_dis
+                else:
+                    cfv, tt, dis = base_cfv, base_tt, base_dis
+                if max_cost_value is not None and cfv > max_cost_value:
+                    continue
+                return_list.append((destination_position, cfv, tt, dis))
+        return return_list
