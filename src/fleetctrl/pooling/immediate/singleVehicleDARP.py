@@ -1,5 +1,6 @@
 from typing import Callable, List, Dict, Any, Tuple
 import logging
+import math
 
 import numpy as np
 from src.fleetctrl.FleetControlBase import FleetControlBase
@@ -138,8 +139,8 @@ def solve_single_vehicle_DARP_exhaustive(veh_obj: SimulationVehicle, routing_eng
         LOG.debug(f"with ob {[p.get_rid_struct() for p in veh_obj.pax]}")
     init_positions = []
     for i, o_pos in enumerate(o_pos_s):
-        if o_pos[1].get_rid() in locked_ob_rids:
-            if not o_pos[1].get_rid() in locked_db_rids:
+        if o_pos[1].get_rid_struct() in locked_ob_rids:
+            if not o_pos[1].get_rid_struct() in locked_db_rids:
                 init_positions.append(d_pos_s[o_pos[3]])
         else:
             init_positions.append(o_pos)
@@ -181,7 +182,7 @@ def markovDecision(old_cfv, new_cfv, Temperature, minimize = True):
     else:
         r = np.random.random()
         try:
-            p = np.math.exp(-delta/Temperature) #.exp(-delta/deltaT)
+            p = math.exp(-delta/Temperature) #.exp(-delta/deltaT)
         except:
             if -delta/Temperature > 0:
                 p = float("inf")
@@ -252,11 +253,13 @@ def solve_single_vehicle_DARP_LNS(veh_obj: SimulationVehicle, routing_engine: Ne
                 else:
                     no_new_sol_counter += 1
                     continue
-            if current_best_obj < overall_best_obj:
+            if best_insert_obj < overall_best_obj:
                 overall_best_obj = best_insert_obj
+                best_insert_plan.set_utility(best_insert_obj)
                 overall_best_plan = best_insert_plan
             if markovDecision(current_best_obj, best_insert_obj, temp):
                 current_best_obj = best_insert_obj
+                best_insert_plan.set_utility(best_insert_obj)
                 current_best_plan = best_insert_plan
             temp = temp * SIM_ANNEAL_TEMP_SCALING
         else:

@@ -5,7 +5,10 @@ import traceback
 from multiprocessing import Process, Queue, Pipe
 import time
 import math
-import dill as pickle
+try:
+    import dill as pickle
+except ImportError:
+    import pickle
 
 from src.misc.globals import *
 from src.misc.init_modules import load_routing_engine
@@ -68,7 +71,7 @@ class ParallelizationManager():
 
     def killProcesses(self):
         """ this function is supposed to kill all parallel processes """
-        for i in range(self.N_cores):
+        for i in range(self.number_cores):
             self.q_in.put( (KILL,) )
             
         self.q_in.close()
@@ -722,7 +725,7 @@ class ParallelProcess():
                     pass
                 if len(self.fo_mutually_exclusive_cluster_id_to_rids[fo_id].get(cluster_rid, {}).keys()) == 0:
                     try:
-                        self.fo_mutually_exclusive_cluster_id_to_rids[fo_id][cluster_rid]
+                        del self.fo_mutually_exclusive_cluster_id_to_rids[fo_id][cluster_rid]
                     except KeyError:
                         pass
                 try:
@@ -911,7 +914,7 @@ class ParallelProcess():
                 if len(x) >= 5:
                     check_rv = x[4]
                 if len(x) >= 6:
-                    skip_first_position_insertion=x[6]
+                    skip_first_position_insertion=x[5]
                 # LOG.debug("single insertion batch")
                 # LOG.debug("{} {} {} {}".format(veh_obj_list, vid_assigned_plan_dict, rq_obj, other_plan_rq_dict))
                 ass_vid, ass_plan, delta_cfv = single_insertion(veh_obj_list, vid_assigned_plan_dict, rq_obj, obj_func, self.routing_engine, other_plan_rq_dict, self.sim_time, std_bt, add_bt, check_rv=check_rv, skip_first_position_insertion=skip_first_position_insertion)

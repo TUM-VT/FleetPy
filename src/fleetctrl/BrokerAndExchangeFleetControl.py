@@ -342,8 +342,9 @@ class BrokerExChangeCtrl(RidePoolingBatchOptimizationFleetControlBase):
                 for f_rid in conflict_rids:
                     f_prq = self.last_future_sample[f_rid]
                     assigned_vid, new_assigned_plan, change_in_objective_value = single_insertion(self.sim_vehicles, new_sol, f_prq, self.vr_ctrl_f, self.routing_engine, new_rq_dict, simulation_time, self.const_bt, self.add_bt)
-                    new_sol[assigned_vid] = new_assigned_plan
-                    self.last_future_sample_sol[assigned_vid] = new_assigned_plan, change_in_objective_value
+                    if assigned_vid is not None and new_assigned_plan is not None:
+                        new_sol[assigned_vid] = new_assigned_plan
+                        self.last_future_sample_sol[assigned_vid] = new_assigned_plan, change_in_objective_value
                     LOG.info("resolved: {} -> {} | {}".format(f_rid, assigned_vid, change_in_objective_value))
 
         try:

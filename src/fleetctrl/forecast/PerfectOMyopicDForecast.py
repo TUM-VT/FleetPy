@@ -69,12 +69,12 @@ class PerfectOMyopicDForecast(PerfectForecastDistributionZoneSystem):
         LOG.debug(f"trigger at {sim_time}: past rqs before {self._past_request_ods}")
         if len(self._past_request_ods) > 0 and self._past_request_ods[0][0] < sim_time - self.fc_temp_resolution:
             # remove old requests from list
-            break_index = 0
             for i, entry in enumerate(self._past_request_ods):
                 if entry[0] >= sim_time - self.fc_temp_resolution:
-                    break_index = i
+                    self._past_request_ods = self._past_request_ods[i:]
                     break
-            self._past_request_ods = self._past_request_ods[break_index:]
+            else:
+                self._past_request_ods = []
             LOG.debug(f"past rqs after: {self._past_request_ods}")
             
     def register_new_request(self, sim_time: int, plan_request: PlanRequest):
@@ -289,7 +289,7 @@ class PerfectOMyopicDForecast(PerfectForecastDistributionZoneSystem):
                     for t in ts:
                         o_n = (self.get_random_node(o_zone, only_boarding_nodes=True), None, None)
                         d_n = (self.get_random_node(d_zone, only_boarding_nodes=True), None, None)
-                        if o_n >= 0 and d_n >= 0:
+                        if o_n[0] >= 0 and d_n[0] >= 0:
                             future_list.append( (t, o_n, d_n) )
                         else:
                             LOG.warning(f"no node found for zone {o_zone} or {d_zone}")

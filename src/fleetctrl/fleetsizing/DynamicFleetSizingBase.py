@@ -171,7 +171,7 @@ class DynamicFleetSizingBase(ABC):
         """
         if not self.sorted_time_deactivate:
             return []
-        if self.sorted_time_deactivate[0][0] < simulation_time:
+        if self.sorted_time_deactivate[0][0] > simulation_time:
             return []
         number_deactivate = 0
         list_remove_index = []

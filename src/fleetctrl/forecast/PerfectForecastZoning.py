@@ -2,6 +2,7 @@
 # standard distribution imports
 # -----------------------------
 import os
+import math
 import logging
 
 # additional module imports (> requirements)
@@ -146,19 +147,19 @@ class PerfectForecastZoneSystem(ForecastZoneSystemBase):
             LOG.warning("scale is not used for perfect forecast and sampling!")
         future_list = []
         if request_attribute is None and attribute_value is None:
-            for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
+            for t in range(int(math.floor(t0)), int(math.ceil(t1))):
                 future_rqs = self._get_future_requests(t)
                 for rq in future_rqs.values():
                     future_list.append( (t, rq.o_pos, rq.d_pos) )
         elif request_attribute is not None:
             if attribute_value is None:
-                for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
+                for t in range(int(math.floor(t0)), int(math.ceil(t1))):
                     future_rqs = self._get_future_requests(t)
                     for rq in future_rqs.values():
                         if rq.__dict__.get(request_attribute) is not None:
                             future_list.append( (t, rq.o_pos, rq.d_pos) )
             else:
-                for t in range(int(np.math.floor(t0)), int(np.math.ceil(t1))):
+                for t in range(int(math.floor(t0)), int(math.ceil(t1))):
                     future_rqs = self._get_future_requests(t)
                     for rq in future_rqs.values():
                         if rq.__dict__.get(request_attribute) is not None and rq.__dict__.get(request_attribute) == attribute_value:

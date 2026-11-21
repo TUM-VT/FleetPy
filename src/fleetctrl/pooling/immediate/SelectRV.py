@@ -18,7 +18,11 @@ def filter_directionality(prq, list_veh_obj, nr_best_veh, routing_engine, select
     prq_o_coord = np.array(routing_engine.return_position_coordinates(prq.o_pos))
     prq_d_coord = np.array(routing_engine.return_position_coordinates(prq.d_pos))
     tmp_diff = prq_d_coord - prq_o_coord
-    prq_norm_vec = tmp_diff / np.sqrt(np.dot(tmp_diff, tmp_diff))
+    prq_norm = np.sqrt(np.dot(tmp_diff, tmp_diff))
+    if prq_norm > 0:
+        prq_norm_vec = tmp_diff / prq_norm
+    else:
+        prq_norm_vec = np.array([0.0, 0.0])
     tmp_list_veh_val = []
     for veh_obj in list_veh_obj:
         # vehicle already selected by other heuristic

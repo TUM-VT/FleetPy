@@ -157,6 +157,7 @@ class V2RB():
                 continue
             new_boarding_dict = {}
             new_max_trip_time_dict = {}
+            new_latest_arrival_time_dict = {}
             new_earliest_pickup_time_dict = {}
             new_latest_pickup_time_dict = {}
             change_nr_pax = 0
@@ -167,8 +168,10 @@ class V2RB():
                         new_boarding_dict[1].append(rid)
                     except:
                         new_boarding_dict[1] = [rid]
-                    new_earliest_pickup_time_dict[rid] = ept[rid]
-                    new_latest_pickup_time_dict[rid] = lpt[rid]
+                    if rid in ept:
+                        new_earliest_pickup_time_dict[rid] = ept[rid]
+                    if rid in lpt:
+                        new_latest_pickup_time_dict[rid] = lpt[rid]
             change_nr_pax += sum([rq_dict[rid].nr_pax for rid in new_boarding_dict.get(1, [])])
             for rid in ps.get_list_alighting_rids():
                 if rid in keep_rids:
@@ -176,7 +179,10 @@ class V2RB():
                         new_boarding_dict[-1].append(rid)
                     except:
                         new_boarding_dict[-1] = [rid]
-                    new_max_trip_time_dict[rid] = mtt[rid]
+                    if rid in mtt:
+                        new_max_trip_time_dict[rid] = mtt[rid]
+                    if rid in lat:
+                        new_latest_arrival_time_dict[rid] = lat[rid]
             change_nr_pax -= sum([rq_dict[rid].nr_pax for rid in new_boarding_dict.get(-1, [])])
             if len(new_boarding_dict.keys()) > 0 or ps.is_locked():
                 #LOG.warning("not considering new time constraints!!!!") # TODO #
@@ -184,6 +190,7 @@ class V2RB():
                 #                           earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
                 #                           change_nr_pax=change_nr_pax, duration=ps.get_duration_and_earliest_departure()[0], locked=ps.is_locked())
                 new_ps = PlanStop(ps.get_pos(), boarding_dict=new_boarding_dict, max_trip_time_dict=new_max_trip_time_dict,
+                                          latest_arrival_time_dict=new_latest_arrival_time_dict,
                                           earliest_pickup_time_dict=new_earliest_pickup_time_dict, latest_pickup_time_dict=new_latest_pickup_time_dict,
                                           change_nr_pax=change_nr_pax, duration=ps.get_duration_and_earliest_departure()[0], locked=ps.is_locked(),
                                           charging_power=ps.get_charging_power(), planstop_state=ps.get_state(), charging_task_id=ps.get_charging_task_id(),

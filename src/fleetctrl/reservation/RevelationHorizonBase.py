@@ -149,7 +149,7 @@ class RevelationHorizonBase(ReservationBase):
             try:
                 del self.active_reservation_requests[rid]
             except KeyError:
-                LOG.debug("rid {rid} allready revealed for global opt?")
+                LOG.debug(f"rid {rid} allready revealed for global opt?")
                 continue
             del self._reavealed_rids[rid]
             try:
@@ -249,7 +249,7 @@ class RevelationHorizonBase(ReservationBase):
         try:
             del self.active_reservation_requests[rid]
         except KeyError:
-            LOG.debug("rid {rid} allready revealed for global opt?")
+            LOG.debug(f"rid {rid} allready revealed for global opt?")
         try:
             del self._unprocessed_rids[rid]
         except KeyError:
@@ -310,11 +310,13 @@ class RevelationHorizonBase(ReservationBase):
                     fullplan = veh_plan.copy()
                     fullplan.list_plan_stops.pop()
                     fullplan.list_plan_stops += res_plan.list_plan_stops
-                    self.fleetctrl.compute_VehiclePlan_utility(sim_time, self.fleetctrl.sim_vehicles[vid], fullplan)
+                    u = self.fleetctrl.compute_VehiclePlan_utility(sim_time, self.fleetctrl.sim_vehicles[vid], fullplan)
+                    fullplan.set_utility(u)
                     self._current_global_veh_plans[vid] = fullplan
                 else:
                     if veh_plan.get_utility() is None:
-                        self.fleetctrl.compute_VehiclePlan_utility(sim_time, self.fleetctrl.sim_vehicles[vid], veh_plan)
+                        u = self.fleetctrl.compute_VehiclePlan_utility(sim_time, self.fleetctrl.sim_vehicles[vid], veh_plan)
+                        veh_plan.set_utility(u)
                     self._current_global_veh_plans[vid] = veh_plan.copy()
             self._last_request_time = sim_time
         # test for insertion
@@ -380,7 +382,7 @@ class RevelationHorizonBase(ReservationBase):
                     ps.direct_earliest_start_time = None
                     ps.direct_latest_start_time = None
                 if second_start_time is not None:
-                    sup_point_pos = veh_plan.list_plan_stops[split_index+1].get_pos()
+                    sup_point_pos = veh_plan.list_plan_stops[split_index].get_pos()
                     first_plan_stops.append( RoutingTargetPlanStop(sup_point_pos, earliest_start_time=second_start_time, latest_start_time=second_start_time, 
                                                                 planstop_state=G_PLANSTOP_STATES.RESERVATION, duration=LARGE_INT, locked_end=True) )
                 veh_plan.list_plan_stops = first_plan_stops 
