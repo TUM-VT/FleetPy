@@ -712,7 +712,8 @@ class MasterRandomChoiceRequest(RequestBase):
         if -1 not in list_options:
             list_options.append(-1)
         choice = np.random.choice(list_options)
-        self.fare = self.offer[choice].get(G_OFFER_FARE, 0)
+        if choice in self.offer:
+            self.fare = self.offer[choice].get(G_OFFER_FARE, 0)
         LOG.debug(f"{self.get_rid_struct()} chooses offer {choice} from options {list_options} | offers {offer_str(self.offer)}")
         return choice
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -977,13 +978,14 @@ class BasicParcelRequest(ParcelRequestBase): # TODO
         :return: operator_id of chosen offer; or -1 if all MoD offers are declined; None if decision not defined yet
         """
         declines = [offer_id for offer_id, operator_offer in self.offer.items() if operator_offer.service_declined()]
-        if len(declines) == scenario_parameters[G_NR_OPERATORS]:
+        if len(self.offer) == 0:
+            return None
+        elif len(declines) == scenario_parameters[G_NR_OPERATORS]:
             return -1
         elif len(self.offer) > 1:
             raise NotImplementedError("More than one offer?")
         else:
             return list(self.offer.keys())[0]
-        return None
     
 INPUT_PARAMETERS_SlaveParcelRequest = {
     "doc" : """This parcel request class does not have any choice functionality. For coupled frameworks only!

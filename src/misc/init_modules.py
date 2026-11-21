@@ -233,7 +233,7 @@ def get_src_forecast_models():
     # add development content
     if dev_content is not None:
         dev_fc_dict = dev_content.add_forecast_models()
-        dev_fc_dict.update(dev_fc_dict)
+        fc_dict.update(dev_fc_dict)
     return fc_dict
 
 # -------------------------------------------------------------------------------------------------------------------- #
