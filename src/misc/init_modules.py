@@ -71,6 +71,7 @@ def get_src_routing_engines():
     re_dict["NetworkBasicWithStoreOnlineMatrixCpp"] = ("src.routing.road.NetworkBasicWithStoreOnlineMatrixCpp", "NetworkBasicWithStoreOnlineMatrixCpp")
     re_dict["NetworkBasicSumoCoupling"] = ("src.routing.road.NetworkBasicSumoCoupling", "NetworkBasicSumoCoupling")
     re_dict["NetworkBasicWithStoreCppSumoCoupling"] = ("src.routing.road.NetworkBasicWithStoreCppSumoCoupling", "NetworkBasicWithStoreCppSumoCoupling")
+    re_dict["NetworkDynamicPreprocCpp"] = ("src.routing.road.NetworkDynamicPreprocCpp", "NetworkDynamicPreprocCpp")
     # add development content
     if dev_content is not None:
         dev_re_dict = dev_content.add_dev_routing_engines()
