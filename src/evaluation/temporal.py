@@ -54,7 +54,7 @@ def _bin_operator_stats(op_df, interval_list):
             return (min(et, interval_end) - max(st, interval_start))/(interval_end - interval_start)
 
     binned_vehicle_stats = {}
-    interval_list.append(float("inf"))
+    interval_list = list(interval_list) + [float("inf")]
     for i in range(1, len(interval_list)):
         sb = interval_list[i-1]
         eb = interval_list[i]
@@ -85,11 +85,11 @@ def _bin_served_user_stats(user_df, interval_list):
             return (min(et, interval_end) - max(st, interval_start))/(interval_end - interval_start)
 
     binned_user_stats = {}
-    interval_list.append(float("inf"))
+    interval_list = list(interval_list) + [float("inf")]
     for i in range(1, len(interval_list)):
         sb = interval_list[i-1]
         eb = interval_list[i]
-        user_part_stats = user_df[(( (user_df[G_RQ_TIME] >= sb) & (user_df[G_RQ_DO] <= eb) )|( (user_df[G_RQ_DO] >= sb) & (user_df[G_RQ_DO] <= eb) )|( (user_df[G_RQ_TIME] < sb) & (user_df[G_RQ_DO] > eb) ) )]
+        user_part_stats = user_df[(( (user_df[G_RQ_TIME] >= sb) & (user_df[G_RQ_TIME] <= eb) )|( (user_df[G_RQ_DO] >= sb) & (user_df[G_RQ_DO] <= eb) )|( (user_df[G_RQ_TIME] < sb) & (user_df[G_RQ_DO] > eb) ) )]
         if user_part_stats.shape[0] > 0:
             user_part_stats["interval_weight"] = user_part_stats.apply(_weight_user_interval, axis = 1, args = (sb, eb))
             binned_user_stats[sb] = user_part_stats.copy()
@@ -126,8 +126,13 @@ def avg_occ_binned(binned_operator_stats, output_dir, op_id, show=True):
         ts.append(t/3600.0)
         occs.append(last)
         occs_rq.append(last_rq)
-        last_rq = binned_stats_df.apply(weight_ob_rq, axis=1).sum() / (binned_stats_df[G_VR_LEG_DISTANCE]*binned_stats_df["interval_weight"]).sum()
-        last = binned_stats_df.apply(weight_ob_pax, axis=1).sum() / (binned_stats_df[G_VR_LEG_DISTANCE]*binned_stats_df["interval_weight"]).sum()
+        weighted_dist = (binned_stats_df[G_VR_LEG_DISTANCE]*binned_stats_df["interval_weight"]).sum()
+        if weighted_dist > 0:
+            last_rq = binned_stats_df.apply(weight_ob_rq, axis=1).sum() / weighted_dist
+            last = binned_stats_df.apply(weight_ob_pax, axis=1).sum() / weighted_dist
+        else:
+            last_rq = 0.0
+            last = 0.0
         if abs(last_rq - last) > SMALL_VALUE:
             differs = True
         ts.append(t/3600.0)
@@ -201,7 +206,7 @@ def avg_fleet_km_binned(binned_operator_stats, output_dir, op_id, show = True):
     driven_distances = []
     last = 0
     bins = list(binned_operator_stats.keys())
-    bin_size = bins[1] - bins[0]
+    bin_size = bins[1] - bins[0] if len(bins) > 1 else DEF_TEMPORAL_RESOLUTION
     driving_states = [x.display_name for x in G_DRIVING_STATUS]
     for t, binned_stats_df in binned_operator_stats.items():
         ts.append(t/3600.0)
@@ -240,7 +245,7 @@ def avg_fleet_driving_speeds_binned(binned_operator_stats, output_dir, op_id, sh
     last_dr = 0
     last_rev = 0
     bins = list(binned_operator_stats.keys())
-    bin_size = bins[1] - bins[0]
+    bin_size = bins[1] - bins[0] if len(bins) > 1 else DEF_TEMPORAL_RESOLUTION
     driving_states = [x.display_name for x in G_DRIVING_STATUS]
     util_states = [x.display_name for x in G_REVENUE_STATUS]
     for t, binned_stats_df in binned_operator_stats.items():
@@ -267,7 +272,8 @@ def avg_fleet_driving_speeds_binned(binned_operator_stats, output_dir, op_id, sh
         driven_speed.append(last_dr)
         revenue_speed.append(last_rev)
 
-    min_y = min([x for x in revenue_speed if x != 0])
+    nonzero_rev = [x for x in revenue_speed if x != 0]
+    min_y = min(nonzero_rev) if nonzero_rev else 0
 
     plt.figure(figsize=(7,7))
     plt.plot(ts, driven_speed, color = LIST_COLORS[0], label = "Driven Speed")
@@ -300,7 +306,7 @@ def avg_revenue_hours_binned(binned_operator_stats, output_dir, op_id, n_vehicle
     vrhs = []
     last = 0
     bins = list(binned_operator_stats.keys())
-    bin_size = bins[1] - bins[0]
+    bin_size = bins[1] - bins[0] if len(bins) > 1 else DEF_TEMPORAL_RESOLUTION
     util_states = [x.display_name for x in G_REVENUE_STATUS]
     for t, binned_stats_df in binned_operator_stats.items():
         ts.append(t/3600.0)
@@ -338,7 +344,7 @@ def avg_active_customers_binned(binned_served_customer_stats, output_dir, op_id,
     last_cust = 0
     last_rq = 0
     bins = list(binned_served_customer_stats.keys())
-    bin_size = bins[1] - bins[0]
+    bin_size = bins[1] - bins[0] if len(bins) > 1 else DEF_TEMPORAL_RESOLUTION
     differs = False
     for t, binned_customer_df in binned_served_customer_stats.items():
         ts.append(t/3600.0)
@@ -393,11 +399,13 @@ def avg_customers_per_vehicle_revenue_hous_binned(binned_served_customer_stats, 
     last_cust_pvrh = 0
     last_rq_pvrh = 0
     bins = list(binned_served_customer_stats.keys())
-    bin_size = bins[1] - bins[0]
+    bin_size = bins[1] - bins[0] if len(bins) > 1 else DEF_TEMPORAL_RESOLUTION
     differs = False
     util_states = [x.display_name for x in G_REVENUE_STATUS]
     def get_frac_active_cust_time(row):
         rq_time = row[G_RQ_DO] - row[G_RQ_TIME]
+        if rq_time == 0:
+            return 0.0
         return row["interval_weight"] * bin_size/rq_time
     for t, binned_customer_df in binned_served_customer_stats.items():
         ts.append(t/3600.0)
@@ -440,9 +448,9 @@ def avg_customers_per_vehicle_revenue_hous_binned(binned_served_customer_stats, 
     plt.savefig(os.path.join(output_dir, "temporal_customers_per_vehicle_revenue_hours_op_{}.png".format(op_id)))
     plt.close()
     if differs:
-        return ts, last_cust_pvrh, act_req_pvrh
+        return ts, act_cust_pvrh, act_req_pvrh
     else:
-        return ts, last_cust_pvrh, None
+        return ts, act_cust_pvrh, None
 
 
 def temporal_operator_plots(output_dir, op_id, show=False, evaluation_start_time=None, evaluation_end_time=None,
@@ -566,6 +574,7 @@ def _load_op_stats_and_infer_idle_states(output_dir, scenario_parameters, op_id,
                             d[key] = val
                     add_df_list.append(d)
                 last_end_time = entry[G_VR_LEG_END_TIME]
+                last_entry = entry
                 c+=1
                 continue
             c+=1
@@ -597,8 +606,10 @@ def _load_op_stats_and_infer_idle_states(output_dir, scenario_parameters, op_id,
                     d[G_VR_LEG_END_TIME] = end_time
                 elif key == G_VR_STATUS:
                     d[G_VR_STATUS] = "idle"
+                elif key == G_VR_LEG_START_SOC:
+                    d[G_VR_LEG_START_SOC] = last_entry[G_VR_LEG_END_SOC]
                 elif key == G_VR_LEG_END_SOC:
-                    d[G_VR_LEG_END_SOC] = last_entry[G_VR_LEG_START_SOC]
+                    d[G_VR_LEG_END_SOC] = last_entry[G_VR_LEG_END_SOC]
                 else:
                     d[key] = val
             add_df_list.append(d)
@@ -823,6 +834,8 @@ def _create_occ_plot_lists(op_df, max_occupancy):
         if not key in occs_last:
             occupancy.append(key)
             values.append(value)
+    occupancy += occs_last
+    values += values_last
     return times, values, occupancy
 
 
@@ -924,13 +937,14 @@ def occupancy_over_time_rel(output_dir, scenario_parameters, operator_attributes
     max_occupancy = op_df[op_df[G_VR_STATUS] == "route"][G_VR_NR_PAX].max()
     times, values, occupancy = _create_occ_plot_lists(op_df, max_occupancy)
     # rescale values to sum up to 100
-    for t_index in range(len(values[0])):
-        s = 0
-        for value in values:
-            s += value[t_index]
-        if s > 0:
-            for i in range(len(values)):
-                values[i][t_index] = values[i][t_index]/s*100.0
+    if len(values) > 0:
+        for t_index in range(len(values[0])):
+            s = 0
+            for value in values:
+                s += value[t_index]
+            if s > 0:
+                for i in range(len(values)):
+                    values[i][t_index] = values[i][t_index]/s*100.0
     # additional binning
     if bin_size is not None:
         new_times = []
@@ -999,7 +1013,7 @@ def run_complete_temporal_evaluation(output_dir, evaluation_start_time=None, eva
     dir_names = get_directory_dict(scenario_parameters, list_operator_attributes)
     eval_dict = {}
     for op_id, op_attributes in enumerate(list_operator_attributes):
-        eval_dict[op_id] = temporal_operator_plots(output_dir, op_id, print_comments=True)
+        eval_dict[op_id] = temporal_operator_plots(output_dir, op_id, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time, print_comments=True)
         eval_dict[op_id]["occupancy_over_time"] = occupancy_over_time(output_dir, scenario_parameters, op_attributes, dir_names, op_id,
                             evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
         eval_dict[op_id]["occupancy_over_time_rel"] = occupancy_over_time_rel(output_dir, scenario_parameters, op_attributes, dir_names, op_id,
@@ -1009,7 +1023,7 @@ def run_complete_temporal_evaluation(output_dir, evaluation_start_time=None, eva
         
     # save dictionary as json
     with open(os.path.join(output_dir, "temporal_eval.json"), "w") as f:
-        json.dump(eval_dict, f)
+        json.dump(eval_dict, f, default=lambda x: x.item() if hasattr(x, "item") else x)
 
 
 if __name__ == "__main__":

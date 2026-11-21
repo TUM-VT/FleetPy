@@ -70,7 +70,7 @@ def aggregate_demand_for_perfect_forecast(demand_f, node_zone_f, temporal_agg=15
     demand_df[["o_zone", "d_zone", "o_time", "d_time"]] = demand_df.apply(return_od_zones,
                                                                           args=(node_zone_dict, temporal_agg),
                                                                           axis=1, result_type="expand")
-    demand_df = demand_df.notna()
+    demand_df = demand_df.dropna(subset=["o_zone", "d_zone", "o_time", "d_time"])
     for col in ["o_zone", "d_zone", "o_time", "d_time"]:
         demand_df[col] = demand_df[col].astype(np.int64)
     # aggregate origin
@@ -82,7 +82,7 @@ def aggregate_demand_for_perfect_forecast(demand_f, node_zone_f, temporal_agg=15
     d_agg_df.index.names = ["time", "zone_id"]
     d_agg_df.rename({"nr_trips": "in perfect_trips", G_RQ_PAX: "in perfect_pax"}, axis=1, inplace=True)
     # merge
-    forecast_df = o_agg_df.merge(d_agg_df, left_index=True, right_index=True)
+    forecast_df = o_agg_df.merge(d_agg_df, left_index=True, right_index=True, how="outer")
     forecast_df.fillna(0, inplace=True)
     # output
     output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(demand_f))), "aggregated",
@@ -147,7 +147,7 @@ def create_demand_dir_perfect_and_file_mean_forecasts(demand_network_dir, node_z
         combine_series.append(tmp_series)
     #
     mean_df = pd.concat(combine_series, axis=1)
-    if glob is not None:
+    if glob_str is not None:
         f_name = f"mean_{slugify(glob_str)}".rstrip(".csv")
         if not f_name.endswith(".csv"):
             f_name += ".csv"

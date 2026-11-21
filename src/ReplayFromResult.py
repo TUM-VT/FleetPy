@@ -63,26 +63,30 @@ def interpolate_coordinates_with_edges(row, nodes_gdf, edges_gdf):
     p0 = nodes_gdf.loc[pos[0], "geometry"]
     p0_lon = p0.x
     p0_lat = p0.y
-    if pos[1] == -1:
+    if pos[1] == -1 or pos[1] is None:
         return p0_lon, p0_lat
     else:
         edge_geometry = edges_gdf.loc[(pos[0], pos[1]), "geometry"]
         full_length = edge_geometry.length
-        next_length = 0
+        if full_length == 0 or len(edge_geometry.coords) < 2:
+            return p0_lon, p0_lat
+        next_length = 0.0
         current_index = 0
-        current_part_len = None
+        current_part_len = 0.0
         while current_index < len(edge_geometry.coords) - 1:
             prev_p = edge_geometry.coords[current_index]
-            next_p = edge_geometry.coords[current_index]
+            next_p = edge_geometry.coords[current_index + 1]
             current_part_len = LineString([prev_p, next_p]).length
             next_length += current_part_len
-            if next_length/full_length > pos[2]:
+            if next_length / full_length >= pos[2] or current_index == len(edge_geometry.coords) - 2:
                 break
             current_index += 1
-        p0_lat, p0_lon = edge_geometry.coords[current_index]
-        p1_lat, p1_lon = edge_geometry.coords[current_index + 1]
-        frac_on_part = 1.0 - ( (next_length - pos[2] * full_length) / current_part_len)
-        return p0_lon + (p1_lon - p0_lon)*frac_on_part, p1_lat + (p1_lat - p0_lat)*frac_on_part
+        p0_lon, p0_lat = edge_geometry.coords[current_index][:2]
+        p1_lon, p1_lat = edge_geometry.coords[current_index + 1][:2]
+        if current_part_len == 0:
+            return p0_lon, p0_lat
+        frac_on_part = 1.0 - ((next_length - pos[2] * full_length) / current_part_len)
+        return p0_lon + (p1_lon - p0_lon) * frac_on_part, p0_lat + (p1_lat - p0_lat) * frac_on_part
 
 def point_str_to_pos(p_str):
     p_info = p_str.split(";")
@@ -466,7 +470,7 @@ class Replay(VehicleMovementSimulation):
             fleet_stat_df = pd.read_csv(fleet_stat_f)
             fleet_stat_df = fleet_stat_df[fleet_stat_df["start_time"] >= self.sim_start_time]
             possible_status = fleet_stat_df["status"].unique()
-            self.poss_veh_states = list(set(self.poss_veh_states).union(possible_status)) + ["idle"]
+            self.poss_veh_states = list(set(self.poss_veh_states).union(possible_status, {"idle"}))
             for vid, veh_stat_f in fleet_stat_df.groupby(G_RQ_VID):
                 self.replay_vehicles[(op_id, vid)] = ReplayVehicle(op_id, vid, veh_stat_f, self.sim_start_time,
                                                                    self.sim_end_time)
@@ -686,7 +690,7 @@ class ReplayPyPlot(Replay):
             from pathlib import Path
 
             image_folder = self.plots_dir
-            images_p = [img for img in image_folder.iterdir() if img.suffix == ".png"]
+            images_p = sorted([img for img in image_folder.iterdir() if img.suffix == ".png"], key=lambda p: p.name)
             video_name = 'video.gif'
 
             # p = Path(image_folder)

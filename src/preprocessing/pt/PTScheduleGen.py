@@ -168,7 +168,7 @@ class PTScheduleGen:
         (with columns route_ID, route_departure, origin_stop, destination_stop)
         """
         demand_df = pd.read_csv(demand_csv)
-        route_df = demand_df[demand_df['route_ID'] == route_no]
+        route_df = demand_df[demand_df['route_ID'] == self.route_no]
 
         route_with_coords = route_df[['route_departure', 'origin_stop', 'destination_stop']].copy()
         # add the index of route_df as well
@@ -196,7 +196,7 @@ class PTScheduleGen:
 
         self.route_with_coords: pd.DataFrame = route_with_coords
 
-        print("Demand file loaded for route {}".format(route_no))
+        print("Demand file loaded for route {}".format(self.route_no))
         print(route_with_coords.head(5))
 
     def check_demand_loaded(self):

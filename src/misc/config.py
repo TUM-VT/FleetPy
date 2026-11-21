@@ -61,7 +61,7 @@ def decode_config_str(in_string):
     :rtype: depending on in_string
     """
     if type(in_string) != str:
-        if np.isnan(in_string):
+        if in_string is None or (isinstance(in_string, (float, np.floating)) and np.isnan(in_string)):
             return None
         else:
             return in_string
