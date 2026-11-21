@@ -177,3 +177,15 @@ class ZoneSystem:
     def get_centroid_node(self, zone_id):
         # TODO # after ISTTT: get_centroid_node()
         pass
+
+    def get_zones_from_route(self, route: list) -> list:
+        """Returns unique zones traversed by a route, preserving travel order."""
+        zones = []
+        seen = set()
+
+        for node in route:
+            zone = self.get_zone_from_node(node)
+            if zone is not None and zone >= 0 and zone not in seen:
+                zones.append(zone)
+                seen.add(zone)
+        return zones
