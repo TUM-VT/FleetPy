@@ -106,6 +106,7 @@ class FleetStateObserver(AbstractObserver):
 
     def __init__(self, detail_level: str = "mini", custom_fields: Optional[Dict[str, List[str]]] = None,
                  recording_interval: int = 1, sim_start_time: int = 0, sim_time_step: int = 1):
+        super().__init__()
         # 1. Resolve field lists
         if detail_level == "custom":
             if custom_fields is None:
@@ -161,7 +162,7 @@ class FleetStateObserver(AbstractObserver):
     def _encode_plan_stops(self, vehicle_plan: VehiclePlan, sim_time: int) -> List[List[Any]]:
         return [[g(ps, sim_time) for g in self._stop_getters] for ps in vehicle_plan.list_plan_stops]
 
-    def observe(self, fleetpy_module) -> dict:
+    def observe(self, fleetpy_module, **kwargs) -> dict:
         assert isinstance(fleetpy_module, FleetControlBase), "FleetStateObserver only works with FleetControl Module"
 
         sim_time = fleetpy_module.sim_time

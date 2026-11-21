@@ -12,7 +12,7 @@ from src.misc.globals import *
 class SimTimeObserver(AbstractObserver):
     """Reads the current simulation time from the repositioning module."""
 
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         """Return the current simulation time.
 
         :param fleetpy_module: active RepositioningBase instance
@@ -25,7 +25,7 @@ class SimTimeObserver(AbstractObserver):
 class DemandForecastObserver(AbstractObserver):
     """Reads zone-level trip departure and arrival forecasts over the repositioning horizon."""
 
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         """Return forecasted trip origins and destinations per zone for the next horizon window.
 
         :param fleetpy_module: active RepositioningBase instance
@@ -49,7 +49,7 @@ class DemandForecastObserver(AbstractObserver):
 class ZoneBasedVehicleStatesObserver(AbstractObserver):
     """Reads per-zone vehicle counts (idle, repositioning, overall available) over the repositioning horizon."""
 
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         """Return per-zone vehicle counts for idle, repositioning, and overall available vehicles.
 
         :param fleetpy_module: active RepositioningBase instance
@@ -86,7 +86,7 @@ class ZoneBasedVehicleStatesObserver(AbstractObserver):
 class ZoneBasedCurrentDemandObserver(AbstractObserver):
     """Reads current zone-level trip departures and arrivals."""
 
-    def observe(self, fleetpy_module: RepositioningBase):
+    def observe(self, fleetpy_module, **kwargs):
         """Return current trip departures and arrivals per zone.
 
         :param fleetpy_module: active RepositioningBase instance
@@ -110,7 +110,7 @@ class ZoneBasedCurrentVehicleStatesObserver(AbstractObserver):
     # TODO Takashi: update doc strings
     """Reads current vehicle states per zone, including idle vehicles and inter-zone movements."""
 
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         """Return current vehicle distribution and flows between zones.
 
         :param fleetpy_module: active RepositioningBase instance
@@ -158,7 +158,7 @@ class ZoneBasedTravelTimeObserver(AbstractObserver):
     # TODO Takashi: update doc strings
     """Reads zone-to-zone travel time and distance information."""
 
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         """Return travel time and distance for all origin-destination zone pairs.
 
         :param fleetpy_module: active RepositioningBase instance
@@ -209,9 +209,10 @@ class FutureDropoffObserver(AbstractObserver):
             tau is derived from op_repo_horizons[1] in const_cfg_manhattan_case_study.yaml
     """
     def __init__(self, tau):
+        super().__init__()
         self.tau = tau
         
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         if self.tau is None:
             horizon = fleetpy_module.list_horizons[1]
             resolution = fleetpy_module.fleetctrl.repo_time_step
@@ -293,9 +294,10 @@ class FutureRepositioningCompletionObserver(AbstractObserver):
             tau is derived from op_repo_horizons[1] in const_cfg_manhattan_case_study.yaml
     """
     def __init__(self):
+        super().__init__()
         self.tau = None
 
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         if self.tau is None:
             horizon = fleetpy_module.list_horizons[1]
             resolution = fleetpy_module.fleetctrl.repo_time_step
@@ -362,7 +364,7 @@ class IdleVehiclesObserver(AbstractObserver):
         Time:
             Current simulation time
     """
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         zone_system = fleetpy_module.zone_system
         zone_to_idle_vehicles = {}
 
@@ -398,10 +400,8 @@ class UnservedRequestsObserver(AbstractObserver):
         :return: {"zone_to_unserved_requests": dict[zone_id -> number of unserved requests]}        
         T is the time step index of FleetPy simulation (e.g., 30 sec)
     """
-    def __init__(self):
-        pass
 
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         
         zone_system = fleetpy_module.zone_system
         sim_time = fleetpy_module.sim_time
@@ -431,9 +431,10 @@ class FutureRequestsObserver(AbstractObserver):
         t1 -> t+1, t+2,...t+tau
     """
     def __init__(self, tau):
+        super().__init__()
         self.tau = tau
 
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
 
         zone_system: ForecastZoneSystemBase = fleetpy_module.zone_system
         sim_time = fleetpy_module.sim_time
@@ -454,10 +455,11 @@ class FutureRequestsObserver(AbstractObserver):
     
 class TravelTimeMatrixObserver(AbstractObserver):
     def __init__(self):
+        super().__init__()
         self.tt_matrix = None
     
     # travel time is calculated only once
-    def observe(self, fleetpy_module):
+    def observe(self, fleetpy_module, **kwargs):
         if self.tt_matrix is None:
             zone_system = fleetpy_module.zone_system
             zones = sorted(zone_system.get_all_zones())
