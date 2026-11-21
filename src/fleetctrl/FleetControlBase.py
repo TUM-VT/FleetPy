@@ -106,8 +106,7 @@ class FleetControlBase(metaclass=ABCMeta):
                                                       network_dynamics_file_name=operator_attributes.get(G_RA_OP_NW_DYN_F))
             self.routing_engine.update_network(scenario_parameters[G_SIM_START_TIME])
             self._use_own_routing_engine = True
-        # TODO: is a zonesystem needed for the fleetcontrol module? -> moved to repo module
-        #self.zones: ZoneSystem = zone_system
+        self.zones: ZoneSystem = zone_system
         self.dir_names = dir_names
         #
         self.sim_vehicles: List[SimulationVehicle] = list_vehicles
