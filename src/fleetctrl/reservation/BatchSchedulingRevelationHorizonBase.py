@@ -64,7 +64,7 @@ class BatchSchedulingRevelationHorizonBase(RevelationHorizonBase):
         if operator_attributes.get(G_RA_OP_NW_TYPE):
             LOG.info(f"operator {self.fleetctrl.op_id} loads its own network for reservation!")
             if not operator_attributes.get(G_RA_OP_NW_NAME):
-                raise IOError(f"parameter {G_RA_OP_NW_NAME} has to be given to load a network for operator {self.op_id}")
+                raise IOError(f"parameter {G_RA_OP_NW_NAME} has to be given to load a network for operator {self.fleetctrl.op_id}")
             from src.misc.init_modules import load_routing_engine
             self.routing_engine : NetworkBase = load_routing_engine(operator_attributes[G_RA_OP_NW_TYPE], os.path.join(dir_names[G_DIR_DATA], "networks", operator_attributes[G_RA_OP_NW_NAME]),
                                                       network_dynamics_file_name=operator_attributes.get(G_RA_OP_NW_DYN_F))

@@ -119,7 +119,7 @@ class ODForecastZoneSystem(ForecastZoneSystemBase):
                 for t in ts:
                     o_n = (self.get_random_node(o_z, only_boarding_nodes=True), None, None)
                     d_n = (self.get_random_node(d_z, only_boarding_nodes=True), None, None)
-                    if o_n != -1 and d_n != -1:
+                    if o_n[0] >= 0 and d_n[0] >= 0:
                         future_list.append( (t, o_n, d_n) )
                     else:
                         LOG.warning(f"Couldnt find random node for zone {o_z} or {d_z}!")

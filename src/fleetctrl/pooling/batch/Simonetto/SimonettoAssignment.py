@@ -110,6 +110,7 @@ class SimonettoAssignment(BatchAssignmentAlgorithmBase):
                     if len(r_list) != 0:
                         _, new_veh_p, _ = min(r_list, key=lambda x:x[2])
                         cost = self.fleetcontrol.compute_VehiclePlan_utility(sim_time, veh_obj, new_veh_p)
+                        new_veh_p.set_utility(cost)
                     else:
                         new_veh_p, cost = None, None
                 if new_veh_p is not None:
@@ -237,7 +238,7 @@ class SimonettoAssignment(BatchAssignmentAlgorithmBase):
                 for vid, (cost, _) in vid_dict.items():
                     name = f"{rid}_{vid}"
                     var = m.addVar(name = name, obj = cost, vtype = gurobi.GRB.BINARY)
-                    vars[name] = var
+                    vars[(rid, vid)] = var
                     try:
                         vid_constr_dict[vid].append(var)
                     except KeyError:
@@ -259,14 +260,9 @@ class SimonettoAssignment(BatchAssignmentAlgorithmBase):
             
             #get solution
             if m.status == gurobi.GRB.Status.OPTIMAL:
-                varnames = m.getAttr("VarName", m.getVars())
-                solution = m.getAttr("X",m.getVars())
-                
                 new_assignments = {}
-                for x in range(len(solution)):
-                    if round(solution[x]) == 1:
-                        key = varnames[x].split("_")
-                        rid, vid = int(key[0]), int(key[1])
+                for (rid, vid), var in vars.items():
+                    if round(var.X) == 1:
                         new_assignments[rid] = vid
             else:
                 model_f = os.path.join(self.fleetcontrol.dir_names[G_DIR_OUTPUT], f"70_repo_am_opt_model_infeasible_{sim_time}.lp")

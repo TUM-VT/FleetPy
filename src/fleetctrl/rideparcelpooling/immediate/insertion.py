@@ -128,8 +128,8 @@ def simple_insert_parcel(routing_engine : NetworkBase, sim_time : int, veh_obj :
 
     # add d_stop for all tmp_plans
     d_stop_pos, prq_t_do_latest, prq_max_trip_time = new_prq_obj.get_d_stop_info()  # TODO # the checks with t_do_latest and max_trip_time can be confusing!
-    skip_next = -1
     for o_index, tmp_next_plan in tmp_plans.items():
+        skip_next = -1
         d_feasible = True  # once latest arrival is reached, no insertion at later index is feasible for current pick-up
         number_stops = len(tmp_next_plan.list_plan_stops)
         # always start checking plans after pick-up of new_prq_obj -> everything before is feasible and stay the same
@@ -375,24 +375,24 @@ def simple_insert_into_route_with_parcels(routing_engine : NetworkBase, sim_time
 
     # add d_stop for all tmp_plans
     d_stop_pos, prq_t_do_latest, prq_max_trip_time = new_prq_obj.get_d_stop_info()  # TODO # the checks with t_do_latest and max_trip_time can be confusing!
-    skip_next = -1
     for o_index, tmp_next_plan in tmp_plans.items():
+        skip_next = -1
         d_feasible = True  # once latest arrival is reached, no insertion at later index is feasible for current pick-up
         number_stops = len(tmp_next_plan.list_plan_stops)
         # always start checking plans after pick-up of new_prq_obj -> everything before is feasible and stay the same
         next_d_plan = tmp_next_plan.copy()
         init_plan_state = next_d_plan.return_intermediary_plan_state(veh_obj, sim_time, routing_engine, o_index)
-        next_stop_index_with_parcel = o_index + 1
+        next_stop_index_with_parcel = number_stops
+        parcel_found = False
         for j in range(o_index + 1, number_stops):
             ps = next_d_plan.list_plan_stops[j]
-            parcel_found = False
             if not (d_stop_pos == ps.get_pos() and not ps.is_locked_end()):
                 for rid in ps.get_list_boarding_rids() + ps.get_list_alighting_rids():
                     if type(rid) == str and rid.startswith("p"):
                         parcel_found = True
                         break
-            next_stop_index_with_parcel = j
             if parcel_found:
+                next_stop_index_with_parcel = j + 1
                 break
         second_iterator = range(o_index + 1, next_stop_index_with_parcel)
         for j in second_iterator:
@@ -448,7 +448,7 @@ def simple_insert_into_route_with_parcels(routing_engine : NetworkBase, sim_time
                     if len(planned_pu_do) > 1 and planned_pu_do[1] > prq_t_do_latest:
                         d_feasible = False
 
-        if skip_next != number_stops and not tmp_next_plan.list_plan_stops[-1].is_locked_end():
+        if not parcel_found and skip_next != number_stops and not tmp_next_plan.list_plan_stops[-1].is_locked_end():
             parcel_at_end = False
             for rid in tmp_next_plan.list_plan_stops[-1].get_list_boarding_rids() + tmp_next_plan.list_plan_stops[-1].get_list_alighting_rids():
                 if type(rid) == str and rid.startswith("p"):

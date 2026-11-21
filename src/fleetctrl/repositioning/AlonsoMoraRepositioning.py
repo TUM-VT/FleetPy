@@ -122,7 +122,7 @@ class AlonsoMoraRepositioning(RepositioningBase):
                 veh_plan.add_plan_stop(ps, veh_obj, sim_time, self.routing_engine)
             else:
                 LOG.debug(f" -> insert before reservation ")
-                veh_plan.list_plan_stops = veh_plan.list_plan_stops[:-2] + [ps] + [veh_plan.list_plan_stops[-1]]
+                veh_plan.list_plan_stops = veh_plan.list_plan_stops[:-1] + [ps] + [veh_plan.list_plan_stops[-1]]
                 veh_plan.update_tt_and_check_plan(veh_obj, sim_time, self.fleetctrl.routing_engine)
             self.fleetctrl.assign_vehicle_plan(veh_obj, veh_plan, sim_time)
             if lock:

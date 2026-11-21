@@ -99,7 +99,7 @@ class AggForecastZoneSystem(ForecastZoneSystemBase):
             raise AssertionError("Invalid forecast column chosen!")
         #
         if aggregation_level is not None:
-            tmp_forecast_df = self.forecast_df.reset_index().groubpy([G_ZONE_FC_T,
+            tmp_forecast_df = self.forecast_df.reset_index().groupby([G_ZONE_FC_T,
                                                                       aggregation_level]).aggregate({col: sum})
         else:
             tmp_forecast_df = self.forecast_df
@@ -134,9 +134,9 @@ class AggForecastZoneSystem(ForecastZoneSystemBase):
                     last_t0 = self.fc_times[-1]
                 scale_factor = (t1 - t0) / self.fc_temp_resolution
                 return_dict = _create_forecast_dict(col, last_t0, return_dict, scale_factor)
-                # if scale is not None:
-                #     for key, val in return_dict.items():
-                #         return_dict[key] = val * scale
+                if scale is not None:
+                    for key, val in return_dict.items():
+                        return_dict[key] = val * scale
                 return return_dict
             else:
                 # get forecast from t0 to next value in self.fc_times
@@ -148,6 +148,9 @@ class AggForecastZoneSystem(ForecastZoneSystemBase):
                         if last_t0 == t0:
                             scale_factor = (t1 - t0) / self.fc_temp_resolution
                             return_dict = _create_forecast_dict(col, self.fc_times[i-1], return_dict, scale_factor)
+                            if scale is not None:
+                                for key, val in return_dict.items():
+                                    return_dict[key] = val * scale
                             return return_dict
                         break
                     if last_t0 <= t0 and t0 < next_t0:
@@ -166,9 +169,9 @@ class AggForecastZoneSystem(ForecastZoneSystemBase):
         if t1 != last_t0:
             scale_factor = (t1 - last_t0) / self.fc_temp_resolution
             return_dict = _create_forecast_dict(col, last_t0, return_dict, scale_factor)
-            if scale is not None:
-                for key, val in return_dict.items():
-                    return_dict[key] = val * scale
+        if scale is not None:
+            for key, val in return_dict.items():
+                return_dict[key] = val * scale
         return return_dict
     
     def get_trip_arrival_forecasts(self, t0, t1, aggregation_level=None, scale = None):
@@ -266,7 +269,7 @@ class AggForecastZoneSystem(ForecastZoneSystemBase):
             d_zone = np.random.choice(arr_zones, p=arr_prob)
             o_pos = (self.get_random_node(o_zone, only_boarding_nodes=True), None, None)
             d_pos = (self.get_random_node(d_zone, only_boarding_nodes=True), None, None)
-            if o_pos != -1 and d_pos != -1:
+            if o_pos[0] >= 0 and d_pos[0] >= 0:
                 future_list.append( (int(tc), o_pos, d_pos) )
             else:
                 LOG.warning(f"draw future: couldnt find nodes for {o_zone} and {d_zone}")

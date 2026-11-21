@@ -393,7 +393,7 @@ class FullSamplingRidePoolingRebalancingMultiStage(RepositioningBase):
                             try:
                                 timebin_to_zone_to_idle_vehs[t][zone] += 1
                             except KeyError:
-                                timebin_to_zone_to_idle_vehs[t] = {zone: 1}
+                                timebin_to_zone_to_idle_vehs[t][zone] = 1
                             del veh_objs[vid]
                             del veh_plans[vid]
                         elif len(veh_plans[vid].list_plan_stops) == 1 and veh_plans[vid].list_plan_stops[-1].is_locked_end():
@@ -405,7 +405,7 @@ class FullSamplingRidePoolingRebalancingMultiStage(RepositioningBase):
                                 try:
                                     timebin_to_zone_to_idle_vehs[t][zone] += 1
                                 except KeyError:
-                                    timebin_to_zone_to_idle_vehs[t] = {zone: 1}
+                                    timebin_to_zone_to_idle_vehs[t][zone] = 1
                                 del veh_objs[vid]
                                 del veh_plans[vid]
                         

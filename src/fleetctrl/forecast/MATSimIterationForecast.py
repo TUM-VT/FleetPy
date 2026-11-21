@@ -14,7 +14,7 @@ import numpy as np
 # src imports
 # -----------
 from src.fleetctrl.forecast.PerfectForecastZoning import PerfectForecastZoneSystem
-from src.routing.NetworkBase import return_position_from_str
+from src.routing.road.NetworkBase import return_position_from_str
 # -------------------------------------------------------------------------------------------------------------------- #
 # global variables
 # ----------------

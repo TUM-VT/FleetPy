@@ -225,7 +225,7 @@ class ContinuousBatchRevelationReservation(BatchSchedulingRevelationHorizonBase)
             self._unprocessed_rids = {}
             
             # reset network
-            if self.fleetctrl._use_own_routing_engine:
+            if self._use_own_routing_engine or getattr(self.fleetctrl, "_use_own_routing_engine", False):
                 self.routing_engine.reset_network(sim_time)
                 
             return True
@@ -247,12 +247,14 @@ class ContinuousBatchRevelationReservation(BatchSchedulingRevelationHorizonBase)
                     fullplan = veh_plan.copy()
                     fullplan.list_plan_stops.pop()
                     fullplan.list_plan_stops += res_plan.list_plan_stops
-                    self.fleetctrl.compute_VehiclePlan_utility(sim_time, self.fleetctrl.sim_vehicles[vid], fullplan)
+                    u = self.fleetctrl.compute_VehiclePlan_utility(sim_time, self.fleetctrl.sim_vehicles[vid], fullplan)
+                    fullplan.set_utility(u)
                     full_veh_plans[vid] = fullplan
                     LOG.debug(f"full plan for vid {vid} : {fullplan}")
                 else:
                     if veh_plan.get_utility() is None:
-                        self.fleetctrl.compute_VehiclePlan_utility(sim_time, self.fleetctrl.sim_vehicles[vid], veh_plan)
+                        u = self.fleetctrl.compute_VehiclePlan_utility(sim_time, self.fleetctrl.sim_vehicles[vid], veh_plan)
+                        veh_plan.set_utility(u)
                     full_veh_plans[vid] = veh_plan.copy()
                     LOG.debug(f"full plan for vid {vid} : {veh_plan}")
                     
@@ -277,7 +279,7 @@ class ContinuousBatchRevelationReservation(BatchSchedulingRevelationHorizonBase)
         LOG.debug(f"batch prog end time: {prog_end_time} | {prog_end_time_1} | {prog_end_time_2} | {start_time}")
         for t in range(start_time, prog_end_time, self._progress_time_step):
             # update travel times
-            if self.fleetctrl._use_own_routing_engine:
+            if self._use_own_routing_engine or getattr(self.fleetctrl, "_use_own_routing_engine", False):
                 self.routing_engine.update_network(t)
             # move vehicles
             for vid, veh in veh_objs.items():

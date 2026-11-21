@@ -2204,9 +2204,9 @@ class AlonsoMoraAssignment(BatchAssignmentAlgorithmBase):
                                 v2rb_obj_list.append( self.rtv_obj[key] )
 
                     mutually_excl_cluster_dict = {self._get_associated_baserid(rid) : self._get_all_other_subrids_associated_to_this_subrid(rid) for rid in current_rids }
-                    new_v2rb_list = optimize_boarding_points_of_vid_assigned_v2rb(None, self.routing_engine, self.sim_time, self.std_bt, self.add_bt, self.objective_function,
+                    new_v2rb_list = optimize_boarding_points_of_vid_assigned_v2rb(None, self.routing_engine, self.sim_time, self.operator_attributes, self.objective_function,
                         self.veh_objs[vid], assigned_key, mutually_excl_cluster_dict, self.r2v_locked, self.v2r_locked,
-                        self.active_requests, v2rb_obj_list, self.veh_tree_build_timeout)
+                        self.active_requests, v2rb_obj_list)
 
                     best_val = self.rtv_costs[assigned_key]
                     prev_best_val = best_val
@@ -2336,8 +2336,8 @@ def optimize_boarding_points_of_vid_assigned_v2rb(fleetcontrol, routing_engine, 
     """
     #t = time.time()
     vid = veh_obj.vid
-    sub_am_module = AlonsoMoraAssignment(fleetcontrol, routing_engine, sim_time, operator_attributes, objective_function, veh_objs_to_build={veh_obj.vid : veh_obj})
-    sub_am_module.applied_heuristics = None
+    sub_am_module = AlonsoMoraAssignment(fleetcontrol, routing_engine, sim_time, objective_function, operator_attributes, veh_objs_to_build={veh_obj.vid : veh_obj})
+    sub_am_module.applied_heuristics = {}
     for base_rid, sub_rid_iterable in mutually_exclusive_cluster_id_to_rids.items():
         sub_am_module.set_mutually_exclusive_assignment_constraint(sub_rid_iterable, base_rid)
     current_rids = getRidsFromRTVKey(assigned_key)
