@@ -86,19 +86,19 @@ struct JourneyStep {
  */
 struct Journey {
   std::vector<JourneyStep> steps;          ///< Steps making up the journey.
-  int source_station_departure_secs;       ///< Overall departure time in seconds from midnight of the query day at source station.
-  Day source_station_departure_day;        ///< Departure day of the journey at source station.
+  int source_station_departure_secs{};     ///< Overall departure time in seconds from midnight of the query day at source station.
+  Day source_station_departure_day{};      ///< Departure day of the journey at source station.
 
-  int target_station_arrival_secs;         ///< Overall arrival time in seconds from midnight of the query day at target station.
-  Day target_station_arrival_day;          ///< Arrival day of the journey at target station.
+  int target_station_arrival_secs{};       ///< Overall arrival time in seconds from midnight of the query day at target station.
+  Day target_station_arrival_day{};        ///< Arrival day of the journey at target station.
 
-  int duration;                            ///< Total duration of the journey from source station to target station in seconds.
-  int source_transfer_time;                ///< Transfer time from source station to source station stop in seconds.
-  int source_waiting_time;                 ///< Waiting time at the source station in seconds.
-  int trip_time;                           ///< Trip time from source station stop to target station stop in seconds.
-  int target_transfer_time;                ///< Transfer time from target station stop to target station in seconds.
+  int duration{};                          ///< Total duration of the journey from source station to target station in seconds.
+  int source_transfer_time{};              ///< Transfer time from source station to source station stop in seconds.
+  int source_waiting_time{};               ///< Waiting time at the source station in seconds.
+  int trip_time{};                         ///< Trip time from source station stop to target station stop in seconds.
+  int target_transfer_time{};              ///< Transfer time from target station stop to target station in seconds.
   
-  int num_transfers;                       ///< Number of transfers in the journey.
+  int num_transfers{};                     ///< Number of transfers in the journey.
 };
 
 /**

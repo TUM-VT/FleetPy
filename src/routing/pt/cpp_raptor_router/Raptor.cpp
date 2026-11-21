@@ -103,9 +103,10 @@ void Raptor::setMinArrivalTime(
 void Raptor::fillActiveTrips(Day day) {
   Date target_date = (day == Day::CurrentDay) ? query_.date : Utils::addOneDay(query_.date);
   int target_date_int = Utils::dateToInt(target_date);
+  int &cached_date_int = (day == Day::CurrentDay) ? current_date_int_ : next_date_int_;
 
-  // Check if the active_trips_by_day_ map already has the trips for the target date
-  if (current_date_int_ == target_date_int) {
+  // Check if active trips for this day slot have already been computed for target_date_int
+  if (cached_date_int == target_date_int) {
     return;
   }
 
@@ -120,6 +121,7 @@ void Raptor::fillActiveTrips(Day day) {
       trip.setActive(day, false);
     }
   }
+  cached_date_int = target_date_int;
 }
 
 std::vector<Journey> Raptor::findJourneys() {
@@ -175,7 +177,7 @@ std::vector<Journey> Raptor::findJourneys() {
 }
 
 std::optional<Journey> Raptor::findOptimalJourney() {
-  Journey optimal_journey;
+  std::optional<Journey> optimal_journey = std::nullopt;
   int optimal_target_station_arrival_secs = std::numeric_limits<int>::max();
 
   initializeAlgorithm();
@@ -477,6 +479,9 @@ Journey Raptor::reconstructJourney(
         departure_seconds = stop_time_record->departure_seconds;
         
         arrival_seconds = arrivals_[current_stop_id][k].arrival_seconds.value();
+        if (arrival_seconds - departure_seconds >= MIDNIGHT) {
+          departure_seconds += MIDNIGHT;
+        }
         duration = arrival_seconds - departure_seconds;
       }
 

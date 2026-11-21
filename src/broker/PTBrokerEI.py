@@ -47,7 +47,7 @@ LOG = logging.getLogger(__name__)
 LARGE_INT = 100000000
 BUFFER_SIZE = 100
 
-INPUT_PARAMETERS_PTBroker = {
+INPUT_PARAMETERS_PTBrokerEI = {
     "doc" : "this class represents a broker platform which handles intermodal requests",
     "inherit" : PTBrokerBasic,
     "input_parameters_mandatory": ["n_amod_op", "amod_operators", "pt_operator", "demand", "routing_engine", "scenario_parameters"],
@@ -55,6 +55,7 @@ INPUT_PARAMETERS_PTBroker = {
     "mandatory_modules": [],
     "optional_modules": []
 }
+INPUT_PARAMETERS_PTBroker = INPUT_PARAMETERS_PTBrokerEI
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # main
@@ -164,7 +165,8 @@ class PTBrokerEI(PTBrokerBasic):
 
             # create sub-request for the same AMoD operator
             if flm_pt_arrival is None:
-                raise ValueError(f"PT offer is not available for sub_request {rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}, skipping to the next AMoD operator.")
+                LOG.info(f"PT offer is not available for sub_request {rid}_{RQ_SUB_TRIP_ID.FLM_PT.value}, skipping to the next AMoD operator.")
+                continue
             else:
                 # last mile AMoD sub-request
                 self._inform_amod_sub_request(rq_obj, RQ_SUB_TRIP_ID.FLM_AMOD_1.value, transfer_street_node_1, rq_obj.get_destination_node(), flm_pt_arrival, parent_modal_state, op_id, sim_time)
