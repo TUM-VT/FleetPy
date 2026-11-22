@@ -3,6 +3,8 @@ from src.fleetctrl.FleetControlBase import FleetControlBase
 from src.fleetctrl.repositioning.RepositioningBase import RepositioningBase
 from src.infra.Zoning import ZoneSystem
 from src.routing.road.NetworkBase import NetworkBase
+from src.FleetSimulationBase import FleetSimulationBase
+from src.ml_gym.hooks_manager import Events
 
 
 class AbstractObserver(ABC):
@@ -14,10 +16,10 @@ class AbstractObserver(ABC):
         self.network: NetworkBase | None = None
 
     @abstractmethod
-    def observe(self, fleetpy_module, **kwargs):
+    def observe(self, fleetpy_module, event: Events, **kwargs):
         pass
 
-    def extract_modules(self, fleetpy_module):
+    def extract_modules(self, fleetpy_module, event: Events):
         """ It is a helper method to extracts various other modules depending on the calling fleetpy module for observation """
 
         if isinstance(fleetpy_module, FleetControlBase):

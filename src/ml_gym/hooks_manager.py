@@ -166,8 +166,7 @@ class Hook:
 
         observation = {}
         for observer in self._observers:
-            # print(f"\nHook: trigger observer - {observer}")
-            observation.update(observer.observe(fleetpy_module))
+            observation.update(observer.observe(fleetpy_module, event))
 
         for actor in self._actors:
             actor._act(observation, fleetpy_module, self._hook_id, process_id, in_queue, out_queue)
