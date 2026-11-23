@@ -19,6 +19,9 @@ class Events(Enum): # イベント名を４つ定義し、Event.ML_OBSERVEなど
     ML_ACTION = "ml_action",
     OBSERVE_FLEET_STATE_AFTER_RECEIVING_STATUS_UPDATE = "observe_fleet_state_after_receiving_status_update", # this event is triggered after the fleetcontrol received a new status update of its vehicle and is about to trigger its optimization
     OBSERVE_BEFORE_REPOSITIONING = "observe_bevore_repositioning" # this event is triggered directly before the repositioning algorithm would calculate new repositioning trips
+    BEFORE_IMMEDIATE_OFFER = "before_immediate_offer"
+    AFTER_NETWORK_UPDATE_STEP = "after_network_update_step"
+    AFTER_FLEET_UPDATE = "after_fleet_update"
 
 class HookManager:
     
@@ -166,7 +169,7 @@ class Hook:
 
         observation = {}
         for observer in self._observers:
-            observation.update(observer.observe(fleetpy_module, event))
+            observation[observer] = {event: observer.observe(fleetpy_module, event)}
 
         for actor in self._actors:
             actor._act(observation, fleetpy_module, self._hook_id, process_id, in_queue, out_queue)
