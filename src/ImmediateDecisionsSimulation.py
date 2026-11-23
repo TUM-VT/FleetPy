@@ -77,11 +77,13 @@ class ImmediateDecisionsSimulation(FleetSimulationBase):
         """
         # 1)
         self.update_sim_state_fleets(sim_time - self.time_step, sim_time)
-        self.hook_manager.trigger(Events.AFTER_FLEET_UPDATE, self)
+        if self.hook_manager:
+            self.hook_manager.trigger(Events.AFTER_FLEET_UPDATE, self)
         new_travel_times = self.routing_engine.update_network(sim_time)
         if new_travel_times:
             self.broker.inform_network_travel_time_update(sim_time)
-            self.hook_manager.trigger(Events.AFTER_NETWORK_UPDATE_STEP, self)
+            if self.hook_manager:
+                self.hook_manager.trigger(Events.AFTER_NETWORK_UPDATE_STEP, self)
         # 2)
         list_undecided_travelers = list(self.demand.get_undecided_travelers(sim_time))
         last_time = sim_time - self.time_step
