@@ -85,6 +85,7 @@ def get_src_request_modules():
     rm_dict["UserDecisionRequest"] = ("src.demand.TravelerModels", "UserDecisionRequest")
     rm_dict["PreferredOperatorRequest"] = ("src.demand.TravelerModels", "PreferredOperatorRequest")
     rm_dict["BasicIntermodalRequest"] = ("src.demand.TravelerModels", "BasicIntermodalRequest")
+    rm_dict["LinearSensitivePriceDeviationFromNominal"] = ("src.demand.TravelerModels", "LinearSensitivePriceDeviationFromNominal")
     # add ml content
     rm_dict.update(ml_modules.add_request_models())
     return rm_dict
