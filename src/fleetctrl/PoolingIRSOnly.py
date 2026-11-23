@@ -6,6 +6,8 @@ from src.fleetctrl.FleetControlBase import FleetControlBase
 from src.fleetctrl.planning.PlanRequest import PlanRequest
 from src.fleetctrl.pooling.objectives import return_pooling_objective_function
 from src.fleetctrl.pooling.immediate.insertion import insertion_with_heuristics
+from src.fleetctrl.planning.VehiclePlan import PlanRequest, VehiclePlan
+from src.ml_gym.hooks_manager import Events
 from src.misc.globals import *
 
 LOG = logging.getLogger(__name__)
@@ -64,6 +66,8 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         self._init_dynamic_fleetcontrol_output_key(G_FCTRL_CT_RQU)
 
         self.flm_excluded_vid = {} # flm rid -> [vid]
+        self.selected_plan_from_actor: dict[int, VehiclePlan] = {}
+        self.modified_fare: dict[tuple(str, VehiclePlan), float] = {}
 
     def receive_status_update(self, vid, simulation_time, list_finished_VRL, force_update=True):
         """This method can be used to update plans and trigger processes whenever a simulation vehicle finished some
@@ -72,7 +76,7 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         :param vid: vehicle id
         :type vid: int
         :param simulation_time: current simulation time
-        :type simulation_time: float
+        :type simulation_time: int
         :param list_finished_VRL: list of VehicleRouteLeg objects
         :type list_finished_VRL: list
         :param force_update: indicates if also current vehicle plan feasibilities have to be checked
@@ -85,6 +89,12 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         except KeyError:
             self.pos_veh_dict[veh_obj.pos] = [veh_obj]
         LOG.debug(f"veh {veh_obj} | after status update: {self.veh_plans[vid]}")
+
+    def set_best_candidate_plan(self, rid, vid, veh_plan, new_fare=None):
+        """ This method is used by FleetPy actor to set the best plan among recent candidates to be used for RL """
+        self.selected_plan_from_actor[rid] = veh_plan
+        if new_fare is not None:
+            self.modified_fare[(rid, veh_plan)] = new_fare
 
     def user_request(self, rq, sim_time, max_wait_time=None):
         """This method is triggered for a new incoming request. It generally adds the rq to the database. It has to
@@ -132,6 +142,12 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
             list_tuples = insertion_with_heuristics(sim_time, prq, self, force_feasible_assignment=True, excluded_vid=excluded_vid)
             if len(list_tuples) > 0:
                 (vid, vehplan, delta_cfv) = min(list_tuples, key=lambda x:x[2])
+                if self.hook_manager is not None:
+                    fare = self._compute_fare(sim_time, prq, vehplan)
+                    candidate_plans = {prq.rid: {vid: (plan, cfv, fare) for vid, plan, cfv in list_tuples}}
+                    self.hook_manager.trigger(Events.BEFORE_IMMEDIATE_OFFER, self, plan_req = prq, candidate_plans=candidate_plans)
+                    if self.selected_plan_from_actor:
+                        vehplan = self.selected_plan_from_actor[prq.get_rid()]
                 self.tmp_assignment[rid_struct] = vehplan
                 offer = self._create_user_offer(prq, sim_time, vehplan)
 
@@ -261,6 +277,12 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         """
         return self.vr_ctrl_f(simulation_time, veh_obj, vehicle_plan, self.rq_dict, self.routing_engine)
 
+    def _compute_fare(self, sim_time : int, prq : PlanRequest, assigned_veh_plan : VehiclePlan=None):
+        if (prq.get_rid(), assigned_veh_plan) in self.modified_fare:
+            return self.modified_fare[prq.get_rid(), assigned_veh_plan]
+        else:
+            return super()._compute_fare(sim_time, prq, assigned_veh_plan)
+
     def _create_user_offer(self, prq, simulation_time, assigned_vehicle_plan=None, offer_dict_without_plan={}):
         """ creating the offer for a requests
 
@@ -278,8 +300,6 @@ class PoolingInsertionHeuristicOnly(FleetControlBase):
         """
         if assigned_vehicle_plan is not None:
             pu_time, do_time = assigned_vehicle_plan.pax_info.get(prq.get_rid_struct())
-            # offer = {G_OFFER_WAIT: pu_time - simulation_time, G_OFFER_DRIVE: do_time - pu_time,
-            #          G_OFFER_FARE: int(prq.init_direct_td * self.dist_fare + self.base_fare)}
             offer = TravellerOffer(prq.get_rid_struct(), self.op_id, pu_time - prq.rq_time, do_time - pu_time,
                                    self._compute_fare(simulation_time, prq, assigned_vehicle_plan))
             prq.set_service_offered(offer)  # has to be called
