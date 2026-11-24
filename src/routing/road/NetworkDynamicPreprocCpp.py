@@ -49,7 +49,7 @@ class NetworkDynamicPreprocCpp(NetworkBasicWithStoreCpp):
         """
         super().__init__(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
         self._max_preproc_nodes = 2000
-        self._coverage_preproc_nodes = 0.95
+        self._coverage_preproc_nodes = 0.98
         # stops are typically located on edges (o, d, rel): as destination of a query the route ends at node o,
         # as origin of a later query it starts at node d -> track origin and destination nodes separately
         self._destination_count = {}    # node -> count (node where routes to a stop end)
@@ -90,7 +90,8 @@ class NetworkDynamicPreprocCpp(NetworkBasicWithStoreCpp):
         if not count_dict:
             return []
         nodes = np.fromiter(count_dict.keys(), dtype=np.int64)
-        counts = np.fromiter(count_dict.values(), dtype=np.float64)
+        # sqrt-scaling dampens bursts (one new request is queried for many vehicles/insertion positions at once)
+        counts = np.sqrt(np.fromiter(count_dict.values(), dtype=np.float64))
         k = min(k_max, len(nodes))
         idx = np.argpartition(counts, -k)[-k:]          # Top-k ohne Gesamtsortierung, O(n)
         idx = idx[np.argsort(counts[idx])[::-1]]        # nur die k Gewinner sortieren
