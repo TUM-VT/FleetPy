@@ -60,6 +60,7 @@ class NetworkDynamicPreprocCpp(NetworkBasicWithStoreCpp):
         self._hot_mat = np.empty((0, 0, 2), dtype=np.float32)
         self._n_queries = 0
         self._n_hot_hits = 0
+        self._diag = {}
         self._preprocess_globally()
 
     def update_network(self, simulation_time, update_state = True):
@@ -103,10 +104,12 @@ class NetworkDynamicPreprocCpp(NetworkBasicWithStoreCpp):
         destination node """
         if self._n_queries > 0:
             LOG.info(f"hot node matrix hit rate since last preprocessing: {self._n_hot_hits / self._n_queries:.3f} "
-                     f"({self._n_hot_hits}/{self._n_queries})")
+                     f"({self._n_hot_hits}/{self._n_queries}) | diagnostics: "
+                     + ", ".join(f"{k}: {v / self._n_queries:.3f}" for k, v in sorted(self._diag.items())))
         t = time.time()
         self._n_queries = 0
         self._n_hot_hits = 0
+        self._diag = {}
         hot_o = self._select_hot_nodes(self._origin_count, self._max_preproc_nodes, self._coverage_preproc_nodes)
         hot_d = self._select_hot_nodes(self._destination_count, self._max_preproc_nodes, self._coverage_preproc_nodes)
         k_o, k_d = len(hot_o), len(hot_d)
@@ -150,6 +153,14 @@ class NetworkDynamicPreprocCpp(NetworkBasicWithStoreCpp):
             o_node = origin_position[1] if origin_position[1] is not None else origin_position[0]
             i = self._hot_o_idx[o_node]
             j = self._hot_d_idx[d_node]
+            # TODO remove diagnostics
+            diag = self._diag
+            if i < 0: diag["miss_o"] = diag.get("miss_o", 0) + 1
+            if j < 0: diag["miss_d"] = diag.get("miss_d", 0) + 1
+            if origin_position[1] is None: diag["o_on_node"] = diag.get("o_on_node", 0) + 1
+            if o_node in self._origin_count: diag["o_ever_stop"] = diag.get("o_ever_stop", 0) + 1
+            if d_node in self._destination_count and self._destination_count[d_node] > 1:
+                diag["d_seen_before"] = diag.get("d_seen_before", 0) + 1
             if i >= 0 and j >= 0:
                 trivial_test = self.test_and_get_trivial_route_tt_and_dis(origin_position, destination_position)
                 if trivial_test is not None:
