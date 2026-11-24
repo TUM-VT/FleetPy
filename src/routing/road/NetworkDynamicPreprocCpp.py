@@ -48,11 +48,15 @@ class NetworkDynamicPreprocCpp(NetworkBasicWithStoreCpp):
         :type network_dynamics_file_name: str
         """
         super().__init__(network_name_dir, network_dynamics_file_name=network_dynamics_file_name, scenario_time=scenario_time)
-        self._max_preproc_nodes = 1800
-        self._coverage_preproc_nodes = 0.9
-        self._destination_count = {}
-        # hot node travel time matrix: node_index -> matrix index (-1: not hot); matrix[i, j] = (tt, dis)
-        self._hot_idx = np.full(len(self.nodes), -1, dtype=np.int32)
+        self._max_preproc_nodes = 2000
+        self._coverage_preproc_nodes = 0.95
+        # stops are typically located on edges (o, d, rel): as destination of a query the route ends at node o,
+        # as origin of a later query it starts at node d -> track origin and destination nodes separately
+        self._destination_count = {}    # node -> count (node where routes to a stop end)
+        self._origin_count = {}         # node -> count (node where routes from a stop start)
+        # hot node travel time matrix: node_index -> row/column index (-1: not hot); matrix[i, j] = (tt, dis)
+        self._hot_o_idx = np.full(len(self.nodes), -1, dtype=np.int32)
+        self._hot_d_idx = np.full(len(self.nodes), -1, dtype=np.int32)
         self._hot_mat = np.empty((0, 0, 2), dtype=np.float32)
         self._n_queries = 0
         self._n_hot_hits = 0
@@ -80,11 +84,12 @@ class NetworkDynamicPreprocCpp(NetworkBasicWithStoreCpp):
         self._preprocess_globally()
         return x
 
-    def _select_hot_destinations(self, k_max, coverage):
-        if not self._destination_count:
+    @staticmethod
+    def _select_hot_nodes(count_dict, k_max, coverage):
+        if not count_dict:
             return []
-        nodes = np.fromiter(self._destination_count.keys(), dtype=np.int64)
-        counts = np.fromiter(self._destination_count.values(), dtype=np.float64)
+        nodes = np.fromiter(count_dict.keys(), dtype=np.int64)
+        counts = np.fromiter(count_dict.values(), dtype=np.float64)
         k = min(k_max, len(nodes))
         idx = np.argpartition(counts, -k)[-k:]          # Top-k ohne Gesamtsortierung, O(n)
         idx = idx[np.argsort(counts[idx])[::-1]]        # nur die k Gewinner sortieren
@@ -93,36 +98,42 @@ class NetworkDynamicPreprocCpp(NetworkBasicWithStoreCpp):
         return nodes[idx[:n_cov]].tolist()
 
     def _preprocess_globally(self):
-        """ computes a dense travel time / distance matrix between all hot nodes (most frequently requested
-        destinations) with one backward Dijkstra per hot node """
+        """ computes a dense travel time / distance matrix from all hot origin nodes to all hot destination nodes
+        (derived from the most frequently requested destination positions) with one backward Dijkstra per hot
+        destination node """
         if self._n_queries > 0:
             LOG.info(f"hot node matrix hit rate since last preprocessing: {self._n_hot_hits / self._n_queries:.3f} "
                      f"({self._n_hot_hits}/{self._n_queries})")
         t = time.time()
         self._n_queries = 0
         self._n_hot_hits = 0
-        hot = self._select_hot_destinations(self._max_preproc_nodes, self._coverage_preproc_nodes)
-        k = len(hot)
-        self._hot_idx.fill(-1)
-        self._hot_idx[np.asarray(hot, dtype=np.int64)] = np.arange(k, dtype=np.int32)
-        mat = np.full((k, k, 2), np.inf, dtype=np.float32)
+        hot_o = self._select_hot_nodes(self._origin_count, self._max_preproc_nodes, self._coverage_preproc_nodes)
+        hot_d = self._select_hot_nodes(self._destination_count, self._max_preproc_nodes, self._coverage_preproc_nodes)
+        k_o, k_d = len(hot_o), len(hot_d)
+        self._hot_o_idx.fill(-1)
+        self._hot_o_idx[np.asarray(hot_o, dtype=np.int64)] = np.arange(k_o, dtype=np.int32)
+        self._hot_d_idx.fill(-1)
+        self._hot_d_idx[np.asarray(hot_d, dtype=np.int64)] = np.arange(k_d, dtype=np.int32)
+        mat = np.full((k_o, k_d, 2), np.inf, dtype=np.float32)
         tt_factor = self._current_tt_factor if self._current_tt_factor is not None else 1.0
-        for j, d in enumerate(hot):
-            res = self.cpp_router.computeTravelCostsXto1(d, hot)  # [(origin_node, tt, dis), ...]
-            if not res:
-                continue
-            arr = np.asarray(res, dtype=np.float64)
-            arr = arr[arr[:, 1] >= -0.0001]  # negative tt -> not reachable
-            rows = self._hot_idx[arr[:, 0].astype(np.int64)]
-            mat[rows, j, 0] = arr[:, 1] * tt_factor
-            mat[rows, j, 1] = arr[:, 2]
+        if k_o > 0:
+            for j, d in enumerate(hot_d):
+                res = self.cpp_router.computeTravelCostsXto1(d, hot_o)  # [(origin_node, tt, dis), ...]
+                if not res:
+                    continue
+                arr = np.asarray(res, dtype=np.float64)
+                arr = arr[arr[:, 1] >= -0.0001]  # negative tt -> not reachable
+                rows = self._hot_o_idx[arr[:, 0].astype(np.int64)]
+                mat[rows, j, 0] = arr[:, 1] * tt_factor
+                mat[rows, j, 1] = arr[:, 2]
         self._hot_mat = mat
-        LOG.info(f"preprocessed hot node matrix with {k} nodes in {time.time() - t:.1f}s")
+        LOG.info(f"preprocessed hot node matrix with {k_o} origin x {k_d} destination nodes "
+                 f"in {time.time() - t:.1f}s")
 
     def return_travel_costs_1to1(self, origin_position, destination_position, customized_section_cost_function=None):
         """
         This method will return the travel costs of the fastest route between two nodes.
-        Routes between hot nodes are looked up in the preprocessed matrix, all others are computed by the parent class.
+        Routes from hot origin to hot destination nodes are looked up in the preprocessed matrix, all others are computed by the parent class.
         :param origin_position: (current_edge_origin_node_index, current_edge_destination_node_index, relative_position)
         :param destination_position: (destination_edge_origin_node_index, destination_edge_destination_node_index, relative_position)
         :param customized_section_cost_function: function to compute the travel cost of an section: args: (travel_time, travel_distance, current_dijkstra_node) -> cost_value
@@ -131,11 +142,14 @@ class NetworkDynamicPreprocCpp(NetworkBasicWithStoreCpp):
         """
         d_node = destination_position[0]
         self._destination_count[d_node] = self._destination_count.get(d_node, 0) + 1
+        # node from which routes will start once this destination becomes an origin (vehicle positions not counted)
+        d_as_o_node = destination_position[1] if destination_position[1] is not None else d_node
+        self._origin_count[d_as_o_node] = self._origin_count.get(d_as_o_node, 0) + 1
         if customized_section_cost_function is None:
             self._n_queries += 1
             o_node = origin_position[1] if origin_position[1] is not None else origin_position[0]
-            i = self._hot_idx[o_node]
-            j = self._hot_idx[d_node]
+            i = self._hot_o_idx[o_node]
+            j = self._hot_d_idx[d_node]
             if i >= 0 and j >= 0:
                 trivial_test = self.test_and_get_trivial_route_tt_and_dis(origin_position, destination_position)
                 if trivial_test is not None:
