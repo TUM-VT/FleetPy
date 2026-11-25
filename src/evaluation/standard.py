@@ -178,10 +178,8 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         dir_names = dir_names_in
 
     # evaluation interval
-    if evaluation_start_time is None and scenario_parameters.get(G_EVAL_INT_START) is not None:
-        evaluation_start_time = int(scenario_parameters[G_EVAL_INT_START])
-    if evaluation_end_time is None and scenario_parameters.get(G_EVAL_INT_END) is not None:
-        evaluation_end_time = int(scenario_parameters[G_EVAL_INT_END])
+    eval_start_time = scenario_parameters.get(G_EVAL_INT_START) if evaluation_start_time is None else evaluation_start_time
+    eval_end_time = scenario_parameters.get(G_EVAL_INT_END) if evaluation_end_time is None else evaluation_end_time
 
     # vehicle type data
     veh_type_db = create_vehicle_type_db(dir_names[G_DIR_VEH])
@@ -569,7 +567,13 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
     # combine and save
     result_df = pd.DataFrame(result_dict_list, index=operator_names)
     result_df = result_df.transpose()
-    result_df.to_csv(os.path.join(output_dir, "standard_eval.csv"))
+    file_name = "standard_eval"
+    if evaluation_start_time is not None:
+        file_name = f"standard_eval_{evaluation_start_time}"
+    if evaluation_end_time is not None:
+        file_name += f"_{evaluation_end_time}"
+    file_name += ".csv"
+    result_df.to_csv(os.path.join(output_dir, file_name))
 
     return result_df
 
