@@ -3,6 +3,7 @@ import sys
 import glob
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 MAIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(MAIN_DIR)
@@ -161,17 +162,129 @@ def shared_rides(op_df):
     return 100.0*N_shared/N
 
 
-def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end_time = None, print_comments=False, dir_names_in = {}):
+def calculate_user_stats_for_operator(op_id, select_op_users, all_users, op_offers, operator_attributes,
+                                      print_comments=False, prefix=""):
+    op_reservation_horizon = operator_attributes.get(G_RA_OPT_HOR, 0)
+    number_users = len(all_users)
+    number_total_travelers = all_users[G_RQ_PAX].sum()
+    op_number_users = len(select_op_users)
+    op_number_pax = select_op_users[G_RQ_PAX].sum()
+
+    op_modal_split_rq = float(op_number_users) / number_users
+    op_modal_split = float(op_number_pax) / number_total_travelers
+
+    op_avg_utility = np.nan
+    if G_RQ_C_UTIL in select_op_users.columns:
+        op_avg_utility = select_op_users[G_RQ_C_UTIL].sum() / op_number_users
+
+    op_reservation_users = select_op_users[select_op_users[G_RQ_EPT] - select_op_users[G_RQ_TIME] > op_reservation_horizon]
+    total_reservation_users = all_users[all_users[G_RQ_EPT] - all_users[G_RQ_TIME] > op_reservation_horizon]
+    op_number_reservation_users = len(op_reservation_users)
+    op_number_reservation_pax = op_reservation_users[G_RQ_PAX].sum()
+    op_frac_served_reservation_users = 100.0
+    op_frac_served_reservation_pax = 100.0
+    if len(total_reservation_users) > 0:
+        op_frac_served_reservation_users = op_number_reservation_users / total_reservation_users.shape[0] * 100.0
+        op_frac_served_reservation_pax = op_number_reservation_pax / total_reservation_users[G_RQ_PAX].sum() * 100.0
+    op_number_online_users = op_number_users - op_number_reservation_users
+    op_number_online_pax = op_number_pax - op_number_reservation_pax
+    op_frac_served_online_users = 100.0
+    op_frac_served_online_pax = 100.0
+    if number_users - len(total_reservation_users) > 0:
+        op_frac_served_online_users = op_number_online_users / (number_users - total_reservation_users.shape[0]) * 100.0
+        op_frac_served_online_pax = (op_number_online_pax / (number_total_travelers - total_reservation_users[G_RQ_PAX].sum()) * 100.0)
+
+    # Count all requests receiving an offer, including those not served by the operator.
+    all_type_rids = set(all_users[G_RQ_ID])
+    select_offers = len(all_type_rids.intersection(op_offers))
+
+    if print_comments:
+        print(f"For operator : {op_id}, {prefix} {select_offers} offers created")
+
+    result_dict = {prefix + "number users": op_number_users,
+                   prefix + "number travelers": op_number_pax,
+                   prefix + "modal split": op_modal_split,
+                   prefix + "modal split rq": op_modal_split_rq,
+                   prefix + "reservation users": op_number_reservation_users,
+                   prefix + "reservation pax": op_number_reservation_pax,
+                   prefix + "served reservation users [%]": round(op_frac_served_reservation_users, 2),
+                   prefix + "served reservation pax [%]": round(op_frac_served_reservation_pax, 2),
+                   prefix + "online users": op_number_online_users,
+                   prefix + "online pax": op_number_online_pax,
+                   prefix + "served online users [%]": round(op_frac_served_online_users, 2),
+                   prefix + "served online pax [%]": round(op_frac_served_online_pax, 2),
+                   prefix + r'% created offers': round(select_offers / number_users * 100.0, 2),
+                   prefix + "utility": round(op_avg_utility, 2)}
+
+    boarding_time = operator_attributes.get(G_OP_CONST_BT, 0)
+    op_revenue = np.nan
+    op_avg_wait_time = np.nan
+    op_med_wait_time = np.nan
+    op_90perquant_wait_time = np.nan
+    op_avg_wait_from_ept = np.nan
+    op_avg_detour_time = np.nan
+    op_avg_rel_detour = np.nan
+    op_sum_direct_travel_distance = np.nan
+
+    if G_RQ_DO in select_op_users.columns and G_RQ_PU in select_op_users.columns:
+        # total travel time
+        op_user_sum_travel_time = select_op_users[G_RQ_DO].sum() - select_op_users[G_RQ_PU].sum()
+
+        if G_RQ_DRT in select_op_users.columns:
+            # avg abs detour time
+            op_avg_detour_time = (op_user_sum_travel_time - select_op_users[G_RQ_DRT].sum()) / op_number_users - \
+                                 boarding_time
+            rel_det_series = (select_op_users[G_RQ_DO] - select_op_users[G_RQ_PU] - boarding_time -
+                              select_op_users[G_RQ_DRT]) / select_op_users[G_RQ_DRT]
+            # avg rel detour time
+            op_avg_rel_detour = rel_det_series.sum() / op_number_users * 100.0
+
+    # sum fare
+    if G_RQ_FARE in select_op_users.columns:
+        op_revenue = select_op_users[G_RQ_FARE].sum()
+
+    # avg waiting time
+    if G_RQ_PU in select_op_users.columns and G_RQ_TIME in select_op_users.columns:
+        select_op_users["wait time"] = select_op_users[G_RQ_PU] - select_op_users[G_RQ_TIME]
+        op_avg_wait_time = select_op_users["wait time"].mean()
+        op_med_wait_time = select_op_users["wait time"].median()
+        op_90perquant_wait_time = select_op_users["wait time"].quantile(q=0.9)
+
+    # avg waiting time from earliest pickup time
+    if G_RQ_PU in select_op_users.columns and G_RQ_EPT in select_op_users.columns:
+        op_avg_wait_from_ept = (select_op_users[G_RQ_PU].sum() - select_op_users[G_RQ_EPT].sum()) / op_number_users
+
+    # direct travel time and distance
+    if G_RQ_DRD in select_op_users.columns:
+        op_sum_direct_travel_distance = select_op_users[G_RQ_DRD].sum() / 1000.0
+
+    result_dict.update({
+        prefix + "waiting time": op_avg_wait_time,
+        prefix + "waiting time from ept": op_avg_wait_from_ept,
+        prefix + "waiting time (median)": op_med_wait_time,
+        prefix + "waiting time (90% quantile)": op_90perquant_wait_time,
+        prefix + "detour time": op_avg_detour_time,
+        prefix + "rel detour": op_avg_rel_detour,
+        prefix + "customer direct distance [km]": op_sum_direct_travel_distance,
+        prefix + "mod revenue": op_revenue,
+    })
+
+    return result_dict
+
+
+def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end_time = None, print_comments=False,
+                        separate_rq_types=True, dir_names_in = {}):
     """This function runs a standard evaluation over a scenario output directory.
 
     :param output_dir: scenario output directory
     :param start_time: start time of evaluation interval in s (if None, then evaluation of all data from sim start)
     :param end_time: end time of evaluation interval in s   (if None, then evalation of all data until sim end)
+    :param separate_rq_types: if True, then a separate evaluation of user stats is included for each request type
     :param print_comments: print some comments about status in between
     """
     if not os.path.isdir(output_dir):
         raise IOError(f"Could not find result directory {output_dir}!")
-    
+
     scenario_parameters, list_operator_attributes, _ = load_scenario_inputs(output_dir)
     dir_names = get_directory_dict(scenario_parameters, list_operator_attributes, abs_fleetpy_dir=MAIN_DIR)
     if dir_names_in:
@@ -191,7 +304,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
     if print_comments:
         print(f"Evaluating {scenario_parameters[G_SCENARIO_NAME]}\nReading user stats ...")
-    user_stats = read_user_output_file(output_dir, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
+    user_stats = read_user_output_file(output_dir, evaluation_start_time=eval_start_time, evaluation_end_time=eval_end_time)
     if print_comments:
         print(f"\t shape of user stats: {user_stats.shape}")
 
@@ -212,67 +325,36 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         row_id_to_offer_dict[key] = offer
         rid = entries[G_RQ_ID]
         for op_id, op_offer in offer.items():
-            try:
-                op_id_to_offer_dict[op_id][rid] = op_offer
-            except KeyError:
-                op_id_to_offer_dict[op_id] = {rid : op_offer}
+            if op_id not in op_id_to_offer_dict:
+                op_id_to_offer_dict[op_id] = {}
+            op_id_to_offer_dict[op_id][rid] = op_offer
             for offer_param in op_offer.keys():
                 active_offer_parameters[offer_param] = 1
-    
-    number_users = user_stats.shape[0]
-    number_total_travelers = user_stats[G_RQ_PAX].sum()
 
+    rq_types = user_stats[G_RQ_TYPE].dropna().unique()
     for op_id, op_users in user_stats.groupby(G_RQ_OP_ID):
         op_name = "?"
-        
-        op_reservation_horizon = list_operator_attributes[int(op_id)].get(G_RA_OPT_HOR,0)
 
-        op_number_users = op_users.shape[0]
+        operator_attributes = list_operator_attributes[int(op_id)]
+        operator_offers = op_id_to_offer_dict.get(op_id, {})
+        result_dict = {"operator_id": op_id}
+        if separate_rq_types is True:
+            all_dict = calculate_user_stats_for_operator(op_id, op_users, user_stats, operator_offers,
+                                                         operator_attributes, print_comments, prefix="[ALL] ")
+            result_dict.update(all_dict)
+            for rq_type in rq_types:
+                select_users = op_users[op_users[G_RQ_TYPE] == rq_type].copy()
+                selected_all_users = user_stats[user_stats[G_RQ_TYPE] == rq_type]
+                rq_dict = calculate_user_stats_for_operator(op_id, select_users, selected_all_users, operator_offers,
+                                                            operator_attributes, print_comments, prefix=f"[{rq_type}] ")
+                result_dict.update(rq_dict)
+        else:
+            all_dict = calculate_user_stats_for_operator(op_id, op_users, user_stats, operator_offers,
+                                                         operator_attributes)
+            result_dict.update(all_dict)
+
+        op_number_users = len(op_users)
         op_number_pax = op_users[G_RQ_PAX].sum()
-        op_created_offers = len(op_id_to_offer_dict.get(op_id, {}).keys())
-        op_modal_split_rq = float(op_number_users)/number_users
-        op_modal_split = float(op_number_pax)/number_total_travelers
-        if print_comments:
-            print(op_created_offers)
-        op_rel_created_offers = float(op_created_offers)/number_users*100.0
-        op_avg_utility = np.nan
-        if G_RQ_C_UTIL in op_users.columns:
-            op_avg_utility = op_users[G_RQ_C_UTIL].sum()/op_number_users  
-            
-        op_reservation_users = op_users[op_users[G_RQ_EPT] - op_users[G_RQ_TIME] > op_reservation_horizon]
-        total_reservation_users = user_stats[user_stats[G_RQ_EPT] - user_stats[G_RQ_TIME] > op_reservation_horizon]
-        op_number_reservation_users = op_reservation_users.shape[0]
-        op_number_reservation_pax = op_reservation_users[G_RQ_PAX].sum()
-        try:
-            op_frac_served_reservation_users = op_number_reservation_users/total_reservation_users.shape[0]*100.0
-            op_frac_served_reservation_pax = op_number_reservation_pax/total_reservation_users[G_RQ_PAX].sum()*100.0
-        except ZeroDivisionError:
-            op_frac_served_reservation_users = 100.0
-            op_frac_served_reservation_pax = 100.0
-        op_number_online_users = op_number_users - op_number_reservation_users
-        op_number_online_pax = op_number_pax - op_number_reservation_pax
-        try:
-            op_frac_served_online_users = op_number_online_users/(number_users - total_reservation_users.shape[0])*100.0
-            op_frac_served_online_pax = op_number_online_pax/(number_total_travelers - total_reservation_users[G_RQ_PAX].sum())*100.0
-        except ZeroDivisionError:
-            op_frac_served_online_users = 100.0
-            op_frac_served_online_pax = 100.0
-
-        result_dict = {"operator_id": op_id, 
-                       "number users": op_number_users,
-                       "number travelers": op_number_pax,
-                       "modal split": op_modal_split,
-                       "modal split rq": op_modal_split_rq,
-                       "reservation users": op_number_reservation_users,
-                       "reservation pax" : op_number_reservation_pax,
-                       "served reservation users [%]": op_frac_served_reservation_users,
-                       "served reservation pax [%]": op_frac_served_reservation_pax,
-                       "online users" : op_number_online_users,
-                       "online pax" : op_number_online_pax,
-                       "served online users [%]": op_frac_served_online_users,
-                       "served online pax [%]": op_frac_served_online_pax,
-                       r'% created offers': op_rel_created_offers,
-                       "utility" : op_avg_utility}
 
         # base user_values
         op_user_sum_travel_time = np.nan
@@ -284,8 +366,8 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         op_avg_travel_time = np.nan
         op_avg_travel_distance = np.nan
         op_sum_direct_travel_distance = np.nan
-        op_avg_detour_time = np.nan 
-        op_avg_rel_detour = np.nan  
+        op_avg_detour_time = np.nan
+        op_avg_rel_detour = np.nan
         op_shared_rids = np.nan
 
         # base fleet values
@@ -313,11 +395,12 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
         if op_id >= 0:  #AMoD
             op_name = "MoD_{}".format(int(op_id))
             operator_attributes = list_operator_attributes[int(op_id)]
-            boarding_time = operator_attributes["op_const_boarding_time"]
+            boarding_time = operator_attributes.get(G_OP_CONST_BT, 0)
             if print_comments:
                 print("Loading AMoD vehicle data ...")
             try:
-                op_vehicle_df = read_op_output_file(output_dir, op_id, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time)
+                op_vehicle_df = read_op_output_file(output_dir, op_id, evaluation_start_time=eval_start_time,
+                                                    evaluation_end_time=eval_end_time)
             except FileNotFoundError:
                 op_vehicle_df = pd.DataFrame([], columns=[G_V_OP_ID, G_V_VID, G_VR_STATUS, G_VR_LOCKED, G_VR_LEG_START_TIME,
                                                         G_VR_LEG_END_TIME, G_VR_LEG_START_POS, G_VR_LEG_END_POS,
@@ -327,7 +410,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
 
             if print_comments:
                 print(f"\t shape of vehicle stats: {op_vehicle_df.shape}\n\t ... processing AMoD vehicle data")
-            
+
             # sum travel time
             if G_RQ_DO in op_users.columns and G_RQ_PU in op_users.columns:
                 op_user_sum_travel_time = op_users[G_RQ_DO].sum() - op_users[G_RQ_PU].sum()
@@ -503,7 +586,7 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
                                     for rq_id in op_users[G_RQ_ID]])/op_number_users
             if active_offer_parameters.get(G_OFFER_DIST):
                 op_avg_travel_distance = sum([op_id_to_offer_dict[op_id][rq_id][G_OFFER_DRIVE]
-                                    for rq_id in op_users[G_RQ_ID]])/op_number_users   
+                                    for rq_id in op_users[G_RQ_ID]])/op_number_users
             if G_RQ_TOLL in op_users.columns:
                 op_toll = op_users[G_RQ_TOLL].sum()/op_number_users
             if G_RQ_PARK in op_users.columns:
@@ -578,17 +661,22 @@ def standard_evaluation(output_dir, evaluation_start_time = None, evaluation_end
     return result_df
 
 
-def evaluate_folder(path, evaluation_start_time = None, evaluation_end_time = None, print_comments = False):
+def evaluate_folder(path, evaluation_start_time = None, evaluation_end_time = None, separate_rq_types=True,
+                    print_comments = False):
     """ this function calls standard_valuation on all simulation results found in the given path 
+    :param path: path to the folder containing the simulation results
     :param evaluation_start_time: start time of evaluation interval in s (if None, then evaluation from sim start)
     :param evaluation_end_time: end time of evaluation interval in s   (if None, then evalation ountil sim end)
+    :param separate_rq_types: if True, then a separate evaluation of user stats is included for each request type
     :param print_comments: print comments
     """
-    for f in os.listdir(path):
+    for f in tqdm(os.listdir(path)):
         sc_path = os.path.join(path, f)
         if os.path.isdir(sc_path):
             if os.path.isfile(os.path.join(sc_path, "1_user-stats.csv")):
-                standard_evaluation(sc_path, evaluation_start_time=evaluation_start_time, evaluation_end_time=evaluation_end_time, print_comments=print_comments)
+                standard_evaluation(sc_path, evaluation_start_time=evaluation_start_time,
+                                    evaluation_end_time=evaluation_end_time, separate_rq_types=separate_rq_types,
+                                    print_comments=print_comments)
 
 
 if __name__ == "__main__":
