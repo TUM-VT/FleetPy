@@ -82,10 +82,11 @@ class ReservationBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def return_immediate_reservation_offer(self, rid : Any, sim_time : int) -> TravellerOffer:
+    def return_immediate_reservation_offer(self, rid : Any, sim_time : int, excluded_vid : List[int]=None) -> TravellerOffer:
         """ this function returns an offer if possible for an reservation request in case an immediate offer is needed for a reservation request
         :param rid: request id
         :param sim_time: current simulation time
+        :param excluded_vid: optional list of vehicle ids excluded from serving this request
         :return: offer for request """
         pass
 

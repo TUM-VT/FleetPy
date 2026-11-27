@@ -71,14 +71,19 @@ class RollingHorizonNoGuarantee(ReservationBase):
         :return: list of (position, latest arrival time)"""
         return []
 
-    def return_immediate_reservation_offer(self, rid, sim_time):
+    def return_immediate_reservation_offer(self, rid, sim_time, excluded_vid=None):
         """ this function returns an offer if possible for an reservation request which has been added to the reservation module before 
         in this implementation, an offer is always returned discribed by the earliest and latest pick up time
         :param rid: request id
         :param sim_time: current simulation time
+        :param excluded_vid: list of vehicle ids that should not be considered for assignment
         :return: offer for request """
         prq = self.active_reservation_requests[rid]
-        veh_strct = SimulationVehicleStruct(self.fleetctrl.sim_vehicles[0], None, sim_time, self.routing_engine, empty_init=True)
+        excluded_set = set(excluded_vid) if excluded_vid else set()
+        eligible_vehs = [veh for veh in self.fleetctrl.sim_vehicles if veh.vid not in excluded_set]
+        if not eligible_vehs:
+            return self.fleetctrl._create_rejection(prq, sim_time)
+        veh_strct = SimulationVehicleStruct(eligible_vehs[0], None, sim_time, self.routing_engine, empty_init=True)
         o_pos, epa ,_ = prq.get_o_stop_info()
         d_pos, _, mtt = prq.get_d_stop_info()
         veh_strct.pos = o_pos
@@ -89,8 +94,10 @@ class RollingHorizonNoGuarantee(ReservationBase):
         offer = self.fleetctrl._create_user_offer(prq, sim_time, assigned_vehicle_plan=veh_p)
         
         plan_request = self.active_reservation_requests[rid]
-        self.sorted_rids_with_epa.append( (plan_request.get_rid_struct(), plan_request.get_o_stop_info()[1]))
-        self.sorted_rids_with_epa.sort(key=lambda x:x[1])
+        rid_struct = plan_request.get_rid_struct()
+        if not any(r == rid_struct for r, _ in self.sorted_rids_with_epa):
+            self.sorted_rids_with_epa.append((rid_struct, plan_request.get_o_stop_info()[1]))
+            self.sorted_rids_with_epa.sort(key=lambda x:x[1])
 
         return offer
 
@@ -107,14 +114,9 @@ class RollingHorizonNoGuarantee(ReservationBase):
         :param rid: request id
         :param simulation_time: current simulation time
         """
-        del self.active_reservation_requests[rid]
-        to_del = None
-        for i, entry in enumerate(self.sorted_rids_with_epa):
-            if entry[0] == rid:
-                to_del = i
-                break
-        if to_del is not None:
-            self.sorted_rids_with_epa.pop(to_del)
+        if rid in self.active_reservation_requests:
+            del self.active_reservation_requests[rid]
+        self.sorted_rids_with_epa = [(r, epa) for r, epa in self.sorted_rids_with_epa if r != rid]
 
     def time_trigger(self, sim_time):
         """ this function is triggered during the simulation time and might trigger reoptimization processes for example 
