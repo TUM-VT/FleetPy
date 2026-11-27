@@ -215,7 +215,7 @@ class RepositioningBase(ABC):
             d_pos = self.routing_engine.return_node_position(self.zone_system.get_random_centroid_node(d_zone_id))
             if o_pos[0] >= 0 and d_pos[0] >= 0:
                 route_info = self.routing_engine.return_travel_costs_1to1(o_pos, d_pos)
-                if route_info:
+                if route_info and route_info[1] is not None and 0 <= route_info[1] < float("inf"):
                     return route_info[1], route_info[2]
                 loop_iter += 1
                 if loop_iter == 10:
