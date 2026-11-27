@@ -91,6 +91,7 @@ class ChargingProcess(StationaryProcess):
         """ Ends the current task by disconnecting the vehicle """
         assert self._task_started is True
         self.station.end_charging_process(sim_time, self)
+        self._task_started = False
 
     def get_scheduled_start_end_times(self):
         return self.start_time, self.end_time
@@ -99,7 +100,7 @@ class ChargingProcess(StationaryProcess):
         return self.start_time - sim_time
 
     def remaining_duration_to_finish(self, sim_time):
-        if self._task_started is None:
+        if not self._task_started:
             return None
         else:
             return self.station.remaining_charging_time(sim_time, self.veh.vid)
