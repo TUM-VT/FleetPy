@@ -262,6 +262,36 @@ def create_parent_user_stats(output_dir, evaluation_start_time=None, evaluation_
                     leg_info['flm_amod_1_travel_time'] = flm_amod_1_travel_time
                     leg_info['flm_amod_1_direct_distance'] = flm_amod_1_row.get(G_RQ_DRD, 0)
 
+        elif modal_state == RQ_MODAL_STATE.PT.value:
+            # PT: either parent row was served directly by AMoD or PT sub-trip (0) was served
+            if not pd.isna(parent_row.get(G_RQ_PU)):
+                is_served = True
+                total_fare = parent_row.get(G_RQ_FARE, 0)
+                total_wait_time = parent_row.get(G_RQ_PU, 0) - parent_row.get(G_RQ_TIME, 0)
+                total_travel_time = parent_row.get(G_RQ_DO, 0) - parent_row.get(G_RQ_PU, 0)
+                amod_fare = total_fare
+                amod_wait_time = total_wait_time
+                amod_travel_time = total_travel_time
+                amod_direct_distance = parent_row.get(G_RQ_DRD, 0)
+            else:
+                pt_sub = sub_trips[sub_trips[G_RQ_SUB_TRIP_ID] == RQ_SUB_TRIP_ID.PT.value]
+                if len(pt_sub) > 0:
+                    pt_row = pt_sub.iloc[0]
+                    is_served = not pd.isna(pt_row.get(G_RQ_PU))
+                    if is_served:
+                        total_fare = pt_row.get(G_RQ_FARE, 0)
+                        pt_offer_str = pt_row.get(G_RQ_OFFERS, None)
+                        wait_match = re.search(r't_wait:(\d+)', str(pt_offer_str)) if pt_offer_str is not None and not pd.isna(pt_offer_str) else None
+                        if wait_match is not None:
+                            total_wait_time = int(wait_match.group(1))
+                        else:
+                            total_wait_time = max(pt_row.get(G_RQ_PU, 0) - parent_row.get(G_RQ_TIME, 0), 0)
+                        total_travel_time = pt_row.get(G_RQ_DO, 0) - pt_row.get(G_RQ_PU, 0)
+                        amod_fare = 0
+                        amod_wait_time = np.nan
+                        amod_travel_time = np.nan
+                        amod_direct_distance = 0
+
         # Update parent aggregation with computed values
         parent_agg['is_served'] = is_served
         parent_agg['total_fare'] = total_fare if is_served else np.nan
@@ -578,26 +608,31 @@ def intermodal_evaluation(output_dir, evaluation_start_time=None, evaluation_end
 
     # Calculate detour for each request based on AMoD segments
     # For requests with direct_route_time available
+    served_requests['amod_direct_route_time'] = np.nan
     if G_RQ_DRT in served_requests.columns:
-        # MONOMODAL: use parent's direct route time
-        monomodal_mask = served_requests['modal_category'] == 'DRT_only'
+        # MONOMODAL (and PT_only served by AMoD): use parent's direct route time
+        monomodal_mask = (served_requests['modal_category'] == 'DRT_only') | (
+            (served_requests['modal_category'] == 'PT_only') & served_requests['amod_travel_time'].notna()
+        )
         served_requests.loc[monomodal_mask, 'amod_direct_route_time'] = served_requests.loc[monomodal_mask, G_RQ_DRT]
 
     # Calculate detour time for AMoD segments
-    served_requests['amod_detour_time'] = served_requests['amod_travel_time'] - served_requests.get('amod_direct_route_time', served_requests['amod_travel_time']) - boarding_time
+    served_requests['amod_detour_time'] = served_requests['amod_travel_time'] - served_requests['amod_direct_route_time'] - boarding_time
     # For intermodal, estimate direct route time from direct distance (assuming avg speed ~30 km/h = 8.33 m/s)
     avg_speed_ms = 8.33  # m/s, approximately 30 km/h
-    served_requests.loc[served_requests['amod_detour_time'].isna(), 'amod_detour_time'] = (
-        served_requests.loc[served_requests['amod_detour_time'].isna(), 'amod_travel_time'] -
-        served_requests.loc[served_requests['amod_detour_time'].isna(), 'amod_direct_distance'] / avg_speed_ms - boarding_time
+    intermodal_amod_mask = served_requests['amod_detour_time'].isna() & served_requests['amod_travel_time'].notna()
+    served_requests.loc[intermodal_amod_mask, 'amod_detour_time'] = (
+        served_requests.loc[intermodal_amod_mask, 'amod_travel_time'] -
+        served_requests.loc[intermodal_amod_mask, 'amod_direct_distance'] / avg_speed_ms - boarding_time
     )
 
     amod_avg_detour_time = served_requests['amod_detour_time'].mean()
 
     # Relative detour (percentage)
+    est_amod_direct_tt = (served_requests['amod_direct_distance'] / avg_speed_ms).where(served_requests['amod_direct_distance'] > 0, np.nan)
     served_requests['amod_rel_detour'] = (
-        (served_requests['amod_travel_time'] - boarding_time - served_requests['amod_direct_distance'] / avg_speed_ms) /
-        (served_requests['amod_direct_distance'] / avg_speed_ms)
+        (served_requests['amod_travel_time'] - boarding_time - est_amod_direct_tt) /
+        est_amod_direct_tt
     ) * 100.0
     amod_avg_rel_detour = served_requests['amod_rel_detour'].mean()
 
