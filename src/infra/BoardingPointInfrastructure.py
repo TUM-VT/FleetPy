@@ -35,7 +35,7 @@ def routing_min_distance_cost_function(travel_time, travel_distance, current_nod
 
 class BoardingPointInfrastructure():
     def __init__(self, infrastructure_dir, routing_engine, load_preprocessed = True):
-        """ this class handles active boarding points in the network 
+        r""" this class handles active boarding points in the network 
         :param infrastructure: directory of boarding point data (\data\infra\{infra_name}\{network_name})
         :param routing_engine: Network object
         :param load_preprocessed: try loading the file for preprocessed node to closest bp in walking range
@@ -64,7 +64,7 @@ class BoardingPointInfrastructure():
                             entries = l.split(",")
                             stop_node = int(entries[0])
                             boarding_node_distance_list = []
-                            if len(entries) > 0 and entries[1] != "":
+                            if len(entries) > 1 and entries[1] != "":
                                 for entry in entries[1:]:
                                     node, distance = entry.split(";") 
                                     if self.boarding_point_node_positions.get(routing_engine.return_node_position(int(node))) is None:
@@ -140,8 +140,9 @@ class BoardingPointInfrastructure():
         if walking_distance is None:
             _, _, dis1 = self.routing_engine.return_travel_costs_1to1(origin_pos, target_pos, customized_section_cost_function = routing_min_distance_cost_function)
             _, _, dis2 = self.routing_engine.return_travel_costs_1to1(target_pos, origin_pos, customized_section_cost_function = routing_min_distance_cost_function)
-            if dis1 < dis2:
-                walking_distance = dis1
+            valid_distances = [d for d in (dis1, dis2) if d is not None and 0 <= d < float("inf")]
+            if valid_distances:
+                walking_distance = min(valid_distances)
             else:
-                walking_distance = dis2
+                walking_distance = float("inf")
         return walking_distance

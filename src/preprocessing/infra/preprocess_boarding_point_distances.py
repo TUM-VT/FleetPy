@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 import pandas as pd
 import numpy as np
 import time
@@ -88,7 +89,7 @@ def preprocess_boarding_points_in_walking_range(nw_name, infra_name, walking_ran
                     ap_to_bp_dis[ap] = [(bp_node, dis)]
     else:
         all_len = len(bp_pos_list)
-        per_cor = int(np.math.ceil(all_len/number_cores))
+        per_cor = int(math.ceil(all_len/number_cores))
         print("all nodes {} | per core {} | n cores {}".format(all_len, per_cor, number_cores))
         part_lists = []
         for i in range(number_cores):
@@ -197,7 +198,7 @@ def preprocess_closest_bp_for_each_node(nw_name, infra_name, must_stop_only = Fa
     else:
         df_list = [{"node_index" : n, "closest_bp_index" : c[0], "walking_distance" : c[1]} for n, c in node_to_bp_dis.items()]
         all_len = len(all_nodes)
-        per_cor = int(np.math.ceil(all_len/number_cores))
+        per_cor = int(math.ceil(all_len/number_cores))
         print("all nodes {} | per core {} | n cores {}".format(all_len, per_cor, number_cores))
         part_lists = []
         for i in range(number_cores):
@@ -261,19 +262,16 @@ if __name__ == "__main__":
     forth argument (optional): indicates if only must_stop_nodes are preprocessed otherwise all network nodes (1 for True, 0 for False). True is standard
     """
 
-    if len(sys.argv) > 2:
+    if len(sys.argv) > 3:
         nw_name = sys.argv[1]
         infra_name = sys.argv[2]
         max_walking_range = float(sys.argv[3])
-        if len(sys.argv) > 3:
-            if sys.argv[4] == 1:
-                must_stop_only = True
-            else:
-                must_stop_only = False
+        if len(sys.argv) > 4:
+            must_stop_only = str(sys.argv[4]).strip().lower() in ("1", "true")
         else:
-            must_stop_only = False
+            must_stop_only = True
         preprocess_boarding_points_in_walking_range(nw_name, infra_name, max_walking_range, must_stop_only=must_stop_only)
-        preprocess_closest_bp_for_each_node(nw_name, infra_name, max_walking_range, must_stop_only=must_stop_only)
+        preprocess_closest_bp_for_each_node(nw_name, infra_name, must_stop_only=must_stop_only)
     else:
         print("wrong usage of script! read string in __main__-function!")
         raise EnvironmentError
